@@ -37,6 +37,8 @@ export interface ArachnidContext {
   /** Паутина: из точки from со скоростью vel */
   web(from: THREE.Vector3, vel: THREE.Vector3, t: ArachnidTuning): void;
   sound(key: 'screech' | 'leap' | 'slash' | 'web' | 'land'): void;
+  /** Гранаты на поле: от лежащих рядом отпрыгивает */
+  dangers: readonly { pos: THREE.Vector3; fuse: number }[];
 }
 
 interface Jump { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; h: number; kind: 'dodge' | 'pounce' | 'hop' }
@@ -343,6 +345,14 @@ export class Arachnid implements Shootable {
     // прыжок в полёте
     if (this.jump) { this.flyJump(dt, ctx); this.pose(dt); return; }
 
+    // граната рядом — отпрыгнуть от неё (умные)
+    if (this.dodgeCd <= 0 && this.state !== 'замах' && this.state !== 'удар') {
+      for (const g of ctx.dangers) {
+        if (g.pos.y > 1.6 || g.fuse > 2.4) continue;
+        if (Math.hypot(g.pos.x - this.pos.x, g.pos.z - this.pos.z) < 4.6 && this.hopFrom(g.pos, ctx)) { this.pose(dt); return; }
+      }
+    }
+
     // угроза: на меня навели ствол?
     const aimed = this.aimedAt(ctx);
     if (aimed) this.threatT += dt; else this.threatT = Math.max(0, this.threatT - dt * 1.5);
@@ -602,6 +612,29 @@ export class Arachnid implements Shootable {
     ctx.sound('web');
     this.attackCd = this.T.webCd * (0.85 + this.rand() * 0.3);
     this.state = 'охота';
+  }
+
+  /** Отпрыгнуть подальше от точки (граната): самый дальний допустимый прыжок */
+  private hopFrom(p: THREE.Vector3, ctx: ArachnidContext): boolean {
+    const away = new THREE.Vector3(this.pos.x - p.x, 0, this.pos.z - p.z);
+    if (away.lengthSq() < 1e-4) away.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    away.normalize();
+    const perp = new THREE.Vector3(away.z, 0, -away.x);
+    let best: THREE.Vector3 | null = null, bestD = 0;
+    for (const k of [0, 0.7, -0.7, 1.4, -1.4]) {
+      const dir = away.clone().addScaledVector(perp, k).normalize();
+      const to = this.pos.clone().addScaledVector(dir, this.T.dodgeDist * 1.3);
+      if (!this.canLeap(this.pos, to, ctx)) continue;
+      const d = to.distanceTo(p);
+      if (d > bestD) { bestD = d; best = to; }
+    }
+    if (!best) return false;
+    this.startJump(best, this.T.dodgeTime * 1.2, 0.6 * this.T.scale, 'dodge');
+    this.state = 'уклон';
+    this.dodgeCd = this.T.dodgeCd * 0.5;
+    this.dodges++;
+    ctx.sound('leap');
+    return true;
   }
 
   /** Отпрыгнуть от героя на dist (по свободной прямой) */

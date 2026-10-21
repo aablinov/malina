@@ -86,3 +86,4 @@ body.dev-playground #c { cursor: none; }
 
 .pg-enemy i { opacity: 0.95; }
 .pg-enemy s { display: block; margin: 2px auto 0; width: 54px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, #ff5a4a calc(var(--k) * 100%), rgba(0, 0, 0, 0.45) 0); }
+.pg-gren { font-size: 11px; opacity: 0.85; }

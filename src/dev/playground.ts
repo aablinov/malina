@@ -413,6 +413,37 @@ export function runPlayground(): void {
   const hero = new Hero(scene, T, fx, 'ak74', rand, onFire, onGunEvent);
   hero.place(0, 4, Math.PI);
   hero.onStep = () => { if (!scripted) sfx.step(); };
+  hero.onGrenade = (from, target, fuse) => { grenades.throw(from, target, fuse, 'герой'); if (!scripted) sfx.swing(0.8); };
+
+  // прицел гранаты: дуга полёта и кольцо радиуса в точке падения, пока держим G
+  const arcMat = new THREE.LineDashedMaterial({ color: '#ffd25a', dashSize: 0.25, gapSize: 0.15, transparent: true, opacity: 0.9, depthTest: false, toneMapped: false });
+  const arcLine = new THREE.Line(new THREE.BufferGeometry(), arcMat);
+  arcLine.renderOrder = 11;
+  arcLine.frustumCulled = false;
+  const aimRing = new THREE.Mesh(new THREE.RingGeometry(GRENADE.radius - 0.1, GRENADE.radius, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.6, 0.4), transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+  aimRing.rotation.x = -Math.PI / 2;
+  const aimDot = new THREE.Mesh(new THREE.CircleGeometry(0.18, 20), aimRing.material);
+  aimDot.rotation.x = -Math.PI / 2;
+  scene.add(arcLine, aimRing, aimDot);
+  function drawGrenadeAim(): void {
+    const t = hero.grenadePreview;
+    arcLine.visible = aimRing.visible = aimDot.visible = !!t;
+    if (!t) return;
+    const from = hero.pos.clone().setY(1.6);
+    const dx = t.x - from.x, dz = t.z - from.z, d = Math.hypot(dx, dz);
+    const T = 0.45 + d * 0.06, g = 14;
+    const vy = (0.1 - from.y + 0.5 * g * T * T) / T;
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 28; i++) {
+      const k = (i / 28) * T;
+      pts.push(new THREE.Vector3(from.x + (dx / T) * k, Math.max(0.05, from.y + vy * k - 0.5 * g * k * k), from.z + (dz / T) * k));
+    }
+    arcLine.geometry.dispose();
+    arcLine.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    arcLine.computeLineDistances();
+    aimRing.position.set(t.x, 0.05, t.z);
+    aimDot.position.set(t.x, 0.06, t.z);
+  }
 
   /** Попадания по манекенам за выстрел — для одной цифры урона на дробь */
   const hitSum = new Map<Shootable, { d: number; p: THREE.Vector3 }>();
@@ -597,7 +628,10 @@ export function runPlayground(): void {
     for (const e of enemies) {
       if (e.gone) continue;
       const p = e.jailer?.pos ?? e.arach?.pos ?? e.beetle?.pos;
-      if (!p || k(p) <= 0) continue;
+      if (!p) continue;
+      // грохот будит всех поблизости
+      if (Math.hypot(p.x - at.x, p.z - at.z) < r * 2.5) wakeEnemy(e);
+      if (k(p) <= 0) continue;
       if (e.jailer && e.jailer.alive) e.jailer.hit(dmg * k(p));
       if (e.arach && !e.arach.dead) e.arach.hit(dmg * k(p), dir(p), p, 1);
       if (e.beetle && !e.beetle.dead && e.beetle.damage(dmg * k(p) * BEETLES.dmgScale, dir(p))) killBeetle(e.beetle);
@@ -753,6 +787,7 @@ export function runPlayground(): void {
     input.move.copy(m);
     input.run = keys.has('ShiftLeft') || keys.has('ShiftRight');
     input.aimDown = rmb;
+    input.grenade = keys.has('KeyG') && !panel.el.contains(document.activeElement);
     input.fire = lmb && !panel.el.contains(document.activeElement);
     if (mouseSeen) {
       raycaster.setFromCamera(mouseNdc, camera);
@@ -803,7 +838,7 @@ export function runPlayground(): void {
     c.appendChild(row);
     button(row, 'Сбросить мишени и врагов (N)', resetTargets);
     button(row, 'Разбудить всех врагов', () => { for (const e of enemies) wakeEnemy(e); });
-    button(row, 'Пополнить патроны', () => { for (const k of Object.keys(CALIBERS) as (keyof typeof CALIBERS)[]) hero.gunner.reserve[k] = CALIBERS[k].max; });
+    button(row, 'Пополнить патроны', () => { for (const k of Object.keys(CALIBERS) as (keyof typeof CALIBERS)[]) hero.gunner.reserve[k] = CALIBERS[k].max; hero.grenades = 3; });
     button(row, 'Герой в центр', () => hero.place(0, 4, Math.PI));
   }
 
@@ -816,9 +851,9 @@ export function runPlayground(): void {
     <div class="pg-toast" id="pgToast"></div>
     <div class="pg-bottom">
       <div class="pg-hp"><i id="pgHp"></i><b id="pgHpN">100</b></div>
-      <div class="pg-gun"><span id="pgGun">АК-74</span><span class="pg-ammo" id="pgAmmo">30 / 180</span><div class="pg-rl"><i id="pgRl"></i></div></div>
+      <div class="pg-gun"><span id="pgGun">АК-74</span><span class="pg-ammo" id="pgAmmo">30 / 180</span><div class="pg-rl"><i id="pgRl"></i></div><span class="pg-gren" id="pgGren">РГД-5 × 3</span></div>
     </div>
-    <div class="pg-help">WASD — ходьба · Shift — бег · ПКМ — прицел · C — присед · Space — перекат · R — перезарядка · 1/2 — основной/пистолет · T — сменить основной<br>
+    <div class="pg-help">WASD — ходьба · Shift — бег · ПКМ — прицел · C — присед · Space — перекат · R — перезарядка · 1/2 — основной/пистолет · T — сменить основной · G — граната (держи — дальше)<br>
     F1 параметры · F2 коллайдеры · F3 разброс · F4 телеметрия · F5 патроны ∞ · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · B bloom · N сброс мишеней и врагов · Ctrl+0 заморозить врагов<br>Враги стоят в загоне и спят: попадание или пуля рядом будит именно этого врага</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(hud);
@@ -834,6 +869,7 @@ export function runPlayground(): void {
     const res = infiniteAmmo ? '∞' : String(hero.gunner.reserve[g.def.caliber]);
     const low = g.rounds < g.capacity * 0.25;
     setHTML('pgGun', `${g.def.name} <small>${CALIBERS[g.def.caliber].name}</small>`);
+    setHTML('pgGren', `РГД-5 × ${hero.infiniteGrenades ? '∞' : hero.grenades}`);
     setHTML('pgAmmo', `<b class="${low ? 'low' : ''}">${g.rounds}</b> / ${res}`);
     const rl = g.reload ? g.reload.t / g.reload.dur : 0;
     $('pgRl').style.width = `${rl * 100}%`;
@@ -894,6 +930,7 @@ export function runPlayground(): void {
   function tick(dt: number): void {
     simTime += dt;
     readInput();
+    hero.infiniteGrenades = infiniteAmmo;
     hero.update(dt, input, obstacles);
     clearEdges();
     if (hero.down) { downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
@@ -927,6 +964,7 @@ export function runPlayground(): void {
         return false;
       },
       web(from, vel, t) { spits.fireWeb(from, vel, t); },
+      dangers: grenades.list,
       sound(k) { if (!scripted) sfx[k](); },
     };
     for (const e of enemies) {
@@ -1032,6 +1070,8 @@ export function runPlayground(): void {
     camera.lookAt(camTarget.x, 0.6, camTarget.z);
     sun.position.copy(camTarget).add(SUN_OFFSET);
     sun.target.position.copy(camTarget);
+
+    drawGrenadeAim();
 
     // «рентген»: высокие стены между камерой и героем полупрозрачны
     const eye = camera.position.clone();

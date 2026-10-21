@@ -6,7 +6,7 @@ import { Gunner, RELOAD_MARKS, type FireRequest, type GunEvent, type GunState, t
 import { Grenades } from './grenade';
 import { aimSegment, solveIK } from './ik';
 import { pixelTex, type Textures } from './textures';
-import { HERO, SPREAD, WEIGHT_MUL } from './tuning';
+import { GRENADE, HERO, SPREAD, WEIGHT_MUL } from './tuning';
 
 /**
  * Боец отряда: блочная модель с суставами (ADR-003), тактическое передвижение и стойка (ADR-002, раздел 10).
@@ -28,10 +28,12 @@ export interface HeroInput {
   roll: boolean;
   reload: boolean;
   slot: 'primary' | 'pistol' | null;
+  /** G удерживается: граната, чем дольше — тем дальше */
+  grenade: boolean;
 }
 
 export function emptyInput(): HeroInput {
-  return { move: new THREE.Vector2(), aim: new THREE.Vector3(0, 0, 5), run: false, aimDown: false, fire: false, crouch: false, roll: false, reload: false, slot: null };
+  return { move: new THREE.Vector2(), aim: new THREE.Vector3(0, 0, 5), run: false, aimDown: false, fire: false, crouch: false, roll: false, reload: false, slot: null, grenade: false };
 }
 
 /** Внешний вид бойца: цвета формы и снаряжения */
@@ -180,6 +182,53 @@ export class Hero {
     return this.throwDur - 0.15; // через сколько граната покидает руку
   }
   get throwing(): boolean { return this.throwT >= 0; }
+
+  // ---------- гранаты игрока (G) ----------
+  /** Сколько гранат с собой (до 3) */
+  grenades = 3;
+  infiniteGrenades = false;
+  /** Сколько держим G; −1 — не готовим */
+  private grenadeCharge = -1;
+  private readonly grenadeTarget = new THREE.Vector3();
+  private grenadeRelease = -1;
+  /** Граната покидает руку: из точки from в точку target, фитиля осталось fuse */
+  onGrenade?: (from: THREE.Vector3, target: THREE.Vector3, fuse: number) => void;
+
+  /** Куда полетит граната, пока держим G (для дуги и кольца), иначе null */
+  get grenadePreview(): THREE.Vector3 | null { return this.grenadeCharge >= 0 ? this.grenadeTarget : null; }
+
+  /** Дальность по времени удержания: от 4 до 14 м за секунду, но не дальше курсора */
+  private grenadeAim(aim: THREE.Vector3): void {
+    const maxR = THREE.MathUtils.lerp(4, GRENADE.range, Math.min(1, this.grenadeCharge / 1.0));
+    const dx = aim.x - this.pos.x, dz = aim.z - this.pos.z;
+    const d = Math.hypot(dx, dz);
+    const r = THREE.MathUtils.clamp(d, 1.5, maxR);
+    const yaw = d > 0.3 ? Math.atan2(dx, dz) : this.upperYaw;
+    this.grenadeTarget.set(this.pos.x + Math.sin(yaw) * r, 0, this.pos.z + Math.cos(yaw) * r);
+  }
+
+  private updateGrenade(dt: number, input: HeroInput): void {
+    // бросок идёт: в нужный момент граната покидает руку
+    if (this.grenadeRelease >= 0) {
+      this.grenadeRelease -= dt;
+      if (this.grenadeRelease < 0) this.onGrenade?.(this.handWorld(), this.grenadeTarget.clone(), GRENADE.fuse - 0.45);
+      return;
+    }
+    const can = !this.rolling && !this.running && !this.throwing && (this.grenades > 0 || this.infiniteGrenades);
+    if (input.grenade && can) {
+      if (this.grenadeCharge < 0) this.grenadeCharge = 0;
+      this.grenadeCharge += dt;
+      this.grenadeAim(input.aim);
+    } else if (this.grenadeCharge >= 0) {
+      // отпустили G — бросок (бег и перекат отменяют)
+      if (can) {
+        this.grenadeAim(input.aim);
+        if (!this.infiniteGrenades) this.grenades--;
+        this.grenadeRelease = this.throwGesture(0);
+      }
+      this.grenadeCharge = -1;
+    }
+  }
   /** Кисть с гранатой в мире */
   handWorld(out = new THREE.Vector3()): THREE.Vector3 { return this.arms[0].end.getWorldPosition(out); }
 
@@ -513,6 +562,7 @@ export class Hero {
     if (this.touching && dt > 0) this.vel.copy(this.pos).sub(prev).divideScalar(dt);
 
     // оружие
+    this.updateGrenade(dt, input);
     if (input.slot) {
       this.gunner.select(input.slot, H.switchTime);
     }

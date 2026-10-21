@@ -283,3 +283,35 @@ test('двустволка бросает гранату в засевшего �
   expect(r.fled).toBeGreaterThan(3);
   expect(r.rifleHp).toBe(100);
 });
+
+test('граната игрока на G: удержание — дальность, взрыв ранит манекен, гранат становится меньше', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.resetTargets(); m.hero.revive(); m.hero.grenades = 3;
+    const d = m.dummies.find((x: any) => x.name === '10 м');
+    m.hero.place(d.pos.x, 19, Math.PI);
+    m.setAim(d.pos.x, d.pos.z);
+    m.step(0.3);
+    // короткое нажатие: граната летит лишь на 4–5 м
+    m.input.grenade = true; m.step(0.1);
+    const short = m.hero.grenadePreview ? m.hero.grenadePreview.distanceTo(m.hero.pos) : -1;
+    // держим секунду: дальность растёт до курсора (10 м)
+    m.step(1.0);
+    const long = m.hero.grenadePreview ? m.hero.grenadePreview.distanceTo(m.hero.pos) : -1;
+    m.input.grenade = false; m.step(1 / 60);
+    const left = m.hero.grenades;
+    m.step(0.7);
+    const flying = m.grenades.list.length;
+    m.step(3.2);
+    return { short, long, left, flying, exploded: m.grenades.exploded, dmg: d.total, heroHp: m.hero.hp };
+  });
+  expect(r.short).toBeGreaterThan(3.5);
+  expect(r.short).toBeLessThan(6);
+  expect(r.long).toBeCloseTo(10, 0);
+  expect(r.left).toBe(2);
+  expect(r.flying).toBe(1);
+  expect(r.exploded).toBe(1);
+  expect(r.dmg).toBeGreaterThan(20);
+  expect(r.heroHp).toBe(100);
+});
