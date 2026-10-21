@@ -149,6 +149,18 @@ export const GUNS: Record<'pm' | 'ak74' | 'dbl' | 'ar15' | 'flamer', GunTuning> 
   },
 };
 
+/** Граната РГД-5 (раздел 8.4) */
+export const GRENADE = {
+  dmg: 70,
+  radius: 4,
+  /** Фитиль от выдёргивания чеки, с */
+  fuse: 3.2,
+  /** Дальность броска, м */
+  range: 14,
+  /** Укрытие между взрывом и целью оставляет столько урона */
+  coverMul: 0.2,
+};
+
 /** Дуплет двустволки: удерживать ЛКМ столько секунд */
 export const DOUBLE_HOLD = 0.3;
 
@@ -249,6 +261,12 @@ export interface JailerTuning {
   flameDps: number;
   burnDps: number;
   burnTime: number;
+  /** Гранаты: сколько с собой, пауза между бросками, дистанция броска, сколько держит перед броском («готовит»), с */
+  grenades: number;
+  grenadeCd: number;
+  grenadeMin: number;
+  grenadeMax: number;
+  cook: number;
   /** Баллоны на спине: прочность, радиус и урон взрыва */
   tankHp: number;
   blastR: number;
@@ -257,14 +275,15 @@ export interface JailerTuning {
 
 const JAIL_BASE: JailerTuning = {
   hp: 100, aimErr: 2.5, reaction: 0.35, burst: 4, burstPause: 0.7, peekTime: 1.8, hideTime: 1.3, preferMin: 6, preferMax: 14, dmgMul: 0.8,
-  flameDps: 0, burnDps: 0, burnTime: 0, tankHp: 0, blastR: 0, blastDmg: 0,
+  flameDps: 0, burnDps: 0, burnTime: 0, grenades: 0, grenadeCd: 0, grenadeMin: 0, grenadeMax: 0, cook: 0, tankHp: 0, blastR: 0, blastDmg: 0,
 };
 
 export const JAILERS: Record<JailerKind, JailerTuning> = {
   /** AR-15: держит дистанцию, прячется за укрытиями, выглядывает и бьёт очередями */
   rifle: { ...JAIL_BASE, hp: 100, aimErr: 2.2, reaction: 0.35, burst: 4, burstPause: 0.6, preferMin: 7, preferMax: 15, dmgMul: 0.8 },
   /** Двустволка: перебегает от укрытия к укрытию и врывается вплотную, вблизи — дуплет */
-  shotgun: { ...JAIL_BASE, hp: 120, aimErr: 3, reaction: 0.3, burst: 1, burstPause: 0.5, preferMin: 2, preferMax: 6, dmgMul: 0.5 },
+  shotgun: { ...JAIL_BASE, hp: 120, aimErr: 3, reaction: 0.3, burst: 1, burstPause: 0.5, preferMin: 2, preferMax: 6, dmgMul: 0.5,
+    grenades: 2, grenadeCd: 7, grenadeMin: 5, grenadeMax: 13, cook: 0.8 },
   /** Огнемётчик: медленно идёт напролом и жжёт; баллоны на спине взрываются от попаданий */
   flamer: {
     ...JAIL_BASE, hp: 140, aimErr: 4, reaction: 0.4, burst: 0, burstPause: 0, preferMin: 2, preferMax: 5.5, dmgMul: 1,
@@ -277,10 +296,10 @@ export const JAILERS: Record<JailerKind, JailerTuning> = {
 const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
 
-let DEFAULTS: { HERO: typeof HERO; SPREAD: typeof SPREAD; RICOCHET: typeof RICOCHET; GUNS: typeof GUNS; BEETLES: typeof BEETLES; ARACHNIDS: typeof ARACHNIDS; JAILERS: typeof JAILERS } | null = null;
+let DEFAULTS: { HERO: typeof HERO; SPREAD: typeof SPREAD; RICOCHET: typeof RICOCHET; GUNS: typeof GUNS; BEETLES: typeof BEETLES; ARACHNIDS: typeof ARACHNIDS; JAILERS: typeof JAILERS; GRENADE: typeof GRENADE } | null = null;
 /** Запомнить стартовые значения (вызывается при запуске) */
 export function snapshotTuning(): void {
-  DEFAULTS ??= { HERO: clone(HERO), SPREAD: clone(SPREAD), RICOCHET: clone(RICOCHET), GUNS: clone(GUNS), BEETLES: clone(BEETLES), ARACHNIDS: clone(ARACHNIDS), JAILERS: clone(JAILERS) };
+  DEFAULTS ??= { HERO: clone(HERO), SPREAD: clone(SPREAD), RICOCHET: clone(RICOCHET), GUNS: clone(GUNS), BEETLES: clone(BEETLES), ARACHNIDS: clone(ARACHNIDS), JAILERS: clone(JAILERS), GRENADE: clone(GRENADE) };
 }
 
 export function resetTuning(): void {
@@ -289,13 +308,14 @@ export function resetTuning(): void {
   Object.assign(SPREAD, clone(DEFAULTS.SPREAD));
   Object.assign(RICOCHET, clone(DEFAULTS.RICOCHET));
   Object.assign(BEETLES, clone(DEFAULTS.BEETLES));
+  Object.assign(GRENADE, clone(DEFAULTS.GRENADE));
   for (const k of Object.keys(ARACHNIDS) as ArachnidKind[]) Object.assign(ARACHNIDS[k], clone(DEFAULTS.ARACHNIDS[k]));
   for (const k of Object.keys(JAILERS) as JailerKind[]) Object.assign(JAILERS[k], clone(DEFAULTS.JAILERS[k]));
   for (const k of Object.keys(GUNS) as (keyof typeof GUNS)[]) Object.assign(GUNS[k], clone(DEFAULTS.GUNS[k]));
 }
 
 export function tuningJSON(): string {
-  return JSON.stringify({ HERO, SPREAD, RICOCHET, GUNS, BEETLES, ARACHNIDS, JAILERS }, null, 2);
+  return JSON.stringify({ HERO, SPREAD, RICOCHET, GUNS, BEETLES, ARACHNIDS, JAILERS, GRENADE }, null, 2);
 }
 
 /** Жуки в плейграунде: их здоровье ещё в старом масштабе (×10), до перебалансировки на этапе 1a */
