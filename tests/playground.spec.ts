@@ -315,3 +315,57 @@ test('граната игрока на G: удержание — дальнос�
   expect(r.dmg).toBeGreaterThan(20);
   expect(r.heroHp).toBe(100);
 });
+
+test('склад: ящик с припасами на E, бочки взрываются цепочкой, ящики разбиваются, терминал лечит', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.resetTargets(); m.hero.revive(); m.hero.god = false;
+    const P = m.props;
+    // ящик с припасами: подойти, E — крышка открыта, лут на полу, проходя — подобран
+    const s = P.supplies[0];
+    m.hero.place(s.pos.x + Math.sin(s.yaw) * 1.2, s.pos.z + Math.cos(s.yaw) * 1.2, 0);
+    m.step(0.1);
+    const berries0 = m.berries;
+    m.interact(); m.step(0.3);
+    const loot = P.pickups.length;
+    m.step(1.2);
+    for (const p of [...P.pickups]) { m.hero.place(p.pos.x, p.pos.z, 0); m.step(0.4); }
+    const lootLeft = P.pickups.length, berries = m.berries - berries0;
+    m.interact(); m.step(0.3);
+    const reopenLoot = P.pickups.length;
+
+    // бочки: стреляем в одну из тройки — взрываются три
+    m.hero.god = true;
+    const b = P.barrels[2];
+    m.hero.place(b.pos.x, 4, Math.PI); m.setAim(b.pos.x, b.pos.z); m.input.aimDown = true; m.step(0.5);
+    for (let i = 0; i < 6; i++) { m.input.fire = true; m.step(1 / 60); m.input.fire = false; m.step(0.15); }
+    m.step(2);
+    const barrelsLeft = P.barrels.filter((x: any) => !x.exploded).length;
+
+    // деревянный ящик разбивается пулями, навигация пересобирается
+    const c = P.crates[1];
+    const ver0 = P.version;
+    m.hero.place(c.pos.x, 9, 0); m.setAim(c.pos.x, c.pos.z); m.step(0.4);
+    for (let i = 0; i < 12 && !c.broken; i++) { m.input.fire = true; m.step(1 / 60); m.input.fire = false; m.step(0.2); }
+    m.input.aimDown = false;
+    const crateBroken = c.broken, verChanged = P.version > ver0;
+
+    // терминал: E лечит, пока стоишь рядом
+    m.hero.god = false; m.hero.hp = 30;
+    const t = P.terminals[0];
+    m.hero.place(t.pos.x + Math.sin(t.yaw) * 1.0, t.pos.z + Math.cos(t.yaw) * 1.0, 0); m.step(0.1);
+    m.interact(); m.step(1.0);
+    const healed = m.hero.hp - 30;
+    m.resetTargets(); m.hero.revive();
+    return { loot, lootLeft, berries, reopenLoot, barrelsLeft, crateBroken, verChanged, healed };
+  });
+  expect(r.loot).toBe(7);
+  expect(r.lootLeft).toBe(0);
+  expect(r.berries).toBe(10);
+  expect(r.reopenLoot).toBe(0);
+  expect(r.barrelsLeft).toBe(2);
+  expect(r.crateBroken).toBe(true);
+  expect(r.verChanged).toBe(true);
+  expect(r.healed).toBeGreaterThan(20);
+});
