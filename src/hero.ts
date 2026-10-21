@@ -3,6 +3,7 @@ import { resolveCircle, type Obstacle } from './collision';
 import { buildFirearm, buildMagazine, buildShell, type FirearmId, type GunRig } from './firearms';
 import type { FX } from './fx';
 import { Gunner, RELOAD_MARKS, type FireRequest, type GunEvent, type GunState, type Rand } from './gunplay';
+import { aimSegment, solveIK } from './ik';
 import { pixelTex, type Textures } from './textures';
 import { HERO, SPREAD, WEIGHT_MUL } from './tuning';
 
@@ -62,29 +63,6 @@ function box(w: number, h: number, d: number, m: THREE.Material | THREE.Material
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
-}
-
-/** Двухзвенная IK: вернуть локоть (колено) для плеча s, цели t и подсказки направления pole */
-function solveIK(s: THREE.Vector3, t: THREE.Vector3, a: number, b: number, pole: THREE.Vector3, outElbow: THREE.Vector3): void {
-  const dir = new THREE.Vector3().subVectors(t, s);
-  let d = dir.length();
-  if (d < 1e-5) { dir.set(0, -1, 0); d = 1e-5; } else dir.divideScalar(d);
-  d = THREE.MathUtils.clamp(d, Math.abs(a - b) + 1e-3, a + b - 1e-3);
-  const cosA = THREE.MathUtils.clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1);
-  const sinA = Math.sqrt(1 - cosA * cosA);
-  const p = pole.clone().addScaledVector(dir, -pole.dot(dir));
-  if (p.lengthSq() < 1e-8) p.set(0, 0, 1).addScaledVector(dir, -dir.z);
-  p.normalize();
-  outElbow.copy(s).addScaledVector(dir, cosA * a).addScaledVector(p, sinA * a);
-}
-
-const DOWN = new THREE.Vector3(0, -1, 0);
-/** Повернуть сегмент (ось −Y) из точки from в точку to */
-function aimSegment(o: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3): void {
-  o.position.copy(from);
-  const d = new THREE.Vector3().subVectors(to, from);
-  if (d.lengthSq() < 1e-10) return;
-  o.quaternion.setFromUnitVectors(DOWN, d.normalize());
 }
 
 interface Limb { upper: THREE.Group; lower: THREE.Group; end: THREE.Group }
@@ -155,6 +133,16 @@ export class Hero {
   /** Магазин или патроны в левой руке во время перезарядки */
   private readonly handMag = new THREE.Group();
   private readonly stamRing: THREE.Mesh;
+  /** Паутина на герое (видна, пока замедлен) */
+  private readonly webMesh = new THREE.Group();
+  private readonly webMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 3, 0.4), toneMapped: false, transparent: true, opacity: 0.85 });
+
+  /** Замедление паутиной: множитель скорости и сколько осталось */
+  slowMul = 1;
+  slowT = 0;
+  /** Яд: урон в секунду и сколько осталось */
+  poisonDps = 0;
+  poisonT = 0;
   private readonly stamMat: THREE.MeshBasicMaterial;
   private readonly vestMats: THREE.Material[] = [];
 
@@ -257,6 +245,25 @@ export class Hero {
     this.root.add(this.stamRing);
 
     this.showGun();
+
+    // нити паутины вокруг ног и корпуса
+    for (const [w, h, d, y, rz] of [[0.9, 0.04, 0.04, 0.35, 0.5], [0.9, 0.04, 0.04, 0.5, -0.6], [0.04, 0.04, 0.8, 0.9, 0], [0.8, 0.04, 0.04, 1.1, 0.3], [0.04, 0.9, 0.04, 0.6, 0.4]] as const) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), this.webMat);
+      m.position.y = y; m.rotation.z = rz; m.rotation.y = y * 3;
+      this.webMesh.add(m);
+    }
+    this.webMesh.visible = false;
+    this.root.add(this.webMesh);
+  }
+
+  /** Попала паутина: замедляет и травит. false — не попала (перекат, бессмертие) */
+  applyWeb(slowMul: number, slowT: number, dps: number, poisonT: number): boolean {
+    if (this.down || this.invulnerable) return false;
+    this.slowMul = slowMul;
+    this.slowT = Math.max(this.slowT, slowT);
+    this.poisonDps = dps;
+    this.poisonT = Math.max(this.poisonT, poisonT);
+    return true;
   }
 
   // ---------- состояние ----------
@@ -299,7 +306,7 @@ export class Hero {
     return true;
   }
 
-  revive(): void { this.down = false; this.hp = HERO.hp; }
+  revive(): void { this.down = false; this.hp = HERO.hp; this.slowT = 0; this.poisonT = 0; }
 
   place(x: number, z: number, yaw = 0): void {
     this.pos.set(x, 0, z);
@@ -317,6 +324,16 @@ export class Hero {
   update(dt: number, input: HeroInput, obstacles: readonly Obstacle[]): void {
     const H = HERO;
     this.hurtT = Math.max(0, this.hurtT - dt);
+    this.slowT = Math.max(0, this.slowT - dt);
+    if (this.poisonT > 0) {
+      this.poisonT = Math.max(0, this.poisonT - dt);
+      if (!this.god && !this.down) {
+        this.hp = Math.max(0, this.hp - this.poisonDps * dt);
+        if (this.hp <= 0) { this.down = true; this.downT = 0; this.gunner.gun.cancelReload(); }
+      }
+    }
+    this.webMesh.visible = this.slowT > 0;
+    if (this.webMesh.visible) { this.webMat.opacity = 0.5 + 0.4 * Math.min(1, this.slowT); this.webMesh.rotation.y += dt * 0.6; }
     if (this.down) {
       this.downT += dt;
       this.vel.set(0, 0, 0);
@@ -374,7 +391,7 @@ export class Hero {
       else if (this.aiming) target = H.aim;
       else if (this.running) target = H.run;
       const w = WEIGHT_MUL[this.gun.def.weight];
-      target *= w;
+      target *= w * (this.slowT > 0 ? this.slowMul : 1);
       if (moveDir && !this.running) {
         const back = moveDir.x * Math.sin(aimYaw) + moveDir.z * Math.cos(aimYaw);
         if (back < -0.35) target *= THREE.MathUtils.lerp(1, H.backMul, Math.min(1, (-back - 0.35) / 0.4));

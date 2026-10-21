@@ -194,6 +194,15 @@ export class Beetle {
     scene.add(this.group);
   }
 
+  /** Поставить жука в точку (строй в плейграунде): сразу «прошёл ворота» и смотрит по курсу yaw */
+  placeAt(x: number, z: number, yaw: number): void {
+    this.pos.set(x, 0, z);
+    this.gate.set(x, 0, z);
+    this.facing = yaw;
+    this.group.position.copy(this.pos);
+    this.group.rotation.y = yaw;
+  }
+
   /** Остановить жука: ice — во льду, иначе просто оглушён */
   freeze(sec: number, ice = true): void {
     if (sec > this.frozenT) this.iceShow = ice;

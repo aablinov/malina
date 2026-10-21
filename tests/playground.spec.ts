@@ -114,3 +114,62 @@ test('бег, присед, перекат и выносливость', async (
   expect(r.roll).toBeGreaterThan(r.H.rollDist - 0.2);
   expect(r.rollCost).toBeGreaterThan(r.H.rollCost - 5);
 });
+
+test('арахниды: спят в загоне, просыпаются от выстрела, уклоняются и не прыгают через стены', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.resetTargets();
+    const asleep0 = m.enemies.filter((e: any) => !e.awake).length;
+    const warrior = m.arachnids.find((a: any) => a.kind === 'warrior');
+    // один выстрел по воину будит только его
+    m.hero.place(warrior.pos.x, 2, Math.PI);
+    m.setAim(warrior.pos.x, warrior.pos.z);
+    m.step(0.4);
+    m.input.fire = true; m.step(1 / 60); m.input.fire = false; m.step(0.1);
+    const awakeAfterShot = m.enemies.filter((e: any) => e.awake).map((e: any) => e.spec.kind);
+
+    // бой: герой целится с запаздыванием 0,25 с и стреляет очередями
+    const crossings = { n: 0 };
+    const check = (a: any, p: any) => {
+      const dx = a.pos.x - p.x, dz = a.pos.z - p.z, d = Math.hypot(dx, dz);
+      if (d > 1e-4 && m.raycast(p.x, p.z, dx / d, dz / d, d)) crossings.n++;
+    };
+    m.hero.gunner.infinite = true;
+    const hist: any[] = [];
+    for (let t = 0; t < 6 && !warrior.dead; t += 1 / 60) {
+      hist.push(warrior.pos.clone());
+      const lag = hist[Math.max(0, hist.length - 15)];
+      m.setAim(lag.x, lag.z);
+      m.input.fire = (t % 0.8) < 0.4;
+      const p = warrior.pos.clone();
+      m.step(1 / 60);
+      check(warrior, p);
+      if (m.hero.down) m.hero.revive();
+    }
+    m.input.fire = false;
+    const dodges = warrior.dodges;
+
+    // прыгун за низким укрытием: прыгать через него нельзя, только обходить
+    m.resetTargets();
+    m.hero.revive();
+    const leaper = m.arachnids.find((a: any) => a.kind === 'leaper');
+    m.hero.place(6, -6.6, Math.PI);
+    leaper.pos.set(6, 0, -9.6);
+    m.wake('leaper');
+    for (let t = 0; t < 5; t += 1 / 60) {
+      const p = leaper.pos.clone();
+      m.step(1 / 60);
+      check(leaper, p);
+      if (m.hero.down) m.hero.revive();
+    }
+    m.resetTargets();
+    const asleepAfterReset = m.enemies.filter((e: any) => !e.awake).length;
+    return { asleep0, total: m.enemies.length, awakeAfterShot, dodges, crossings: crossings.n, asleepAfterReset };
+  });
+  expect(r.asleep0).toBe(r.total);
+  expect(r.awakeAfterShot).toEqual(['warrior']);
+  expect(r.dodges).toBeGreaterThan(0);
+  expect(r.crossings).toBe(0);
+  expect(r.asleepAfterReset).toBe(r.total);
+});

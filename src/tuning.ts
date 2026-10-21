@@ -146,15 +146,87 @@ export const GUNS: Record<'pm' | 'ak74' | 'dbl' | 'ar15', GunTuning> = {
 /** Дуплет двустволки: удерживать ЛКМ столько секунд */
 export const DOUBLE_HOLD = 0.3;
 
+// ---------- Арахниды (как в «Звёздном десанте») ----------
+
+export type ArachnidKind = 'warrior' | 'spinner' | 'leaper';
+
+export interface ArachnidTuning {
+  hp: number;
+  /** Бег, м/с */
+  speed: number;
+  /** Размер модели (×) и длина тела, м */
+  scale: number;
+  /** Через сколько секунд замечает, что на него навели ствол */
+  reaction: number;
+  /** Шанс отпрыгнуть, когда заметил прицел (0..1) */
+  dodgeChance: number;
+  /** Пауза между уклонами, с */
+  dodgeCd: number;
+  /** Длина и время отскока */
+  dodgeDist: number;
+  dodgeTime: number;
+  /** Ближний бой: дистанция, урон, замах, пауза */
+  meleeRange: number;
+  meleeDmg: number;
+  meleeWindup: number;
+  meleeCd: number;
+  /** Ткач: держит дистанцию keepMin..keepMax и плюётся паутиной */
+  keepMin: number;
+  keepMax: number;
+  webRange: number;
+  webCd: number;
+  webSpeed: number;
+  webDmg: number;
+  /** Замедление героя паутиной (× скорость) и сколько длится */
+  webSlow: number;
+  webSlowTime: number;
+  /** Яд: урон в секунду и длительность */
+  poisonDps: number;
+  poisonTime: number;
+  /** Прыгун: прыжок на героя — дальность в длинах тела, урон, замах, пауза, время полёта */
+  pounceMul: number;
+  pounceDmg: number;
+  pounceWindup: number;
+  pounceCd: number;
+  pounceTime: number;
+}
+
+const ARACH_BASE: ArachnidTuning = {
+  hp: 120, speed: 6, scale: 1, reaction: 0.15, dodgeChance: 0.8, dodgeCd: 1, dodgeDist: 3, dodgeTime: 0.32,
+  meleeRange: 1.9, meleeDmg: 10, meleeWindup: 0.3, meleeCd: 1.2,
+  keepMin: 0, keepMax: 0, webRange: 0, webCd: 0, webSpeed: 0, webDmg: 0, webSlow: 1, webSlowTime: 0, poisonDps: 0, poisonTime: 0,
+  pounceMul: 0, pounceDmg: 0, pounceWindup: 0, pounceCd: 0, pounceTime: 0,
+};
+
+export const ARACHNIDS: Record<ArachnidKind, ArachnidTuning> = {
+  /** Воин: самый ловкий и умный, ближний бой, заходит с фланга, давит на перезарядке */
+  warrior: { ...ARACH_BASE, hp: 140, speed: 6.4, scale: 1, reaction: 0.12, dodgeChance: 0.9, dodgeCd: 0.8, dodgeDist: 3, dodgeTime: 0.3, meleeRange: 2, meleeDmg: 18, meleeWindup: 0.25, meleeCd: 1.1 },
+  /** Ткач: держит дистанцию, кидает ядовитую паутину (замедляет и травит) */
+  spinner: {
+    ...ARACH_BASE, hp: 110, speed: 5.6, scale: 0.85, reaction: 0.18, dodgeChance: 0.8, dodgeCd: 0.9, dodgeDist: 2.8, dodgeTime: 0.3,
+    meleeRange: 1.6, meleeDmg: 8, meleeWindup: 0.3, meleeCd: 1.4,
+    keepMin: 6, keepMax: 11, webRange: 13, webCd: 2.4, webSpeed: 13, webDmg: 5, webSlow: 0.45, webSlowTime: 2.5, poisonDps: 4, poisonTime: 3,
+  },
+  /** Прыгун: быстрый, прыгает прямо на героя на 3 длины тела */
+  leaper: {
+    ...ARACH_BASE, hp: 110, speed: 7.2, scale: 0.8, reaction: 0.18, dodgeChance: 0.75, dodgeCd: 1, dodgeDist: 3.2, dodgeTime: 0.3,
+    meleeRange: 1.6, meleeDmg: 10, meleeWindup: 0.25, meleeCd: 1.2,
+    pounceMul: 3, pounceDmg: 26, pounceWindup: 0.4, pounceCd: 2.6, pounceTime: 0.45,
+  },
+};
+
+/** Длина тела арахнида при scale = 1, м */
+export const ARACHNID_LENGTH = 2.2;
+
 // ---------- Сброс и экспорт для панели ----------
 
 const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
 
-let DEFAULTS: { HERO: typeof HERO; SPREAD: typeof SPREAD; RICOCHET: typeof RICOCHET; GUNS: typeof GUNS; BEETLES: typeof BEETLES } | null = null;
+let DEFAULTS: { HERO: typeof HERO; SPREAD: typeof SPREAD; RICOCHET: typeof RICOCHET; GUNS: typeof GUNS; BEETLES: typeof BEETLES; ARACHNIDS: typeof ARACHNIDS } | null = null;
 /** Запомнить стартовые значения (вызывается при запуске) */
 export function snapshotTuning(): void {
-  DEFAULTS ??= { HERO: clone(HERO), SPREAD: clone(SPREAD), RICOCHET: clone(RICOCHET), GUNS: clone(GUNS), BEETLES: clone(BEETLES) };
+  DEFAULTS ??= { HERO: clone(HERO), SPREAD: clone(SPREAD), RICOCHET: clone(RICOCHET), GUNS: clone(GUNS), BEETLES: clone(BEETLES), ARACHNIDS: clone(ARACHNIDS) };
 }
 
 export function resetTuning(): void {
@@ -163,11 +235,12 @@ export function resetTuning(): void {
   Object.assign(SPREAD, clone(DEFAULTS.SPREAD));
   Object.assign(RICOCHET, clone(DEFAULTS.RICOCHET));
   Object.assign(BEETLES, clone(DEFAULTS.BEETLES));
+  for (const k of Object.keys(ARACHNIDS) as ArachnidKind[]) Object.assign(ARACHNIDS[k], clone(DEFAULTS.ARACHNIDS[k]));
   for (const k of Object.keys(GUNS) as (keyof typeof GUNS)[]) Object.assign(GUNS[k], clone(DEFAULTS.GUNS[k]));
 }
 
 export function tuningJSON(): string {
-  return JSON.stringify({ HERO, SPREAD, RICOCHET, GUNS, BEETLES }, null, 2);
+  return JSON.stringify({ HERO, SPREAD, RICOCHET, GUNS, BEETLES, ARACHNIDS }, null, 2);
 }
 
 /** Жуки в плейграунде: их здоровье ещё в старом масштабе (×10), до перебалансировки на этапе 1a */

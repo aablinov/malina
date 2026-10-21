@@ -1,4 +1,4 @@
-import { BEETLES, GUNS, HERO, resetTuning, RICOCHET, SPREAD, tuningJSON } from '../tuning';
+import { ARACHNIDS, BEETLES, GUNS, HERO, resetTuning, RICOCHET, SPREAD, tuningJSON } from '../tuning';
 
 /**
  * F1 — панель параметров. Ползунки правят объекты из tuning.ts напрямую, изменения применяются сразу.
@@ -19,13 +19,18 @@ const LABELS: Record<string, string> = {
   range: 'Дальность, м', spread: 'Разброс, °', bloomShot: 'Раскачка за выстрел', bloomDeg: 'Полная раскачка, °', bloomDecay: 'Спад раскачки, с',
   kick: 'Подброс ствола', shoulderKick: 'Отдача в плечи, °', knock: 'Отбрасывание',
   dmgScale: 'Урон по жукам ×', biteMul: 'Укус жука ×',
+  scale: 'Размер ×', reaction: 'Реакция на прицел, с', dodgeChance: 'Шанс уклона', dodgeCd: 'Пауза уклонов, с', dodgeDist: 'Уклон, м', dodgeTime: 'Уклон, с',
+  meleeRange: 'Удар: дистанция, м', meleeDmg: 'Удар: урон', meleeWindup: 'Удар: замах, с', meleeCd: 'Удар: пауза, с',
+  keepMin: 'Держит от, м', keepMax: 'Держит до, м', webRange: 'Паутина: дальность', webCd: 'Паутина: пауза, с', webSpeed: 'Паутина: скорость',
+  webDmg: 'Паутина: урон', webSlow: 'Замедление ×', webSlowTime: 'Замедление, с', poisonDps: 'Яд, урон/с', poisonTime: 'Яд, с',
+  pounceMul: 'Прыжок: длин тела', pounceDmg: 'Прыжок: урон', pounceWindup: 'Прыжок: замах, с', pounceCd: 'Прыжок: пауза, с', pounceTime: 'Прыжок: полёт, с',
 };
 
 const INT_KEYS = new Set(['hp', 'stamina', 'pellets', 'mag']);
 
 function rangeFor(key: string, v: number): [number, number, number] {
   if (INT_KEYS.has(key)) return [1, Math.max(10, Math.ceil(v * 3)), 1];
-  if (key === 'chance' || key === 'dmgMul' || key === 'bloomShot' || key === 'aimCamShift') return [0, 1, 0.01];
+  if (key === 'chance' || key === 'dmgMul' || key === 'bloomShot' || key === 'aimCamShift' || key === 'dodgeChance' || key === 'webSlow') return [0, 1, 0.01];
   if (key.endsWith('Mul') || key === 'aim' || key === 'crouch' || key === 'move') return [0, Math.max(2, v * 2), 0.01];
   const max = v <= 0 ? 1 : v < 1 ? 1 : v * 3;
   const step = max <= 1 ? 0.01 : max <= 10 ? 0.05 : max <= 50 ? 0.1 : 1;
@@ -81,6 +86,9 @@ export class Panel {
     this.section('Множители разброса', SPREAD as unknown as NumObj);
     this.section('Рикошеты', RICOCHET as unknown as NumObj);
     this.section('Жуки', BEETLES as unknown as NumObj);
+    this.section('Арахнид: Воин', ARACHNIDS.warrior as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'dodgeTime', 'meleeRange', 'meleeDmg', 'meleeWindup', 'meleeCd']);
+    this.section('Арахнид: Ткач', ARACHNIDS.spinner as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'keepMin', 'keepMax', 'webRange', 'webCd', 'webSpeed', 'webDmg', 'webSlow', 'webSlowTime', 'poisonDps', 'poisonTime']);
+    this.section('Арахнид: Прыгун', ARACHNIDS.leaper as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'meleeDmg', 'pounceMul', 'pounceDmg', 'pounceWindup', 'pounceCd', 'pounceTime']);
   }
 
   /** Обновить числа, если их поменяли не ползунком */
@@ -91,11 +99,11 @@ export class Panel {
     }
   }
 
-  private section(title: string, obj: NumObj): void {
+  private section(title: string, obj: NumObj, only?: string[]): void {
     const sec = document.createElement('details');
     sec.open = title.startsWith('Ствол') || title === 'Герой';
     sec.innerHTML = `<summary>${title}</summary>`;
-    for (const key of Object.keys(obj)) {
+    for (const key of only ?? Object.keys(obj)) {
       const v = obj[key];
       if (typeof v !== 'number') continue;
       const [min, max, step] = rangeFor(key, v);

@@ -4,14 +4,16 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { initAudio, sfx, toggleMute } from '../audio';
+import { Arachnid, ARACHNID_NAMES, type ArachnidContext } from '../arachnid';
 import { Beetle, type BeetleKind } from '../beetle';
-import { obstacle, resolveCircle, type Obstacle } from '../collision';
+import { distToObstacle, NavGrid } from '../nav';
+import { obstacle, raycastObstacles, resolveCircle, type Obstacle } from '../collision';
 import { FIREARMS, PRIMARIES, type FirearmId } from '../firearms';
 import { FX } from '../fx';
 import { rng, traceShot, type FireRequest, type GunEvent, type GunState, type Shootable } from '../gunplay';
 import { emptyInput, Hero, type HeroInput } from '../hero';
 import { makeTextures } from '../textures';
-import { BEETLES, CALIBERS, GUNS, HERO, snapshotTuning } from '../tuning';
+import { ARACHNIDS, BEETLES, CALIBERS, GUNS, HERO, snapshotTuning, type ArachnidKind } from '../tuning';
 import { Dummy, Spits, type Spit } from './dummies';
 import { Overlays } from './overlay';
 import { button, Panel, select, toggle } from './panel';
@@ -268,16 +270,85 @@ export function runPlayground(): void {
 
   const spits = new Spits(scene, fx);
 
-  // ---------- Жуки ----------
-  const beetles: Beetle[] = [];
-  let beetleAI = true;
-  const BEETLE_KEYS: BeetleKind[] = ['small', 'fast', 'spitter', 'bombardier', 'big'];
+  // ---------- Загон врагов ----------
+  // Все враги стоят в строю и спят. Попадание или пуля рядом будит именно этого врага. N — все обратно на места.
+  const nav = new NavGrid(HALF, obstacles, 0.75);
+  type EnemySpec = { type: 'beetle'; kind: BeetleKind; x: number } | { type: 'arachnid'; kind: ArachnidKind; x: number };
+  const PEN_Z = -10;
+  const ROSTER: EnemySpec[] = [
+    { type: 'beetle', kind: 'small', x: -15 }, { type: 'beetle', kind: 'fast', x: -13 }, { type: 'beetle', kind: 'spitter', x: -11 },
+    { type: 'beetle', kind: 'bombardier', x: -9 }, { type: 'beetle', kind: 'big', x: -7 },
+    { type: 'arachnid', kind: 'warrior', x: -3.5 }, { type: 'arachnid', kind: 'spinner', x: 0.5 }, { type: 'arachnid', kind: 'leaper', x: 4.5 },
+  ];
+  const ARACH_GLOW: Record<ArachnidKind, THREE.Color> = { warrior: new THREE.Color(3.2, 2.2, 0.3), spinner: new THREE.Color(0.7, 3.2, 0.4), leaper: new THREE.Color(2.6, 1, 3) };
   const BEETLE_NAMES: Record<BeetleKind, string> = { small: 'мелкий', fast: 'быстрый', spitter: 'плевун', bombardier: 'бомбардир', big: 'носорог' };
+  const ARACH_COLORS: Record<ArachnidKind, string> = { warrior: '#c79a1c', spinner: '#3c9a2a', leaper: '#9a3cb0' };
 
-  function beetleTarget(b: Beetle): Shootable {
+  interface Enemy {
+    spec: EnemySpec;
+    name: string;
+    beetle: Beetle | null;
+    arach: Arachnid | null;
+    awake: boolean;
+    gone: boolean;
+    label: HTMLDivElement;
+    labelText: string;
+  }
+  const enemies: Enemy[] = [];
+  let beetleAI = true;
+  const aiRand = rng(4242);
+
+  for (const sp of ROSTER) floorLabel(sp.type === 'beetle' ? BEETLE_NAMES[sp.kind] : ARACHNID_NAMES[sp.kind], sp.x, PEN_Z + (sp.type === 'arachnid' ? 2.4 : 1.3), sp.type === 'arachnid' ? 0.9 : 0.7,
+    0, sp.type === 'arachnid' ? ARACH_COLORS[sp.kind] : '#2b2e33');
+  floorLabel('загон врагов: выстрел будит, N — на места', -5.5, PEN_Z + 4, 1);
+
+  function spawnEnemies(): void {
+    for (const sp of ROSTER) {
+      const label = document.createElement('div');
+      label.className = 'pg-dummy pg-enemy';
+      overlayEl.appendChild(label);
+      const e: Enemy = { spec: sp, name: '', beetle: null, arach: null, awake: false, gone: false, label, labelText: '' };
+      if (sp.type === 'beetle') {
+        const b = new Beetle(scene, sp.kind, [sp.x, PEN_Z], [sp.x, PEN_Z]);
+        b.placeAt(sp.x, PEN_Z, 0);
+        e.beetle = b;
+        e.name = BEETLE_NAMES[sp.kind];
+      } else {
+        e.arach = new Arachnid(scene, sp.kind, sp.x, PEN_Z, 0, aiRand, fx);
+        e.name = ARACHNID_NAMES[sp.kind];
+      }
+      enemies.push(e);
+    }
+  }
+
+  function clearEnemies(): void {
+    for (const e of enemies) {
+      e.beetle?.dispose();
+      e.arach?.dispose();
+      e.label.remove();
+    }
+    enemies.length = 0;
+  }
+
+  function resetEnemies(): void {
+    clearEnemies();
+    spawnEnemies();
+    spits.clear();
+  }
+
+  function wakeEnemy(e: Enemy): void {
+    if (e.gone) return;
+    if (!e.awake && !scripted) sfx.screech();
+    e.awake = true;
+    e.arach?.wake();
+  }
+
+  /** Обёртка жука под попадания пули */
+  function beetleTarget(e: Enemy, b: Beetle): Shootable {
     return {
       pos: b.pos, radius: b.radius * 0.9, alive: !b.dead,
       hit(dmg, dir, point) {
+        wakeEnemy(e);
         const d = dmg * BEETLES.dmgScale;
         fx.hit(point, dir, new THREE.Color(3, 2.4, 1), 0.7);
         if (b.damage(d, dir)) killBeetle(b);
@@ -286,8 +357,28 @@ export function runPlayground(): void {
   }
 
   function killBeetle(b: Beetle): void {
-    sfx.kill();
+    if (!scripted) sfx.kill();
     fx.burst(b.pos.clone().setY(0.35), [b.K.shell, b.K.sheen, '#14161c'], 16, { speed: 4, up: 4.5, size: 0.16 * b.K.scale, life: 1.2 });
+  }
+
+  const liveBeetles = (): Beetle[] => enemies.filter((e) => e.beetle && !e.gone).map((e) => e.beetle as Beetle);
+  const liveArachnids = (): Arachnid[] => enemies.filter((e) => e.arach && !e.gone).map((e) => e.arach as Arachnid);
+  spawnEnemies();
+
+  /** Подпись над врагом: имя, состояние, здоровье */
+  function drawEnemyLabel(e: Enemy, w: number, h: number): void {
+    const obj = e.arach ?? e.beetle;
+    if (!obj || e.gone) { e.label.style.display = 'none'; return; }
+    const top = e.arach ? 2.2 * e.arach.T.scale : 1.2;
+    const v = obj.pos.clone().setY(top).project(camera);
+    const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
+    e.label.style.display = on ? '' : 'none';
+    if (!on) return;
+    e.label.style.transform = `translate(${((v.x * 0.5 + 0.5) * w).toFixed(1)}px,${((-v.y * 0.5 + 0.5) * h).toFixed(1)}px) translate(-50%,-100%)`;
+    const hpK = e.arach ? e.arach.hp / e.arach.T.hp : e.beetle ? e.beetle.hp / e.beetle.maxHp : 0;
+    const state = e.arach ? e.arach.state : e.awake ? 'охота' : 'спит';
+    const t = `<i>${e.name} · ${state}</i><s style="--k:${Math.max(0, hpK).toFixed(2)}"></s>`;
+    if (t !== e.labelText) { e.labelText = t; e.label.innerHTML = t; }
   }
 
   // ---------- Герой ----------
@@ -304,9 +395,22 @@ export function runPlayground(): void {
 
   function targets(): Shootable[] {
     const list: Shootable[] = [...dummies];
-    for (const b of beetles) if (!b.dead) list.push(beetleTarget(b));
+    for (const e of enemies) {
+      if (e.gone) continue;
+      if (e.beetle && !e.beetle.dead) list.push(beetleTarget(e, e.beetle));
+      if (e.arach && !e.arach.dead) list.push(e.arach);
+    }
     return list;
   }
+
+  /** Расстояние от точки до отрезка в плоскости XZ */
+  function segDist(px: number, pz: number, a: THREE.Vector3, b: THREE.Vector3): number {
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const l2 = dx * dx + dz * dz || 1;
+    const t = THREE.MathUtils.clamp(((px - a.x) * dx + (pz - a.z) * dz) / l2, 0, 1);
+    return Math.hypot(px - (a.x + dx * t), pz - (a.z + dz * t));
+  }
+  let lastShot = -9;
 
   function onFire(req: FireRequest, h: Hero): void {
     const g = req.gun;
@@ -326,8 +430,33 @@ export function runPlayground(): void {
         const e = hitSum.get(t.target);
         if (e) e.d += t.dmg; else hitSum.set(t.target, { d: t.dmg, p: t.point });
       }
+      // пуля прошла рядом: проснувшийся арахнид пугается и может отпрыгнуть,
+      // а из спящих будится только первый на пути пули — именно тот, в кого стреляли
+      let first: Enemy | null = null, firstT = Infinity;
+      for (const en of enemies) {
+        if (en.gone) continue;
+        const pos = en.arach ? en.arach.pos : en.beetle ? en.beetle.pos : null;
+        if (!pos) continue;
+        const r = en.arach ? en.arach.radius : (en.beetle as Beetle).radius;
+        for (const sg of res.segments) {
+          const d = segDist(pos.x, pos.z, sg.from, sg.to);
+          if (en.awake) { if (d < r + 0.9) en.arach?.nearMiss(); continue; }
+          if (d < r + 0.4) {
+            const t = sg.from.distanceTo(pos);
+            if (t < firstT) { firstT = t; first = en; }
+          }
+        }
+      }
+      if (first) { first.arach?.nearMiss(); wakeEnemy(first); }
     }
+    lastShot = simTime;
     for (const [t, e] of hitSum) {
+      if (t instanceof Arachnid) {
+        fx.text(e.p, fmtDmg(e.d), req.double ? 'crit' : '');
+        fx.burst(e.p, [ARACH_GLOW[t.kind].clone()], 4, { speed: 3, up: 2, size: 0.06, life: 0.35, glow: true, gravity: 6 });
+        if (!scripted) sfx.hit();
+        for (const en of enemies) if (en.arach === t) wakeEnemy(en);
+      }
       if (t instanceof Dummy) {
         fx.text(e.p, fmtDmg(e.d), req.double ? 'crit' : '');
         fx.burst(e.p, ['#d8b779', '#b8935a'], 3, { speed: 2, up: 1.5, size: 0.06, life: 0.4 });
@@ -435,8 +564,7 @@ export function runPlayground(): void {
     if (e.ctrlKey) {
       const n = Number(e.code.slice(5));
       if (e.code.startsWith('Digit')) {
-        if (n === 0) { beetleAI = !beetleAI; toast(beetleAI ? 'ИИ жуков включён' : 'ИИ жуков заморожен'); }
-        else if (n >= 1 && n <= 5) spawnBeetle(BEETLE_KEYS[n - 1]);
+        if (n === 0) { beetleAI = !beetleAI; toast(beetleAI ? 'ИИ врагов включён' : 'ИИ врагов заморожен'); }
       }
       return;
     }
@@ -521,22 +649,10 @@ export function runPlayground(): void {
     refreshControls();
   }
 
-  function spawnBeetle(kind: BeetleKind): void {
-    const a = input.aim.clone().setY(0);
-    if (a.distanceTo(hero.pos) < 4) a.copy(hero.pos).add(new THREE.Vector3(Math.sin(hero.upperYaw) * 8, 0, Math.cos(hero.upperYaw) * 8));
-    a.x = THREE.MathUtils.clamp(a.x, -HALF + 1, HALF - 1);
-    a.z = THREE.MathUtils.clamp(a.z, -HALF + 1, HALF - 1);
-    const b = new Beetle(scene, kind, [a.x, a.z], [hero.pos.x, hero.pos.z]);
-    beetles.push(b);
-    toast(`Жук: ${BEETLE_NAMES[kind]}`);
-  }
-
   function resetTargets(): void {
     for (const d of dummies) d.reset();
-    for (const b of beetles) b.dispose();
-    beetles.length = 0;
-    spits.clear();
-    toast('Мишени сброшены');
+    resetEnemies();
+    toast('Мишени и враги на местах');
   }
 
   // ---------- Панель: переключатели ----------
@@ -554,7 +670,8 @@ export function runPlayground(): void {
     const row = document.createElement('div');
     row.className = 'pg-btnrow';
     c.appendChild(row);
-    button(row, 'Сбросить мишени (N)', resetTargets);
+    button(row, 'Сбросить мишени и врагов (N)', resetTargets);
+    button(row, 'Разбудить всех врагов', () => { for (const e of enemies) wakeEnemy(e); });
     button(row, 'Пополнить патроны', () => { for (const k of Object.keys(CALIBERS) as (keyof typeof CALIBERS)[]) hero.gunner.reserve[k] = CALIBERS[k].max; });
     button(row, 'Герой в центр', () => hero.place(0, 4, Math.PI));
   }
@@ -571,7 +688,7 @@ export function runPlayground(): void {
       <div class="pg-gun"><span id="pgGun">АК-74</span><span class="pg-ammo" id="pgAmmo">30 / 180</span><div class="pg-rl"><i id="pgRl"></i></div></div>
     </div>
     <div class="pg-help">WASD — ходьба · Shift — бег · ПКМ — прицел · C — присед · Space — перекат · R — перезарядка · 1/2 — основной/пистолет · T — сменить основной<br>
-    F1 параметры · F2 коллайдеры · F3 разброс · F4 телеметрия · F5 патроны ∞ · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · B bloom · N сброс мишеней · Ctrl+1…5 жуки · Ctrl+0 ИИ жуков</div>
+    F1 параметры · F2 коллайдеры · F3 разброс · F4 телеметрия · F5 патроны ∞ · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · B bloom · N сброс мишеней и врагов · Ctrl+0 заморозить врагов<br>Враги стоят в загоне и спят: попадание или пуля рядом будит именно этого врага</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(hud);
 
@@ -607,6 +724,8 @@ export function runPlayground(): void {
         `патроны <b>${g.mag}${g.def.reload === 'mag' ? (g.chamber ? '+1' : '+0') : ''}</b> / ${res}`,
         `перезарядка ${rlTxt}`,
         `выстрелов ${hero.gunner.shots}`,
+        `врагов не спит <b>${enemies.filter((e) => e.awake && !e.gone).length}</b> / ${enemies.filter((e) => !e.gone).length} · уклонов ${enemies.reduce((a, e) => a + (e.arach?.dodges ?? 0), 0)}`,
+        hero.slowT > 0 || hero.poisonT > 0 ? `<span class="bad">паутина ${hero.slowT.toFixed(1)} с · яд ${hero.poisonT.toFixed(1)} с</span>` : '',
         `x ${hero.pos.x.toFixed(2)} · z ${hero.pos.z.toFixed(2)}`,
         `время ×${timeScale}${paused ? ' · <span class="bad">пауза</span>' : ''}${hero.god ? ' · бессмертие' : ''}${infiniteAmmo ? ' · патроны ∞' : ''}`,
       ].join('<br>'));
@@ -651,27 +770,71 @@ export function runPlayground(): void {
     const ctx = { hero: hero.pos, obstacles, spit: (from: THREE.Vector3, to: THREE.Vector3) => { spits.fire(from, to, 10, 8); if (!scripted) sfx.spit(); } };
     for (const d of dummies) d.update(dt, ctx);
 
-    // жуки
-    for (const b of beetles) {
-      if (b.dead || !beetleAI) continue;
-      b.update(dt, simTime, [], hero, beetles, () => {}, (_b, from, to, r) => {
-        spits.fire(from.clone().setY(0.9), to.clone().setY(0.9), r.speed, r.dmg, new THREE.Color(...r.color));
-        if (!scripted) sfx.spit();
-      });
-      resolveCircle(b.pos, b.radius * 0.8, obstacles);
-      if (!b.ranged && !hero.down) {
-        const d = Math.hypot(b.pos.x - hero.pos.x, b.pos.z - hero.pos.z);
-        if (d < b.radius + 0.45 && hero.hurt(b.bite * BEETLES.biteMul * dt) && !scripted) sfx.chew();
+    // враги: спят, пока их не разбудит выстрел
+    const allBeetles = liveBeetles();
+    const arachs = liveArachnids();
+    const actx: ArachnidContext = {
+      hero: {
+        pos: hero.pos, vel: hero.vel, upperYaw: hero.upperYaw + hero.gun.drift, aiming: hero.aiming, running: hero.running, rolling: hero.rolling,
+        down: hero.down, reloading: !!hero.gun.reload || hero.gunner.switchT > 0, muzzle: hero.muzzle(),
+        spread: hero.gunner.spread(hero.spreadMul), range: hero.gun.def.t.range,
+      },
+      firing: simTime - lastShot < 0.25 || input.fire,
+      nav, obstacles, others: arachs,
+      hurtHero(dmg, from, what) {
+        if (hero.hurt(dmg)) {
+          fx.text(hero.pos, `−${dmg}`, 'bad');
+          fx.shake = Math.max(fx.shake, what === 'pounce' ? 0.6 : 0.3);
+          // толчок от удара
+          const push = hero.pos.clone().sub(from).setY(0).setLength(what === 'pounce' ? 1.2 : 0.5);
+          hero.pos.add(push);
+          resolveCircle(hero.pos, HERO.radius, obstacles);
+          if (!scripted) sfx.hurt();
+          return true;
+        }
+        if (hero.rolling) fx.text(hero.pos, 'уклон', '');
+        return false;
+      },
+      web(from, vel, t) { spits.fireWeb(from, vel, t); },
+      sound(k) { if (!scripted) sfx[k](); },
+    };
+    for (const e of enemies) {
+      if (e.gone || !e.awake || !beetleAI) continue;
+      if (e.arach) e.arach.update(dt, actx);
+      const b = e.beetle;
+      if (b && !b.dead) {
+        b.update(dt, simTime, [], hero, allBeetles, () => {}, (_b, from, to, r) => {
+          spits.fire(from.clone().setY(0.9), to.clone().setY(0.9), r.speed, r.dmg, new THREE.Color(...r.color));
+          if (!scripted) sfx.spit();
+        });
+        resolveCircle(b.pos, b.radius * 0.8, obstacles);
+        if (!b.ranged && !hero.down) {
+          const d = Math.hypot(b.pos.x - hero.pos.x, b.pos.z - hero.pos.z);
+          if (d < b.radius + 0.45 && hero.hurt(b.bite * BEETLES.biteMul * dt) && !scripted) sfx.chew();
+        }
       }
     }
-    for (let i = beetles.length - 1; i >= 0; i--) if (beetles[i].dead) { beetles[i].dispose(); beetles.splice(i, 1); }
+    // спящие арахниды дышат и светятся
+    for (const e of enemies) if (e.arach && !e.awake && !e.gone) e.arach.update(dt, actx);
+    for (const e of enemies) {
+      if (e.gone) continue;
+      if (e.beetle?.dead) { e.beetle.dispose(); e.gone = true; }
+      if (e.arach?.dead) { e.arach.explode(); if (!scripted) sfx.kill(); e.arach.dispose(); e.gone = true; }
+    }
 
     spits.update(dt, obstacles, (s: Spit) => {
       if (Math.hypot(s.pos.x - hero.pos.x, s.pos.z - hero.pos.z) > 0.45) return false;
       if (s.pos.y > hero.headTop) return false; // пролетел над каской
       if (hero.rolling && hero.invulnerable) { fx.text(hero.pos, 'уклон', ''); return false; }
-      if (hero.hurt(s.dmg)) { fx.text(hero.pos, `−${s.dmg}`, 'bad'); if (!scripted) sfx.hurt(); }
-      fx.burst(s.pos.clone(), [new THREE.Color(0.9, 3, 0.4)], 8, { speed: 2.5, up: 2, size: 0.07, life: 0.4, glow: true, gravity: 6 });
+      if (s.web) {
+        // паутина: урон, замедление и яд
+        if (hero.applyWeb(s.web.webSlow, s.web.webSlowTime, s.web.poisonDps, s.web.poisonTime)) {
+          hero.hurt(s.dmg);
+          fx.text(hero.pos, 'паутина!', 'bad');
+          if (!scripted) sfx.webHit();
+        }
+      } else if (hero.hurt(s.dmg)) { fx.text(hero.pos, `−${s.dmg}`, 'bad'); if (!scripted) sfx.hurt(); }
+      fx.burst(s.pos.clone(), [new THREE.Color(0.9, 3, 0.4)], s.web ? 14 : 8, { speed: 2.5, up: 2, size: 0.07, life: 0.4, glow: true, gravity: 6 });
       return true;
     });
 
@@ -726,13 +889,16 @@ export function runPlayground(): void {
     if (overlays.colliders) {
       const list = [{ x: hero.pos.x, z: hero.pos.z, r: HERO.radius }];
       for (const d of dummies) list.push({ x: d.pos.x, z: d.pos.z, r: d.radius });
-      for (const b of beetles) list.push({ x: b.pos.x, z: b.pos.z, r: b.radius * 0.9 });
+      for (const b of liveBeetles()) list.push({ x: b.pos.x, z: b.pos.z, r: b.radius * 0.9 });
+      for (const a of liveArachnids()) list.push({ x: a.pos.x, z: a.pos.z, r: a.radius });
       overlays.drawCircles(list);
-    } else overlays.drawCircles([]);
+      overlays.drawPaths(liveArachnids().filter((a) => a.active).map((a) => [a.pos, ...a.debugPath]));
+    } else { overlays.drawCircles([]); overlays.drawPaths([]); }
     overlays.drawAim(hero.muzzle(), hero.upperYaw + hero.gun.drift, hero.gunner.spread(hero.spreadMul), hero.gun.def.t.range * 1.5);
 
     const w = window.innerWidth, h = window.innerHeight;
     for (const d of dummies) d.drawLabel(camera, w, h);
+    for (const e of enemies) drawEnemyLabel(e, w, h);
     panel.setGun(hero.gun.def.id, hero.gun.def.name);
     if (panel.open) panel.sync();
     updateHUD(real, fpsVal, frameMs);
@@ -745,7 +911,16 @@ export function runPlayground(): void {
   // ---------- Отладочный хук ----------
   window.__malina = {
     mode: 'playground',
-    hero, input, dummies, beetles, obstacles, camera, GUNS, HERO,
+    hero, input, dummies, obstacles, camera, GUNS, HERO, ARACHNIDS, nav,
+    get enemies() { return enemies; },
+    get beetles() { return liveBeetles(); },
+    get arachnids() { return liveArachnids(); },
+    /** Разбудить врага по имени вида ('warrior', 'small'…) или всех */
+    wake(kind?: string) { for (const e of enemies) if (!kind || e.spec.kind === kind) wakeEnemy(e); },
+    resetEnemies,
+    /** Для тестов: луч на уровне пола против препятствий и расстояние до ближайшего */
+    raycast(x: number, z: number, dx: number, dz: number, d: number) { return raycastObstacles(x, z, dx, dz, d, 0.05, obstacles) !== null; },
+    minObsDist(x: number, z: number) { return Math.min(...obstacles.map((o) => distToObstacle(x, z, o))); },
     /** Ввод из теста: клавиатура и мышь перестают влиять на героя */
     script(on = true) { scripted = on; if (on) { input.move.set(0, 0); input.fire = false; input.run = false; input.aimDown = false; } },
     /** Прогнать симуляцию sec секунд без реального времени */
@@ -754,7 +929,7 @@ export function runPlayground(): void {
     press(what: 'crouch' | 'roll' | 'reload' | 'primary' | 'pistol') {
       if (what === 'primary' || what === 'pistol') input.slot = what; else input[what] = true;
     },
-    equip, spawnBeetle, resetTargets,
+    equip, resetTargets,
     setAim(x: number, z: number) { input.aim.set(x, AIM_Y, z); },
     setCam(dist: number, dir?: [number, number, number]) { camDist = dist; if (dir) CAM_DIR.set(...dir).normalize(); },
     toggles: { get postFX() { return postFX; }, set postFX(v: boolean) { postFX = v; } },
