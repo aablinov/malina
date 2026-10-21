@@ -33,6 +33,35 @@ export function emptyInput(): HeroInput {
   return { move: new THREE.Vector2(), aim: new THREE.Vector3(0, 0, 5), run: false, aimDown: false, fire: false, crouch: false, roll: false, reload: false, slot: null };
 }
 
+/** Внешний вид бойца: цвета формы и снаряжения */
+export interface HeroLook {
+  team: string; shirt: string; pants: string; boot: string; glove: string; vest: string; pouch: string; helmet: string; strap: string; pad: string;
+  /** Лицо закрыто балаклавой */
+  balaclava: boolean;
+  backpack: boolean;
+}
+const DEFAULT_LOOK: HeroLook = {
+  team: '#c4284f', shirt: '#6f7a52', pants: '#4d523c', boot: '#3a2b1e', glove: '#2b2b2b', vest: '#5b6b3a', pouch: '#4a5730',
+  helmet: '#56653a', strap: '#2f3524', pad: '#3c432c', balaclava: false, backpack: true,
+};
+
+/** Балаклава: чёрная маска с прорезью для глаз */
+function balaclavaTex(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 8;
+  const g = c.getContext('2d') as CanvasRenderingContext2D;
+  g.fillStyle = '#17181b'; g.fillRect(0, 0, 8, 8);
+  g.fillStyle = '#c9946f'; g.fillRect(1, 3, 6, 1);
+  g.fillStyle = '#fff'; g.fillRect(1, 3, 2, 1); g.fillRect(5, 3, 2, 1);
+  g.fillStyle = '#3a2a1a'; g.fillRect(2, 3, 1, 1); g.fillRect(5, 3, 1, 1);
+  g.fillStyle = '#26282d'; g.fillRect(2, 6, 4, 1);
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.NearestFilter;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export type MoveState = 'стоит' | 'ходьба' | 'бег' | 'прицел' | 'присед' | 'присед + прицел' | 'перекат' | 'без сознания';
 
 // ---------- размеры модели, м ----------
@@ -137,6 +166,12 @@ export class Hero {
   private readonly webMesh = new THREE.Group();
   private readonly webMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 3, 0.4), toneMapped: false, transparent: true, opacity: 0.85 });
 
+  /** Сюда вешается снаряжение на спину (баллоны огнемётчика) */
+  readonly backMount = new THREE.Group();
+  /** Горение: урон в секунду и сколько осталось */
+  burnDps = 0;
+  burnT = 0;
+
   /** Замедление паутиной: множитель скорости и сколько осталось */
   slowMul = 1;
   slowT = 0;
@@ -154,24 +189,25 @@ export class Hero {
     rand: Rand,
     onFire: (req: FireRequest, hero: Hero) => void,
     private readonly onGunEvent: (ev: GunEvent, gun: GunState, hero: Hero) => void = () => {},
-    teamColor = '#c4284f',
+    look: Partial<HeroLook> = {},
   ) {
+    const L = { ...DEFAULT_LOOK, ...look };
     this.gunner = new Gunner(primary, rand, (ev, g) => this.gunEvent(ev, g), (req) => onFire(req, this));
 
     const lam = (o: THREE.MeshLambertMaterialParameters) => new THREE.MeshLambertMaterial(o);
     const M = {
-      skin: lam({ map: pixelTex('#d9a07a', 6, 30) }),
-      face: lam({ map: T.face }),
-      shirt: lam({ map: pixelTex('#6f7a52', 7, 31) }),
-      pants: lam({ map: pixelTex('#4d523c', 6, 32) }),
-      boot: lam({ map: pixelTex('#3a2b1e', 5, 33) }),
-      glove: lam({ map: pixelTex('#2b2b2b', 5, 34) }),
-      vest: lam({ map: pixelTex('#5b6b3a', 8, 35) }),
-      pouch: lam({ map: pixelTex('#4a5730', 6, 36) }),
-      helmet: lam({ map: pixelTex('#56653a', 7, 37) }),
-      strap: lam({ color: '#2f3524' }),
-      team: lam({ color: teamColor, emissive: teamColor, emissiveIntensity: 0.15 }),
-      pad: lam({ map: pixelTex('#3c432c', 6, 38) }),
+      skin: lam({ map: L.balaclava ? pixelTex('#17181b', 4, 29) : pixelTex('#d9a07a', 6, 30) }),
+      face: lam({ map: L.balaclava ? balaclavaTex() : T.face }),
+      shirt: lam({ map: pixelTex(L.shirt, 7, 31) }),
+      pants: lam({ map: pixelTex(L.pants, 6, 32) }),
+      boot: lam({ map: pixelTex(L.boot, 5, 33) }),
+      glove: lam({ map: pixelTex(L.glove, 5, 34) }),
+      vest: lam({ map: pixelTex(L.vest, 8, 35) }),
+      pouch: lam({ map: pixelTex(L.pouch, 6, 36) }),
+      helmet: lam({ map: pixelTex(L.helmet, 7, 37) }),
+      strap: lam({ color: L.strap }),
+      team: lam({ color: L.team, emissive: L.team, emissiveIntensity: 0.15 }),
+      pad: lam({ map: pixelTex(L.pad, 6, 38) }),
     };
     this.vestMats.push(M.vest, M.pouch);
     scene.add(this.root);
@@ -194,7 +230,9 @@ export class Hero {
     this.chest.add(box(0.54, 0.34, 0.34, M.vest, 0, 0.15, 0));
     for (const x of [-0.14, 0, 0.14]) this.chest.add(box(0.11, 0.13, 0.07, M.pouch, x, 0.05, 0.2));
     this.chest.add(box(0.12, 0.07, 0.02, M.team, 0.14, 0.26, 0.175));
-    this.chest.add(box(0.4, 0.3, 0.12, M.pouch, 0, 0.16, -0.22)); // рюкзачок
+    if (L.backpack) this.chest.add(box(0.4, 0.3, 0.12, M.pouch, 0, 0.16, -0.22)); // рюкзачок
+    this.backMount.position.set(0, 0.16, -0.2);
+    this.chest.add(this.backMount);
     this.chest.add(box(0.14, 0.06, 0.36, M.strap, -0.2, 0.33, 0), box(0.14, 0.06, 0.36, M.strap, 0.2, 0.33, 0));
 
     // голова в каске
@@ -306,7 +344,21 @@ export class Hero {
     return true;
   }
 
-  revive(): void { this.down = false; this.hp = HERO.hp; this.slowT = 0; this.poisonT = 0; }
+  revive(): void { this.down = false; this.hp = this.maxHp; this.slowT = 0; this.poisonT = 0; this.burnT = 0; }
+
+  /** Подожгли (огнемёт): горит burnT секунд. Перекат и бессмертие спасают */
+  applyBurn(dps: number, t: number): boolean {
+    if (this.down || this.invulnerable) return false;
+    this.burnDps = Math.max(this.burnDps * (this.burnT > 0 ? 1 : 0), dps);
+    this.burnT = Math.max(this.burnT, t);
+    return true;
+  }
+
+  /** Показывать дугу выносливости (врагам не нужна) */
+  showStamina = true;
+
+  /** Максимум здоровья (у врагов свой) */
+  maxHp: number = HERO.hp;
 
   place(x: number, z: number, yaw = 0): void {
     this.pos.set(x, 0, z);
@@ -325,6 +377,13 @@ export class Hero {
     const H = HERO;
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
+    if (this.burnT > 0) {
+      this.burnT = Math.max(0, this.burnT - dt);
+      if (!this.god && !this.down) {
+        this.hp = Math.max(0, this.hp - this.burnDps * dt);
+        if (this.hp <= 0) { this.down = true; this.downT = 0; this.gunner.gun.cancelReload(); }
+      }
+    }
     if (this.poisonT > 0) {
       this.poisonT = Math.max(0, this.poisonT - dt);
       if (!this.god && !this.down) {
@@ -644,7 +703,7 @@ export class Hero {
 
     // дуга выносливости
     const sk = this.stamina / H.stamina;
-    this.stamRing.visible = sk < 0.999 && !this.down;
+    this.stamRing.visible = this.showStamina && sk < 0.999 && !this.down;
     if (this.stamRing.visible) {
       const geo = this.stamRing.geometry as THREE.RingGeometry;
       const want = Math.max(0.01, sk) * Math.PI * 2;

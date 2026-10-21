@@ -173,3 +173,67 @@ test('арахниды: спят в загоне, просыпаются от в
   expect(r.crossings).toBe(0);
   expect(r.asleepAfterReset).toBe(r.total);
 });
+
+test('тюремщики: тревога, низкое укрытие спасает присевшего, баллоны огнемётчика взрываются', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.resetTargets();
+    const all = () => m.jailers;
+    const asleep0 = all().every((j: any) => !j.awake && j.state === 'ест малину');
+    // выстрел в стрелка будит его, он поднимает тревогу — просыпается весь пост
+    const rifle = all().find((j: any) => j.kind === 'rifle');
+    m.hero.place(rifle.pos.x - 8, rifle.pos.z - 4, 0);
+    m.setAim(rifle.pos.x, rifle.pos.z);
+    m.step(0.5);
+    m.input.fire = true; m.step(1 / 60); m.input.fire = false;
+    m.step(1.2);
+    const awakeAfter = all().filter((j: any) => j.awake).length;
+
+    // стрелок против героя за низким укрытием 0,9 м: стоя — получает, присев — нет
+    const duel = (crouch: boolean) => {
+      m.resetTargets(); m.hero.revive(); m.hero.god = false;
+      m.hero.place(6, -9, 0); m.setAim(6, 0); m.step(0.1);
+      if (crouch) { m.press('crouch'); m.step(1 / 60); }
+      const j = m.jailers.find((x: any) => x.kind === 'rifle');
+      j.hero.place(6, 1, Math.PI);
+      m.wake('rifle');
+      const others = m.jailers.filter((x: any) => x !== j);
+      let lost = 0;
+      for (let t = 0; t < 6; t += 1 / 60) {
+        for (const o of others) o.awake = false;
+        const hp = m.hero.hp;
+        m.step(1 / 60);
+        lost += Math.max(0, hp - m.hero.hp);
+        if (m.hero.down) m.hero.revive();
+      }
+      if (crouch) { m.press('crouch'); m.step(1 / 60); }
+      return { lost, shots: j.hero.gunner.shots };
+    };
+    const standing = duel(false);
+    const crouched = duel(true);
+
+    // огнемётчик: три пули в баллоны со спины — взрыв, огнемётчик погибает
+    m.resetTargets(); m.hero.revive(); m.hero.god = true;
+    const fl = m.jailers.find((x: any) => x.kind === 'flamer');
+    m.freezeAI(true);
+    const yaw = fl.hero.upperYaw;
+    m.hero.place(fl.pos.x - Math.sin(yaw) * 2.2, fl.pos.z - Math.cos(yaw) * 2.2, 0);
+    m.setAim(fl.pos.x, fl.pos.z); m.input.aimDown = true; m.step(0.6);
+    for (let i = 0; i < 8 && !fl.tanks.exploded; i++) { m.input.fire = true; m.step(1 / 60); m.input.fire = false; m.step(0.4); }
+    m.step(0.2);
+    m.freezeAI(false);
+    m.input.aimDown = false;
+    const blast = { exploded: fl.tanks.exploded, dead: fl.hero.down };
+    m.hero.god = false;
+    m.resetTargets();
+    return { asleep0, awakeAfter, standing, crouched, blast };
+  });
+  expect(r.asleep0).toBe(true);
+  expect(r.awakeAfter).toBe(3);
+  expect(r.standing.shots).toBeGreaterThan(0);
+  expect(r.standing.lost).toBeGreaterThan(0);
+  expect(r.crouched.shots).toBeGreaterThan(0);
+  expect(r.crouched.lost).toBe(0);
+  expect(r.blast).toEqual({ exploded: true, dead: true });
+});
