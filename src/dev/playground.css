@@ -1,0 +1,85 @@
+/* Плейграунд разработчика: служебный интерфейс, не задаёт стиль игры */
+body.dev-playground #menu,
+body.dev-playground #hud,
+body.dev-playground #pause,
+body.dev-playground #shop,
+body.dev-playground #over,
+body.dev-playground #reticle,
+body.dev-playground #hurt { display: none !important; }
+
+.pg-hud { position: fixed; inset: 0; pointer-events: none; font: 500 12px/1.45 Rubik, system-ui, sans-serif; color: #f4f1ea; z-index: 5; }
+.pg-hud b { font-weight: 700; }
+.pg-hud .bad { color: #ff6a5a; }
+
+.pg-tele, .pg-fps {
+  position: absolute; top: 12px; padding: 8px 10px; border-radius: 6px;
+  background: rgba(20, 22, 27, 0.78); font-variant-numeric: tabular-nums;
+}
+.pg-tele { left: 12px; min-width: 220px; }
+.pg-fps { right: 12px; }
+
+.pg-toast {
+  position: absolute; top: 14px; left: 50%; transform: translate(-50%, -6px); opacity: 0;
+  padding: 6px 14px; border-radius: 6px; background: rgba(20, 22, 27, 0.85); font-weight: 700;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.pg-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.pg-bottom { position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: stretch; }
+.pg-hp, .pg-gun { background: rgba(20, 22, 27, 0.82); border-radius: 6px; padding: 6px 10px; }
+.pg-hp { position: relative; width: 120px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.pg-hp i { position: absolute; left: 0; top: 0; bottom: 0; background: #b8304a; transition: width 0.1s; }
+.pg-hp b { position: relative; font-size: 16px; }
+.pg-gun { min-width: 190px; display: flex; flex-direction: column; gap: 2px; }
+.pg-gun small { opacity: 0.6; font-weight: 500; margin-left: 4px; }
+.pg-ammo { font-size: 20px; font-variant-numeric: tabular-nums; }
+.pg-ammo b.low { color: #ff5a4a; }
+.pg-rl { height: 3px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
+.pg-rl i { display: block; height: 100%; width: 0; background: #ffd25a; }
+
+.pg-help {
+  position: absolute; left: 12px; right: 12px; bottom: 10px; text-align: center; font-size: 11px; opacity: 0.85;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.pg-reticle { position: absolute; left: 0; top: 0; width: 0; height: 0; --r: 10px; }
+.pg-reticle::before {
+  content: ''; position: absolute; left: calc(-1 * var(--r)); top: calc(-1 * var(--r));
+  width: calc(2 * var(--r)); height: calc(2 * var(--r)); border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.pg-reticle i { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; border-radius: 50%; background: #ff4a4a; }
+.pg-reticle.blocked::before { border-style: dashed; opacity: 0.5; }
+
+.pg-dummy {
+  position: absolute; left: 0; top: 0; white-space: nowrap; text-align: center; pointer-events: none;
+  font: 600 11px/1.3 Rubik, system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+.pg-dummy i { font-style: normal; opacity: 0.75; font-weight: 500; }
+.pg-dummy b { color: #ffd25a; font-size: 13px; }
+
+.pg-panel {
+  position: fixed; top: 10px; right: 10px; bottom: 10px; width: 320px; overflow-y: auto; z-index: 10;
+  background: rgba(20, 22, 27, 0.92); color: #eceae4; border-radius: 8px; padding: 10px 12px;
+  font: 500 12px/1.4 Rubik, system-ui, sans-serif; user-select: none;
+}
+.pg-panel.hidden { display: none; }
+.pg-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 14px; }
+.pg-head span { opacity: 0.5; font-size: 11px; }
+.pg-panel button {
+  font: inherit; color: inherit; background: #343842; border: 1px solid #4a505c; border-radius: 5px; padding: 4px 8px; cursor: pointer;
+}
+.pg-panel button:hover { background: #404552; }
+.pg-btns, .pg-btnrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.pg-extra { border-bottom: 1px solid #3a3f4a; padding-bottom: 6px; margin-bottom: 6px; }
+.pg-check, .pg-select { display: flex; align-items: center; gap: 6px; margin: 4px 0; cursor: pointer; }
+.pg-select span { flex: 1; }
+.pg-select select { font: inherit; background: #2a2e36; color: inherit; border: 1px solid #4a505c; border-radius: 4px; padding: 2px 4px; }
+.pg-panel details { margin: 4px 0; }
+.pg-panel summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
+.pg-row { display: grid; grid-template-columns: 1fr 96px 44px; gap: 6px; align-items: center; margin: 2px 0; }
+.pg-row span { font-size: 11px; opacity: 0.85; }
+.pg-row input { width: 100%; }
+.pg-row output { text-align: right; font-variant-numeric: tabular-nums; cursor: text; }
+
+body.dev-playground #c { cursor: none; }
