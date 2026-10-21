@@ -1,0 +1,352 @@
+:root {
+  --ink: #f4ead2;
+  --muted: #b9ad94;
+  --panel: rgba(18, 20, 28, 0.78);
+  --edge: #0a0b10;
+  --bevel: rgba(255, 255, 255, 0.10);
+  --red: #e0284f;
+  --gold: #ffcf5a;
+  --green: #7fd04a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #0b1424; overflow: hidden; }
+body { font-family: 'Rubik', system-ui, sans-serif; color: var(--ink); user-select: none; -webkit-user-select: none; }
+#app { position: fixed; inset: 0; }
+#c { display: block; width: 100%; height: 100%; cursor: none; }
+#overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.hidden { display: none !important; }
+
+/* Пиксельные иконки — картинки задаются из JS */
+.ic { display: inline-block; width: 24px; height: 24px; background-size: contain; background-repeat: no-repeat; image-rendering: pixelated; vertical-align: middle; flex: none; }
+.ic.big { width: 40px; height: 40px; }
+
+.panel {
+  position: absolute; background: var(--panel); border: 3px solid var(--edge);
+  box-shadow: inset 0 0 0 2px var(--bevel), 0 6px 18px rgba(0, 0, 0, 0.35);
+  padding: 10px 14px; border-radius: 4px;
+}
+.tl { top: 16px; left: 16px; min-width: 210px; }
+.tr { top: 16px; right: 16px; display: grid; gap: 6px; }
+.wave-title { font-family: 'Press Start 2P', monospace; font-size: 13px; letter-spacing: 1px; color: var(--gold); }
+.wave-title b { color: #fff; }
+.wave-timer { font-weight: 700; font-size: 15px; margin-top: 8px; }
+.wave-timer.danger { color: #ff6b6b; animation: pulse 0.8s infinite; }
+.wave-bar { height: 6px; background: #0007; margin-top: 8px; border: 1px solid #000; }
+.wave-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #c4284f, #ff6a7f); }
+.stat { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 14px; color: var(--muted); }
+.stat b { margin-left: auto; padding-left: 14px; color: var(--ink); font-family: 'Press Start 2P', monospace; font-size: 12px; }
+.stat .ic { width: 20px; height: 20px; }
+
+.hotbar {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+  display: flex; align-items: flex-end; gap: 8px;
+}
+.slot {
+  position: relative; width: 64px; height: 64px; background: var(--panel); border: 3px solid var(--edge);
+  box-shadow: inset 0 0 0 2px var(--bevel); border-radius: 4px; display: grid; place-items: center; overflow: hidden;
+}
+.slot .ic { width: 36px; height: 36px; }
+.slot .key { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font-family: 'Press Start 2P', monospace; font-size: 7px; color: var(--muted); }
+.slot .cost { position: absolute; top: 3px; right: 4px; font-family: 'Press Start 2P', monospace; font-size: 8px; color: #ff8aa0; }
+.slot .cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.6); }
+.slot.off { filter: grayscale(0.8) brightness(0.6); }
+.slot.flash { animation: flash 0.25s; }
+.ammo {
+  width: 104px; height: 88px; background: radial-gradient(circle at 50% 35%, #3a1220, #15090e 70%); border: 3px solid var(--edge);
+  box-shadow: inset 0 0 0 2px rgba(255, 90, 120, 0.25), 0 0 24px rgba(224, 40, 79, 0.35); border-radius: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.ammo-n { font-family: 'Press Start 2P', monospace; font-size: 18px; color: #fff; text-shadow: 0 2px 0 #000; }
+.ammo-l { font-size: 11px; color: var(--muted); font-weight: 500; }
+.ammo-n { font-variant-numeric: tabular-nums; }
+.ammo.low .ammo-n { color: #ff6b6b; animation: pulse 0.7s infinite; }
+.ammo.bump { animation: bump 0.35s; }
+
+#prompt {
+  position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%);
+  background: var(--panel); border: 3px solid var(--edge); padding: 8px 14px; border-radius: 4px;
+  font-weight: 700; font-size: 15px; white-space: nowrap; opacity: 0; transition: opacity 0.15s;
+}
+#prompt.show { opacity: 1; }
+#prompt kbd { font-family: 'Press Start 2P', monospace; font-size: 10px; background: #f4ead2; color: #111; padding: 3px 6px; border-radius: 3px; margin-right: 6px; box-shadow: 0 2px 0 #8a7f68; }
+#prompt.bad { color: #ff8a8a; }
+
+#banner {
+  position: absolute; top: 22%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;
+  opacity: 0; transition: opacity 0.3s;
+}
+#banner.show { opacity: 1; }
+#banner .b1 { font-family: 'Press Start 2P', monospace; font-size: 34px; color: #ff5a6e; text-shadow: 0 4px 0 #3a0a14, 0 0 30px rgba(255, 40, 80, 0.6); }
+#banner .b2 { margin-top: 14px; font-weight: 700; font-size: 18px; text-shadow: 0 2px 4px #000; }
+#banner.nightb .b1 { color: #9db4ff; text-shadow: 0 4px 0 #0a1430, 0 0 30px rgba(90, 130, 255, 0.6); }
+#banner.good .b1 { color: var(--green); text-shadow: 0 4px 0 #173a0a, 0 0 30px rgba(120, 255, 80, 0.5); }
+
+/* Числа урона */
+.dmg {
+  position: absolute; left: 0; top: 0; font-family: 'Press Start 2P', monospace; font-size: 16px; color: #fff;
+  text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; will-change: transform;
+}
+.dmg.crit { color: #ff5a3c; font-size: 20px; }
+.dmg.berry { color: #ff7a9a; font-size: 14px; }
+.dmg.bad { color: #ff4a4a; font-size: 12px; }
+.dmg.heal { color: #ffe066; font-size: 14px; }
+.dmg.bleed { color: #ff2a3a; font-size: 12px; }
+
+/* Над грядками */
+.plot-ui { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; will-change: transform; }
+.plot-ui .hp { width: 46px; height: 7px; background: #000a; border: 1px solid #000; }
+.plot-ui .hp i { display: block; height: 100%; background: linear-gradient(#8fe85a, #4fa82a); }
+.plot-ui .hp.mid i { background: linear-gradient(#ffd24a, #d8a020); }
+.plot-ui .hp.low i { background: linear-gradient(#ff6a6a, #c02a2a); }
+.plot-ui .ring {
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--c, #e0284f) calc(var(--p, 0) * 1%), rgba(0, 0, 0, 0.55) 0);
+  border: 2px solid #000c; box-shadow: 0 2px 6px #0008;
+}
+.plot-ui .ring span { width: 20px; height: 20px; border-radius: 50%; background: #15161c; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #fff; font-family: 'Rubik', sans-serif; }
+.plot-ui .ready { display: flex; align-items: center; gap: 4px; animation: bob 0.9s ease-in-out infinite; }
+.plot-ui .ready .ic { width: 30px; height: 30px; filter: drop-shadow(0 0 6px rgba(255, 60, 100, 0.9)); }
+.plot-ui .ready kbd { font-family: 'Press Start 2P', monospace; font-size: 9px; background: #f4ead2; color: #111; padding: 3px 5px; border-radius: 3px; box-shadow: 0 2px 0 #8a7f68; }
+.plot-ui .plus { font-family: 'Press Start 2P', monospace; font-size: 10px; background: var(--panel); border: 2px solid #000; padding: 5px 7px; border-radius: 3px; color: var(--green); }
+
+.arrow { position: absolute; left: 0; top: 0; width: 0; height: 0; border-left: 16px solid #ff3b4e; border-top: 10px solid transparent; border-bottom: 10px solid transparent; filter: drop-shadow(0 0 6px rgba(255, 40, 60, 0.9)); }
+
+/* Экраны */
+.screen { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(8, 10, 20, 0.35), rgba(5, 6, 12, 0.85)); padding: 16px; }
+.card {
+  background: rgba(16, 18, 26, 0.92); border: 4px solid var(--edge); box-shadow: inset 0 0 0 3px var(--bevel), 0 20px 60px rgba(0, 0, 0, 0.6);
+  border-radius: 6px; padding: 32px 36px; max-width: 560px; width: 100%; text-align: center;
+}
+.card.small { max-width: 340px; }
+.logo {
+  margin: 0; font-family: 'Press Start 2P', monospace; font-size: 54px; line-height: 1.1; letter-spacing: 2px;
+  color: #ff3d64; text-shadow: 0 5px 0 #7a0f2a, 0 9px 0 #2a0610, 0 0 40px rgba(255, 50, 90, 0.45);
+}
+h2 { font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5; margin: 0 0 18px; color: var(--gold); }
+.sub { color: var(--muted); font-size: 16px; line-height: 1.45; margin: 22px 0 18px; }
+.rules { display: grid; gap: 9px; text-align: left; font-size: 14px; color: var(--ink); background: #0006; padding: 14px 16px; border-radius: 4px; border: 2px solid #000; }
+.rules > div { display: flex; align-items: center; gap: 10px; }
+.rules b { color: var(--gold); }
+.btn {
+  margin-top: 22px; font-family: 'Press Start 2P', monospace; font-size: 16px; padding: 16px 34px; cursor: pointer;
+  color: #fff; background: linear-gradient(#e8385e, #b81a3e); border: 3px solid #2a0610; border-radius: 4px;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.3), inset 0 -4px 0 rgba(0, 0, 0, 0.3), 0 4px 0 #2a0610;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn:active { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.3), inset 0 -4px 0 rgba(0, 0, 0, 0.3), 0 1px 0 #2a0610; }
+.best { margin-top: 14px; color: var(--muted); font-size: 13px; min-height: 16px; }
+.results { display: grid; gap: 8px; margin: 10px 0 6px; }
+.results > div { display: flex; justify-content: space-between; padding: 8px 12px; background: #0006; border: 2px solid #000; border-radius: 3px; }
+.results span { color: var(--muted); }
+.results b { font-family: 'Press Start 2P', monospace; font-size: 13px; }
+.results .score b { color: var(--gold); }
+
+/* День и ночь */
+.day-row { display: flex; align-items: center; gap: 8px; }
+.day-row .ic { width: 22px; height: 22px; }
+#dayPanel.night .wave-bar i { background: linear-gradient(90deg, #3a5fc4, #8aa8ff); }
+#dayPanel.day .wave-bar i { background: linear-gradient(90deg, #ffb340, #ffe17a); }
+
+/* Здоровье */
+.hp-orb {
+  position: relative; width: 74px; height: 74px; border-radius: 50%; overflow: hidden; align-self: center;
+  background: radial-gradient(circle at 50% 35%, #2a0d12, #12070a 70%); border: 3px solid var(--edge);
+  box-shadow: inset 0 0 0 2px rgba(255, 90, 90, 0.2), 0 0 18px rgba(232, 58, 74, 0.25);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.hp-orb i { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; background: linear-gradient(#ff5a64, #a8182a); transition: height 0.2s; }
+.hp-orb .ic, .hp-orb b { position: relative; }
+.hp-orb .ic { width: 22px; height: 22px; filter: drop-shadow(1px 0 0 #000) drop-shadow(-1px 0 0 #000) drop-shadow(0 1px 0 #000) drop-shadow(0 -1px 0 #000); }
+.hp-orb b { font-family: 'Press Start 2P', monospace; font-size: 11px; color: #fff; text-shadow: 0 2px 0 #000; margin-top: 2px; }
+.hp-orb.low { animation: pulse 0.6s infinite; }
+#hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 140px 30px rgba(220, 20, 40, 0.75); transition: opacity 0.12s; }
+#downMsg {
+  position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); text-align: center;
+  font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.8; color: #ff8a8a; text-shadow: 0 3px 0 #000; white-space: pre-line;
+}
+
+/* Слоты оружия и спецудара */
+:root { --wglow: rgb(200, 220, 255); }
+.slot.weapon, .slot.special { width: 96px; height: 76px; box-shadow: inset 0 0 0 2px var(--bevel), 0 0 16px -4px var(--wglow); border-color: #000; }
+.slot.weapon .ic, .slot.special .ic { width: 34px; height: 34px; margin-top: 4px; filter: drop-shadow(0 0 6px var(--wglow)); }
+.slot .stars { position: absolute; bottom: 13px; left: 0; right: 0; text-align: center; font-size: 9px; color: var(--gold); letter-spacing: 1px; }
+.slot .combo { position: absolute; top: 18px; right: 5px; display: flex; flex-direction: column; gap: 3px; }
+.slot .combo i { width: 5px; height: 5px; background: #fff3; border-radius: 1px; }
+.slot .combo i.on { background: var(--wglow); box-shadow: 0 0 6px var(--wglow); }
+.slot.special.ready { animation: glowpulse 1.4s ease-in-out infinite; }
+@keyframes glowpulse { 50% { box-shadow: inset 0 0 0 2px var(--bevel), 0 0 26px 2px var(--wglow); } }
+.dmg.special { color: #fff; font-size: 13px; text-shadow: 0 0 10px var(--wglow), 2px 2px 0 #000; }
+.item { --wg: #fff; }
+.item.owned .item-ic .ic { filter: drop-shadow(0 0 5px var(--wg)); }
+.item-name .stars { color: var(--gold); font-size: 12px; letter-spacing: 1px; margin-left: 4px; }
+.item-name .stars em { font-style: normal; color: #fff3; }
+.sp { margin-top: 5px; font-size: 12px; line-height: 1.35; color: #c9c0e8; }
+.sp b { color: var(--wg); }
+.sp .ic { width: 12px; height: 12px; vertical-align: -1px; }
+.item-btns { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.buy.up { background: linear-gradient(#e0a93a, #a86a14); border-color: #3a2406; }
+
+/* Стволы и патроны */
+.slot .heat { position: absolute; left: 4px; right: 4px; bottom: 2px; height: 3px; width: 0; background: linear-gradient(90deg, #4ac8ff, #ff7a3a); max-width: calc(100% - 8px); }
+.slot.special.active { box-shadow: inset 0 0 0 2px var(--wglow), 0 0 22px 2px var(--wglow); }
+.berries {
+  align-self: center; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 10px;
+  background: var(--panel); border: 3px solid var(--edge); border-radius: 4px; min-width: 64px;
+}
+.berries b { font-family: 'Press Start 2P', monospace; font-size: 12px; }
+.berries small { font-size: 10px; color: var(--muted); }
+.berries.bump { animation: bump 0.35s; }
+.ammo { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08), 0 0 18px -4px var(--wglow); background: radial-gradient(circle at 50% 35%, #2a2018, #110c08 70%); }
+.ammo-list { position: absolute; right: 16px; bottom: 112px; display: grid; gap: 4px; }
+.al { display: grid; grid-template-columns: 20px 44px 70px; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel); border: 2px solid var(--edge); border-radius: 3px; opacity: 0.75; }
+.al.cur { opacity: 1; border-color: #6a5a3a; }
+.al .ic { width: 18px; height: 18px; }
+.al b { font-family: 'Press Start 2P', monospace; font-size: 10px; text-align: right; }
+.al i { height: 5px; background: #0009; }
+.al s { display: block; height: 100%; background: var(--gold); text-decoration: none; }
+.al.low b { color: #ff6b6b; }
+.arrow.shooter { border-left-color: #7aff3a; filter: drop-shadow(0 0 6px rgba(120, 255, 60, 0.9)); }
+.dmg.pickup { color: #ffd25a; font-size: 11px; }
+.ammo-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.ammo-cell { display: grid; grid-template-columns: 26px 1fr; gap: 4px 8px; align-items: center; padding: 8px; background: #0007; border: 2px solid #000; border-radius: 4px; }
+.ammo-cell .ic { width: 24px; height: 24px; }
+.ammo-cell b { display: block; font-size: 13px; }
+.ammo-cell small { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ammo-cell .buy { grid-column: 1 / -1; justify-content: center; font-size: 9px; padding: 7px; }
+.perk .am { white-space: nowrap; color: var(--gold); }
+.perk .am .ic { width: 12px; height: 12px; vertical-align: -1px; margin-right: 2px; }
+
+/* Превью стволов */
+.gunpv { display: block; width: 84px; height: 36px; background: center / contain no-repeat; filter: drop-shadow(0 0 6px var(--wglow)); margin-top: 6px; }
+.shop-list .item { grid-template-columns: minmax(0, 1fr) 118px; align-items: start; }
+.item-btns { width: 118px; }
+.item-btns .buy { justify-content: center; }
+.item-pv {
+  grid-column: 1 / -1; position: relative; height: 104px; display: grid; place-items: center;
+  background: radial-gradient(ellipse at 50% 60%, #3a3d44, #1a1b20 75%); border: 2px solid #000; border-radius: 3px; overflow: hidden;
+}
+.item-pv::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 255, 255, 0.02) 3px 4px); pointer-events: none; }
+.item-pv img { max-width: 92%; max-height: 100%; object-fit: contain; image-rendering: auto; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.6)); }
+.item:not(.owned) .item-pv img { filter: grayscale(0.85) brightness(0.55) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.6)); }
+.item-pv .lvl { position: absolute; left: 8px; top: 6px; font-family: 'Press Start 2P', monospace; font-size: 10px; color: #ffd84a; text-shadow: 0 2px 0 #000; }
+.item-pv .lvl.locked { color: #9a9a9a; }
+.item-pv kbd { position: absolute; right: 6px; top: 6px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #f4ead2; color: #111; padding: 3px 5px; border-radius: 2px; z-index: 1; }
+.item.equipped .item-pv { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(255, 207, 90, 0.4); }
+
+/* Компактная лавка: всё помещается в экран */
+.shop-card { max-width: 900px; padding: 16px 18px; }
+.shop-card h2 { font-size: 15px; margin-bottom: 6px; }
+.shop-card .shop-sub { font-size: 12px; }
+.shop-card .shop-wallet { padding: 6px 10px; }
+.shop-card .ammo-row { margin-top: 10px; gap: 6px; }
+.shop-card .ammo-cell { grid-template-columns: 20px 1fr auto; padding: 5px 6px; gap: 6px; }
+.shop-card .ammo-cell .ic { width: 18px; height: 18px; }
+.shop-card .ammo-cell b { font-size: 12px; }
+.shop-card .ammo-cell .buy { grid-column: auto; padding: 5px 6px; font-size: 8px; }
+.shop-card .ammo-cell .buy .ic { width: 11px; height: 11px; }
+.shop-card .shop-list { margin-top: 10px; gap: 6px; }
+.shop-list .item { grid-template-columns: 100px minmax(0, 1fr) 92px; gap: 10px; padding: 6px 8px; align-items: center; }
+.shop-list .item-pv { grid-column: auto; height: 46px; border-width: 1px; }
+.shop-list .item-pv img { max-width: 94%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+.shop-list .item:not(.owned) .item-pv img { filter: grayscale(0.85) brightness(0.55); }
+.shop-list .item-pv kbd { right: 3px; top: 3px; font-size: 7px; padding: 2px 3px; }
+.shop-list .item-name { font-size: 13px; }
+.shop-list .item-name .stars { font-size: 10px; }
+.shop-list .stats { margin: 3px 0; gap: 2px; }
+.shop-list .st { grid-template-columns: 52px 1fr; font-size: 10px; }
+.shop-list .st i { height: 4px; }
+.shop-list .sp { margin-top: 2px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shop-list .item-btns { width: 92px; gap: 4px; }
+.shop-list .item-btns .buy { padding: 6px 4px; font-size: 8px; }
+.shop-list .item-btns .buy .ic { width: 12px; height: 12px; }
+.shop-card .shop-foot .btn { margin-top: 10px; padding: 9px 14px; font-size: 10px; }
+
+/* Прицел */
+#reticle { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 4; --s: 12px; --c: #fff; }
+#reticle i { position: absolute; background: var(--c); box-shadow: 0 0 0 1px #000a, 0 0 6px var(--wglow); }
+#reticle .t1, #reticle .t3 { width: 2px; height: 8px; left: -1px; }
+#reticle .t2, #reticle .t4 { width: 8px; height: 2px; top: -1px; }
+#reticle .t1 { top: calc(-1 * var(--s) - 8px); } #reticle .t3 { top: var(--s); }
+#reticle .t2 { left: var(--s); } #reticle .t4 { left: calc(-1 * var(--s) - 8px); }
+#reticle b { position: absolute; width: 4px; height: 4px; left: -2px; top: -2px; background: var(--c); box-shadow: 0 0 0 1px #000a; border-radius: 1px; }
+#reticle s, #reticle u { position: absolute; border-radius: 50%; left: 0; top: 0; transform: translate(-50%, -50%); display: none; }
+#reticle s { width: calc(var(--s) * 2 + 10px); height: calc(var(--s) * 2 + 10px); border: 2px solid var(--c); box-shadow: 0 0 0 1px #0008; }
+#reticle u { width: calc(var(--s) * 2 + 26px); height: calc(var(--s) * 2 + 26px);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  background: conic-gradient(var(--wglow) var(--m), transparent 0); display: block; opacity: 0.85; }
+#reticle.r-ring s, #reticle.r-spin s, #reticle.r-triple s, #reticle.r-arc s { display: block; }
+#reticle.r-ring i, #reticle.r-triple i { display: none; }
+#reticle.r-spin s { border-style: dashed; }
+#reticle.r-diamond b { transform: rotate(45deg); width: 8px; height: 8px; left: -4px; top: -4px; background: transparent; border: 2px solid var(--c); }
+#reticle.r-brackets i.t1, #reticle.r-brackets i.t3 { display: none; }
+#reticle.r-brackets i.t2, #reticle.r-brackets i.t4 { width: 4px; height: 18px; top: -9px; background: transparent; border: 2px solid var(--c); box-shadow: none; }
+#reticle.r-brackets i.t2 { border-left: none; } #reticle.r-brackets i.t4 { border-right: none; }
+#reticle.r-wide .t1, #reticle.r-wide .t3 { height: 5px; }
+#reticle.r-arc s { border-top-color: transparent; }
+#reticle.r-triple b { width: 10px; height: 10px; left: -5px; top: -5px; border-radius: 50%; background: transparent; border: 2px solid var(--c); }
+#reticle.target { --c: #ff5a5a; }
+#reticle.hit i, #reticle.hit b { box-shadow: 0 0 0 1px #000a, 0 0 10px #fff, 0 0 4px #fff; }
+#reticle.hit { --c: #fff; }
+
+/* Слот оружия (старый) */
+.slot.wide { width: 84px; }
+.slot .wname { position: absolute; top: 3px; left: 0; right: 0; text-align: center; font-size: 9px; font-weight: 700; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; }
+.slot.wide .ic { margin-top: 6px; }
+
+/* Лавка */
+#shop { z-index: 5; }
+.shop-card { max-width: 860px; text-align: left; padding: 22px 24px; max-height: calc(100% - 24px); display: flex; flex-direction: column; }
+.shop-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.shop-head h2 { margin: 0 0 8px; }
+.shop-sub { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.4; max-width: 52ch; }
+.shop-wallet { display: flex; align-items: center; gap: 8px; background: #0008; border: 2px solid #000; padding: 8px 12px; border-radius: 4px; flex: none; }
+.shop-wallet b { font-family: 'Press Start 2P', monospace; font-size: 14px; }
+.shop-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; overflow-y: auto; padding-right: 4px; }
+.item { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; background: #0007; border: 2px solid #000; border-radius: 4px; }
+.item.equipped { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(255, 207, 90, 0.3); }
+.item-ic { position: relative; width: 56px; height: 56px; display: grid; place-items: center; background: #1c1f2a; border: 2px solid #000; border-radius: 4px; }
+.item-ic .ic { width: 40px; height: 40px; }
+.item-ic kbd { position: absolute; right: -6px; bottom: -6px; font-family: 'Press Start 2P', monospace; font-size: 8px; background: #f4ead2; color: #111; padding: 2px 4px; border-radius: 2px; }
+.item.owned:not(.equipped) .item-ic kbd { background: var(--gold); }
+.item:not(.owned) .item-ic kbd { display: none; }
+.item-name { font-weight: 700; font-size: 15px; }
+.stats { display: grid; gap: 3px; margin: 6px 0 5px; }
+.st { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.st i { height: 5px; background: #000a; border-radius: 1px; overflow: hidden; }
+.st b { display: block; height: 100%; background: linear-gradient(90deg, #c4284f, #ff7a8f); }
+.perk { font-size: 12px; color: #d8ccb0; line-height: 1.35; }
+.buy {
+  font-family: 'Press Start 2P', monospace; font-size: 10px; display: flex; align-items: center; gap: 6px; padding: 10px 10px; cursor: pointer;
+  color: #fff; background: linear-gradient(#e8385e, #b81a3e); border: 2px solid #2a0610; border-radius: 3px; box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25), 0 2px 0 #2a0610;
+}
+.buy .ic { width: 16px; height: 16px; }
+.buy.poor { filter: grayscale(0.7) brightness(0.7); }
+.buy.own { background: linear-gradient(#5aa83a, #2f6e1e); border-color: #0f2a08; }
+.buy.on { background: #2a2c36; color: var(--gold); cursor: default; box-shadow: none; }
+.buy:focus-visible, .btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.buy.nope { animation: shake 0.3s; }
+.shop-foot { display: flex; justify-content: flex-end; }
+.shop-foot .btn { margin-top: 14px; font-size: 12px; padding: 12px 18px; }
+.shop-foot small { font-size: 8px; opacity: 0.7; margin-left: 6px; }
+.plot-ui .ring.paused { filter: grayscale(1) brightness(0.8); }
+
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@keyframes pulse { 50% { opacity: 0.5; } }
+@keyframes bob { 50% { transform: translateY(-5px); } }
+@keyframes bump { 30% { transform: scale(1.12); } }
+@keyframes flash { 30% { box-shadow: inset 0 0 0 3px #ff4a5a; } }
+
+@media (max-width: 640px) {
+  .logo { font-size: 34px; }
+  .card { padding: 22px 18px; }
+  .tl { min-width: 0; }
+  .slot { width: 52px; height: 52px; }
+  .slot.wide { width: 64px; }
+  .slot.weapon, .slot.special { width: 72px; height: 64px; }
+  .slot .wname { font-size: 8px; }
+  .hp-orb { width: 58px; height: 58px; }
+  .shop-list { grid-template-columns: 1fr; }
+  .ammo-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ammo-list { display: none; }
+  .ammo { width: 84px; height: 74px; }
+}
