@@ -78,7 +78,7 @@ export const RICOCHET = {
   dmgMul: 0.5,
 };
 
-export type Caliber = '9mm' | '545' | '556' | '12g' | '762r';
+export type Caliber = '9mm' | '545' | '556' | '12g' | '762r' | 'fuel';
 
 export const CALIBERS: Record<Caliber, { name: string; max: number }> = {
   '9mm': { name: '9 мм', max: 120 },
@@ -86,6 +86,7 @@ export const CALIBERS: Record<Caliber, { name: string; max: number }> = {
   '556': { name: '5,56×45', max: 180 },
   '12g': { name: '12 калибр', max: 32 },
   '762r': { name: '7,62×54R', max: 150 },
+  fuel: { name: 'смесь', max: 400 },
 };
 
 export type FireMode = 'semi' | 'auto' | 'double';
@@ -124,7 +125,7 @@ export interface GunTuning {
   knock: number;
 }
 
-export const GUNS: Record<'pm' | 'ak74' | 'dbl' | 'ar15', GunTuning> = {
+export const GUNS: Record<'pm' | 'ak74' | 'dbl' | 'ar15' | 'flamer', GunTuning> = {
   pm: {
     dmg: 9, pellets: 1, rate: 4, mag: 8, reloadTac: 1.1, reloadFull: 1.5, range: 14,
     spread: 1.6, bloomShot: 0.22, bloomDeg: 3, bloomDecay: 0.3, kick: 0.35, shoulderKick: 3, knock: 0,
@@ -136,6 +137,11 @@ export const GUNS: Record<'pm' | 'ak74' | 'dbl' | 'ar15', GunTuning> = {
   dbl: {
     dmg: 6, pellets: 8, rate: 2.5, mag: 2, reloadTac: 0, reloadFull: 2.0, range: 8,
     spread: 6, bloomShot: 0.5, bloomDeg: 2, bloomDecay: 0.4, kick: 1, shoulderKick: 6, knock: 1.2,
+  },
+  /** Огнемёт: «выстрел» — порция огня, урон за порцию; магазин — запас смеси */
+  flamer: {
+    dmg: 1.2, pellets: 1, rate: 20, mag: 80, reloadTac: 3, reloadFull: 3.5, range: 6.5,
+    spread: 12, bloomShot: 0, bloomDeg: 0, bloomDecay: 0.3, kick: 0.03, shoulderKick: 0.5, knock: 0,
   },
   ar15: {
     dmg: 10, pellets: 1, rate: 12, mag: 30, reloadTac: 2.1, reloadFull: 2.6, range: 22,
@@ -218,15 +224,63 @@ export const ARACHNIDS: Record<ArachnidKind, ArachnidTuning> = {
 /** Длина тела арахнида при scale = 1, м */
 export const ARACHNID_LENGTH = 3;
 
+// ---------- Тюремщики: бойцы ЧВК в чёрном, утащили малину ----------
+
+export type JailerKind = 'rifle' | 'shotgun' | 'flamer';
+
+export interface JailerTuning {
+  hp: number;
+  /** Ошибка прицеливания, ° (по движущейся цели — в 1,6 раза больше) */
+  aimErr: number;
+  /** Через сколько секунд после того, как увидел героя, начинает стрелять */
+  reaction: number;
+  /** Очередь: выстрелов и пауза между очередями, с */
+  burst: number;
+  burstPause: number;
+  /** Цикл у укрытия: сколько выглядывает и сколько прячется, с */
+  peekTime: number;
+  hideTime: number;
+  /** Предпочитаемая дистанция до героя, м */
+  preferMin: number;
+  preferMax: number;
+  /** Множитель урона его оружия по герою */
+  dmgMul: number;
+  /** Огнемёт: урон в секунду в струе, горение после и его длительность */
+  flameDps: number;
+  burnDps: number;
+  burnTime: number;
+  /** Баллоны на спине: прочность, радиус и урон взрыва */
+  tankHp: number;
+  blastR: number;
+  blastDmg: number;
+}
+
+const JAIL_BASE: JailerTuning = {
+  hp: 100, aimErr: 2.5, reaction: 0.35, burst: 4, burstPause: 0.7, peekTime: 1.8, hideTime: 1.3, preferMin: 6, preferMax: 14, dmgMul: 0.8,
+  flameDps: 0, burnDps: 0, burnTime: 0, tankHp: 0, blastR: 0, blastDmg: 0,
+};
+
+export const JAILERS: Record<JailerKind, JailerTuning> = {
+  /** AR-15: держит дистанцию, прячется за укрытиями, выглядывает и бьёт очередями */
+  rifle: { ...JAIL_BASE, hp: 100, aimErr: 2.2, reaction: 0.35, burst: 4, burstPause: 0.6, preferMin: 7, preferMax: 15, dmgMul: 0.8 },
+  /** Двустволка: перебегает от укрытия к укрытию и врывается вплотную, вблизи — дуплет */
+  shotgun: { ...JAIL_BASE, hp: 120, aimErr: 3, reaction: 0.3, burst: 1, burstPause: 0.5, preferMin: 2, preferMax: 6, dmgMul: 0.5 },
+  /** Огнемётчик: медленно идёт напролом и жжёт; баллоны на спине взрываются от попаданий */
+  flamer: {
+    ...JAIL_BASE, hp: 140, aimErr: 4, reaction: 0.4, burst: 0, burstPause: 0, preferMin: 2, preferMax: 5.5, dmgMul: 1,
+    flameDps: 22, burnDps: 6, burnTime: 2.5, tankHp: 30, blastR: 3.8, blastDmg: 80,
+  },
+};
+
 // ---------- Сброс и экспорт для панели ----------
 
 const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
 
-let DEFAULTS: { HERO: typeof HERO; SPREAD: typeof SPREAD; RICOCHET: typeof RICOCHET; GUNS: typeof GUNS; BEETLES: typeof BEETLES; ARACHNIDS: typeof ARACHNIDS } | null = null;
+let DEFAULTS: { HERO: typeof HERO; SPREAD: typeof SPREAD; RICOCHET: typeof RICOCHET; GUNS: typeof GUNS; BEETLES: typeof BEETLES; ARACHNIDS: typeof ARACHNIDS; JAILERS: typeof JAILERS } | null = null;
 /** Запомнить стартовые значения (вызывается при запуске) */
 export function snapshotTuning(): void {
-  DEFAULTS ??= { HERO: clone(HERO), SPREAD: clone(SPREAD), RICOCHET: clone(RICOCHET), GUNS: clone(GUNS), BEETLES: clone(BEETLES), ARACHNIDS: clone(ARACHNIDS) };
+  DEFAULTS ??= { HERO: clone(HERO), SPREAD: clone(SPREAD), RICOCHET: clone(RICOCHET), GUNS: clone(GUNS), BEETLES: clone(BEETLES), ARACHNIDS: clone(ARACHNIDS), JAILERS: clone(JAILERS) };
 }
 
 export function resetTuning(): void {
@@ -236,11 +290,12 @@ export function resetTuning(): void {
   Object.assign(RICOCHET, clone(DEFAULTS.RICOCHET));
   Object.assign(BEETLES, clone(DEFAULTS.BEETLES));
   for (const k of Object.keys(ARACHNIDS) as ArachnidKind[]) Object.assign(ARACHNIDS[k], clone(DEFAULTS.ARACHNIDS[k]));
+  for (const k of Object.keys(JAILERS) as JailerKind[]) Object.assign(JAILERS[k], clone(DEFAULTS.JAILERS[k]));
   for (const k of Object.keys(GUNS) as (keyof typeof GUNS)[]) Object.assign(GUNS[k], clone(DEFAULTS.GUNS[k]));
 }
 
 export function tuningJSON(): string {
-  return JSON.stringify({ HERO, SPREAD, RICOCHET, GUNS, BEETLES, ARACHNIDS }, null, 2);
+  return JSON.stringify({ HERO, SPREAD, RICOCHET, GUNS, BEETLES, ARACHNIDS, JAILERS }, null, 2);
 }
 
 /** Жуки в плейграунде: их здоровье ещё в старом масштабе (×10), до перебалансировки на этапе 1a */

@@ -6,8 +6,8 @@ import { GUNS, type Caliber, type FireMode, type GunClass, type GunTuning, type 
  * Числа — в tuning.ts, здесь только то, что не настраивается: калибр, режим огня, вид.
  */
 
-export type FirearmId = 'pm' | 'ak74' | 'dbl' | 'ar15';
-export type ShotSound = 'pm' | 'ak' | 'ar' | 'dbl';
+export type FirearmId = 'pm' | 'ak74' | 'dbl' | 'ar15' | 'flamer';
+export type ShotSound = 'pm' | 'ak' | 'ar' | 'dbl' | 'flame';
 /** Как перезаряжается: магазин или переламывание стволов */
 export type ReloadStyle = 'mag' | 'break';
 
@@ -40,6 +40,10 @@ export const FIREARMS: Record<FirearmId, FirearmDef> = {
   dbl: {
     id: 'dbl', name: 'Двустволка', cls: 'shotgun', caliber: '12g', mode: 'double', weight: 'medium', slot: 'primary',
     reload: 'break', sound: 'dbl', tracer: [3.4, 2.2, 0.9], muzzleSize: 1.5, t: GUNS.dbl,
+  },
+  flamer: {
+    id: 'flamer', name: 'Огнемёт', cls: 'rifle', caliber: 'fuel', mode: 'auto', weight: 'heavy', slot: 'primary',
+    reload: 'mag', sound: 'flame', tracer: [3.4, 1.6, 0.4], muzzleSize: 0.5, t: GUNS.flamer,
   },
   ar15: {
     id: 'ar15', name: 'AR-15', cls: 'rifle', caliber: '556', mode: 'auto', weight: 'medium', slot: 'primary',
@@ -114,6 +118,10 @@ export function buildMagazine(id: FirearmId): THREE.Group {
   } else if (id === 'ar15') {
     part(g, 0.045, 0.16, 0.075, C.blackL, 0, -0.08, 0.01, -0.12);
     part(g, 0.05, 0.02, 0.08, C.black, 0, -0.165, 0.02, -0.12);
+  } else if (id === 'flamer') {
+    // сменный баллончик со смесью
+    part(g, 0.08, 0.13, 0.11, C.red, 0, -0.065, 0);
+    part(g, 0.084, 0.02, 0.114, C.brass, 0, -0.03, 0);
   } else if (id === 'pm') {
     part(g, 0.03, 0.09, 0.04, C.steelD, 0, -0.045, 0);
     part(g, 0.038, 0.016, 0.052, C.black, 0, -0.095, 0.004);
@@ -167,6 +175,21 @@ export function buildFirearm(id: FirearmId): GunRig {
     rig.muzzle = point(root, 0, 0.035, 0.64);
     rig.gripL = point(root, 0, -0.005, 0.31);
     rig.port = point(root, 0.035, 0.045, 0.08);
+  } else if (id === 'flamer') {
+    part(root, 0.09, 0.1, 0.5, C.blackL, 0, 0.03, 0.12); // корпус
+    part(root, 0.11, 0.03, 0.4, C.steelD, 0, 0.095, 0.14); // планка
+    part(root, 0.07, 0.07, 0.28, C.steel, 0, 0.04, 0.5); // ствол
+    part(root, 0.1, 0.1, 0.06, C.black, 0, 0.04, 0.66); // сопло
+    const pilot = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.035), new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.4, 0.3), toneMapped: false }));
+    pilot.position.set(0, -0.02, 0.68);
+    root.add(pilot); // запальник светится
+    part(root, 0.045, 0.1, 0.05, C.black, 0, -0.065, -0.04, 0.3); // рукоять
+    part(root, 0.04, 0.12, 0.04, C.black, 0, -0.06, 0.3); // передняя рукоять
+    part(root, 0.05, 0.05, 0.22, C.black, 0, -0.01, -0.22, -0.4); // шланг к баллонам
+    rig.magWell = point(root, 0, -0.02, 0.1);
+    rig.muzzle = point(root, 0, 0.04, 0.7);
+    rig.gripL = point(root, 0, -0.1, 0.3);
+    rig.port = point(root, 0.04, 0.05, 0.1);
   } else if (id === 'dbl') {
     part(root, 0.05, 0.065, 0.3, C.wood, 0, -0.025, -0.22);
     part(root, 0.056, 0.12, 0.06, C.woodD, 0, -0.045, -0.36);

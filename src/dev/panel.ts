@@ -1,4 +1,4 @@
-import { ARACHNIDS, BEETLES, GUNS, HERO, resetTuning, RICOCHET, SPREAD, tuningJSON } from '../tuning';
+import { ARACHNIDS, BEETLES, GUNS, HERO, JAILERS, resetTuning, RICOCHET, SPREAD, tuningJSON } from '../tuning';
 
 /**
  * F1 — панель параметров. Ползунки правят объекты из tuning.ts напрямую, изменения применяются сразу.
@@ -23,6 +23,9 @@ const LABELS: Record<string, string> = {
   meleeRange: 'Удар: дистанция, м', meleeDmg: 'Удар: урон', meleeWindup: 'Удар: замах, с', meleeCd: 'Удар: пауза, с',
   keepMin: 'Держит от, м', keepMax: 'Держит до, м', webRange: 'Паутина: дальность', webCd: 'Паутина: пауза, с', webSpeed: 'Паутина: скорость',
   webDmg: 'Паутина: урон', webSlow: 'Замедление ×', webSlowTime: 'Замедление, с', poisonDps: 'Яд, урон/с', poisonTime: 'Яд, с',
+  aimErr: 'Ошибка прицела, °', burst: 'Очередь, выстрелов', burstPause: 'Пауза очередей, с', peekTime: 'Выглядывает, с', hideTime: 'Прячется, с',
+  preferMin: 'Дистанция от, м', preferMax: 'Дистанция до, м', flameDps: 'Огонь: урон/с', burnDps: 'Горение: урон/с', burnTime: 'Горение, с',
+  tankHp: 'Баллоны: прочность', blastR: 'Взрыв: радиус, м', blastDmg: 'Взрыв: урон',
   pounceMul: 'Прыжок: длин тела', pounceDmg: 'Прыжок: урон', pounceWindup: 'Прыжок: замах, с', pounceCd: 'Прыжок: пауза, с', pounceTime: 'Прыжок: полёт, с',
 };
 
@@ -88,6 +91,9 @@ export class Panel {
     this.section('Жуки', BEETLES as unknown as NumObj);
     this.section('Арахнид: Воин', ARACHNIDS.warrior as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'dodgeTime', 'meleeRange', 'meleeDmg', 'meleeWindup', 'meleeCd']);
     this.section('Арахнид: Ткач', ARACHNIDS.spinner as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'keepMin', 'keepMax', 'webRange', 'webCd', 'webSpeed', 'webDmg', 'webSlow', 'webSlowTime', 'poisonDps', 'poisonTime']);
+    this.section('Тюремщик: стрелок', JAILERS.rifle as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'burst', 'burstPause', 'peekTime', 'hideTime', 'preferMin', 'preferMax', 'dmgMul']);
+    this.section('Тюремщик: двустволка', JAILERS.shotgun as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'preferMax', 'dmgMul']);
+    this.section('Тюремщик: огнемётчик', JAILERS.flamer as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'flameDps', 'burnDps', 'burnTime', 'tankHp', 'blastR', 'blastDmg']);
     this.section('Арахнид: Прыгун', ARACHNIDS.leaper as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'meleeDmg', 'pounceMul', 'pounceDmg', 'pounceWindup', 'pounceCd', 'pounceTime']);
   }
 

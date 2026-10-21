@@ -276,6 +276,11 @@ export interface Shootable {
   readonly pos: THREE.Vector3;
   readonly radius: number;
   readonly alive: boolean;
+  /**
+   * Высота корпуса, если цель пригнулась (присел за укрытием). Если между стрелком и целью
+   * есть препятствие выше этой высоты, пуля проходит над головой.
+   */
+  readonly shieldY?: number;
   hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void;
 }
 
@@ -311,7 +316,10 @@ export function traceShot(
     for (const tg of targets) {
       if (!tg.alive || skip.has(tg)) continue;
       const t = raycastCircle(ox, oz, dx, dz, tg.pos.x, tg.pos.z, tg.radius);
-      if (t >= 0 && t < bestT) { bestT = t; best = tg; }
+      if (t < 0 || t >= bestT) continue;
+      // пригнулся за укрытием — пуля проходит над ним
+      if (tg.shieldY !== undefined && raycastObstacles(ox, oz, dx, dz, t, tg.shieldY, obstacles)) continue;
+      bestT = t; best = tg;
     }
     const from = new THREE.Vector3(ox, y, oz);
     const to = new THREE.Vector3(ox + dx * bestT, y, oz + dz * bestT);

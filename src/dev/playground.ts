@@ -5,6 +5,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { initAudio, sfx, toggleMute } from '../audio';
 import { Arachnid, ARACHNID_NAMES, type ArachnidContext } from '../arachnid';
+import { buildCoverPoints } from '../cover';
+import { Jailer, JAILER_NAMES, type JailerContext } from '../jailer';
 import { Beetle, type BeetleKind } from '../beetle';
 import { distToObstacle, NavGrid } from '../nav';
 import { obstacle, raycastObstacles, resolveCircle, type Obstacle } from '../collision';
@@ -13,7 +15,7 @@ import { FX } from '../fx';
 import { rng, traceShot, type FireRequest, type GunEvent, type GunState, type Shootable } from '../gunplay';
 import { emptyInput, Hero, type HeroInput } from '../hero';
 import { makeTextures } from '../textures';
-import { ARACHNIDS, BEETLES, CALIBERS, GUNS, HERO, snapshotTuning, type ArachnidKind } from '../tuning';
+import { ARACHNIDS, BEETLES, CALIBERS, GUNS, HERO, JAILERS, snapshotTuning, type ArachnidKind, type JailerKind } from '../tuning';
 import { Dummy, Spits, type Spit } from './dummies';
 import { Overlays } from './overlay';
 import { button, Panel, select, toggle } from './panel';
@@ -275,12 +277,16 @@ export function runPlayground(): void {
   // ---------- Загон врагов ----------
   // Все враги стоят в строю и спят. Попадание или пуля рядом будит именно этого врага. N — все обратно на места.
   const nav = new NavGrid(HALF, obstacles, 0.75);
-  type EnemySpec = { type: 'beetle'; kind: BeetleKind; x: number } | { type: 'arachnid'; kind: ArachnidKind; x: number };
+  const covers = buildCoverPoints(obstacles, nav);
+  type EnemySpec = { type: 'beetle'; kind: BeetleKind; x: number } | { type: 'arachnid'; kind: ArachnidKind; x: number }
+    | { type: 'jailer'; kind: JailerKind; x: number; z: number; yaw: number };
   const PEN_Z = -10;
   const ROSTER: EnemySpec[] = [
     { type: 'beetle', kind: 'small', x: -15 }, { type: 'beetle', kind: 'fast', x: -13 }, { type: 'beetle', kind: 'spitter', x: -11 },
     { type: 'beetle', kind: 'bombardier', x: -9 }, { type: 'beetle', kind: 'big', x: -7 },
     { type: 'arachnid', kind: 'warrior', x: -3.5 }, { type: 'arachnid', kind: 'spinner', x: 1.2 }, { type: 'arachnid', kind: 'leaper', x: 5.6 },
+    // пост ЧВК «Тюремщики» у угла комнаты
+    { type: 'jailer', kind: 'rifle', x: 16.5, z: 12, yaw: -2.1 }, { type: 'jailer', kind: 'shotgun', x: 19, z: 12.5, yaw: -2.1 }, { type: 'jailer', kind: 'flamer', x: 21.5, z: 13, yaw: -2.1 },
   ];
   const ARACH_GLOW: Record<ArachnidKind, THREE.Color> = { warrior: new THREE.Color(3.2, 2.2, 0.3), spinner: new THREE.Color(0.7, 3.2, 0.4), leaper: new THREE.Color(2.6, 1, 3) };
   const BEETLE_NAMES: Record<BeetleKind, string> = { small: 'мелкий', fast: 'быстрый', spitter: 'плевун', bombardier: 'бомбардир', big: 'носорог' };
@@ -291,6 +297,9 @@ export function runPlayground(): void {
     name: string;
     beetle: Beetle | null;
     arach: Arachnid | null;
+    jailer: Jailer | null;
+    /** Малина уже высыпалась из убитого тюремщика */
+    looted: boolean;
     awake: boolean;
     gone: boolean;
     label: HTMLDivElement;
@@ -300,8 +309,12 @@ export function runPlayground(): void {
   let beetleAI = true;
   const aiRand = rng(4242);
 
-  for (const sp of ROSTER) floorLabel(sp.type === 'beetle' ? BEETLE_NAMES[sp.kind] : ARACHNID_NAMES[sp.kind], sp.x, PEN_Z + (sp.type === 'arachnid' ? 2.4 : 1.3), sp.type === 'arachnid' ? 0.9 : 0.7,
-    0, sp.type === 'arachnid' ? ARACH_COLORS[sp.kind] : '#2b2e33');
+  for (const sp of ROSTER) {
+    if (sp.type === 'jailer') { floorLabel(JAILER_NAMES[sp.kind], sp.x, sp.z + 1.3, 0.75, 0, '#1a1b1e'); continue; }
+    floorLabel(sp.type === 'beetle' ? BEETLE_NAMES[sp.kind] : ARACHNID_NAMES[sp.kind], sp.x, PEN_Z + (sp.type === 'arachnid' ? 2.4 : 1.3), sp.type === 'arachnid' ? 0.9 : 0.7,
+      0, sp.type === 'arachnid' ? ARACH_COLORS[sp.kind] : '#2b2e33');
+  }
+  floorLabel('пост ЧВК «Тюремщики»', 19, 15.6, 1, 0, '#c4284f');
   floorLabel('загон врагов: выстрел будит, N — на места', -5.5, PEN_Z + 4, 1);
 
   function spawnEnemies(): void {
@@ -309,8 +322,11 @@ export function runPlayground(): void {
       const label = document.createElement('div');
       label.className = 'pg-dummy pg-enemy';
       overlayEl.appendChild(label);
-      const e: Enemy = { spec: sp, name: '', beetle: null, arach: null, awake: false, gone: false, label, labelText: '' };
-      if (sp.type === 'beetle') {
+      const e: Enemy = { spec: sp, name: '', beetle: null, arach: null, jailer: null, looted: false, awake: false, gone: false, label, labelText: '' };
+      if (sp.type === 'jailer') {
+        e.jailer = new Jailer(scene, T, fx, sp.kind, sp.x, sp.z, sp.yaw, aiRand, enemyFire, onEnemyGunEvent);
+        e.name = JAILER_NAMES[sp.kind];
+      } else if (sp.type === 'beetle') {
         const b = new Beetle(scene, sp.kind, [sp.x, PEN_Z], [sp.x, PEN_Z]);
         b.placeAt(sp.x, PEN_Z, 0);
         e.beetle = b;
@@ -327,6 +343,7 @@ export function runPlayground(): void {
     for (const e of enemies) {
       e.beetle?.dispose();
       e.arach?.dispose();
+      e.jailer?.dispose(scene);
       e.label.remove();
     }
     enemies.length = 0;
@@ -340,9 +357,10 @@ export function runPlayground(): void {
 
   function wakeEnemy(e: Enemy): void {
     if (e.gone) return;
-    if (!e.awake && !scripted) sfx.screech();
+    if (!e.awake && !scripted) (e.jailer ? sfx.shout : sfx.screech)();
     e.awake = true;
     e.arach?.wake();
+    e.jailer?.wake();
   }
 
   /** Обёртка жука под попадания пули */
@@ -365,20 +383,21 @@ export function runPlayground(): void {
 
   const liveBeetles = (): Beetle[] => enemies.filter((e) => e.beetle && !e.gone).map((e) => e.beetle as Beetle);
   const liveArachnids = (): Arachnid[] => enemies.filter((e) => e.arach && !e.gone).map((e) => e.arach as Arachnid);
+  const liveJailers = (): Jailer[] => enemies.filter((e) => e.jailer && !e.gone).map((e) => e.jailer as Jailer);
   spawnEnemies();
 
   /** Подпись над врагом: имя, состояние, здоровье */
   function drawEnemyLabel(e: Enemy, w: number, h: number): void {
-    const obj = e.arach ?? e.beetle;
+    const obj = e.arach ?? e.beetle ?? e.jailer;
     if (!obj || e.gone) { e.label.style.display = 'none'; return; }
-    const top = e.arach ? 3.4 * e.arach.T.scale : 1.2;
+    const top = e.arach ? 3.4 * e.arach.T.scale : e.jailer ? 2.4 : 1.2;
     const v = obj.pos.clone().setY(top).project(camera);
     const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
     e.label.style.display = on ? '' : 'none';
     if (!on) return;
     e.label.style.transform = `translate(${((v.x * 0.5 + 0.5) * w).toFixed(1)}px,${((-v.y * 0.5 + 0.5) * h).toFixed(1)}px) translate(-50%,-100%)`;
-    const hpK = e.arach ? e.arach.hp / e.arach.T.hp : e.beetle ? e.beetle.hp / e.beetle.maxHp : 0;
-    const state = e.arach ? e.arach.state : e.awake ? 'охота' : 'спит';
+    const hpK = e.arach ? e.arach.hp / e.arach.T.hp : e.beetle ? e.beetle.hp / e.beetle.maxHp : e.jailer ? e.jailer.hero.hp / e.jailer.hero.maxHp : 0;
+    const state = e.arach ? e.arach.state : e.jailer ? e.jailer.state : e.awake ? 'охота' : 'спит';
     const t = `<i>${e.name} · ${state}</i><s style="--k:${Math.max(0, hpK).toFixed(2)}"></s>`;
     if (t !== e.labelText) { e.labelText = t; e.label.innerHTML = t; }
   }
@@ -401,6 +420,10 @@ export function runPlayground(): void {
       if (e.gone) continue;
       if (e.beetle && !e.beetle.dead) list.push(beetleTarget(e, e.beetle));
       if (e.arach && !e.arach.dead) list.push(e.arach);
+      if (e.jailer) {
+        if (e.jailer.alive) list.push(e.jailer);
+        if (e.jailer.tanks && e.jailer.tanks.alive) list.push(e.jailer.tanks);
+      }
     }
     return list;
   }
@@ -437,12 +460,12 @@ export function runPlayground(): void {
       let first: Enemy | null = null, firstT = Infinity;
       for (const en of enemies) {
         if (en.gone) continue;
-        const pos = en.arach ? en.arach.pos : en.beetle ? en.beetle.pos : null;
+        const pos = en.arach ? en.arach.pos : en.beetle ? en.beetle.pos : en.jailer && en.jailer.alive ? en.jailer.pos : null;
         if (!pos) continue;
-        const r = en.arach ? en.arach.radius : (en.beetle as Beetle).radius;
+        const r = en.arach ? en.arach.radius : en.jailer ? en.jailer.radius : (en.beetle as Beetle).radius;
         for (const sg of res.segments) {
           const d = segDist(pos.x, pos.z, sg.from, sg.to);
-          if (en.awake) { if (d < r + 0.9) en.arach?.nearMiss(); continue; }
+          if (en.awake) { if (d < r + 0.9) { en.arach?.nearMiss(); en.jailer?.suppress(); } continue; }
           if (d < r + 0.4) {
             const t = sg.from.distanceTo(pos);
             if (t < firstT) { firstT = t; first = en; }
@@ -459,6 +482,13 @@ export function runPlayground(): void {
         if (!scripted) sfx.hit();
         for (const en of enemies) if (en.arach === t) wakeEnemy(en);
       }
+      if (t instanceof Jailer) {
+        fx.text(e.p, fmtDmg(e.d), req.double ? 'crit' : '');
+        fx.burst(e.p, ['#22242a', '#141619', '#3a2a24'], 4, { speed: 2.5, up: 2, size: 0.06, life: 0.4 });
+        if (!scripted) sfx.hit();
+        for (const en of enemies) if (en.jailer === t) wakeEnemy(en);
+      }
+      for (const en of enemies) if (en.jailer && en.jailer.tanks === t) { fx.burst(e.p, [new THREE.Color(3, 1.6, 0.4)], 6, { speed: 3, up: 2, size: 0.05, life: 0.3, glow: true }); if (!scripted) sfx.ricochet(); }
       if (t instanceof Dummy) {
         fx.text(e.p, fmtDmg(e.d), req.double ? 'crit' : '');
         fx.burst(e.p, ['#d8b779', '#b8935a'], 3, { speed: 2, up: 1.5, size: 0.06, life: 0.4 });
@@ -475,6 +505,95 @@ export function runPlayground(): void {
       if (def.sound === 'dbl' && req.double) sfx.dblBoth();
       else sfx[def.sound]();
     }
+  }
+
+  /** Герой как цель для пуль врагов; присев за укрытием, прячется за ним */
+  const playerTarget: Shootable = {
+    get pos() { return hero.pos; },
+    radius: 0.38,
+    get alive() { return !hero.down; },
+    get shieldY() { return hero.crouched ? 0.8 : undefined; },
+    hit(dmg) {
+      if (hero.hurt(dmg)) { fx.text(hero.pos, `−${fmtDmg(dmg)}`, 'bad'); fx.shake = Math.max(fx.shake, 0.15); if (!scripted) sfx.hurt(); }
+    },
+  };
+
+  /** Выстрел тюремщика: пули по герою (и рикошеты), огнемёт — струя пламени */
+  function enemyFire(req: FireRequest, h: Hero): void {
+    const def = req.gun.def;
+    const muzzle = h.muzzle();
+    const owner = liveJailers().find((j) => j.hero === h);
+    const JT = owner?.T ?? JAILERS.rifle;
+    if (def.id === 'flamer') {
+      const dir = new THREE.Vector3(Math.sin(h.upperYaw), 0, Math.cos(h.upperYaw));
+      fx.spray(muzzle, dir, [new THREE.Color(3.4, 1.4, 0.25), new THREE.Color(3.4, 2.4, 0.5), new THREE.Color(2.4, 0.6, 0.1)], 5, { speed: 9, spread: 0.2, life: 0.5, size: 0.14, gravity: -1.5 });
+      if (fxRand() < 0.25) fx.burst(muzzle.clone().addScaledVector(dir, 3 + fxRand() * 2), ['#2a2622', '#3a3430'], 1, { speed: 0.6, up: 1.5, size: 0.25, life: 1.2, gravity: -1.2, drag: 2 });
+      flashLight.position.copy(muzzle).addScaledVector(dir, 2);
+      flashLight.color.setRGB(1, 0.55, 0.2);
+      flashLight.intensity = 5;
+      flashT = 0.06;
+      // урон: герой в струе (конус, дальность, без стены между)
+      const P = hero.pos;
+      const dx = P.x - muzzle.x, dz = P.z - muzzle.z;
+      const d = Math.hypot(dx, dz);
+      const a = Math.atan2(dx, dz) - h.upperYaw;
+      const ang = Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+      if (!hero.down && d < def.t.range && ang < THREE.MathUtils.degToRad(def.t.spread) + Math.atan(0.4 / Math.max(d, 0.3))
+        && !raycastObstacles(muzzle.x, muzzle.z, dx / (d || 1), dz / (d || 1), d, 1.0, obstacles)) {
+        if (hero.hurt(JT.flameDps / def.t.rate)) hero.applyBurn(JT.burnDps, JT.burnTime);
+      }
+      if (!scripted && fxRand() < 0.35) sfx.flame();
+      return;
+    }
+    const tracer = new THREE.Color(...def.tracer);
+    for (const a of req.angles) {
+      const res = traceShot(muzzle, h.upperYaw + a, req.dmg * JT.dmgMul, def.t.range, req.knock, obstacles, [playerTarget], rand);
+      for (const s of res.segments) drawTracer(s.from, s.to, tracer);
+      for (const w of res.wallHits) {
+        chip(w.point, w.nx, w.nz);
+        if (w.ricochet) fx.ricochet(w.point, new THREE.Color(3.2, 2.6, 1.4));
+      }
+    }
+    fx.muzzle(muzzle, h.upperYaw, tracer, def.muzzleSize * (req.double ? 1.5 : 1));
+    flashLight.position.copy(muzzle);
+    flashLight.color.set('#ffd27a');
+    flashLight.intensity = 5 * def.muzzleSize;
+    flashT = 0.05;
+    if (!scripted) {
+      if (def.sound === 'dbl' && req.double) sfx.dblBoth();
+      else sfx[def.sound]();
+    }
+  }
+
+  function onEnemyGunEvent(ev: GunEvent): void {
+    if (scripted) return;
+    const snd: Partial<Record<GunEvent, () => void>> = { magOut: sfx.magOut, magIn: sfx.magIn, rack: sfx.rack, open: sfx.breakOpen, close: sfx.breakClose, shellsIn: sfx.shellsIn };
+    snd[ev]?.();
+  }
+
+  /** Взрыв баллонов огнемётчика: бьёт всех вокруг — героя, тюремщиков, жуков, арахнидов, манекены */
+  function explode(at: THREE.Vector3, r: number, dmg: number): void {
+    fx.explosion(at.clone().setY(1), r, new THREE.Color(3.4, 1.4, 0.3));
+    flashLight.position.copy(at).setY(1.5);
+    flashLight.color.setRGB(1, 0.6, 0.25);
+    flashLight.intensity = 30;
+    flashT = 0.2;
+    fx.shake = Math.max(fx.shake, 1);
+    if (!scripted) sfx.blast();
+    const k = (p: THREE.Vector3) => { const d = Math.hypot(p.x - at.x, p.z - at.z); return d < r ? 1 - (d / r) * 0.6 : 0; };
+    const dir = (p: THREE.Vector3) => new THREE.Vector3(p.x - at.x, 0, p.z - at.z).normalize();
+    const kh = k(hero.pos);
+    if (kh > 0 && hero.hurt(dmg * kh)) { hero.applyBurn(6, 2); fx.text(hero.pos, `−${Math.round(dmg * kh)}`, 'bad'); }
+    for (const e of enemies) {
+      if (e.gone) continue;
+      const p = e.jailer?.pos ?? e.arach?.pos ?? e.beetle?.pos;
+      if (!p || k(p) <= 0) continue;
+      if (e.jailer && e.jailer.alive) e.jailer.hit(dmg * k(p));
+      if (e.arach && !e.arach.dead) e.arach.hit(dmg * k(p), dir(p), p, 1);
+      if (e.beetle && !e.beetle.dead && e.beetle.damage(dmg * k(p) * BEETLES.dmgScale, dir(p))) killBeetle(e.beetle);
+      wakeEnemy(e);
+    }
+    for (const d of dummies) if (k(d.pos) > 0) d.hit(dmg * k(d.pos), dir(d.pos), d.pos, 1);
   }
 
   function onGunEvent(ev: GunEvent, g: GunState): void {
@@ -818,6 +937,32 @@ export function runPlayground(): void {
     }
     // спящие арахниды дышат и светятся
     for (const e of enemies) if (e.arach && !e.awake && !e.gone) e.arach.update(dt, actx);
+
+    // тюремщики
+    const jailers = liveJailers();
+    const jctx: JailerContext = {
+      player: hero, obstacles, nav, covers, others: jailers,
+      alert(from) {
+        // тревога: просыпаются соседи по посту
+        for (const en of enemies) if (en.jailer && !en.awake && en.jailer.pos.distanceTo(from.pos) < 16) wakeEnemy(en);
+      },
+    };
+    for (const e of enemies) {
+      const j = e.jailer;
+      if (!j || e.gone) continue;
+      if (j.blastPending) { j.blastPending = false; explode(j.tanks ? j.tanks.pos : j.pos, j.T.blastR, j.T.blastDmg); j.hero.hurt(9999); }
+      if (e.awake && !beetleAI && !j.hero.down) continue;
+      j.update(dt, jctx);
+      if (j.hero.down && !e.looted) {
+        // из убитого тюремщика высыпается украденная малина
+        e.looted = true;
+        fx.burst(j.pos.clone().setY(1), ['#c4284f', '#e0284f', '#8a1030'], 18, { speed: 3, up: 4, size: 0.12, life: 1.4 });
+        fx.text(j.pos, '+малина', 'berry');
+        if (!scripted) sfx.harvest();
+      }
+    }
+    // горит — языки пламени на герое
+    if (hero.burnT > 0 && fxRand() < 0.6) fx.burst(hero.pos.clone().add(new THREE.Vector3((fxRand() - 0.5) * 0.5, 0.4 + fxRand() * 1.2, (fxRand() - 0.5) * 0.5)), [new THREE.Color(3.4, 1.5, 0.3), new THREE.Color(3.4, 2.6, 0.6)], 1, { speed: 0.4, up: 1.8, size: 0.09, life: 0.4, glow: true, gravity: -2 });
     for (const e of enemies) {
       if (e.gone) continue;
       if (e.beetle?.dead) { e.beetle.dispose(); e.gone = true; }
@@ -893,6 +1038,7 @@ export function runPlayground(): void {
       for (const d of dummies) list.push({ x: d.pos.x, z: d.pos.z, r: d.radius });
       for (const b of liveBeetles()) list.push({ x: b.pos.x, z: b.pos.z, r: b.radius * 0.9 });
       for (const a of liveArachnids()) list.push({ x: a.pos.x, z: a.pos.z, r: a.radius });
+      for (const j of liveJailers()) { list.push({ x: j.pos.x, z: j.pos.z, r: j.radius }); if (j.tanks?.alive) { const p = j.tanks.pos; list.push({ x: p.x, z: p.z, r: j.tanks.radius }); } }
       overlays.drawCircles(list);
       overlays.drawPaths(liveArachnids().filter((a) => a.active).map((a) => [a.pos, ...a.debugPath]));
     } else { overlays.drawCircles([]); overlays.drawPaths([]); }
@@ -917,6 +1063,8 @@ export function runPlayground(): void {
     get enemies() { return enemies; },
     get beetles() { return liveBeetles(); },
     get arachnids() { return liveArachnids(); },
+    get jailers() { return liveJailers(); },
+    covers,
     /** Разбудить врага по имени вида ('warrior', 'small'…) или всех */
     wake(kind?: string) { for (const e of enemies) if (!kind || e.spec.kind === kind) wakeEnemy(e); },
     resetEnemies,

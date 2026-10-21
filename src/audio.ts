@@ -94,6 +94,10 @@ export const sfx = {
   shellsIn() { noise({ dur: 0.04, vol: 0.12, freq: 900, q: 1.5 }); noise({ dur: 0.04, vol: 0.12, freq: 950, q: 1.5, delay: 0.12 }); },
   roll() { noise({ dur: 0.2, vol: 0.14, freq: 700, q: 0.6 }); },
   step() { noise({ dur: 0.04, vol: 0.035, freq: 500, q: 0.8 }); },
+  // ---------- тюремщики ----------
+  flame() { noise({ dur: 0.08, vol: 0.09, freq: 420, q: 0.5 }); },
+  blast() { tone({ type: 'sine', f0: 90, f1: 25, dur: 0.8, vol: 0.55 }); noise({ dur: 0.8, vol: 0.5, freq: 220, q: 0.4 }); noise({ dur: 0.25, vol: 0.25, freq: 1600, q: 0.5 }); },
+  shout() { tone({ type: 'sawtooth', f0: 180, f1: 140, dur: 0.18, vol: 0.06 }); tone({ type: 'sawtooth', f0: 210, f1: 160, dur: 0.18, vol: 0.05, delay: 0.2 }); },
   // ---------- арахниды ----------
   screech() { tone({ type: 'sawtooth', f0: 900, f1: 1700, dur: 0.25, vol: 0.07 }); tone({ type: 'square', f0: 1300, f1: 600, dur: 0.3, vol: 0.05, delay: 0.08 }); noise({ dur: 0.3, vol: 0.12, freq: 3200, q: 2 }); },
   leap() { noise({ dur: 0.1, vol: 0.12, freq: 1400, q: 0.8 }); tone({ type: 'triangle', f0: 300, f1: 520, dur: 0.08, vol: 0.05 }); },
