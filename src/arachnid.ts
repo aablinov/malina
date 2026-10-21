@@ -104,6 +104,7 @@ export class Arachnid implements Shootable {
   private readonly jawL: THREE.Mesh;
   private readonly jawR: THREE.Mesh;
   private readonly claws: THREE.Group[] = [];
+  private horns: THREE.Group[] = [];
   private readonly legs: Leg[] = [];
   private readonly shell: THREE.MeshStandardMaterial;
   private readonly stripe: THREE.MeshBasicMaterial;
@@ -122,13 +123,15 @@ export class Arachnid implements Shootable {
     this.spawn.set(x, 0, z);
     this.yaw = this.spawnYaw = yaw;
     const s = this.T.scale;
-    this.bodyY = 0.95 * s;
-    this.FEMUR = 1.0 * s;
-    this.TIBIA = 1.5 * s;
+    const leaper = kind === 'leaper', spinner = kind === 'spinner';
+    // как на референсах: корпус высоко, колени выше спины, ноги-копья длиннее тела
+    this.bodyY = 2.15 * s;
+    this.FEMUR = (leaper ? 1.75 : 1.6) * s;
+    this.TIBIA = (leaper ? 3.2 : 2.9) * s;
 
-    this.shell = new THREE.MeshStandardMaterial({ color: '#1b1e24', roughness: 0.38, metalness: 0.35 });
-    const under = new THREE.MeshStandardMaterial({ color: '#4a1c16', roughness: 0.6, metalness: 0.1 });
-    const dark = new THREE.MeshStandardMaterial({ color: '#0f1114', roughness: 0.5, metalness: 0.3 });
+    this.shell = new THREE.MeshStandardMaterial({ color: '#1a1d22', roughness: 0.34, metalness: 0.4 });
+    const under = new THREE.MeshStandardMaterial({ color: '#5a1d18', roughness: 0.6, metalness: 0.1 });
+    const dark = new THREE.MeshStandardMaterial({ color: '#0d0f12', roughness: 0.45, metalness: 0.35 });
     this.stripeBase = STRIPE_COLORS[kind].clone();
     this.stripe = new THREE.MeshBasicMaterial({ color: this.stripeBase.clone(), toneMapped: false });
 
@@ -150,73 +153,130 @@ export class Arachnid implements Shootable {
       m.castShadow = false;
       return m;
     };
+    const group = (p: THREE.Object3D, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0): THREE.Group => {
+      const g = new THREE.Group();
+      g.position.set(x, y, z);
+      g.rotation.set(rx, ry, rz);
+      p.add(g);
+      return g;
+    };
 
-    // грудь и брюшко
-    box(this.body, 0.72, 0.42, 0.95, this.shell, 0, 0, 0);
-    box(this.body, 0.5, 0.2, 0.8, under, 0, -0.24, 0.05);
-    // спинной гребень и хвостовой шип
-    box(this.body, 0.9, 0.12, 1.25, this.shell, 0, 0.3, -0.25, 0.12);
-    box(this.body, 0.1, 0.32, 0.9, dark, 0, 0.46, -0.3, 0.12);
-    box(this.body, 0.16, 0.16, 0.95, this.shell, 0, 0.32, -1.1, -0.55);
-    // тигровые полосы разной ширины поперёк гребня
-    for (const [z, w, d] of [[0.12, 0.7, 0.07], [-0.3, 0.92, 0.1], [-0.68, 0.6, 0.06]] as const) glow(this.body, w, 0.025, d, 0, 0.375 - z * 0.12, z, 0.12);
+    // ---------- грудь ----------
+    const w = leaper ? 0.85 : 1;
+    box(this.body, 0.85 * w, 0.6, 1.1, this.shell, 0, 0, 0);
+    box(this.body, 0.6 * w, 0.3, 0.9, under, 0, -0.36, 0.05);
+    box(this.body, 0.95 * w, 0.14, 0.5, dark, 0, 0.3, 0.25); // воротник за головой
 
-    // голова: длинный панцирь вперёд, челюсти
-    this.head.position.set(0, 0.08, 0.45);
+    // ---------- голова: клин вперёд и вниз, плоский гребень-«молот», пасть с клыками ----------
+    this.head.position.set(0, 0.06, 0.5);
+    this.head.rotation.x = 0.16;
     this.body.add(this.head);
-    box(this.head, 0.52, 0.3, 1.0, this.shell, 0, 0.04, 0.45, -0.08);
-    box(this.head, 0.62, 0.1, 0.7, dark, 0, 0.2, 0.3, -0.08); // козырёк
-    box(this.head, 0.3, 0.22, 0.34, under, 0, -0.1, 0.95);
-    for (const [z, w] of [[0.3, 0.6], [0.66, 0.42]] as const) glow(this.head, w, 0.025, 0.07, 0, 0.26 + (0.45 - z) * 0.08, z, -0.08);
-    glow(this.head, 0.05, 0.05, 0.05, 0.16, 0.08, 1.0); glow(this.head, 0.05, 0.05, 0.05, -0.16, 0.08, 1.0); // глаза
-    this.jawL = box(this.head, 0.08, 0.08, 0.42, dark, 0.13, -0.14, 1.18, 0, 0.3);
-    this.jawR = box(this.head, 0.08, 0.08, 0.42, dark, -0.13, -0.14, 1.18, 0, -0.3);
+    box(this.head, 0.8 * w, 0.55, 0.55, this.shell, 0, 0, 0.28);
+    box(this.head, 0.62 * w, 0.45, 0.5, this.shell, 0, -0.03, 0.72);
+    box(this.head, 0.44 * w, 0.34, 0.45, this.shell, 0, -0.06, 1.12);
+    box(this.head, 0.26, 0.22, 0.35, dark, 0, -0.08, 1.46);
+    // гребень: широкая плоская пластина с заострёнными краями
+    box(this.head, 1.15 * w, 0.08, 0.75, this.shell, 0, 0.31, 0.45);
+    for (const sd of [1, -1]) box(this.head, 0.3, 0.06, 0.3, dark, sd * 0.68 * w, 0.29, 0.3, 0, sd * 0.7, 0);
+    for (const [z, ww] of [[0.18, 1.05], [0.42, 0.8], [0.64, 0.55]] as const) glow(this.head, ww * w, 0.02, z === 0.42 ? 0.1 : 0.07, 0, 0.36, z);
+    glow(this.head, 0.06, 0.02, 0.5, 0.18, 0.36, 0.95, 0, 0.12); glow(this.head, 0.06, 0.02, 0.5, -0.18, 0.36, 0.95, 0, -0.12);
+    // пасть и клыки
+    box(this.head, 0.42, 0.26, 0.34, under, 0, -0.3, 0.88);
+    this.jawL = box(this.head, 0.08, 0.36, 0.08, dark, 0.13, -0.5, 1.0, 0.35);
+    this.jawR = box(this.head, 0.08, 0.36, 0.08, dark, -0.13, -0.5, 1.0, 0.35);
+    glow(this.head, 0.06, 0.06, 0.04, 0.26, 0.08, 0.98); glow(this.head, 0.06, 0.06, 0.04, -0.26, 0.08, 0.98); // глаза
 
-    // передние клешни-серпы (рога на референсах)
-    for (const side of [1, -1]) {
-      const c = new THREE.Group();
-      c.position.set(side * 0.28, 0.12, 0.55);
-      this.body.add(c);
-      box(c, 0.13, 0.7, 0.13, this.shell, 0, 0.32, 0.06, 0.25);
-      const blade = new THREE.Group();
-      blade.position.set(0, 0.66, 0.16);
-      c.add(blade);
-      box(blade, 0.09, 0.09, 0.8, this.shell, 0, 0.0, 0.38, -0.35);
-      box(blade, 0.06, 0.06, 0.38, dark, 0, -0.15, 0.82, 0.55);
-      glow(blade, 0.1, 0.04, 0.34, 0, 0.06, 0.3, -0.35);
+    // ---------- большие рога-серпы: толстые у основания, дугой вверх и назад над спиной ----------
+    this.horns = [];
+    const hornK = spinner ? 0.7 : leaper ? 0.55 : 1;
+    const segs: [number, number, number][] = [
+      // длина, толщина, изгиб относительно предыдущего
+      [0.8, 0.24, 0], [0.75, 0.19, -0.75], [0.7, 0.14, -0.7], [0.5, 0.08, -0.6],
+    ];
+    for (const sd of [1, -1]) {
+      const a = group(this.head, sd * 0.3 * w, 0.3, 0.42, 0.2, 0, -sd * 0.28);
+      let parent: THREE.Group = a;
+      segs.forEach(([len, th, bend], i) => {
+        const g = i === 0 ? a : group(parent, 0, segs[i - 1][0] * hornK, 0, bend);
+        const L = len * hornK;
+        box(g, th, L + th * 0.5, th * 1.15, i === 3 ? dark : this.shell, 0, L / 2, 0);
+        // светящаяся внутренняя кромка серпа (со стороны головы)
+        if (i < 3) glow(g, th * 0.35, L * 0.55, 0.03, 0, L * 0.5, th * 0.6);
+        parent = g;
+      });
+      this.horns.push(a);
+    }
+
+    // ---------- малые клешни под головой (ими бьёт) ----------
+    for (const sd of [1, -1]) {
+      const c = group(this.body, sd * 0.24, -0.32, 0.75);
+      box(c, 0.11, 0.55, 0.11, this.shell, 0, -0.27, 0);
+      const blade = group(c, 0, -0.54, 0);
+      box(blade, 0.08, 0.08, 0.5, this.shell, 0, 0, 0.24);
+      box(blade, 0.05, 0.05, 0.26, dark, 0, 0.06, 0.55, -0.5);
+      glow(blade, 0.1, 0.03, 0.22, 0, 0.05, 0.2);
       c.userData.blade = blade;
       this.claws.push(c);
     }
 
-    if (kind === 'spinner') {
+    // ---------- спинной панцирь со скатом назад и хвостовой шип ----------
+    const back = group(this.body, 0, 0.32, -0.45, -0.16);
+    box(back, 1.2 * w, 0.16, 1.7, this.shell, 0, 0, -0.2);
+    box(back, 0.14, 0.24, 1.4, dark, 0, 0.16, -0.25); // киль
+    for (const sd of [1, -1]) box(back, 0.3, 0.1, 1.0, dark, sd * 0.68 * w, -0.06, -0.3, 0, sd * 0.22, sd * 0.25);
+    // тигровые полосы рваной ширины поперёк панциря и по бокам
+    // тигровые полосы: рваные «языки пламени» от киля к краям, разной длины и наклона
+    const stripes: [number, number, number, number][] = [[0.45, 0.42, 0.07, 0.5], [0.15, 0.55, 0.11, 0.38], [-0.12, 0.34, 0.06, 0.6], [-0.42, 0.52, 0.1, 0.42], [-0.72, 0.4, 0.07, 0.55], [-0.98, 0.28, 0.05, 0.5]];
+    stripes.forEach(([z, len, d, ang], i) => {
+      for (const sd of [1, -1]) {
+        const jit = ((i * 7 + (sd > 0 ? 3 : 0)) % 5) * 0.03;
+        glow(back, len * w, 0.02, d, sd * (0.13 + len * w * 0.45), 0.09, z - Math.sin(ang) * len * 0.3 + jit, 0, sd * ang, 0);
+      }
+    });
+    for (const sd of [1, -1]) for (const z of [0.1, -0.4]) glow(back, 0.04, 0.12, 0.18, sd * 0.61 * w, 0.0, z);
+    if (spinner) {
       // брюшко с прядильными железами — светится зелёным
-      this.sac = box(this.body, 0.75, 0.6, 0.85, this.shell, 0, 0.05, -0.95);
-      for (const z of [-0.78, -1.1]) glow(this.body, 0.78, 0.62, 0.05, 0, 0.05, z);
-      glow(this.body, 0.2, 0.2, 0.12, 0, -0.05, -1.4);
+      this.sac = box(this.body, 0.95, 0.85, 1.05, this.shell, 0, -0.05, -1.25);
+      for (const z of [-0.95, -1.3, -1.62]) glow(this.body, 0.98, 0.88, 0.05, 0, -0.05, z);
+      glow(this.body, 0.3, 0.3, 0.12, 0, -0.15, -1.8);
+    } else {
+      box(this.body, 0.7 * w, 0.5, 1.0, this.shell, 0, 0.0, -1.0, -0.12);
+      const tail = group(this.body, 0, 0.12, -1.5, 0.75);
+      box(tail, 0.22, 0.22, 0.85, this.shell, 0, 0, -0.4);
+      box(tail, 0.1, 0.1, 0.5, dark, 0, -0.12, -0.95, 0.5);
+      glow(tail, 0.24, 0.02, 0.1, 0, 0.12, -0.35);
     }
-    if (kind === 'leaper') {
-      // шипы на спине
-      for (const z of [0.1, -0.25, -0.6]) box(this.body, 0.08, 0.32, 0.12, dark, 0, 0.55, z, -0.5);
+    if (leaper) {
+      // гребень шипов вдоль спины, загнутых назад
+      for (const [z, h] of [[0.0, 0.5], [-0.4, 0.62], [-0.8, 0.5], [-1.15, 0.35]] as const) {
+        box(back, 0.08, h, 0.12, dark, 0, 0.25 + h / 2 - 0.15, z, -0.6);
+      }
     }
 
-    // ноги: 4 длинных, колени высоко
+    // ---------- ноги: 4 копья, колени высоко над спиной ----------
     const legDefs: [number, number, number, number, 0 | 1][] = [
       // side, hipZ, homeZ, homeX, group
-      [1, 0.3, 1.0, 1.35, 0], [-1, 0.3, 1.0, 1.35, 1],
-      [1, -0.3, kind === 'leaper' ? -1.25 : -1.0, 1.4, 1], [-1, -0.3, kind === 'leaper' ? -1.25 : -1.0, 1.4, 0],
+      [1, 0.4, 2.0, 1.85, 0], [-1, 0.4, 2.0, 1.85, 1],
+      [1, -0.45, leaper ? -2.5 : -2.2, 2.0, 1], [-1, -0.45, leaper ? -2.5 : -2.2, 2.0, 0],
     ];
-    for (const [side, hz, homeZ, homeX, group] of legDefs) {
+    const F = this.FEMUR, Tb = this.TIBIA;
+    for (const [side, hz, homeZ, homeX, grp] of legDefs) {
       const femur = new THREE.Group(), tibia = new THREE.Group();
-      box(femur, 0.16 * s, this.FEMUR, 0.16 * s, this.shell, 0, -this.FEMUR / 2, 0);
-      glow(femur, 0.18 * s, 0.06 * s, 0.18 * s, 0, -this.FEMUR * 0.55, 0);
-      box(tibia, 0.15 * s, this.TIBIA * 0.55, 0.15 * s, this.shell, 0, -this.TIBIA * 0.27, 0);
-      box(tibia, 0.08 * s, this.TIBIA * 0.5, 0.08 * s, dark, 0, -this.TIBIA * 0.75, 0);
-      glow(tibia, 0.17 * s, 0.06 * s, 0.17 * s, 0, -this.TIBIA * 0.3, 0);
+      box(femur, 0.26 * s, F, 0.26 * s, this.shell, 0, -F / 2, 0);
+      box(femur, 0.34 * s, 0.3 * s, 0.34 * s, dark, 0, -F, 0); // колено
+      glow(femur, 0.28 * s, 0.07 * s, 0.28 * s, 0, -F * 0.55, 0);
+      // голень сужается к игле
+      box(tibia, 0.24 * s, Tb * 0.34, 0.24 * s, this.shell, 0, -Tb * 0.17, 0);
+      box(tibia, 0.15 * s, Tb * 0.36, 0.15 * s, this.shell, 0, -Tb * 0.51, 0);
+      box(tibia, 0.08 * s, Tb * 0.3, 0.08 * s, dark, 0, -Tb * 0.84, 0);
+      glow(tibia, 0.26 * s, 0.07 * s, 0.26 * s, 0, -Tb * 0.12, 0);
+      glow(tibia, 0.26 * s, 0.05 * s, 0.26 * s, 0, -Tb * 0.26, 0);
+      glow(tibia, 0.17 * s, 0.05 * s, 0.17 * s, 0, -Tb * 0.5, 0);
       this.root.add(femur, tibia);
       const home = new THREE.Vector3(side * homeX * s, 0, homeZ * s);
       const leg: Leg = {
-        femur, tibia, hip: new THREE.Vector3(side * 0.34, -0.05, hz), home,
-        foot: new THREE.Vector3(), stepFrom: new THREE.Vector3(), stepTo: new THREE.Vector3(), stepT: 1, group, side,
+        femur, tibia, hip: new THREE.Vector3(side * 0.44 * w, -0.1, hz), home,
+        foot: new THREE.Vector3(), stepFrom: new THREE.Vector3(), stepTo: new THREE.Vector3(), stepT: 1, group: grp, side,
       };
       this.legs.push(leg);
     }
@@ -224,7 +284,7 @@ export class Arachnid implements Shootable {
     this.pose(0);
   }
 
-  get radius(): number { return 0.75 * this.T.scale; }
+  get radius(): number { return 0.9 * this.T.scale; }
   get alive(): boolean { return !this.dead; }
   get active(): boolean { return this.state !== 'спит'; }
   get bodyLength(): number { return ARACHNID_LENGTH * this.T.scale; }
@@ -649,17 +709,21 @@ export class Arachnid implements Shootable {
     for (let i = 0; i < 2; i++) {
       const c = this.claws[i];
       const blade = c.userData.blade as THREE.Group;
-      let rx = -0.1 + Math.sin(t * 2 + i) * 0.05, br = 0;
-      if (this.state === 'замах' || this.state === 'просыпается') { rx = -0.7; br = -0.5; }
-      if (this.state === 'удар') { rx = 0.9; br = 0.9; }
-      if (this.state === 'спит') { rx = 0.25; br = 0.4; }
+      // клешни висят под головой: на замахе вскидываются вперёд-вверх, ударом рубят вниз
+      let rx = -0.35 + Math.sin(t * 2 + i) * 0.06, br = 0;
+      if (this.state === 'замах' || this.state === 'просыпается') { rx = -1.75; br = 0.5; }
+      if (this.state === 'удар') { rx = -0.25; br = -0.6; }
+      if (this.state === 'спит') { rx = -0.12; br = 0.2; }
       c.rotation.x += (rx - c.rotation.x) * damp(20, dt || 1);
       blade.rotation.x += (br - blade.rotation.x) * damp(20, dt || 1);
       c.rotation.z = (i ? -1 : 1) * 0.12;
     }
     // челюсти
     const open = this.state === 'замах' || this.state === 'просыпается' || this.state === 'плевок' ? 0.5 : 0.12 + Math.sin(t * 9) * 0.05;
-    this.jawL.rotation.y = 0.3 + open; this.jawR.rotation.y = -0.3 - open;
+    this.jawL.rotation.z = 0.1 + open * 0.8; this.jawR.rotation.z = -0.1 - open * 0.8;
+    // рога поднимаются на замахе
+    const hornUp = this.state === 'замах' || this.state === 'просыпается' ? -0.35 : this.state === 'спит' ? 0.45 : 0.2 + Math.sin(t * 1.7) * 0.04;
+    for (const h of this.horns) h.rotation.x += (hornUp - h.rotation.x) * damp(10, dt || 1);
 
     // свечение полос: пульс, ярче на замахе; у прыгуна — переливается
     let glowK = 0.85 + Math.sin(t * 3 + this.spawn.x) * 0.15;
@@ -674,7 +738,7 @@ export class Arachnid implements Shootable {
 
     // ноги: шагают двумя группами, в прыжке поджаты
     this.body.updateMatrixWorld(true);
-    const stepDist = (0.5 + Math.min(1, speed / 6) * 0.5) * s;
+    const stepDist = (0.7 + Math.min(1, speed / 6) * 0.6) * s;
     const stepTime = Math.max(0.07, 0.16 - speed * 0.01);
     for (const l of this.legs) {
       const hip = l.hip.clone().applyMatrix4(this.body.matrixWorld);
@@ -682,7 +746,7 @@ export class Arachnid implements Shootable {
       if (j) {
         // в полёте ноги тянутся вперёд-вниз за телом
         const tuck = l.home.clone().multiplyScalar(0.75).applyQuaternion(yawQ).add(this.pos);
-        tuck.y = Math.max(0, this.bodyY0 - 0.8 * s);
+        tuck.y = Math.max(0, this.bodyY0 - 1.5 * s);
         l.foot.lerp(tuck, damp(18, dt || 1));
       } else if (this.state === 'спит') {
         l.foot.copy(home);
@@ -690,7 +754,7 @@ export class Arachnid implements Shootable {
         if (l.stepT < 1) {
           l.stepT = Math.min(1, l.stepT + (dt || 0) / stepTime);
           l.foot.lerpVectors(l.stepFrom, l.stepTo, ease(l.stepT));
-          l.foot.y = Math.sin(l.stepT * Math.PI) * 0.35 * s;
+          l.foot.y = Math.sin(l.stepT * Math.PI) * 0.5 * s;
         } else {
           const lead = home.clone().addScaledVector(this.vel, stepTime * 1.2);
           const busy = this.legs.some((o) => o.group !== l.group && o.stepT < 1);
@@ -708,7 +772,7 @@ export class Arachnid implements Shootable {
       aimSegment(l.tibia, knee, l.foot);
     }
   }
-  private bodyY0 = 0.95;
+  private bodyY0 = 2.15;
 
   /** Обломки панциря и светящиеся осколки полос */
   explode(): void {

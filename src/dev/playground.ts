@@ -56,6 +56,8 @@ export function runPlayground(): void {
   const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 220);
   const CAM_DIR = new THREE.Vector3(1, 1.38, 1).normalize();
   let camDist = 26;
+  /** Для скриншотов и тестов: камера смотрит в заданную точку */
+  let camOverride: THREE.Vector3 | null = null;
   const camTarget = new THREE.Vector3();
 
   scene.add(new THREE.HemisphereLight('#ffffff', '#7a7f86', 1.1));
@@ -278,7 +280,7 @@ export function runPlayground(): void {
   const ROSTER: EnemySpec[] = [
     { type: 'beetle', kind: 'small', x: -15 }, { type: 'beetle', kind: 'fast', x: -13 }, { type: 'beetle', kind: 'spitter', x: -11 },
     { type: 'beetle', kind: 'bombardier', x: -9 }, { type: 'beetle', kind: 'big', x: -7 },
-    { type: 'arachnid', kind: 'warrior', x: -3.5 }, { type: 'arachnid', kind: 'spinner', x: 0.5 }, { type: 'arachnid', kind: 'leaper', x: 4.5 },
+    { type: 'arachnid', kind: 'warrior', x: -3.5 }, { type: 'arachnid', kind: 'spinner', x: 1.2 }, { type: 'arachnid', kind: 'leaper', x: 5.6 },
   ];
   const ARACH_GLOW: Record<ArachnidKind, THREE.Color> = { warrior: new THREE.Color(3.2, 2.2, 0.3), spinner: new THREE.Color(0.7, 3.2, 0.4), leaper: new THREE.Color(2.6, 1, 3) };
   const BEETLE_NAMES: Record<BeetleKind, string> = { small: 'мелкий', fast: 'быстрый', spitter: 'плевун', bombardier: 'бомбардир', big: 'носорог' };
@@ -369,7 +371,7 @@ export function runPlayground(): void {
   function drawEnemyLabel(e: Enemy, w: number, h: number): void {
     const obj = e.arach ?? e.beetle;
     if (!obj || e.gone) { e.label.style.display = 'none'; return; }
-    const top = e.arach ? 2.2 * e.arach.T.scale : 1.2;
+    const top = e.arach ? 3.4 * e.arach.T.scale : 1.2;
     const v = obj.pos.clone().setY(top).project(camera);
     const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
     e.label.style.display = on ? '' : 'none';
@@ -864,7 +866,7 @@ export function runPlayground(): void {
     // камера: как в игре; в прицеле сдвигается к точке прицела
     const shift = hero.aiming ? HERO.aimCamShift : 0;
     const want = hero.pos.clone().lerp(input.aim.clone().setY(0), shift);
-    if (scripted) camTarget.copy(want); else camTarget.lerp(want, Math.min(1, real * 6));
+    if (camOverride) camTarget.copy(camOverride); else if (scripted) camTarget.copy(want); else camTarget.lerp(want, Math.min(1, real * 6));
     const sh = fx.shake * 0.2;
     camera.position.copy(camTarget).addScaledVector(CAM_DIR, camDist).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh));
     camera.lookAt(camTarget.x, 0.6, camTarget.z);
@@ -931,6 +933,9 @@ export function runPlayground(): void {
     },
     equip, resetTargets,
     setAim(x: number, z: number) { input.aim.set(x, AIM_Y, z); },
+    setCamTarget(x?: number, z?: number) { camOverride = x === undefined || z === undefined ? null : new THREE.Vector3(x, 0, z); },
+    /** Заморозить или разморозить ИИ врагов (как Ctrl+0) */
+    freezeAI(on = true) { beetleAI = !on; },
     setCam(dist: number, dir?: [number, number, number]) { camDist = dist; if (dir) CAM_DIR.set(...dir).normalize(); },
     toggles: { get postFX() { return postFX; }, set postFX(v: boolean) { postFX = v; } },
   };

@@ -200,23 +200,23 @@ const ARACH_BASE: ArachnidTuning = {
 
 export const ARACHNIDS: Record<ArachnidKind, ArachnidTuning> = {
   /** Воин: самый ловкий и умный, ближний бой, заходит с фланга, давит на перезарядке */
-  warrior: { ...ARACH_BASE, hp: 140, speed: 6.4, scale: 1, reaction: 0.12, dodgeChance: 0.9, dodgeCd: 0.8, dodgeDist: 3, dodgeTime: 0.3, meleeRange: 2, meleeDmg: 18, meleeWindup: 0.25, meleeCd: 1.1 },
+  warrior: { ...ARACH_BASE, hp: 140, speed: 6.4, scale: 1, reaction: 0.12, dodgeChance: 0.9, dodgeCd: 0.8, dodgeDist: 3, dodgeTime: 0.3, meleeRange: 2.6, meleeDmg: 18, meleeWindup: 0.25, meleeCd: 1.1 },
   /** Ткач: держит дистанцию, кидает ядовитую паутину (замедляет и травит) */
   spinner: {
-    ...ARACH_BASE, hp: 110, speed: 5.6, scale: 0.85, reaction: 0.18, dodgeChance: 0.8, dodgeCd: 0.9, dodgeDist: 2.8, dodgeTime: 0.3,
+    ...ARACH_BASE, hp: 110, speed: 5.6, scale: 0.8, reaction: 0.18, dodgeChance: 0.8, dodgeCd: 0.9, dodgeDist: 2.8, dodgeTime: 0.3,
     meleeRange: 1.6, meleeDmg: 8, meleeWindup: 0.3, meleeCd: 1.4,
     keepMin: 6, keepMax: 11, webRange: 13, webCd: 2.4, webSpeed: 13, webDmg: 5, webSlow: 0.45, webSlowTime: 2.5, poisonDps: 4, poisonTime: 3,
   },
   /** Прыгун: быстрый, прыгает прямо на героя на 3 длины тела */
   leaper: {
-    ...ARACH_BASE, hp: 110, speed: 7.2, scale: 0.8, reaction: 0.18, dodgeChance: 0.75, dodgeCd: 1, dodgeDist: 3.2, dodgeTime: 0.3,
+    ...ARACH_BASE, hp: 110, speed: 7.2, scale: 0.7, reaction: 0.18, dodgeChance: 0.75, dodgeCd: 1, dodgeDist: 3.2, dodgeTime: 0.3,
     meleeRange: 1.6, meleeDmg: 10, meleeWindup: 0.25, meleeCd: 1.2,
     pounceMul: 3, pounceDmg: 26, pounceWindup: 0.4, pounceCd: 2.6, pounceTime: 0.45,
   },
 };
 
 /** Длина тела арахнида при scale = 1, м */
-export const ARACHNID_LENGTH = 2.2;
+export const ARACHNID_LENGTH = 3;
 
 // ---------- Сброс и экспорт для панели ----------
 
