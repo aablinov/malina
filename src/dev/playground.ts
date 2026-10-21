@@ -6,6 +6,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { initAudio, sfx, toggleMute } from '../audio';
 import { Arachnid, ARACHNID_NAMES, type ArachnidContext } from '../arachnid';
 import { buildCoverPoints } from '../cover';
+import { Grenades } from '../grenade';
 import { Jailer, JAILER_NAMES, type JailerContext } from '../jailer';
 import { Beetle, type BeetleKind } from '../beetle';
 import { distToObstacle, NavGrid } from '../nav';
@@ -15,7 +16,7 @@ import { FX } from '../fx';
 import { rng, traceShot, type FireRequest, type GunEvent, type GunState, type Shootable } from '../gunplay';
 import { emptyInput, Hero, type HeroInput } from '../hero';
 import { makeTextures } from '../textures';
-import { ARACHNIDS, BEETLES, CALIBERS, GUNS, HERO, JAILERS, snapshotTuning, type ArachnidKind, type JailerKind } from '../tuning';
+import { ARACHNIDS, BEETLES, CALIBERS, GRENADE, GUNS, HERO, JAILERS, snapshotTuning, type ArachnidKind, type JailerKind } from '../tuning';
 import { Dummy, Spits, type Spit } from './dummies';
 import { Overlays } from './overlay';
 import { button, Panel, select, toggle } from './panel';
@@ -273,6 +274,7 @@ export function runPlayground(): void {
   dummies.push(shooter);
 
   const spits = new Spits(scene, fx);
+  const grenades = new Grenades(scene, fx, (at) => explode(at, GRENADE.radius, GRENADE.dmg));
 
   // ---------- Загон врагов ----------
   // Все враги стоят в строю и спят. Попадание или пуля рядом будит именно этого врага. N — все обратно на места.
@@ -353,6 +355,7 @@ export function runPlayground(): void {
     clearEnemies();
     spawnEnemies();
     spits.clear();
+    grenades.clear();
   }
 
   function wakeEnemy(e: Enemy): void {
@@ -580,7 +583,14 @@ export function runPlayground(): void {
     flashT = 0.2;
     fx.shake = Math.max(fx.shake, 1);
     if (!scripted) sfx.blast();
-    const k = (p: THREE.Vector3) => { const d = Math.hypot(p.x - at.x, p.z - at.z); return d < r ? 1 - (d / r) * 0.6 : 0; };
+    // урон падает к краю радиуса; укрытие между взрывом и целью оставляет малую долю
+    const k = (p: THREE.Vector3) => {
+      const dx = p.x - at.x, dz = p.z - at.z, d = Math.hypot(dx, dz);
+      if (d >= r) return 0;
+      let f = 1 - (d / r) * 0.6;
+      if (d > 0.3 && raycastObstacles(at.x, at.z, dx / d, dz / d, d, 0.6, obstacles)) f *= GRENADE.coverMul;
+      return f;
+    };
     const dir = (p: THREE.Vector3) => new THREE.Vector3(p.x - at.x, 0, p.z - at.z).normalize();
     const kh = k(hero.pos);
     if (kh > 0 && hero.hurt(dmg * kh)) { hero.applyBurn(6, 2); fx.text(hero.pos, `−${Math.round(dmg * kh)}`, 'bad'); }
@@ -946,6 +956,9 @@ export function runPlayground(): void {
         // тревога: просыпаются соседи по посту
         for (const en of enemies) if (en.jailer && !en.awake && en.jailer.pos.distanceTo(from.pos) < 16) wakeEnemy(en);
       },
+      dangers: grenades.list,
+      throwGrenade(from, target, fuse, who) { grenades.throw(from, target, fuse, who.name); if (!scripted) sfx.swing(0.8); },
+      say(text, who) { fx.text(who.pos.clone().setY(0.6), text, 'bad'); if (!scripted) sfx.shout(); },
     };
     for (const e of enemies) {
       const j = e.jailer;
@@ -968,6 +981,8 @@ export function runPlayground(): void {
       if (e.beetle?.dead) { e.beetle.dispose(); e.gone = true; }
       if (e.arach?.dead) { e.arach.explode(); if (!scripted) sfx.kill(); e.arach.dispose(); e.gone = true; }
     }
+
+    grenades.update(dt, obstacles);
 
     spits.update(dt, obstacles, (s: Spit) => {
       if (Math.hypot(s.pos.x - hero.pos.x, s.pos.z - hero.pos.z) > 0.45) return false;
@@ -1064,6 +1079,7 @@ export function runPlayground(): void {
     get beetles() { return liveBeetles(); },
     get arachnids() { return liveArachnids(); },
     get jailers() { return liveJailers(); },
+    grenades,
     covers,
     /** Разбудить врага по имени вида ('warrior', 'small'…) или всех */
     wake(kind?: string) { for (const e of enemies) if (!kind || e.spec.kind === kind) wakeEnemy(e); },

@@ -1,11 +1,11 @@
-import { ARACHNIDS, BEETLES, GUNS, HERO, JAILERS, resetTuning, RICOCHET, SPREAD, tuningJSON } from '../tuning';
+import { ARACHNIDS, BEETLES, GRENADE, GUNS, HERO, JAILERS, resetTuning, RICOCHET, SPREAD, tuningJSON } from '../tuning';
 
 /**
  * F1 — панель параметров. Ползунки правят объекты из tuning.ts напрямую, изменения применяются сразу.
  */
 
 const LABELS: Record<string, string> = {
-  hp: 'Здоровье', radius: 'Радиус тела, м',
+  hp: 'Здоровье', radius: 'Радиус, м',
   walk: 'Ходьба, м/с', run: 'Бег, м/с', aim: 'Прицел, м/с', crouch: 'Присед, м/с', crouchAim: 'Присед + прицел, м/с',
   backMul: 'Ход спиной ×', accel: 'Разгон, м/с²', decel: 'Торможение, м/с²',
   rollDist: 'Перекат, м', rollTime: 'Перекат, с', rollIframes: 'Неуязвимость, с',
@@ -25,15 +25,17 @@ const LABELS: Record<string, string> = {
   webDmg: 'Паутина: урон', webSlow: 'Замедление ×', webSlowTime: 'Замедление, с', poisonDps: 'Яд, урон/с', poisonTime: 'Яд, с',
   aimErr: 'Ошибка прицела, °', burst: 'Очередь, выстрелов', burstPause: 'Пауза очередей, с', peekTime: 'Выглядывает, с', hideTime: 'Прячется, с',
   preferMin: 'Дистанция от, м', preferMax: 'Дистанция до, м', flameDps: 'Огонь: урон/с', burnDps: 'Горение: урон/с', burnTime: 'Горение, с',
+  grenades: 'Гранат с собой', grenadeCd: 'Пауза бросков, с', grenadeMin: 'Бросает от, м', grenadeMax: 'Бросает до, м', cook: 'Держит перед броском, с',
+  fuse: 'Фитиль, с', coverMul: 'За укрытием урон ×',
   tankHp: 'Баллоны: прочность', blastR: 'Взрыв: радиус, м', blastDmg: 'Взрыв: урон',
   pounceMul: 'Прыжок: длин тела', pounceDmg: 'Прыжок: урон', pounceWindup: 'Прыжок: замах, с', pounceCd: 'Прыжок: пауза, с', pounceTime: 'Прыжок: полёт, с',
 };
 
-const INT_KEYS = new Set(['hp', 'stamina', 'pellets', 'mag']);
+const INT_KEYS = new Set(['hp', 'stamina', 'pellets', 'mag', 'grenades', 'burst']);
 
 function rangeFor(key: string, v: number): [number, number, number] {
   if (INT_KEYS.has(key)) return [1, Math.max(10, Math.ceil(v * 3)), 1];
-  if (key === 'chance' || key === 'dmgMul' || key === 'bloomShot' || key === 'aimCamShift' || key === 'dodgeChance' || key === 'webSlow') return [0, 1, 0.01];
+  if (key === 'chance' || key === 'dmgMul' || key === 'bloomShot' || key === 'aimCamShift' || key === 'dodgeChance' || key === 'webSlow' || key === 'coverMul') return [0, 1, 0.01];
   if (key.endsWith('Mul') || key === 'aim' || key === 'crouch' || key === 'move') return [0, Math.max(2, v * 2), 0.01];
   const max = v <= 0 ? 1 : v < 1 ? 1 : v * 3;
   const step = max <= 1 ? 0.01 : max <= 10 ? 0.05 : max <= 50 ? 0.1 : 1;
@@ -92,7 +94,8 @@ export class Panel {
     this.section('Арахнид: Воин', ARACHNIDS.warrior as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'dodgeTime', 'meleeRange', 'meleeDmg', 'meleeWindup', 'meleeCd']);
     this.section('Арахнид: Ткач', ARACHNIDS.spinner as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'keepMin', 'keepMax', 'webRange', 'webCd', 'webSpeed', 'webDmg', 'webSlow', 'webSlowTime', 'poisonDps', 'poisonTime']);
     this.section('Тюремщик: стрелок', JAILERS.rifle as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'burst', 'burstPause', 'peekTime', 'hideTime', 'preferMin', 'preferMax', 'dmgMul']);
-    this.section('Тюремщик: двустволка', JAILERS.shotgun as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'preferMax', 'dmgMul']);
+    this.section('Тюремщик: двустволка', JAILERS.shotgun as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'preferMax', 'dmgMul', 'grenades', 'grenadeCd', 'grenadeMin', 'grenadeMax', 'cook']);
+    this.section('Граната РГД-5', GRENADE as unknown as NumObj);
     this.section('Тюремщик: огнемётчик', JAILERS.flamer as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'flameDps', 'burnDps', 'burnTime', 'tankHp', 'blastR', 'blastDmg']);
     this.section('Арахнид: Прыгун', ARACHNIDS.leaper as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'meleeDmg', 'pounceMul', 'pounceDmg', 'pounceWindup', 'pounceCd', 'pounceTime']);
   }

@@ -3,6 +3,7 @@ import { resolveCircle, type Obstacle } from './collision';
 import { buildFirearm, buildMagazine, buildShell, type FirearmId, type GunRig } from './firearms';
 import type { FX } from './fx';
 import { Gunner, RELOAD_MARKS, type FireRequest, type GunEvent, type GunState, type Rand } from './gunplay';
+import { Grenades } from './grenade';
 import { aimSegment, solveIK } from './ik';
 import { pixelTex, type Textures } from './textures';
 import { HERO, SPREAD, WEIGHT_MUL } from './tuning';
@@ -39,10 +40,12 @@ export interface HeroLook {
   /** Лицо закрыто балаклавой */
   balaclava: boolean;
   backpack: boolean;
+  /** Светящиеся глаза (HDR-цвет, даёт bloom), null — обычные */
+  eyes: [number, number, number] | null;
 }
 const DEFAULT_LOOK: HeroLook = {
   team: '#c4284f', shirt: '#6f7a52', pants: '#4d523c', boot: '#3a2b1e', glove: '#2b2b2b', vest: '#5b6b3a', pouch: '#4a5730',
-  helmet: '#56653a', strap: '#2f3524', pad: '#3c432c', balaclava: false, backpack: true,
+  helmet: '#56653a', strap: '#2f3524', pad: '#3c432c', balaclava: false, backpack: true, eyes: null,
 };
 
 /** Балаклава: чёрная маска с прорезью для глаз */
@@ -166,6 +169,20 @@ export class Hero {
   private readonly webMesh = new THREE.Group();
   private readonly webMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 3, 0.4), toneMapped: false, transparent: true, opacity: 0.85 });
 
+  /** Бросок гранаты левой рукой: сколько прошло и сколько длится, с */
+  private throwT = -1;
+  private throwDur = 0;
+  /** Начать бросок: достать гранату, замахнуться, держать hold секунд («готовить»), бросить */
+  throwGesture(hold = 0): number {
+    this.throwDur = 0.6 + hold;
+    this.throwT = 0;
+    if (this.gun.cancelReload()) this.gunEvent('reloadCancel', this.gun);
+    return this.throwDur - 0.15; // через сколько граната покидает руку
+  }
+  get throwing(): boolean { return this.throwT >= 0; }
+  /** Кисть с гранатой в мире */
+  handWorld(out = new THREE.Vector3()): THREE.Vector3 { return this.arms[0].end.getWorldPosition(out); }
+
   /** Сюда вешается снаряжение на спину (баллоны огнемётчика) */
   readonly backMount = new THREE.Group();
   /** Горение: урон в секунду и сколько осталось */
@@ -241,6 +258,15 @@ export class Hero {
     this.chest.add(this.head);
     const headMats = [M.skin, M.skin, M.skin, M.skin, M.face, M.skin];
     this.head.add(box(0.44, 0.44, 0.44, headMats, 0, 0.23, 0));
+    if (L.eyes) {
+      // светящиеся глаза поверх прорези балаклавы
+      const eyeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(...L.eyes), toneMapped: false });
+      for (const x of [-0.11, 0.11]) {
+        const e = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.045, 0.02), eyeMat);
+        e.position.set(x, 0.255, 0.226);
+        this.head.add(e);
+      }
+    }
     this.head.add(box(0.5, 0.2, 0.5, M.helmet, 0, 0.45, -0.01));
     this.head.add(box(0.54, 0.05, 0.54, M.helmet, 0, 0.36, 0));
     this.head.add(box(0.5, 0.14, 0.06, M.helmet, 0, 0.3, -0.25)); // затылок
@@ -493,7 +519,7 @@ export class Hero {
     this.gunner.update(dt, {
       trigger: input.fire,
       reloadPressed: input.reload,
-      canFire: !this.running && !this.rolling && this.runK < 0.35,
+      canFire: !this.running && !this.rolling && this.runK < 0.35 && !this.throwing,
       interrupt: this.running || this.rolling,
       spreadMul: this.spreadMul,
     });
@@ -530,7 +556,7 @@ export class Hero {
     this.setHandItem(null);
   }
 
-  private setHandItem(kind: 'mag' | 'shells' | null): void {
+  private setHandItem(kind: 'mag' | 'shells' | 'grenade' | null): void {
     for (const c of [...this.handMag.children]) this.handMag.remove(c);
     if (!kind) return;
     if (kind === 'mag') {
@@ -538,6 +564,10 @@ export class Hero {
       m.scale.setScalar(GUN_SCALE);
       m.position.set(0, 0.02, 0.0);
       this.handMag.add(m);
+    } else if (kind === 'grenade') {
+      const g = Grenades.model();
+      g.position.set(0, 0.06, 0);
+      this.handMag.add(g);
     } else {
       const a = buildShell(), b = buildShell();
       a.position.set(-0.016, 0.05, 0); b.position.set(0.016, 0.05, 0);
@@ -613,6 +643,7 @@ export class Hero {
     this.shoulderKick = Math.max(0, this.shoulderKick - dt * 10);
     this.boltT = Math.min(1, this.boltT + dt / 0.08);
     this.equipK = Math.min(1, this.equipK + dt / Math.max(0.05, H.switchTime));
+    if (this.throwT >= 0) { this.throwT += dt; if (this.throwT >= this.throwDur) { this.throwT = -1; this.setHandItem(null); } }
 
     // походка
     const sp = Math.hypot(this.vel.x, this.vel.z);
@@ -662,7 +693,7 @@ export class Hero {
       reloadW = seg(k, 0, 0.1) * (1 - seg(k, 0.9, 1));
       if (rel.kind === 'break') reloadPose = POSES.rifle.break;
     }
-    const lowW = Math.max(this.runK, 1 - this.equipK);
+    const lowW = Math.max(this.runK, 1 - this.equipK, this.throwing ? 0.65 : 0);
     const readyW = (1 - this.aimK) * (1 - reloadW) * (1 - lowW);
     const adsW = this.aimK * (1 - reloadW) * (1 - lowW);
     const rw = reloadW * (1 - lowW);
@@ -726,7 +757,22 @@ export class Hero {
     let gripL = toChest(r.gripL);
     const rel = this.gun.reload;
 
-    if (rel && k >= 0) {
+    if (this.throwing) {
+      // бросок левой рукой: к подсумку — замах за голову — держит — бросок вперёд
+      const t = this.throwT, D = this.throwDur;
+      const pouch = new THREE.Vector3(0.14, -0.02, 0.2);
+      const wind = new THREE.Vector3(0.42, 0.62, -0.3);
+      const rel2 = new THREE.Vector3(0.22, 0.5, 0.7);
+      let p: THREE.Vector3;
+      if (t < 0.15) p = gripL.clone().lerp(pouch, seg(t, 0, 0.15));
+      else if (t < 0.35) p = pouch.clone().lerp(wind, seg(t, 0.15, 0.35));
+      else if (t < D - 0.25) p = wind;
+      else if (t < D - 0.12) p = wind.clone().lerp(rel2, seg(t, D - 0.25, D - 0.12));
+      else p = rel2.clone().lerp(gripL, seg(t, D - 0.12, D));
+      gripL = p;
+      const hold = t >= 0.12 && t < D - 0.15;
+      if (hold !== (this.handMag.children.length > 0)) this.setHandItem(hold ? 'grenade' : null);
+    } else if (rel && k >= 0) {
       const pouch = new THREE.Vector3(0.08, 0.05, 0.24);
       const well = toChest(r.magWell);
       const below = well.clone().add(new THREE.Vector3(0, -0.12, 0.02));

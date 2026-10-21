@@ -7,7 +7,7 @@ import type { FireRequest, GunEvent, GunState, Rand, Shootable } from './gunplay
 import { emptyInput, Hero, type HeroInput, type HeroLook } from './hero';
 import type { NavGrid } from './nav';
 import type { Textures } from './textures';
-import { JAILERS, type JailerKind, type JailerTuning } from './tuning';
+import { GRENADE, JAILERS, type JailerKind, type JailerTuning } from './tuning';
 
 /**
  * «Тюремщики» — бойцы ЧВК в чёрной форме, утащившие малину.
@@ -23,7 +23,7 @@ import { JAILERS, type JailerKind, type JailerTuning } from './tuning';
  * - разбуженный поднимает тревогу — просыпаются соседи.
  */
 
-export type JailerState = 'ест малину' | 'тревога' | 'к укрытию' | 'прячется' | 'выглядывает' | 'сближается' | 'стреляет' | 'жжёт' | 'перезарядка' | 'убит';
+export type JailerState = 'ест малину' | 'тревога' | 'к укрытию' | 'прячется' | 'выглядывает' | 'сближается' | 'стреляет' | 'жжёт' | 'перезарядка' | 'бросает гранату' | 'бежит от гранаты' | 'убит';
 
 export const JAILER_NAMES: Record<JailerKind, string> = { rifle: 'Стрелок', shotgun: 'Двустволка', flamer: 'Огнемётчик' };
 const WEAPON: Record<JailerKind, FirearmId> = { rifle: 'ar15', shotgun: 'dbl', flamer: 'flamer' };
@@ -31,7 +31,7 @@ const WEAPON: Record<JailerKind, FirearmId> = { rifle: 'ar15', shotgun: 'dbl', f
 /** Чёрная форма ЧВК, балаклава, малиновая нашивка */
 const PMC_LOOK: Partial<HeroLook> = {
   team: '#c4284f', shirt: '#2c2f36', pants: '#26282e', boot: '#141414', glove: '#111214', vest: '#1a1c21', pouch: '#363a42',
-  helmet: '#1e2024', strap: '#0e0f11', pad: '#3a3e46', balaclava: true,
+  helmet: '#1e2024', strap: '#0e0f11', pad: '#3a3e46', balaclava: true, eyes: [3.6, 0.25, 0.15],
 };
 
 export interface JailerContext {
@@ -42,6 +42,12 @@ export interface JailerContext {
   others: readonly Jailer[];
   /** Разбудить соседей */
   alert(from: Jailer): void;
+  /** Живые гранаты на поле: от них убегают */
+  dangers: readonly { pos: THREE.Vector3; fuse: number }[];
+  /** Бросить гранату из руки в точку; fuse — остаток фитиля */
+  throwGrenade(from: THREE.Vector3, target: THREE.Vector3, fuse: number, who: Jailer): void;
+  /** Крикнуть (всплывающая надпись) */
+  say(text: string, who: Jailer): void;
 }
 
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
@@ -76,6 +82,13 @@ export class Jailer implements Shootable {
   private readonly peek = new THREE.Vector3();
   private blindT = 0;
   private alertT = -1;
+  /** Гранаты: сколько осталось, пауза, план броска */
+  grenadesLeft = 0;
+  private grenadeCdT = 0.8;
+  private grenadeCheckT = 0;
+  private throwPlan: { t: number; releaseAt: number; target: THREE.Vector3 } | null = null;
+  private stillT = 0;
+  private readonly playerPrev = new THREE.Vector3();
   private strafeT = 0;
   private strafe = 1;
   private readonly tankMeshes: THREE.Mesh[] = [];
@@ -96,6 +109,7 @@ export class Jailer implements Shootable {
     this.hero.showStamina = false;
     this.hero.gunner.infinite = true;
     this.hero.place(x, z, yaw);
+    this.grenadesLeft = this.T.grenades;
     this.spawn = new THREE.Vector3(x, 0, z);
     this.input.aim.set(x + Math.sin(yaw) * 5, 0, z + Math.cos(yaw) * 5);
 
@@ -229,6 +243,27 @@ export class Jailer implements Shootable {
 
     const gun = H.gun;
     const lowAmmo = gun.rounds <= Math.max(1, gun.capacity * 0.3);
+
+    // герой долго стоит на месте (засел за укрытием) — повод для гранаты
+    if (P.pos.distanceTo(this.playerPrev) < 1.2) this.stillT += dt; else { this.stillT = 0; this.playerPrev.copy(P.pos); }
+
+    // граната рядом — бежать, всё остальное потом
+    if (this.fleeGrenade(dt, ctx)) { H.update(dt, I, ctx.obstacles); return; }
+
+    // бросок уже идёт: стоит, смотрит в цель, в нужный момент отпускает
+    if (this.throwPlan) {
+      const tp = this.throwPlan;
+      tp.t += dt;
+      this.state = 'бросает гранату';
+      I.aim.copy(tp.target);
+      if (tp.t >= tp.releaseAt) {
+        ctx.throwGrenade(H.handWorld(), tp.target, GRENADE.fuse - tp.releaseAt, this);
+        this.throwPlan = null;
+      }
+      H.update(dt, I, ctx.obstacles);
+      return;
+    }
+    if (this.wantGrenade(dt, ctx, dist, los)) { H.update(dt, I, ctx.obstacles); return; }
 
     if (this.kind === 'rifle') this.rifle(dt, ctx, dist, los, canShoot, aimAt, lowAmmo);
     else if (this.kind === 'shotgun') this.shotgun(dt, ctx, dist, los, canShoot, aimAt);
@@ -430,6 +465,61 @@ export class Jailer implements Shootable {
       if (ctx.nav.walkable(p.x, p.z) && ctx.nav.clearLine(c.pos.x, c.pos.z, p.x, p.z) && from(p, 1.5)) return p;
     }
     return null;
+  }
+
+  /** Убегает от гранаты, если стоит в её радиусе */
+  private fleeGrenade(dt: number, ctx: JailerContext): boolean {
+    const H = this.hero;
+    let worst: { pos: THREE.Vector3; fuse: number } | null = null;
+    for (const g of ctx.dangers) {
+      if (g.pos.y > 1.6 || g.fuse > 2.8) continue;
+      if (Math.hypot(g.pos.x - H.pos.x, g.pos.z - H.pos.z) < GRENADE.radius + 0.8 && (!worst || g.fuse < worst.fuse)) worst = g;
+    }
+    if (!worst) return false;
+    this.state = 'бежит от гранаты';
+    this.throwPlan = null;
+    const away = new THREE.Vector3(H.pos.x - worst.pos.x, 0, H.pos.z - worst.pos.z);
+    if (away.lengthSq() < 1e-4) away.set(1, 0, 0);
+    away.normalize();
+    const goal = ctx.nav.nearestFree(H.pos.x + away.x * 6, H.pos.z + away.z * 6);
+    this.wantCrouch(false);
+    this.walkTo(dt, ctx, goal, true);
+    this.input.aim.copy(goal);
+    return true;
+  }
+
+  /**
+   * Решить, бросать ли гранату: есть гранаты, пауза прошла, герой на нужной дистанции
+   * и засел — за укрытием (не видно), присел или долго стоит на месте.
+   */
+  private wantGrenade(dt: number, ctx: JailerContext, dist: number, los: boolean): boolean {
+    const H = this.hero, P = ctx.player, T = this.T;
+    this.grenadeCdT -= dt;
+    this.grenadeCheckT -= dt;
+    if (this.grenadesLeft <= 0 || this.grenadeCdT > 0 || this.grenadeCheckT > 0 || H.gun.reload || P.down) return false;
+    this.grenadeCheckT = 0.5;
+    if (dist < T.grenadeMin || dist > Math.min(T.grenadeMax, GRENADE.range)) return false;
+    const dug = !los || P.crouched || this.stillT > 1.2;
+    if (!dug || this.rand() > 0.6) return false;
+    const target = (los ? P.pos.clone().addScaledVector(P.vel, 0.5) : this.lastSeen.clone());
+    // бросает не идеально: разброс растёт с дальностью
+    const spread = 0.35 + dist * 0.07;
+    target.x += (this.rand() - 0.5) * 2 * spread;
+    target.z += (this.rand() - 0.5) * 2 * spread;
+    // высокая стена прямо перед лицом — граната отскочит в своих
+    const dx = target.x - H.pos.x, dz = target.z - H.pos.z, d = Math.hypot(dx, dz) || 1;
+    if (raycastObstacles(H.pos.x, H.pos.z, dx / d, dz / d, Math.min(d, 2.5), 2.2, ctx.obstacles)) return false;
+    // свои в радиусе цели — не бросает
+    for (const o of ctx.others) if (o !== this && !o.hero.down && o.pos.distanceTo(target) < GRENADE.radius + 0.5) return false;
+    this.grenadesLeft--;
+    this.grenadeCdT = T.grenadeCd;
+    const releaseAt = H.throwGesture(T.cook);
+    this.throwPlan = { t: 0, releaseAt, target };
+    this.state = 'бросает гранату';
+    this.input.aim.copy(target);
+    this.wantCrouch(false);
+    ctx.say('Граната!', this);
+    return true;
   }
 
   /** Пройти ли дальше: тело убрано */

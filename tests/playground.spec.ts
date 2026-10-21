@@ -237,3 +237,49 @@ test('тюремщики: тревога, низкое укрытие спаса
   expect(r.crouched.lost).toBe(0);
   expect(r.blast).toEqual({ exploded: true, dead: true });
 });
+
+test('двустволка бросает гранату в засевшего героя, тюремщики убегают от гранат', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.resetTargets(); m.hero.revive(); m.hero.god = true;
+    // герой засел за низким укрытием
+    m.hero.place(6, -9, 0); m.setAim(6, 0); m.step(0.1);
+    m.press('crouch'); m.step(1 / 60);
+    const j = m.jailers.find((x: any) => x.kind === 'shotgun');
+    j.hero.place(6, 2, Math.PI);
+    m.wake('shotgun');
+    const others = m.jailers.filter((x: any) => x !== j);
+    let thrownAt = -1, landDist = -1;
+    for (let t = 0; t < 8; t += 1 / 60) {
+      for (const o of others) o.awake = false;
+      m.step(1 / 60);
+      const g = m.grenades.list[0];
+      if (g && thrownAt < 0) thrownAt = t;
+      if (g && landDist < 0 && g.vel.lengthSq() < 0.5) landDist = Math.hypot(g.pos.x - 6, g.pos.z + 9);
+    }
+    m.press('crouch'); m.step(1 / 60);
+    const thrown = m.grenades.thrown, exploded = m.grenades.exploded;
+
+    // граната у ног стрелка — он убегает за радиус
+    m.resetTargets();
+    const rifle = m.jailers.find((x: any) => x.kind === 'rifle');
+    m.hero.place(0, 4, Math.PI);
+    m.wake('rifle'); m.step(0.6);
+    const p0 = rifle.pos.clone();
+    m.grenades.throw(rifle.pos.clone().setY(1.5), rifle.pos.clone(), 2.5, 'тест');
+    m.step(2.6);
+    const fled = rifle.pos.distanceTo(p0);
+    const rifleHp = rifle.hero.hp;
+    m.hero.god = false;
+    m.resetTargets();
+    return { thrownAt, landDist, thrown, exploded, fled, rifleHp, eyes: true };
+  });
+  expect(r.thrown).toBeGreaterThan(0);
+  expect(r.thrownAt).toBeLessThan(4);
+  expect(r.landDist).toBeGreaterThanOrEqual(0);
+  expect(r.landDist).toBeLessThan(4);
+  expect(r.exploded).toBeGreaterThan(0);
+  expect(r.fled).toBeGreaterThan(3);
+  expect(r.rifleHp).toBe(100);
+});
