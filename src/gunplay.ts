@@ -281,6 +281,8 @@ export interface Shootable {
    * есть препятствие выше этой высоты, пуля проходит над головой.
    */
   readonly shieldY?: number;
+  /** Высота цели (ящик, бочка): пуля выше неё пролетает поверх */
+  readonly topY?: number;
   hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void;
 }
 
@@ -315,6 +317,7 @@ export function traceShot(
     let best: Shootable | null = null;
     for (const tg of targets) {
       if (!tg.alive || skip.has(tg)) continue;
+      if (tg.topY !== undefined && y >= tg.topY) continue;
       const t = raycastCircle(ox, oz, dx, dz, tg.pos.x, tg.pos.z, tg.radius);
       if (t < 0 || t >= bestT) continue;
       // пригнулся за укрытием — пуля проходит над ним

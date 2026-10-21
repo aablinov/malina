@@ -87,3 +87,13 @@ body.dev-playground #c { cursor: none; }
 .pg-enemy i { opacity: 0.95; }
 .pg-enemy s { display: block; margin: 2px auto 0; width: 54px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, #ff5a4a calc(var(--k) * 100%), rgba(0, 0, 0, 0.45) 0); }
 .pg-gren { font-size: 11px; opacity: 0.85; }
+
+.pg-berry { display: flex; align-items: center; gap: 6px; background: rgba(20, 22, 27, 0.82); border-radius: 6px; padding: 6px 10px; font-size: 16px; }
+.pg-berry i { width: 12px; height: 12px; background: #c4284f; box-shadow: inset -2px -2px 0 #8a1030, 0 0 8px #ff2a55; }
+.pg-prompt {
+  position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 7px 14px; border-radius: 6px;
+  background: rgba(20, 22, 27, 0.88); font-weight: 700; font-size: 13px; white-space: nowrap;
+}
+.pg-prompt kbd {
+  display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 4px; background: #ffd25a; color: #1a1b1e; font: 700 12px/1.4 Rubik, system-ui, sans-serif;
+}

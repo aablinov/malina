@@ -7,6 +7,7 @@ import { initAudio, sfx, toggleMute } from '../audio';
 import { Arachnid, ARACHNID_NAMES, type ArachnidContext } from '../arachnid';
 import { buildCoverPoints } from '../cover';
 import { Grenades } from '../grenade';
+import { Props, type LootKind } from '../props';
 import { Jailer, JAILER_NAMES, type JailerContext } from '../jailer';
 import { Beetle, type BeetleKind } from '../beetle';
 import { distToObstacle, NavGrid } from '../nav';
@@ -278,8 +279,55 @@ export function runPlayground(): void {
 
   // ---------- Загон врагов ----------
   // Все враги стоят в строю и спят. Попадание или пуля рядом будит именно этого врага. N — все обратно на места.
-  const nav = new NavGrid(HALF, obstacles, 0.75);
-  const covers = buildCoverPoints(obstacles, nav);
+  // ---------- Склад: интерактивные предметы ----------
+  const props = new Props(scene, fx, rng(99), {
+    explode: (at, r, dmg) => explode(at, r, dmg),
+    give: (kind, amount, at) => giveLoot(kind, amount, at),
+    sound: (k) => { if (scripted) return; ({ open: sfx.breakOpen, pickup: sfx.pickup, break: sfx.burst, heal: sfx.ready, ignite: sfx.flame } as const)[k](); },
+  }, {
+    barrels: [[-11, 11], [-10.25, 11.6], [-10.9, 10.15], [-6, 12.2], [-3.4, 18]],
+    crates: [[-8.6, 14, 0], [-7.6, 14, 0], [-6.6, 14, 0], [-4.2, 15.2, 15], [-12.8, 15.6, 0], [-12.8, 16.6, 0]],
+    supplies: [[-9.6, 17.6, 145], [-5.4, 19, 160]],
+    terminals: [[-2.6, 10.6, 50]],
+  });
+  floorLabel('склад: бочки, ящики с припасами (E), терминал (E), ящики-укрытия', -7.5, 21.3, 0.9);
+  /** Все препятствия: стены и укрытия плюс предметы склада (меняются, когда что-то разбили) */
+  let worldCache: Obstacle[] = [];
+  let worldVer = -1;
+  const world = (): Obstacle[] => {
+    if (worldVer !== props.version) { worldCache = obstacles.concat(props.solids); worldVer = props.version; }
+    return worldCache;
+  };
+  let nav = new NavGrid(HALF, world(), 0.75);
+  let covers = buildCoverPoints(world(), nav);
+  let navVer = props.version;
+  let berries = 0;
+  /** Нажали E — использовать ближайший предмет */
+  let interactReq = false;
+
+  /** Подобранный лут */
+  function giveLoot(kind: LootKind, amount: number, at: THREE.Vector3): void {
+    const g = hero.gunner;
+    let text = '';
+    if (kind === 'ammo') {
+      const cal = g.primary.def.caliber;
+      g.reserve[cal] = Math.min(CALIBERS[cal].max, g.reserve[cal] + amount);
+      text = `+${amount} ${CALIBERS[cal].name}`;
+    } else if (kind === 'pistolAmmo') {
+      g.reserve['9mm'] = Math.min(CALIBERS['9mm'].max, g.reserve['9mm'] + amount);
+      text = `+${amount} 9 мм`;
+    } else if (kind === 'grenade') {
+      hero.grenades = Math.min(3, hero.grenades + amount);
+      text = '+РГД-5';
+    } else if (kind === 'berry') {
+      berries += amount;
+      text = `+${amount} малины`;
+    } else {
+      hero.hp = Math.min(hero.maxHp, hero.hp + amount);
+      text = `+${amount} здоровья`;
+    }
+    fx.text(at.clone().setY(0.4), text, kind === 'berry' ? 'berry' : kind === 'med' ? 'heal' : '');
+  }
   type EnemySpec = { type: 'beetle'; kind: BeetleKind; x: number } | { type: 'arachnid'; kind: ArachnidKind; x: number }
     | { type: 'jailer'; kind: JailerKind; x: number; z: number; yaw: number };
   const PEN_Z = -10;
@@ -449,7 +497,7 @@ export function runPlayground(): void {
   const hitSum = new Map<Shootable, { d: number; p: THREE.Vector3 }>();
 
   function targets(): Shootable[] {
-    const list: Shootable[] = [...dummies];
+    const list: Shootable[] = [...dummies, ...props.targets];
     for (const e of enemies) {
       if (e.gone) continue;
       if (e.beetle && !e.beetle.dead) list.push(beetleTarget(e, e.beetle));
@@ -475,11 +523,13 @@ export function runPlayground(): void {
     const g = req.gun;
     const def = g.def;
     const muzzle = h.muzzle();
+    // прицел на бочке или ящике — стреляем ниже, в него; иначе пули идут поверх низких предметов
+    if (props.targets.some((t) => Math.hypot(input.aim.x - t.pos.x, input.aim.z - t.pos.z) < t.radius + 0.3)) muzzle.y = Math.min(muzzle.y, 0.6);
     const tg = targets();
     hitSum.clear();
     const tracer = new THREE.Color(...def.tracer);
     for (const a of req.angles) {
-      const res = traceShot(muzzle, h.upperYaw + a, req.dmg, def.t.range, req.knock, obstacles, tg, rand);
+      const res = traceShot(muzzle, h.upperYaw + a, req.dmg, def.t.range, req.knock, world(), tg, rand);
       for (const s of res.segments) drawTracer(s.from, s.to, tracer);
       for (const w of res.wallHits) {
         chip(w.point, w.nx, w.nz);
@@ -573,7 +623,7 @@ export function runPlayground(): void {
       const a = Math.atan2(dx, dz) - h.upperYaw;
       const ang = Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
       if (!hero.down && d < def.t.range && ang < THREE.MathUtils.degToRad(def.t.spread) + Math.atan(0.4 / Math.max(d, 0.3))
-        && !raycastObstacles(muzzle.x, muzzle.z, dx / (d || 1), dz / (d || 1), d, 1.0, obstacles)) {
+        && !raycastObstacles(muzzle.x, muzzle.z, dx / (d || 1), dz / (d || 1), d, 1.0, world())) {
         if (hero.hurt(JT.flameDps / def.t.rate)) hero.applyBurn(JT.burnDps, JT.burnTime);
       }
       if (!scripted && fxRand() < 0.35) sfx.flame();
@@ -581,7 +631,7 @@ export function runPlayground(): void {
     }
     const tracer = new THREE.Color(...def.tracer);
     for (const a of req.angles) {
-      const res = traceShot(muzzle, h.upperYaw + a, req.dmg * JT.dmgMul, def.t.range, req.knock, obstacles, [playerTarget], rand);
+      const res = traceShot(muzzle, h.upperYaw + a, req.dmg * JT.dmgMul, def.t.range, req.knock, world(), [playerTarget, ...props.targets], rand);
       for (const s of res.segments) drawTracer(s.from, s.to, tracer);
       for (const w of res.wallHits) {
         chip(w.point, w.nx, w.nz);
@@ -619,7 +669,7 @@ export function runPlayground(): void {
       const dx = p.x - at.x, dz = p.z - at.z, d = Math.hypot(dx, dz);
       if (d >= r) return 0;
       let f = 1 - (d / r) * 0.6;
-      if (d > 0.3 && raycastObstacles(at.x, at.z, dx / d, dz / d, d, 0.6, obstacles)) f *= GRENADE.coverMul;
+      if (d > 0.3 && raycastObstacles(at.x, at.z, dx / d, dz / d, d, 0.6, world())) f *= GRENADE.coverMul;
       return f;
     };
     const dir = (p: THREE.Vector3) => new THREE.Vector3(p.x - at.x, 0, p.z - at.z).normalize();
@@ -638,6 +688,7 @@ export function runPlayground(): void {
       wakeEnemy(e);
     }
     for (const d of dummies) if (k(d.pos) > 0) d.hit(dmg * k(d.pos), dir(d.pos), d.pos, 1);
+    props.blast(at, r, dmg);
   }
 
   function onGunEvent(ev: GunEvent, g: GunState): void {
@@ -735,6 +786,7 @@ export function runPlayground(): void {
     }
     switch (e.code) {
       case 'KeyC': edges.crouch = true; break;
+    case 'KeyE': interactReq = true; break;
       case 'Space': edges.roll = true; break;
       case 'KeyR': edges.reload = true; break;
       case 'Digit1': edges.slot = 'primary'; break;
@@ -817,6 +869,7 @@ export function runPlayground(): void {
 
   function resetTargets(): void {
     for (const d of dummies) d.reset();
+    props.reset();
     resetEnemies();
     toast('Мишени и враги на местах');
   }
@@ -852,9 +905,11 @@ export function runPlayground(): void {
     <div class="pg-bottom">
       <div class="pg-hp"><i id="pgHp"></i><b id="pgHpN">100</b></div>
       <div class="pg-gun"><span id="pgGun">АК-74</span><span class="pg-ammo" id="pgAmmo">30 / 180</span><div class="pg-rl"><i id="pgRl"></i></div><span class="pg-gren" id="pgGren">РГД-5 × 3</span></div>
+      <div class="pg-berry"><i></i><b id="pgBerry">0</b></div>
     </div>
+    <div class="pg-prompt" id="pgPrompt"></div>
     <div class="pg-help">WASD — ходьба · Shift — бег · ПКМ — прицел · C — присед · Space — перекат · R — перезарядка · 1/2 — основной/пистолет · T — сменить основной · G — граната (держи — дальше)<br>
-    F1 параметры · F2 коллайдеры · F3 разброс · F4 телеметрия · F5 патроны ∞ · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · B bloom · N сброс мишеней и врагов · Ctrl+0 заморозить врагов<br>Враги стоят в загоне и спят: попадание или пуля рядом будит именно этого врага</div>
+    F1 параметры · F2 коллайдеры · F3 разброс · F4 телеметрия · F5 патроны ∞ · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · B bloom · E использовать · N сброс мишеней, врагов и склада · Ctrl+0 заморозить врагов<br>Враги стоят в загоне и спят: попадание или пуля рядом будит именно этого врага</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(hud);
 
@@ -869,6 +924,11 @@ export function runPlayground(): void {
     const res = infiniteAmmo ? '∞' : String(hero.gunner.reserve[g.def.caliber]);
     const low = g.rounds < g.capacity * 0.25;
     setHTML('pgGun', `${g.def.name} <small>${CALIBERS[g.def.caliber].name}</small>`);
+    setHTML('pgBerry', String(berries));
+    const near = hero.down ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
+    const promptEl = $('pgPrompt');
+    promptEl.style.display = near ? '' : 'none';
+    if (near) setHTML('pgPrompt', `<kbd>E</kbd>${near.prompt}`);
     setHTML('pgGren', `РГД-5 × ${hero.infiniteGrenades ? '∞' : hero.grenades}`);
     setHTML('pgAmmo', `<b class="${low ? 'low' : ''}">${g.rounds}</b> / ${res}`);
     const rl = g.reload ? g.reload.t / g.reload.dur : 0;
@@ -931,11 +991,22 @@ export function runPlayground(): void {
     simTime += dt;
     readInput();
     hero.infiniteGrenades = infiniteAmmo;
-    hero.update(dt, input, obstacles);
+    hero.update(dt, input, world());
+
+    // склад: E у предмета, лечение у терминала, взрывы бочек, лут
+    if (interactReq) {
+      interactReq = false;
+      const it = props.nearest(hero.pos, hero.hp, hero.maxHp);
+      if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
+    }
+    const healed = props.update(dt, hero);
+    if (healed > 0) hero.hp = Math.min(hero.maxHp, hero.hp + healed);
+    // разбили ящик или взорвали бочку — пересобрать навигацию и укрытия
+    if (navVer !== props.version) { nav = new NavGrid(HALF, world(), 0.75); covers = buildCoverPoints(world(), nav); navVer = props.version; }
     clearEdges();
     if (hero.down) { downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
 
-    const ctx = { hero: hero.pos, obstacles, spit: (from: THREE.Vector3, to: THREE.Vector3) => { spits.fire(from, to, 10, 8); if (!scripted) sfx.spit(); } };
+    const ctx = { hero: hero.pos, obstacles: world(), spit: (from: THREE.Vector3, to: THREE.Vector3) => { spits.fire(from, to, 10, 8); if (!scripted) sfx.spit(); } };
     for (const d of dummies) d.update(dt, ctx);
 
     // враги: спят, пока их не разбудит выстрел
@@ -948,7 +1019,7 @@ export function runPlayground(): void {
         spread: hero.gunner.spread(hero.spreadMul), range: hero.gun.def.t.range,
       },
       firing: simTime - lastShot < 0.25 || input.fire,
-      nav, obstacles, others: arachs,
+      nav, obstacles: world(), others: arachs,
       hurtHero(dmg, from, what) {
         if (hero.hurt(dmg)) {
           fx.text(hero.pos, `−${dmg}`, 'bad');
@@ -956,7 +1027,7 @@ export function runPlayground(): void {
           // толчок от удара
           const push = hero.pos.clone().sub(from).setY(0).setLength(what === 'pounce' ? 1.2 : 0.5);
           hero.pos.add(push);
-          resolveCircle(hero.pos, HERO.radius, obstacles);
+          resolveCircle(hero.pos, HERO.radius, world());
           if (!scripted) sfx.hurt();
           return true;
         }
@@ -976,7 +1047,7 @@ export function runPlayground(): void {
           spits.fire(from.clone().setY(0.9), to.clone().setY(0.9), r.speed, r.dmg, new THREE.Color(...r.color));
           if (!scripted) sfx.spit();
         });
-        resolveCircle(b.pos, b.radius * 0.8, obstacles);
+        resolveCircle(b.pos, b.radius * 0.8, world());
         if (!b.ranged && !hero.down) {
           const d = Math.hypot(b.pos.x - hero.pos.x, b.pos.z - hero.pos.z);
           if (d < b.radius + 0.45 && hero.hurt(b.bite * BEETLES.biteMul * dt) && !scripted) sfx.chew();
@@ -989,7 +1060,7 @@ export function runPlayground(): void {
     // тюремщики
     const jailers = liveJailers();
     const jctx: JailerContext = {
-      player: hero, obstacles, nav, covers, others: jailers,
+      player: hero, obstacles: world(), nav, covers, others: jailers,
       alert(from) {
         // тревога: просыпаются соседи по посту
         for (const en of enemies) if (en.jailer && !en.awake && en.jailer.pos.distanceTo(from.pos) < 16) wakeEnemy(en);
@@ -1020,9 +1091,9 @@ export function runPlayground(): void {
       if (e.arach?.dead) { e.arach.explode(); if (!scripted) sfx.kill(); e.arach.dispose(); e.gone = true; }
     }
 
-    grenades.update(dt, obstacles);
+    grenades.update(dt, world());
 
-    spits.update(dt, obstacles, (s: Spit) => {
+    spits.update(dt, world(), (s: Spit) => {
       if (Math.hypot(s.pos.x - hero.pos.x, s.pos.z - hero.pos.z) > 0.45) return false;
       if (s.pos.y > hero.headTop) return false; // пролетел над каской
       if (hero.rolling && hero.invulnerable) { fx.text(hero.pos, 'уклон', ''); return false; }
@@ -1093,6 +1164,7 @@ export function runPlayground(): void {
       for (const d of dummies) list.push({ x: d.pos.x, z: d.pos.z, r: d.radius });
       for (const b of liveBeetles()) list.push({ x: b.pos.x, z: b.pos.z, r: b.radius * 0.9 });
       for (const a of liveArachnids()) list.push({ x: a.pos.x, z: a.pos.z, r: a.radius });
+      for (const t of props.targets) list.push({ x: t.pos.x, z: t.pos.z, r: t.radius });
       for (const j of liveJailers()) { list.push({ x: j.pos.x, z: j.pos.z, r: j.radius }); if (j.tanks?.alive) { const p = j.tanks.pos; list.push({ x: p.x, z: p.z, r: j.tanks.radius }); } }
       overlays.drawCircles(list);
       overlays.drawPaths(liveArachnids().filter((a) => a.active).map((a) => [a.pos, ...a.debugPath]));
@@ -1114,7 +1186,11 @@ export function runPlayground(): void {
   // ---------- Отладочный хук ----------
   window.__malina = {
     mode: 'playground',
-    hero, input, dummies, obstacles, camera, GUNS, HERO, ARACHNIDS, nav,
+    hero, input, dummies, obstacles, camera, GUNS, HERO, ARACHNIDS, props,
+    get nav() { return nav; },
+    get berries() { return berries; },
+    /** Нажать E */
+    interact() { interactReq = true; },
     get enemies() { return enemies; },
     get beetles() { return liveBeetles(); },
     get arachnids() { return liveArachnids(); },
@@ -1125,8 +1201,8 @@ export function runPlayground(): void {
     wake(kind?: string) { for (const e of enemies) if (!kind || e.spec.kind === kind) wakeEnemy(e); },
     resetEnemies,
     /** Для тестов: луч на уровне пола против препятствий и расстояние до ближайшего */
-    raycast(x: number, z: number, dx: number, dz: number, d: number) { return raycastObstacles(x, z, dx, dz, d, 0.05, obstacles) !== null; },
-    minObsDist(x: number, z: number) { return Math.min(...obstacles.map((o) => distToObstacle(x, z, o))); },
+    raycast(x: number, z: number, dx: number, dz: number, d: number) { return raycastObstacles(x, z, dx, dz, d, 0.05, world()) !== null; },
+    minObsDist(x: number, z: number) { return Math.min(...world().map((o) => distToObstacle(x, z, o))); },
     /** Ввод из теста: клавиатура и мышь перестают влиять на героя */
     script(on = true) { scripted = on; if (on) { input.move.set(0, 0); input.fire = false; input.run = false; input.aimDown = false; } },
     /** Прогнать симуляцию sec секунд без реального времени */
