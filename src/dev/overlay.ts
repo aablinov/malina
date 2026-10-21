@@ -71,5 +71,21 @@ export class Overlays {
     (this.coneLine.geometry as THREE.BufferGeometry).setFromPoints([muzzle, l, muzzle, r]);
   }
 
+  private pathLines: THREE.LineSegments | null = null;
+  /** Пути врагов по навигационной сетке */
+  drawPaths(paths: THREE.Vector3[][]): void {
+    const pts: THREE.Vector3[] = [];
+    for (const p of paths) for (let i = 0; i + 1 < p.length; i++) pts.push(p[i].clone().setY(0.08), p[i + 1].clone().setY(0.08));
+    if (!this.pathLines) {
+      this.pathLines = new THREE.LineSegments(new THREE.BufferGeometry(), lineMat('#ff5ad2'));
+      this.pathLines.renderOrder = 10;
+      this.pathLines.frustumCulled = false;
+      this.scene.add(this.pathLines);
+    }
+    this.pathLines.geometry.dispose();
+    this.pathLines.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    this.pathLines.visible = pts.length > 0;
+  }
+
   update(): void { this.obsLines.visible = this.colliders; }
 }

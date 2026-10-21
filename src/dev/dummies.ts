@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { raycastObstacles, type Obstacle } from '../collision';
 import type { FX } from '../fx';
 import type { Shootable } from '../gunplay';
+import type { ArachnidTuning } from '../tuning';
 
 /**
  * Мишени плейграунда: неподвижный манекен, манекен на рельсе, манекен-стрелок.
@@ -168,9 +169,12 @@ export interface Spit {
   life: number;
   dmg: number;
   mesh: THREE.Mesh;
+  /** Паутина ткача: замедляет и травит */
+  web?: ArachnidTuning;
 }
 
 const spitGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+const webGeo = new THREE.BoxGeometry(0.34, 0.34, 0.08);
 
 export class Spits {
   readonly list: Spit[] = [];
@@ -189,6 +193,17 @@ export class Spits {
     this.list.push({ pos: from.clone(), vel, life: 3, dmg, mesh });
   }
 
+  /** Комок паутины: летит с заданной скоростью, крутится крестом */
+  fireWeb(from: THREE.Vector3, vel: THREE.Vector3, t: ArachnidTuning): void {
+    const mesh = new THREE.Mesh(webGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.7, 3.4, 0.5), toneMapped: false }));
+    const cross = new THREE.Mesh(webGeo, mesh.material);
+    cross.rotation.z = Math.PI / 2;
+    mesh.add(cross);
+    mesh.position.copy(from);
+    this.scene.add(mesh);
+    this.list.push({ pos: from.clone(), vel: vel.clone(), life: 2.5, dmg: t.webDmg, mesh, web: t });
+  }
+
   /** hitHero возвращает true, если попал (тогда плевок исчезает) */
   update(dt: number, obstacles: readonly Obstacle[], hitHero: (s: Spit) => boolean): void {
     for (let i = this.list.length - 1; i >= 0; i--) {
@@ -205,7 +220,8 @@ export class Spits {
       }
       s.pos.addScaledVector(s.vel, dt);
       s.mesh.position.copy(s.pos);
-      s.mesh.rotation.x += dt * 9; s.mesh.rotation.y += dt * 7;
+      if (s.web) { s.mesh.rotation.z += dt * 12; s.mesh.lookAt(s.pos.clone().add(s.vel)); s.mesh.rotateZ(s.life * 12); }
+      else { s.mesh.rotation.x += dt * 9; s.mesh.rotation.y += dt * 7; }
       if (Math.random() < 0.5) this.fx.burst(s.pos.clone(), [new THREE.Color(0.6, 2.4, 0.3)], 1, { speed: 0.3, up: 0.2, size: 0.05, life: 0.3, glow: true, gravity: 0 });
       if (hitHero(s) || s.life <= 0) this.remove(i);
     }

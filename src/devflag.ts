@@ -4,7 +4,11 @@
  */
 export const DEV_TOOLS: boolean = import.meta.env.VITE_DEV_TOOLS !== 'off';
 
+/** Сборка только плейграунда (для публикации отдельной страницей): VITE_PLAYGROUND=only */
+const PLAYGROUND_ONLY: boolean = import.meta.env.VITE_PLAYGROUND === 'only';
+
 export function wantsPlayground(): boolean {
+  if (PLAYGROUND_ONLY) return true;
   return DEV_TOOLS && new URLSearchParams(window.location.search).get('dev') === 'playground';
 }
 

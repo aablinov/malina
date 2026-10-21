@@ -94,6 +94,13 @@ export const sfx = {
   shellsIn() { noise({ dur: 0.04, vol: 0.12, freq: 900, q: 1.5 }); noise({ dur: 0.04, vol: 0.12, freq: 950, q: 1.5, delay: 0.12 }); },
   roll() { noise({ dur: 0.2, vol: 0.14, freq: 700, q: 0.6 }); },
   step() { noise({ dur: 0.04, vol: 0.035, freq: 500, q: 0.8 }); },
+  // ---------- арахниды ----------
+  screech() { tone({ type: 'sawtooth', f0: 900, f1: 1700, dur: 0.25, vol: 0.07 }); tone({ type: 'square', f0: 1300, f1: 600, dur: 0.3, vol: 0.05, delay: 0.08 }); noise({ dur: 0.3, vol: 0.12, freq: 3200, q: 2 }); },
+  leap() { noise({ dur: 0.1, vol: 0.12, freq: 1400, q: 0.8 }); tone({ type: 'triangle', f0: 300, f1: 520, dur: 0.08, vol: 0.05 }); },
+  land() { noise({ dur: 0.06, vol: 0.1, freq: 600, q: 1 }); },
+  slash() { noise({ dur: 0.12, vol: 0.2, freq: 2800, q: 0.9 }); tone({ type: 'sawtooth', f0: 500, f1: 180, dur: 0.12, vol: 0.06 }); },
+  web() { noise({ dur: 0.18, vol: 0.14, freq: 1100, q: 3 }); tone({ type: 'sine', f0: 240, f1: 500, dur: 0.14, vol: 0.06 }); },
+  webHit() { noise({ dur: 0.2, vol: 0.18, freq: 800, q: 2 }); tone({ type: 'sine', f0: 200, f1: 120, dur: 0.2, vol: 0.08 }); },
   hurt() { tone({ type: 'square', f0: 160, f1: 90, dur: 0.12, vol: 0.12 }); },
 
   /** Взмах: pitch — высота свиста, heavy — тяжёлое оружие */
