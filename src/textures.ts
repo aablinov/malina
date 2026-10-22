@@ -63,6 +63,23 @@ export interface Textures {
   roof: THREE.Texture; berry: THREE.Texture; awning: THREE.Texture; sign: THREE.Texture; tallGrass: THREE.Texture; flowers: THREE.Texture[];
   face: THREE.Texture; skin: THREE.Texture; hair: THREE.Texture; shirt: THREE.Texture;
   overalls: THREE.Texture; straw: THREE.Texture; square: THREE.Texture; glow: THREE.Texture;
+  /** Текстуры блоков уровня (палитра — src/level/palette.ts) */
+  gravel: THREE.Texture; sand: THREE.Texture; cobble: THREE.Texture; stoneBricks: THREE.Texture;
+  stoneBricksMossy: THREE.Texture; stoneBricksCracked: THREE.Texture; stoneBricksOld: THREE.Texture; tiles: THREE.Texture;
+  planksDark: THREE.Texture; roofDark: THREE.Texture; crate: THREE.Texture; berryBush: THREE.Texture; fern: THREE.Texture;
+  hay: THREE.Texture; hayTop: THREE.Texture; ash: THREE.Texture; leavesCut: THREE.Texture;
+  flowerRed: THREE.Texture; flowerBlue: THREE.Texture; flowerWhite: THREE.Texture; flowerYellow: THREE.Texture;
+  /** Вода: 16 × 16, двигается смещением UV */
+  water: THREE.Texture;
+  /** Огонь: 3 кадра по 16 × 16 друг над другом */
+  fire: THREE.Texture;
+}
+
+/** Текстура по имени — для атласа блоков */
+export function textureByName(T: Textures, name: string): THREE.Texture {
+  const t = (T as unknown as Record<string, THREE.Texture | undefined>)[name];
+  if (!t) throw new Error(`Нет текстуры «${name}»`);
+  return t;
 }
 
 export function makeTextures(): Textures {
@@ -186,6 +203,124 @@ export function makeTextures(): Textures {
   T.straw = canvasTex(8, (g, _s, r) => {
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) px(g, x, y, jitter((x + y) % 3 ? '#e8c35a' : '#cfa43f', r, 8));
   }, 45);
+
+  // ---------- блоки уровня ----------
+  T.gravel = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#8a8580', '#7a756f', '#96908a', '#6e6a66', '#a39c93'], 7);
+    for (let i = 0; i < 14; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#5a5652'); px(g, x + 1, y, '#b3ada4'); }
+  }, 50);
+  T.sand = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#dccb8f', '#d2c184', '#e3d39b', '#c9b87b'], 6), 51);
+  const stoneyCells = (g: Ctx, s: number, r: Rand, pal: readonly string[], mortar: string, cell: number, rows: number) => {
+    noiseFill(g, s, r, pal, 5);
+    for (let row = 0; row < rows; row++) {
+      const y0 = (row * s) / rows, off = row % 2 ? cell / 2 : 0;
+      for (let x = 0; x < s; x++) px(g, x, y0 | 0, jitter(mortar, r, 4));
+      for (let x = off; x <= s; x += cell) for (let y = y0; y < y0 + s / rows; y++) px(g, x % s, y | 0, jitter(mortar, r, 4));
+    }
+  };
+  T.cobble = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#8d8d8d', '#7f7f7f', '#999999', '#737373'], 6);
+    // булыжники: случайные пятна со светлым верхом и тёмным низом
+    for (let i = 0; i < 9; i++) {
+      const cx = (r() * s) | 0, cy = (r() * s) | 0, w = 3 + ((r() * 3) | 0), h = 2 + ((r() * 3) | 0);
+      const base = pick(['#8a8a8a', '#9a9a9a', '#7a7a7a', '#a0a0a0'], r);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(g, (cx + x) % s, (cy + y) % s, jitter(y === 0 ? '#b0b0b0' : y === h - 1 ? '#5c5c5c' : base, r, 5));
+    }
+  }, 52);
+  T.stoneBricks = canvasTex(16, (g, s, r) => stoneyCells(g, s, r, ['#8a8a8a', '#808080', '#949494', '#777777'], '#5a5a5a', 8, 4), 53);
+  T.stoneBricksMossy = canvasTex(16, (g, s, r) => {
+    stoneyCells(g, s, r, ['#8a8a8a', '#808080', '#949494', '#777777'], '#5a5a5a', 8, 4);
+    for (let i = 0; i < 50; i++) px(g, (r() * s) | 0, (r() * s) | 0, jitter(pick(['#4f7d33', '#5d8f3a', '#3f6a2a'], r), r, 8));
+  }, 54);
+  T.stoneBricksCracked = canvasTex(16, (g, s, r) => {
+    stoneyCells(g, s, r, ['#8a8a8a', '#808080', '#949494', '#777777'], '#5a5a5a', 8, 4);
+    let x = (r() * s) | 0;
+    for (let y = 0; y < s; y++) { px(g, x, y, '#4a4a4a'); if (r() < 0.6) x = Math.max(0, Math.min(s - 1, x + (r() < 0.5 ? -1 : 1))); }
+  }, 55);
+  T.stoneBricksOld = canvasTex(16, (g, s, r) => stoneyCells(g, s, r, ['#8b7f93', '#7d7287', '#978ba0', '#6f6478'], '#4c4454', 8, 4), 56);
+  T.tiles = canvasTex(16, (g, s, r) => {
+    stoneyCells(g, s, r, ['#9a948c', '#8f8982', '#a39d95', '#857f78'], '#5e5952', 8, 2);
+    for (let i = 0; i < 10; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#b5afa6');
+  }, 57);
+  T.planksDark = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) {
+      const base = ['#5e4228', '#56391f', '#66482c', '#4f3519'][Math.floor(y / 4) % 4];
+      for (let x = 0; x < s; x++) px(g, x, y, jitter(base, r, 6));
+    }
+    for (let y = 3; y < s; y += 4) for (let x = 0; x < s; x++) px(g, x, y, '#2f1e0f');
+    for (let b = 0; b < 4; b++) { const x = (r() * s) | 0; for (let y = b * 4; y < b * 4 + 3; y++) px(g, x, y, '#2f1e0f'); }
+  }, 58);
+  T.roofDark = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y % 4 === 3 ? '#1e2430' : pick(['#3b4658', '#34404f', '#43506a'], r), r, 6));
+  }, 59);
+  T.crate = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(['#a7824f', '#9c7746', '#b08b57'][Math.floor(y / 5) % 3], r, 6));
+    for (let i = 0; i < s; i++) { for (const k of [0, 1, s - 2, s - 1]) { px(g, i, k, '#6e5230'); px(g, k, i, '#6e5230'); } px(g, i, i, '#6e5230'); px(g, i, s - 1 - i, '#7a5a34'); }
+  }, 60);
+  T.berryBush = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#3e8a33', '#4c9b3a', '#367a2c', '#58a845'], 10);
+    for (let i = 0; i < 14; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#285e20');
+    for (let i = 0; i < 7; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#d0123f'); px(g, x + 1, y, '#ff4a6a'); }
+  }, 61);
+  T.fern = canvasTex(16, (g, s, r) => {
+    for (let k = 0; k < 3; k++) {
+      let x = 7 + k - 1;
+      for (let y = s - 1; y >= 3 + k * 2; y--) {
+        px(g, x, y, '#3f8a2f');
+        const len = Math.max(1, ((s - y) / 3) | 0);
+        for (let d = 1; d <= len; d++) { px(g, x - d, y, jitter('#5aa342', r, 8)); px(g, x + d, y, jitter('#5aa342', r, 8)); }
+        if (r() < 0.3) x += k === 0 ? -1 : k === 2 ? 1 : 0;
+      }
+    }
+  }, 62, { alpha: true });
+  T.hay = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y % 3 === 2 ? '#b8912e' : pick(['#e8c35a', '#dbb34a', '#f0cf6c'], r), r, 8));
+  }, 63);
+  T.hayTop = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter((x + y) % 4 === 0 ? '#b8912e' : pick(['#e8c35a', '#dbb34a', '#f0cf6c'], r), r, 8));
+  }, 64);
+  // листва кроны: с дырками по краям, чтобы кубы кроны не читались как кубы
+  T.leavesCut = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const edge = Math.min(x, y, s - 1 - x, s - 1 - y);
+      const hole = edge === 0 ? 0.45 : edge === 1 ? 0.25 : 0.08;
+      if (r() < hole) continue;
+      px(g, x, y, jitter(pick(['#3f7d2c', '#356b25', '#4b8f35', '#2c5a1e', '#457f2f'], r), r, 10));
+    }
+    for (let i = 0; i < 12; i++) px(g, 2 + ((r() * 12) | 0), 2 + ((r() * 12) | 0), '#1f4415');
+  }, 68, { alpha: true });
+  T.ash = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#3a3835', '#2e2c2a', '#454240'], 6), 65);
+  [T.flowerRed, T.flowerBlue, T.flowerWhite, T.flowerYellow] = T.flowers;
+  T.water = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#3a7fd6', '#3576cc', '#4189dd', '#2f6fc0'], 6);
+    for (let i = 0; i < 4; i++) {
+      const y = (r() * s) | 0;
+      for (let x = (r() * 6) | 0, n = 4 + ((r() * 6) | 0); n > 0; n--, x++) px(g, x % s, y, jitter('#7fb6f0', r, 8));
+    }
+  }, 66);
+  T.water.wrapS = T.water.wrapT = THREE.RepeatWrapping;
+  T.fire = (() => {
+    const c = document.createElement('canvas'); c.width = 16; c.height = 48;
+    const g = ctx2d(c);
+    const r = rng(67);
+    for (let f = 0; f < 3; f++) {
+      const y0 = f * 16;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        // языки пламени: внизу широко и ярко, кверху узко
+        const h = 1 - y / 16; // 1 внизу картинки — но канвас рисуется сверху вниз, низ блока = y=15
+        const w = 0.25 + (1 - h) * 0.3 + Math.sin(x * 1.7 + f * 2.1) * 0.08;
+        const dx = Math.abs(x - 7.5) / 8;
+        if (dx > w + (r() - 0.5) * 0.2 || h > 0.95 - r() * 0.3) continue;
+        const col = dx < w * 0.35 && h < 0.5 ? '#fff0a0' : dx < w * 0.7 ? '#ffb020' : '#ff5a10';
+        px(g, x, y0 + y, jitter(col, r, 10));
+      }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+    t.colorSpace = THREE.SRGBColorSpace; t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(1, 1 / 3);
+    return t;
+  })();
 
   T.square = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;
