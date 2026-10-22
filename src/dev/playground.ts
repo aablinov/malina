@@ -930,6 +930,7 @@ export function runPlayground(): void {
     hero.update(dt, input, props.solids, terrain);
     view.sync();
     view.update(simTime, 0.4, hero.pos);
+    view.setXray(hero.pos.clone().setY(hero.pos.y + 0.9), camera.position, 2.0);
 
     // склад: E у предмета, лечение у терминала, взрывы бочек, лут
     if (interactReq) {
