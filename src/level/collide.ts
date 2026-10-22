@@ -27,10 +27,21 @@ export interface Terrain {
   wallHit(ax: number, az: number, bx: number, bz: number, y: number): { x: number; z: number; nx: number; nz: number } | null;
 }
 
-/** Верх блока для столкновений (y + высота) или −Infinity, если проходимый */
-export function collideTop(L: Level, x: number, y: number, z: number): number {
+/**
+ * Верх блока для столкновений (y + высота) или −Infinity, если проходимый.
+ * Для ступеней зависит от точки (px, pz): над низкой половиной 0,5, над высокой 1; без точки — 0,5.
+ */
+export function collideTop(L: Level, x: number, y: number, z: number, px?: number, pz?: number): number {
   const d = L.defAt(x, y, z);
-  return d.collide > 0 ? y + d.collide : -Infinity;
+  if (d.collide <= 0) return -Infinity;
+  if (d.stairs && px !== undefined && pz !== undefined) {
+    // в локальные координаты формы: клетка [x−0,5; x+0,5) → [0; 1), затем снимаем поворот
+    let lx = px - x + 0.5, lz = pz - z + 0.5;
+    const rot = L.rotAt(x, y, z);
+    for (let k = 0; k < (4 - rot) % 4; k++) { const nx = 1 - lz; lz = lx; lx = nx; }
+    return y + (lx >= 0.5 ? 1 : 0.5);
+  }
+  return y + d.collide;
 }
 
 export function terrainOf(L: Level): Terrain {
@@ -40,7 +51,7 @@ export function terrainOf(L: Level): Terrain {
     const cx = cell(x), cz = cell(z);
     const yTop = Math.min(b.maxY, Math.floor(y + STEP));
     for (let cy = yTop; cy >= b.minY; cy--) {
-      const t = collideTop(L, cx, cy, cz);
+      const t = collideTop(L, cx, cy, cz, x, z);
       if (t > -Infinity && t <= y + STEP + 1e-3) return t;
     }
     return -Infinity;
@@ -56,7 +67,7 @@ export function terrainOf(L: Level): Terrain {
       // блоки ниже ног тоже могут быть высокими (забор 1,5 м), поэтому смотрим на слой ниже
       const y0 = Math.max(b.minY, Math.floor(pos.y + STEP) - 1), y1 = Math.min(b.maxY, Math.floor(pos.y + h - 0.01));
       for (let cy = y0; cy <= y1; cy++) for (let cz = z0; cz <= z1; cz++) for (let cx = x0; cx <= x1; cx++) {
-        const top = collideTop(L, cx, cy, cz);
+        const top = collideTop(L, cx, cy, cz, pos.x, pos.z);
         if (top <= pos.y + STEP + 1e-3 || cy >= pos.y + h) continue;
         // круг против квадрата клетки
         const qx = Math.max(cx - 0.5, Math.min(pos.x, cx + 0.5)), qz = Math.max(cz - 0.5, Math.min(pos.z, cz + 0.5));

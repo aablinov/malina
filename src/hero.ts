@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { resolveCircle, type Obstacle } from './collision';
+import type { Terrain } from './level/collide.ts';
 import { buildFirearm, buildMagazine, buildShell, type FirearmId, type GunRig } from './firearms';
 import type { FX } from './fx';
 import { Gunner, RELOAD_MARKS, type FireRequest, type GunEvent, type GunState, type Rand } from './gunplay';
@@ -448,7 +449,8 @@ export class Hero {
 
   // ---------- симуляция ----------
 
-  update(dt: number, input: HeroInput, obstacles: readonly Obstacle[]): void {
+  /** terrain — блоки уровня: ступени и полублоки, падение с обрывов; без него боец ходит по плоскости y = 0 */
+  update(dt: number, input: HeroInput, obstacles: readonly Obstacle[], terrain?: Terrain): void {
     const H = HERO;
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
@@ -557,7 +559,13 @@ export class Hero {
       }
     }
     this.touching = resolveCircle(this.pos, H.radius, obstacles);
-    this.pos.y = 0;
+    if (terrain) {
+      if (terrain.resolve(this.pos, H.radius)) this.touching = true;
+      const floor = terrain.floorAt(this.pos.x, this.pos.z, this.pos.y);
+      if (floor === -Infinity) this.pos.y = 0;
+      else if (floor >= this.pos.y - 1e-3) this.pos.y = floor;
+      else this.pos.y = Math.max(floor, this.pos.y - 12 * dt);
+    } else this.pos.y = 0;
     this.speed = dt > 0 ? prev.distanceTo(this.pos) / dt : 0;
     if (this.touching && dt > 0) this.vel.copy(this.pos).sub(prev).divideScalar(dt);
 
