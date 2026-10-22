@@ -114,6 +114,17 @@ export const BLOCKS: BlockDef[] = [
   B('flower_white', 'Цветок белый', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerWhite' } }], { collide: 0, scatter: true, replaceable: true }),
   B('flower_yellow', 'Цветок жёлтый', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerYellow' } }], { collide: 0, scatter: true, replaceable: true }),
 
+  // --- служебные блоки плейграунда: нейтральная сетка и клетчатые стены, стиль игры не задают ---
+  solid('dev_light', 'Сетка: светлая', 'служебные', 'devLight', { jitter: 0 }),
+  solid('dev_dark', 'Сетка: тёмная', 'служебные', 'devDark', { jitter: 0 }),
+  solid('dev_light_line', 'Сетка: светлая с линией', 'служебные', 'devLightLine', { jitter: 0, rotatable: true }),
+  solid('dev_dark_line', 'Сетка: тёмная с линией', 'служебные', 'devDarkLine', { jitter: 0, rotatable: true }),
+  solid('dev_light_corner', 'Сетка: светлая, угол', 'служебные', 'devLightCorner', { jitter: 0, rotatable: true }),
+  solid('dev_dark_corner', 'Сетка: тёмная, угол', 'служебные', 'devDarkCorner', { jitter: 0, rotatable: true }),
+  solid('dev_wall', 'Стена плейграунда', 'служебные', 'devWall', { jitter: 0 }),
+  solid('dev_cover', 'Укрытие плейграунда', 'служебные', 'devCover', { jitter: 0 }),
+  B('dev_cover_low', 'Укрытие плейграунда низкое', 'служебные', [cube(same('devCover'), 'low')], { collide: 0.875, connects: true, jitter: 0 }),
+
   // --- огонь и свет ---
   B('torch', 'Факел', 'свет', [cube({ side: 'logSide' }, 'torch'), { obj: 'torch_flame', layer: 'fire', tex: { side: 'fire' } }], { collide: 0, light: { color: '#ffa040', intensity: 6, dist: 7 } }),
   B('campfire', 'Костёр', 'свет', [cube({ top: 'logTop', side: 'logSide', bottom: 'ash' }, 'campfire_logs'), { obj: 'campfire_fire', layer: 'fire', tex: { side: 'fire' } }], { collide: 1, light: { color: '#ff9a3a', intensity: 12, dist: 10 } }),
