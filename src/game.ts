@@ -16,7 +16,7 @@ import { DayNight } from './daynight';
 import { WEAPONS, WEAPON_BY_ID, AMMO, AMMO_TYPES, MAX_LEVEL, upgradeCost, gunPreview, type AmmoType, type WeaponDef, type WeaponId } from './weapons';
 import { ShopUI } from './shop';
 import { Combat } from './combat';
-import { DEV_TOOLS, openPlayground } from './devflag';
+import { DEV_TOOLS, openEditor, openPlayground } from './devflag';
 import './style.css';
 
 declare global {
@@ -313,6 +313,7 @@ export function runGame(): void {
     if (e.code === 'KeyM') toggleMute();
     // F9 в главном меню — плейграунд разработчика
     if (e.code === 'F9' && G.state === 'menu' && DEV_TOOLS) { e.preventDefault(); openPlayground(); return; }
+    if (e.code === 'F10' && G.state === 'menu' && DEV_TOOLS) { e.preventDefault(); openEditor(); return; }
     if (G.state === 'shop') {
       if (e.code === 'Escape' || e.code === 'KeyE') closeShop();
       return;
@@ -687,7 +688,7 @@ export function runGame(): void {
   function update(dt: number): void {
     const play = G.state === 'play';
     gt += dt;
-    world.update(gt, dn.night);
+    world.update(gt, dn.night, camTarget);
 
     // прицел
     if (mouseSeen) {
@@ -703,7 +704,7 @@ export function runGame(): void {
     if (!play) {
       fx.update(dt, window.innerWidth, window.innerHeight);
       for (const b of G.bushes) if (b) b.update(0, gt, false);
-      if (G.state === 'menu') player.update(dt, new Set<string>(), null, world.colliders);
+      if (G.state === 'menu') player.update(dt, new Set<string>(), null, world.colliders, world.terrain);
       return;
     }
 
@@ -728,7 +729,7 @@ export function runGame(): void {
         fx.burst(player.pos.clone().setY(0.6), [new THREE.Color(3, 2.6, 1)], 16, { speed: 2, up: 3, size: 0.08, life: 0.7, glow: true, gravity: 0 });
       }
     }
-    player.update(sdt, keys, aim, world.colliders);
+    player.update(sdt, keys, aim, world.colliders, world.terrain);
     combat.trigger(G.firing && !player.down, sdt);
     combat.update(sdt, gt);
     // пули понемногу копятся сами, чтобы автомат не замолкал насовсем
@@ -819,7 +820,7 @@ export function runGame(): void {
     camTarget.lerp(player.pos.clone().add(lead), Math.min(1, dt * 5));
     const shake = fx.shake * 0.25;
     camera.position.copy(camTarget).addScaledVector(CAM_DIR, camDist).add(new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake));
-    camera.lookAt(camTarget.x, 0.6, camTarget.z);
+    camera.lookAt(camTarget.x, camTarget.y + 0.6, camTarget.z);
     dn.apply(lights);
     sun.position.copy(camTarget).add(dn.sunOffset);
     sun.target.position.copy(camTarget);
@@ -834,7 +835,7 @@ export function runGame(): void {
 
   // для отладки
   window.__malina = {
-    G, player, camera, dn, combat, startGame, equip, upgrade, openShop,
+    G, player, camera, dn, combat, world, startGame, equip, upgrade, openShop,
     step: (sec: number) => { for (let i = 0; i < sec * 20; i++) update(0.05); },
   };
 }

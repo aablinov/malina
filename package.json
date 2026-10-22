@@ -7,7 +7,9 @@
     "build": "tsc && vite build",
     "typecheck": "tsc",
     "preview": "vite preview",
-    "test": "playwright test"
+    "test": "playwright test",
+    "blocks": "node scripts/gen-blocks.mjs",
+    "map:garden": "node scripts/export-map.ts garden"
   },
   "dependencies": {
     "three": "^0.169.0"

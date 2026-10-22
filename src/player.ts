@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CFG, type Collider } from './config';
 import type { Textures } from './textures';
 import type { FX } from './fx';
+import type { Terrain } from './level/collide.ts';
 import { buildGunModel, type WeaponDef } from './weapons';
 
 function box(w: number, h: number, d: number, mat: THREE.Material | THREE.Material[], x = 0, y = 0, z = 0): THREE.Mesh {
@@ -36,6 +37,8 @@ export class Player {
   private equipT = 1;
   private hurtT = 0;
   private dashT = 0;
+  /** Вертикальная скорость при падении */
+  private vy = 0;
   private spinAngle = 0;
   private readonly dashV = new THREE.Vector3();
 
@@ -188,10 +191,11 @@ export class Player {
     this.model.rotation.set(0, 0, 0);
   }
 
-  update(dt: number, input: ReadonlySet<string>, aim: THREE.Vector3 | null, colliders: readonly Collider[]): void {
+  /** terrain — блоки уровня: герой упирается в стены, поднимается на полублоки и падает с обрывов */
+  update(dt: number, input: ReadonlySet<string>, aim: THREE.Vector3 | null, colliders: readonly Collider[], terrain?: Terrain): void {
     if (this.down) {
       this.model.rotation.z = lerp(this.model.rotation.z, Math.PI / 2, Math.min(1, dt * 8));
-      this.root.position.set(this.pos.x, 0.25, this.pos.z);
+      this.root.position.set(this.pos.x, this.pos.y + 0.25, this.pos.z);
       this.ring.position.x = this.pos.x; this.ring.position.z = this.pos.z;
       return;
     }
@@ -217,6 +221,13 @@ export class Player {
       const dx = this.pos.x - c.x, dz = this.pos.z - c.z;
       const d = Math.hypot(dx, dz), min = c.r + 0.35;
       if (d < min && d > 1e-4) { this.pos.x = c.x + (dx / d) * min; this.pos.z = c.z + (dz / d) * min; }
+    }
+    if (terrain) {
+      terrain.resolve(this.pos, 0.35);
+      const floor = terrain.floorAt(this.pos.x, this.pos.z, this.pos.y);
+      if (floor === -Infinity) this.vy = 0; // пропасть без дна — стоим на месте
+      else if (floor >= this.pos.y - 1e-3) { this.pos.y = floor; this.vy = 0; }
+      else { this.vy -= 22 * dt; this.pos.y = Math.max(floor, this.pos.y + this.vy * dt); if (this.pos.y === floor) this.vy = 0; }
     }
 
     if (aim) {
@@ -258,7 +269,7 @@ export class Player {
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.squash = Math.max(this.squash - dt * 4, this.hurtT > 0 ? 0.6 : 0);
     const lift = Math.abs(Math.sin(this.phase)) * 0.07 * this.moving;
-    this.root.position.set(this.pos.x, lift, this.pos.z);
+    this.root.position.set(this.pos.x, this.pos.y + lift, this.pos.z);
     this.root.rotation.y = this.facing;
     this.model.scale.set(1 + this.squash * 0.15, 1 - this.squash * 0.15, 1 + this.squash * 0.15);
     this.ring.position.x = this.pos.x; this.ring.position.z = this.pos.z;

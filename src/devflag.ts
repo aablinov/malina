@@ -12,6 +12,17 @@ export function wantsPlayground(): boolean {
   return DEV_TOOLS && new URLSearchParams(window.location.search).get('dev') === 'playground';
 }
 
+/** Редактор уровней: ?dev=editor (или F10 в меню) */
+export function wantsEditor(): boolean {
+  return DEV_TOOLS && !PLAYGROUND_ONLY && new URLSearchParams(window.location.search).get('dev') === 'editor';
+}
+
+export function openEditor(): void {
+  const u = new URL(window.location.href);
+  u.searchParams.set('dev', 'editor');
+  window.location.href = u.toString();
+}
+
 export function openPlayground(): void {
   const u = new URL(window.location.href);
   u.searchParams.set('dev', 'playground');

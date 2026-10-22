@@ -6,6 +6,7 @@
 |---|---|
 | [project-brief.md](project-brief.md) | С чего начинать: что за игра, стек, как работаем, карта кода, текущее состояние и следующий шаг |
 | [design-dungeon.md](design-dungeon.md) | Дизайн-документ «Улья»: цикл, генерация этажей, орды, боссы, малина, оружие, броня, передвижение, усиления, этапы |
+| [design-level-blocks.md](design-level-blocks.md) | Блоки уровней и редактор: воксельная сетка, карты в JSON, формы в OBJ, палитра, рендер, столкновения с высотой |
 | [adr-001-dungeon-roguelite.md](adr-001-dungeon-roguelite.md) | Решение: основной режим — кооперативный рогалик-зачистка подземелий |
 | [adr-002-realistic-weapons-tactical-movement.md](adr-002-realistic-weapons-tactical-movement.md) | Решение: реальное оружие, тактическое передвижение, броня, плейграунд |
 | [adr-003-visual-style.md](adr-003-visual-style.md) | Решение: графика в стиле Minecraft Dungeons, без гиперреализма |

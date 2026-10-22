@@ -1,0 +1,23 @@
+/* Редактор уровней: служебный интерфейс */
+body.dev-editor #menu, body.dev-editor #hud, body.dev-editor #pause, body.dev-editor #shop,
+body.dev-editor #over, body.dev-editor #reticle, body.dev-editor #hurt, body.dev-editor #overlay { display: none !important; }
+body.dev-editor { cursor: crosshair; }
+
+.ed { position: fixed; inset: 0; pointer-events: none; font: 500 12px/1.4 Rubik, system-ui, sans-serif; color: #f4f1ea; z-index: 5; }
+.ed > * { pointer-events: auto; }
+.ed button, .ed select, .ed input { font: inherit; color: inherit; background: rgba(40, 44, 52, 0.95); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 5px; padding: 5px 9px; cursor: pointer; }
+.ed button:hover { background: rgba(70, 76, 88, 0.95); }
+.ed-top { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 6px; background: rgba(20, 22, 27, 0.8); }
+.ed-name { width: 180px; cursor: text; }
+.ed-stat { margin-left: auto; opacity: 0.8; font-variant-numeric: tabular-nums; }
+.ed-side { position: absolute; top: 56px; left: 10px; bottom: 44px; width: 210px; overflow-y: auto; border-radius: 6px; background: rgba(20, 22, 27, 0.8); padding: 6px; }
+.ed-cur { display: flex; gap: 8px; align-items: center; padding: 6px; margin-bottom: 6px; border-radius: 5px; background: rgba(76, 255, 122, 0.12); border: 1px solid rgba(76, 255, 122, 0.4); }
+.ed-cur img, .ed-blk img { width: 28px; height: 28px; image-rendering: pixelated; border-radius: 3px; background: #333; flex: none; }
+.ed-cat { margin: 8px 4px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; }
+.ed-blk { display: flex; width: 100%; gap: 8px; align-items: center; text-align: left; padding: 3px 5px; margin: 1px 0; border-color: transparent; background: transparent; }
+.ed-blk:hover { background: rgba(255, 255, 255, 0.08); }
+.ed-blk.on { background: rgba(76, 255, 122, 0.18); border-color: rgba(76, 255, 122, 0.5); }
+.ed-blk span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed-help { position: absolute; left: 10px; right: 10px; bottom: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(20, 22, 27, 0.8); opacity: 0.85; text-align: center; }
+.ed-toast { position: absolute; top: 60px; left: 50%; transform: translate(-50%, -6px); opacity: 0; padding: 6px 14px; border-radius: 6px; background: rgba(20, 22, 27, 0.9); font-weight: 700; transition: opacity 0.15s, transform 0.15s; }
+.ed-toast.show { opacity: 1; transform: translate(-50%, 0); }
