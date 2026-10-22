@@ -69,6 +69,9 @@ export interface Textures {
   planksDark: THREE.Texture; roofDark: THREE.Texture; crate: THREE.Texture; berryBush: THREE.Texture; fern: THREE.Texture;
   hay: THREE.Texture; hayTop: THREE.Texture; ash: THREE.Texture; leavesCut: THREE.Texture; acid: THREE.Texture; hole: THREE.Texture;
   flowerRed: THREE.Texture; flowerBlue: THREE.Texture; flowerWhite: THREE.Texture; flowerYellow: THREE.Texture;
+  /** Служебные блоки плейграунда: серая сетка 1 м (два тона, разметка каждые 5 м) и клетчатые стены */
+  devLight: THREE.Texture; devDark: THREE.Texture; devLightLine: THREE.Texture; devDarkLine: THREE.Texture;
+  devLightCorner: THREE.Texture; devDarkCorner: THREE.Texture; devWall: THREE.Texture; devCover: THREE.Texture;
   /** Вода: 16 × 16, двигается смещением UV */
   water: THREE.Texture;
   /** Огонь: 3 кадра по 16 × 16 друг над другом */
@@ -333,6 +336,22 @@ export function makeTextures(): Textures {
     t.repeat.set(1, 1 / 3);
     return t;
   })();
+
+  // служебная сетка плейграунда: ровный тон, линия разметки — 2 px у края (−X: слева; с поворотом — у любого)
+  const devTile = (tone: string, line: 'none' | 'edge' | 'corner', seed: number) => canvasTex(16, (g, s) => {
+    g.fillStyle = tone; g.fillRect(0, 0, s, s);
+    g.fillStyle = '#5f6268';
+    if (line !== 'none') g.fillRect(0, 0, 2, s);
+    if (line === 'corner') g.fillRect(0, 0, s, 2);
+  }, seed);
+  T.devLight = devTile('#9c9fa5', 'none', 80); T.devDark = devTile('#8b8e94', 'none', 81);
+  T.devLightLine = devTile('#9c9fa5', 'edge', 82); T.devDarkLine = devTile('#8b8e94', 'edge', 83);
+  T.devLightCorner = devTile('#9c9fa5', 'corner', 84); T.devDarkCorner = devTile('#8b8e94', 'corner', 85);
+  const devChecker = (a: string, b: string, seed: number) => canvasTex(16, (g) => {
+    for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) { g.fillStyle = (x + y) % 2 ? b : a; g.fillRect(x * 8, y * 8, 8, 8); }
+  }, seed);
+  T.devWall = devChecker('#b9ab90', '#a7987c', 86);
+  T.devCover = devChecker('#8e9fb0', '#7d8ea0', 87);
 
   T.square = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;

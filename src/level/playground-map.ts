@@ -17,37 +17,40 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   const H = PG_HALF;
 
   // ---------- арена ----------
-  // пол: шахматный камень, каждые 5 м — светлая полоса гравия
+  // пол: служебная сетка — клетка 1 м двух тонов, разметка каждые 5 м (линия у края клетки, где x или z кратно 5)
   for (let x = -H; x <= H; x++) for (let z = -H; z <= H; z++) {
-    L.set(x, -1, z, x % 5 === 0 || z % 5 === 0 ? 'gravel' : (x + z) % 2 ? 'stone' : 'tiles');
+    const tone = (x + z) % 2 ? 'dark' : 'light';
+    const lx = x % 5 === 0, lz = z % 5 === 0;
+    // линия в текстуре — у края −X; поворот 1 переносит её к краю −Z… для угла линия и слева, и сверху
+    if (lx && lz) L.set(x, -1, z, `dev_${tone}_corner`, 0);
+    else if (lx) L.set(x, -1, z, `dev_${tone}_line`, 0);
+    else if (lz) L.set(x, -1, z, `dev_${tone}_line`, 1);
+    else L.set(x, -1, z, `dev_${tone}`);
   }
   // стены по периметру: дальние (−X, −Z) 3 блока, со стороны камеры (+X, +Z) — 1 блок; на юге проём к витрине
   const W = H + 1;
   for (let i = -W; i <= W; i++) {
-    for (let y = 0; y < 3; y++) { L.set(i, y, -W, 'bricks'); L.set(-W, y, i, 'bricks'); }
-    L.set(W, 0, i, 'bricks');
-    if (Math.abs(i) > 1) L.set(i, 0, W, 'bricks');
+    for (let y = 0; y < 3; y++) { L.set(i, y, -W, 'dev_wall'); L.set(-W, y, i, 'dev_wall'); }
+    L.set(W, 0, i, 'dev_wall');
+    if (Math.abs(i) > 1) L.set(i, 0, W, 'dev_wall');
   }
-  for (let i = -W; i <= W; i++) { L.set(i, -1, -W, 'bricks'); L.set(i, -1, W, 'bricks'); L.set(-W, -1, i, 'bricks'); L.set(W, -1, i, 'bricks'); }
+  for (let i = -W; i <= W; i++) { L.set(i, -1, -W, 'dev_wall'); L.set(i, -1, W, 'dev_wall'); L.set(-W, -1, i, 'dev_wall'); L.set(W, -1, i, 'dev_wall'); }
 
   // укрытия: низкие (14/16 — стоя стрелять поверх можно) и высокие 2 блока
-  for (let x = 5; x <= 7; x++) L.set(x, 0, -8, 'bricks_low');
-  for (let z = -14; z <= -12; z++) L.set(10, 0, z, 'cobble_low');
-  for (let x = 2; x <= 4; x++) L.fill(x, 0, -13, x, 1, -13, 'bricks');
-  for (let x = 14; x <= 15; x++) L.fill(x, 0, -9, x, 1, -9, 'bricks');
+  for (let x = 5; x <= 7; x++) L.set(x, 0, -8, 'dev_cover_low');
+  for (let z = -14; z <= -12; z++) L.set(10, 0, z, 'dev_cover_low');
+  for (let x = 2; x <= 4; x++) L.fill(x, 0, -13, x, 1, -13, 'dev_cover');
+  for (let x = 14; x <= 15; x++) L.fill(x, 0, -9, x, 1, -9, 'dev_cover');
   // колонна
-  L.fill(9, 0, -3, 9, 2, -3, 'bricks');
-  L.set(9, 3, -3, 'bricks_slab');
+  L.fill(9, 0, -3, 9, 2, -3, 'dev_wall');
   // диагональ (бывшая стена под 45°): рикошеты и скольжение
-  for (let k = 0; k < 5; k++) L.fill(17 + k, 0, -1 - k, 17 + k, 2, -1 - k, 'bricks_old');
+  for (let k = 0; k < 5; k++) L.fill(17 + k, 0, -1 - k, 17 + k, 2, -1 - k, 'dev_wall');
   // угол комнаты
-  for (let x = 16; x <= 21; x++) L.fill(x, 0, 5, x, 2, 5, 'bricks');
-  for (let z = 5; z <= 10; z++) L.fill(16, 0, z, 16, 2, z, 'bricks');
+  for (let x = 16; x <= 21; x++) L.fill(x, 0, 5, x, 2, 5, 'dev_wall');
+  for (let z = 5; z <= 10; z++) L.fill(16, 0, z, 16, 2, z, 'dev_wall');
   // коридор 3 м с проёмом 1 м посередине
-  for (let x = 2; x <= 12; x++) { L.fill(x, 0, 13, x, 1, 13, 'bricks'); L.fill(x, 0, 17, x, 1, 17, 'bricks'); }
-  L.fill(7, 0, 14, 7, 1, 14, 'bricks'); L.fill(7, 0, 16, 7, 1, 16, 'bricks');
-  // факелы по углам, чтобы было видно свет
-  for (const [x, z] of [[-23, -23], [23, -23], [-23, 23]]) L.set(x, 0, z, 'torch');
+  for (let x = 2; x <= 12; x++) { L.fill(x, 0, 13, x, 1, 13, 'dev_wall'); L.fill(x, 0, 17, x, 1, 17, 'dev_wall'); }
+  L.fill(7, 0, 14, 7, 1, 14, 'dev_wall'); L.fill(7, 0, 16, 7, 1, 16, 'dev_wall');
 
   // ---------- витрина ----------
   const Z0 = W + 1, Z1 = W + 20;
@@ -58,7 +61,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   labels.push({ text: 'витрина блоков: все блоки палитры', x: 0, z: Z0 + 1.2, size: 1.1 });
 
   // ряд 1–2: все «твёрдые» блоки палитры по одному, подпись под каждым
-  const solids = BLOCKS.filter((b) => b.name !== 'air' && !b.scatter && !b.name.endsWith('_stairs') && b.parts.length && b.collide > 0);
+  const solids = BLOCKS.filter((b) => b.category !== 'служебные' && !b.scatter && !b.name.endsWith('_stairs') && b.parts.length && b.collide > 0);
   let i = 0;
   for (const b of solids) {
     const x = -22 + (i % 23) * 2, z = Z0 + 4 + Math.floor(i / 23) * 4;
