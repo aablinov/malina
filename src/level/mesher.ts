@@ -17,6 +17,42 @@ import { getShape } from './shapes';
 interface LightSpot { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
 
 const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire'];
+
+/**
+ * «Рентген»: блоки между камерой и героем (в цилиндре радиуса uXrayR вокруг луча камера → герой,
+ * выше ног героя) растворяются сеточкой Байера, чтобы стены не закрывали бойца. uXrayR = 0 — выключено.
+ */
+const XRAY_UNIFORMS = { uXrayHero: { value: new THREE.Vector3() }, uXrayCam: { value: new THREE.Vector3() }, uXrayR: { value: 0 } };
+function withXray(m: THREE.Material): THREE.Material {
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, XRAY_UNIFORMS);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vXrayPos;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvXrayPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vXrayPos;
+uniform vec3 uXrayHero; uniform vec3 uXrayCam; uniform float uXrayR;
+float xrayBayer() {
+  int x = int(mod(gl_FragCoord.x, 4.0)), y = int(mod(gl_FragCoord.y, 4.0));
+  int i = x + y * 4;
+  int m[16]; m[0]=0; m[1]=8; m[2]=2; m[3]=10; m[4]=12; m[5]=4; m[6]=14; m[7]=6; m[8]=3; m[9]=11; m[10]=1; m[11]=9; m[12]=15; m[13]=7; m[14]=13; m[15]=5;
+  for (int k = 0; k < 16; k++) if (k == i) return (float(m[k]) + 0.5) / 16.0;
+  return 0.5;
+}`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+if (uXrayR > 0.0 && vXrayPos.y > uXrayHero.y - 0.55) {
+  vec3 ab = uXrayHero - uXrayCam;
+  float t = clamp(dot(vXrayPos - uXrayCam, ab) / dot(ab, ab), 0.0, 1.0);
+  if (t < 0.97) {
+    float d = length(vXrayPos - (uXrayCam + ab * t));
+    float hole = smoothstep(uXrayR, uXrayR * 0.45, d);
+    if (xrayBayer() < hole) discard;
+  }
+}`);
+  };
+  return m;
+}
 const AO_SHADE = [0.5, 0.68, 0.84, 1];
 const MAX_LIGHTS = 8;
 
@@ -58,8 +94,8 @@ export class LevelRenderer {
     this.acidTex = T.acid;
     this.fireTex = T.fire;
     this.mats = {
-      opaque: new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true }),
-      cutout: new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide }),
+      opaque: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true })),
+      cutout: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide })),
       water: new THREE.MeshLambertMaterial({ map: T.water, vertexColors: true, transparent: true, opacity: 0.8 }),
       acid: new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
@@ -179,6 +215,13 @@ export class LevelRenderer {
     }
     this.meshes.set(key, meshes);
     if (spots.length) this.lights.set(key, spots);
+  }
+
+  /** Прозрачность стен между камерой и героем: hero — точка груди героя, radius — радиус окна (0 — выключить) */
+  setXray(hero: THREE.Vector3, cam: THREE.Vector3, radius: number): void {
+    XRAY_UNIFORMS.uXrayHero.value.copy(hero);
+    XRAY_UNIFORMS.uXrayCam.value.copy(cam);
+    XRAY_UNIFORMS.uXrayR.value = radius;
   }
 
   /** Анимация воды и огня, ближайшие к focus источники света. night 0..1 */
