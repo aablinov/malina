@@ -39,6 +39,8 @@ export interface BlockDef {
   connects?: boolean;
   /** Есть смысл поворачивать (ступени, брёвна) */
   rotatable?: boolean;
+  /** Ступени: низкая половина 0,5, высокая 1 — по ним поднимаются на блок */
+  stairs?: boolean;
 }
 
 const cube = (tex: Record<string, string | string[]>, obj = 'cube'): Part => ({ obj, tex });
@@ -55,7 +57,7 @@ const solid = (name: string, title: string, cat: string, tex: string | string[] 
 function stoneSet(name: string, title: string, cat: string, tex: string | string[], wall = true): BlockDef[] {
   const out = [
     solid(name, title, cat, tex),
-    B(`${name}_stairs`, `${title}: ступени`, cat, [cube(same(tex), 'stairs')], { rotatable: true, collide: 0.5, connects: true }),
+    B(`${name}_stairs`, `${title}: ступени`, cat, [cube(same(tex), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true }),
     B(`${name}_slab`, `${title}: полублок`, cat, [cube(same(tex), 'slab')], { collide: 0.5, connects: true }),
   ];
   if (wall) out.push(B(`${name}_wall`, `${title}: стенка`, cat, [cube(same(tex), 'wall_post'), { obj: 'wall_seg', tex: same(tex), connect: true }], { collide: 1.5, connects: true }));
@@ -96,9 +98,9 @@ export const BLOCKS: BlockDef[] = [
   B('fence', 'Забор', 'дерево', [cube(same('planks'), 'fence_post'), { obj: 'fence_rail', tex: same('planks'), connect: true }], { collide: 1.5, connects: true }),
   B('crate', 'Ящик', 'дерево', [cube(same('crate'), 'crate')], { connects: true }),
   B('rail', 'Бортик грядки', 'дерево', [cube(same('logSide'), 'rail')], { collide: 0, rotatable: true }),
-  B('roof_stairs', 'Черепица: ступени', 'дерево', [cube(same('roof'), 'stairs')], { rotatable: true, collide: 0.5, connects: true }),
+  B('roof_stairs', 'Черепица: ступени', 'дерево', [cube(same('roof'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true }),
   B('roof_slab', 'Черепица: полублок', 'дерево', [cube(same('roof'), 'slab')], { collide: 0.5, connects: true }),
-  B('roof_dark_stairs', 'Черепица тёмная: ступени', 'дерево', [cube(same('roofDark'), 'stairs')], { rotatable: true, collide: 0.5, connects: true }),
+  B('roof_dark_stairs', 'Черепица тёмная: ступени', 'дерево', [cube(same('roofDark'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true }),
   B('roof_dark_slab', 'Черепица тёмная: полублок', 'дерево', [cube(same('roofDark'), 'slab')], { collide: 0.5, connects: true }),
   solid('hay', 'Сено', 'дерево', { top: 'hayTop', side: 'hay', bottom: 'hayTop' }),
 

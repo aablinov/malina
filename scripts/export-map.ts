@@ -2,14 +2,14 @@
  * Экспорт сгенерированных карт в assets/maps/*.json.
  * Node ≥ 22.18 выполняет TypeScript сам (type stripping), сборщик не нужен:
  *
- *   node scripts/export-map.ts garden   — огород → assets/maps/garden.json
+ *   node scripts/export-map.ts playground — плейграунд → assets/maps/playground.json
  *   node scripts/export-map.ts rooms    — комнаты подземелья → assets/maps/rooms/*.json
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildGardenLevel } from '../src/level/garden.ts';
 import { ROOM_TEMPLATES, roomFromTemplate } from '../src/level/rooms.ts';
+import { buildPlaygroundLevel } from '../src/level/playground-map.ts';
 import type { Level } from '../src/level/level.ts';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'maps');
@@ -26,6 +26,6 @@ function save(sub: string, name: string, level: Level): void {
 }
 
 const what = process.argv[2] ?? 'garden';
-if (what === 'garden') save('', 'garden', buildGardenLevel());
+if (what === 'playground') save('', 'playground', buildPlaygroundLevel().level);
 else if (what === 'rooms') for (const t of ROOM_TEMPLATES) save('rooms', t.name, roomFromTemplate(t));
-else { console.error(`Нечего экспортировать: «${what}». Есть: garden, rooms`); process.exit(1); }
+else { console.error(`Нечего экспортировать: «${what}». Есть: playground, rooms`); process.exit(1); }

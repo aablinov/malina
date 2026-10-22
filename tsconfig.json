@@ -16,7 +16,5 @@
     "skipLibCheck": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "vite.config.ts"],
-  // файлы режима «открытой карты» не отслежены в git и не сходятся с закоммиченной версией — вне проверки до этапа 1
-  "exclude": ["src/lobby.ts", "src/mission.ts", "src/minimap.ts"]
+  "include": ["src", "vite.config.ts"]
 }

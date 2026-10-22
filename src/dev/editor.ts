@@ -208,7 +208,7 @@ export function runEditor(): void {
       const raw = localStorage.getItem(EDITOR_STORAGE);
       if (raw) return Level.fromJSON(JSON.parse(raw) as LevelJSON);
     } catch { /* повреждённое автосохранение — берём встроенную карту */ }
-    const first = maps['garden.json'] ?? maps[Object.keys(maps)[0]];
+    const first = maps['playground.json'] ?? maps[Object.keys(maps)[0]];
     return first ? Level.fromJSON(first) : new Level('Новая карта');
   }
   function autosave(): void {

@@ -11,21 +11,44 @@ import { Props, type LootKind } from '../props';
 import { Jailer, JAILER_NAMES, type JailerContext } from '../jailer';
 import { Beetle, type BeetleKind } from '../beetle';
 import { distToObstacle, NavGrid } from '../nav';
-import { obstacle, raycastObstacles, resolveCircle, type Obstacle } from '../collision';
+import { raycastObstacles, resolveCircle, type Obstacle } from '../collision';
 import { FIREARMS, PRIMARIES, type FirearmId } from '../firearms';
 import { FX } from '../fx';
 import { rng, traceShot, type FireRequest, type GunEvent, type GunState, type Shootable } from '../gunplay';
 import { emptyInput, Hero, type HeroInput } from '../hero';
 import { makeTextures } from '../textures';
+import { Level, type LevelJSON } from '../level/level.ts';
+import { LevelRenderer } from '../level/mesher';
+import { obstaclesOf, terrainOf } from '../level/collide.ts';
+import { mapByName } from '../level/maps';
+import type { PgLabel } from '../level/playground-map.ts';
 import { ARACHNIDS, BEETLES, CALIBERS, GRENADE, GUNS, HERO, JAILERS, snapshotTuning, type ArachnidKind, type JailerKind } from '../tuning';
 import { Dummy, Spits, type Spit } from './dummies';
 import { Overlays } from './overlay';
+import { DEV_TOOLS, openEditor } from '../devflag';
 import { button, Panel, select, toggle } from './panel';
 import '../style.css';
 import './playground.css';
 
 declare global {
   interface Window { __malina?: unknown }
+}
+
+/** ?map=editor — автосохранение редактора (кнопка «Играть»), ?map=<имя> — файл из assets/maps/, иначе playground.json */
+function pickMap(): LevelJSON {
+  const name = new URLSearchParams(window.location.search).get('map');
+  if (name === 'editor') {
+    try {
+      const raw = localStorage.getItem('malina.editor.level');
+      if (raw) return JSON.parse(raw) as LevelJSON;
+    } catch { /* нет сохранения — плейграунд */ }
+  } else if (name) {
+    const j = mapByName(name);
+    if (j) return j;
+  }
+  const j = mapByName('playground');
+  if (!j) throw new Error('Нет карты assets/maps/playground.json — запусти npm run map:playground');
+  return j;
 }
 
 export function runPlayground(): void {
@@ -101,52 +124,17 @@ export function runPlayground(): void {
   const overlayEl = $('overlay');
   const fx = new FX(scene, camera, T, overlayEl);
   const HALF = 24;
-  const obstacles: Obstacle[] = [];
-  /** Высокие стены, которые становятся прозрачными, если закрывают героя */
+  // ---------- Уровень из блоков ----------
+  // Арена и витрина — карта assets/maps/playground.json (генератор src/level/playground-map.ts, `npm run map:playground`,
+  // правка — редактор ?dev=editor). Препятствия для бойца, врагов и пуль собираются из блоков.
+  const level = Level.fromJSON(pickMap());
+  const view = new LevelRenderer(scene, level, T);
+  const terrain = terrainOf(level);
+  const bounds = level.getBounds() ?? { minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF, minY: -1, maxY: 0 };
+  const NAV_HALF = Math.max(Math.abs(bounds.minX), Math.abs(bounds.maxX), Math.abs(bounds.minZ), Math.abs(bounds.maxZ)) + 1;
+  const obstacles: Obstacle[] = obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ);
+  /** Высокие стены, которые становятся прозрачными, если закрывают героя (у блочных стен пока нет) */
   const xray: { mesh: THREE.Mesh; mat: THREE.MeshLambertMaterial; box: THREE.Box3 }[] = [];
-
-  function floorTex(): THREE.CanvasTexture {
-    // тайл 10 × 10 м: клетка 1 м, разметка каждые 5 м
-    const px = 16, n = 10, size = px * n;
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const g = c.getContext('2d') as CanvasRenderingContext2D;
-    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-      g.fillStyle = (x + y) % 2 ? '#8b8e94' : '#9c9fa5';
-      g.fillRect(x * px, y * px, px, px);
-    }
-    g.fillStyle = '#5f6268';
-    for (const k of [0, 5]) { g.fillRect(k * px - 1, 0, 2, size); g.fillRect(0, k * px - 1, size, 2); }
-    g.fillRect(size - 1, 0, 1, size); g.fillRect(0, size - 1, size, 1);
-    const t = new THREE.CanvasTexture(c);
-    t.magFilter = THREE.NearestFilter;
-    t.minFilter = THREE.LinearMipmapLinearFilter;
-    t.anisotropy = 8;
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.repeat.set((HALF * 2) / 10, (HALF * 2) / 10);
-    t.offset.set(0.6, 0.6);
-    return t;
-  }
-
-  function wallTex(a: string, b: string): THREE.CanvasTexture {
-    const c = document.createElement('canvas');
-    c.width = c.height = 32;
-    const g = c.getContext('2d') as CanvasRenderingContext2D;
-    for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) { g.fillStyle = (x + y) % 2 ? b : a; g.fillRect(x * 16, y * 16, 16, 16); }
-    const t = new THREE.CanvasTexture(c);
-    t.magFilter = THREE.NearestFilter;
-    t.minFilter = THREE.LinearMipmapLinearFilter;
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
-    return t;
-  }
-
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2), new THREE.MeshLambertMaterial({ map: floorTex() }));
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  scene.add(floor);
 
   // крест нулевой точки
   const crossMat = new THREE.MeshBasicMaterial({ color: '#2b2e33' });
@@ -155,61 +143,6 @@ export function runPlayground(): void {
     m.position.y = 0.006;
     scene.add(m);
   }
-
-  const WALL_TEX = wallTex('#b9ab90', '#a7987c');
-  const COVER_TEX = wallTex('#8e9fb0', '#7d8ea0');
-
-  /** Коробка с UV в метрах: клетка 1 × 1 м на каждой грани */
-  function meterBox(w: number, h: number, d: number): THREE.BoxGeometry {
-    const g = new THREE.BoxGeometry(w, h, d);
-    const uv = g.getAttribute('uv') as THREE.BufferAttribute;
-    const dims: [number, number][] = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
-    for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) {
-      const k = f * 4 + i;
-      uv.setXY(k, uv.getX(k) * dims[f][0] / 2, uv.getY(k) * dims[f][1] / 2);
-    }
-    return g;
-  }
-
-  /**
-   * Стена или укрытие. visH — видимая высота (со стороны камеры стены низкие), h — высота для пуль.
-   */
-  function wall(x: number, z: number, w: number, d: number, h: number, opts: { rot?: number; visH?: number; tex?: THREE.Texture; xray?: boolean } = {}): void {
-    const visH = opts.visH ?? h;
-    const mat = new THREE.MeshLambertMaterial({ map: opts.tex ?? WALL_TEX, transparent: !!opts.xray });
-    const m = new THREE.Mesh(meterBox(w, visH, d), mat);
-    m.position.set(x, visH / 2, z);
-    m.rotation.y = THREE.MathUtils.degToRad(opts.rot ?? 0);
-    m.castShadow = m.receiveShadow = true;
-    scene.add(m);
-    obstacles.push(obstacle(x, z, w, d, h, opts.rot ?? 0));
-    if (opts.xray) { m.updateMatrixWorld(); xray.push({ mesh: m, mat, box: new THREE.Box3().setFromObject(m) }); }
-  }
-
-  // стены по периметру: дальние 3 м, со стороны камеры (+X, +Z) — 0,5 м
-  const T_W = 1;
-  wall(0, -HALF - T_W / 2, HALF * 2 + T_W * 2, T_W, 3);
-  wall(-HALF - T_W / 2, 0, T_W, HALF * 2, 3);
-  wall(0, HALF + T_W / 2, HALF * 2 + T_W * 2, T_W, 3, { visH: 0.5 });
-  wall(HALF + T_W / 2, 0, T_W, HALF * 2, 3, { visH: 0.5 });
-
-  // укрытия: низкие 0,9 м и высокие 2 м
-  wall(6, -8, 3, 0.6, 0.9, { tex: COVER_TEX });
-  wall(10.5, -13, 0.6, 3, 0.9, { tex: COVER_TEX });
-  wall(3, -13, 3, 0.6, 2, { tex: COVER_TEX, xray: true });
-  wall(14.5, -9, 2, 0.6, 2, { tex: COVER_TEX, xray: true });
-  // колонна
-  wall(9, -3.5, 1, 1, 3, { xray: true });
-  // стена под 45° — для рикошетов и скольжения
-  wall(19, -3, 6, 0.6, 3, { rot: 45, xray: true });
-  // угол комнаты
-  wall(18.3, 5, 6, 0.6, 3, { xray: true });
-  wall(15.6, 7.7, 0.6, 6, 3, { xray: true });
-  // коридор шириной 2 м с дверным проёмом 1 м посередине
-  wall(7, 13.7, 10, 0.6, 2.4, { xray: true });
-  wall(7, 16.3, 10, 0.6, 2.4, { xray: true });
-  wall(7, 14.25, 0.3, 0.5, 2.4, { xray: true });
-  wall(7, 15.75, 0.3, 0.5, 2.4, { xray: true });
 
   // ---------- Надписи на полу ----------
   function floorLabel(text: string, x: number, z: number, size = 1, rot = 0, color = '#2b2e33'): void {
@@ -245,12 +178,13 @@ export function runPlayground(): void {
   }
   floorLabel('огневой рубеж', RANGE_X, LINE_Z + 0.9, 1);
   floorLabel('стрельбище', RANGE_X, LINE_Z + 2.2, 1.6);
-  floorLabel('укрытия 0,9 м', 7.5, -6.6, 0.9);
+  floorLabel('укрытия низкие', 7.5, -6.6, 0.9);
   floorLabel('укрытия 2 м', 6, -15, 0.9);
   floorLabel('колонна', 9, -2.3, 0.9);
-  floorLabel('стена 45°', 17, -0.4, 0.9);
   floorLabel('угол', 18, 7, 0.9);
-  floorLabel('коридор 2 м · проём 1 м', 7, 18, 0.9);
+  floorLabel('коридор 3 м · проём 1 м', 7, 18.8, 0.9);
+  floorLabel('диагональ', 17, -0.4, 0.9);
+  for (const l of (level.meta.labels as PgLabel[] | undefined) ?? []) floorLabel(l.text, l.x, l.z, l.size ?? 0.6, 0, '#1f3a22');
   floorLabel('0', 0.5, 0.6, 0.8);
 
   // ---------- Мишени ----------
@@ -298,7 +232,7 @@ export function runPlayground(): void {
     if (worldVer !== props.version) { worldCache = obstacles.concat(props.solids); worldVer = props.version; }
     return worldCache;
   };
-  let nav = new NavGrid(HALF, world(), 0.75);
+  let nav = new NavGrid(NAV_HALF, world(), 0.75);
   let covers = buildCoverPoints(world(), nav);
   let navVer = props.version;
   let berries = 0;
@@ -772,10 +706,11 @@ export function runPlayground(): void {
   let showFps = false;
 
   window.addEventListener('keydown', (e) => {
-    if (['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9'].includes(e.code)) e.preventDefault();
+    if (['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10'].includes(e.code)) e.preventDefault();
     if (e.ctrlKey && /^Digit\d$/.test(e.code)) e.preventDefault();
     initAudio();
     if (e.repeat) return;
+    if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
     keys.add(e.code);
     if (e.ctrlKey) {
       const n = Number(e.code.slice(5));
@@ -991,7 +926,10 @@ export function runPlayground(): void {
     simTime += dt;
     readInput();
     hero.infiniteGrenades = infiniteAmmo;
-    hero.update(dt, input, world());
+    // стены из блоков боец проходит через terrain (ступени, высота), а предметы склада — как плоские препятствия
+    hero.update(dt, input, props.solids, terrain);
+    view.sync();
+    view.update(simTime, 0.4, hero.pos);
 
     // склад: E у предмета, лечение у терминала, взрывы бочек, лут
     if (interactReq) {
@@ -1002,7 +940,7 @@ export function runPlayground(): void {
     const healed = props.update(dt, hero);
     if (healed > 0) hero.hp = Math.min(hero.maxHp, hero.hp + healed);
     // разбили ящик или взорвали бочку — пересобрать навигацию и укрытия
-    if (navVer !== props.version) { nav = new NavGrid(HALF, world(), 0.75); covers = buildCoverPoints(world(), nav); navVer = props.version; }
+    if (navVer !== props.version) { nav = new NavGrid(NAV_HALF, world(), 0.75); covers = buildCoverPoints(world(), nav); navVer = props.version; }
     clearEdges();
     if (hero.down) { downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
 
