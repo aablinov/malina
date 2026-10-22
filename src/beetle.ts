@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { CFG, type Vec2 } from './config';
 import type { Bush } from './bush';
+import type { Terrain } from './level/collide.ts';
+import type { NavGrid } from './nav';
+
+/** Уровень для жуков: блоки (высота, стены) и навигационная сетка в обход стен */
+export interface BeetleWorld { terrain: Terrain; nav: NavGrid }
 
 const OUTLINE = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.25, 0.25), side: THREE.BackSide, toneMapped: false });
 
@@ -92,6 +97,9 @@ export class Beetle {
   private burstT = 0;
   private strafe = Math.random() < 0.5 ? 1 : -1;
   private strafeT = 0;
+  /** Следующая точка пути в обход стен и когда пересчитать путь */
+  private wp: THREE.Vector3 | null = null;
+  private pathT = 0;
   private sac: THREE.Mesh | null = null;
   private sacMat: THREE.MeshStandardMaterial | null = null;
 
@@ -235,7 +243,7 @@ export class Beetle {
   /** Жук стреляет издалека */
   get ranged(): RangedStats | undefined { return this.K.ranged; }
 
-  update(dt: number, t: number, bushes: readonly (Bush | null)[], player: BeetleTarget, beetles: readonly Beetle[], onBite: BiteHandler, onShoot: ShootHandler): void {
+  update(dt: number, t: number, bushes: readonly (Bush | null)[], player: BeetleTarget, beetles: readonly Beetle[], onBite: BiteHandler, onShoot: ShootHandler, world?: BeetleWorld): void {
     this.spawnT += dt;
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     if (this.frozenT > 0) {
@@ -249,7 +257,7 @@ export class Beetle {
       const tint = this.iceShow ? [0.25, 0.6, 0.9] : [0.35, 0.3, 0.05];
       for (const m of this.mats) { m.emissive.setRGB(fl + tint[0], fl + tint[1], fl + tint[2]); m.emissiveIntensity = 1; }
       if (!this.iceShow) this.body.rotation.z = Math.sin(this.frozenT * 30) * 0.08;
-      this.group.position.set(this.pos.x, 0, this.pos.z);
+      this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
       return;
     }
     this.ice.visible = false;
@@ -271,6 +279,19 @@ export class Beetle {
 
     const dx = dest.x - this.pos.x, dz = dest.z - this.pos.z;
     const dist = Math.hypot(dx, dz);
+    // в обход стен: раз в 0,4 с спрашиваем у сетки следующую точку, если прямой путь закрыт
+    let mx = dx, mz = dz, mdist = dist;
+    if (world) {
+      this.pathT -= dt;
+      if (this.pathT <= 0) {
+        this.pathT = 0.4;
+        this.wp = world.nav.clearLine(this.pos.x, this.pos.z, dest.x, dest.z) ? null : (world.nav.path(this.pos, dest)[0] ?? null);
+      }
+      if (this.wp) {
+        mx = this.wp.x - this.pos.x; mz = this.wp.z - this.pos.z; mdist = Math.hypot(mx, mz);
+        if (mdist < 0.3) { this.wp = null; mx = dx; mz = dz; mdist = dist; }
+      }
+    }
     this.chewing = false;
     let mv = 0;
     const sp = this.speed * Math.min(1, this.spawnT * 2);
@@ -278,7 +299,7 @@ export class Beetle {
       // держит дистанцию: подходит, отступает, кружит вбок
       this.strafeT -= dt;
       if (this.strafeT <= 0) { this.strafe = -this.strafe; this.strafeT = 1.2 + Math.random() * 1.5; }
-      const nx = dx / Math.max(dist, 1e-4), nz = dz / Math.max(dist, 1e-4);
+      const nx = mx / Math.max(mdist, 1e-4), nz = mz / Math.max(mdist, 1e-4);
       let fwd = 0;
       if (dist > R.range) fwd = 1;
       else if (dist < R.range * 0.55) fwd = -0.8;
@@ -304,8 +325,8 @@ export class Beetle {
     } else {
       const reach = this.passedGate && target ? 0.45 + this.radius * 0.9 : (this.chasePlayer ? 1.1 : 0.3);
       if (dist > reach) {
-        this.pos.x += (dx / dist) * sp * dt;
-        this.pos.z += (dz / dist) * sp * dt;
+        this.pos.x += (mx / Math.max(mdist, 1e-4)) * sp * dt;
+        this.pos.z += (mz / Math.max(mdist, 1e-4)) * sp * dt;
         mv = 1;
       } else if (this.passedGate && target) {
         this.chewing = true;
@@ -324,6 +345,12 @@ export class Beetle {
     }
     this.pos.addScaledVector(this.knock, dt);
     this.knock.multiplyScalar(Math.exp(-8 * dt));
+    if (world) {
+      // стены из блоков не пускают, пол задаёт высоту
+      world.terrain.resolve(this.pos, this.radius * 0.8, 0.9);
+      const floor = world.terrain.floorAt(this.pos.x, this.pos.z, this.pos.y);
+      if (floor !== -Infinity) this.pos.y = floor >= this.pos.y ? floor : Math.max(floor, this.pos.y - 9 * dt);
+    }
     if (this.passedGate) {
       // за стены поля не уходят
       const B = CFG.FIELD + 0.5;
@@ -355,7 +382,7 @@ export class Beetle {
 
     this.body.scale.setScalar(Math.min(1, this.spawnT * 3));
     this.body.position.y = Math.abs(Math.sin(this.phase * 2)) * 0.03 * mv;
-    this.group.position.set(this.pos.x, 0, this.pos.z);
+    this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
     this.group.rotation.y = this.facing;
   }
 

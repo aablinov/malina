@@ -98,6 +98,9 @@ export function runGame(): void {
   const overlay = $('overlay');
   const fx = new FX(scene, camera, T, overlay);
   const player = new Player(scene, T, fx);
+  // на картах кроме огорода герой появляется в точке появления карты
+  const spawnAt = world.limit === Infinity && world.level.spawn ? { x: world.level.spawn[0], z: world.level.spawn[2] } : RESPAWN;
+  if (spawnAt !== RESPAWN) { player.pos.set(spawnAt.x, 0, spawnAt.z); camTarget.set(spawnAt.x, 0, spawnAt.z); }
   const dn = new DayNight();
   const hoverMarker = fx.marker(new THREE.Color(3, 0.4, 0.4), 1.3);
   hoverMarker.visible = false;
@@ -234,6 +237,7 @@ export function runGame(): void {
     light: lightFlash,
     owned: ammoOwned,
     colliders: () => world.colliders,
+    terrain: world.terrain,
   });
 
   // ---------- Оружие и лавка ----------
@@ -704,7 +708,7 @@ export function runGame(): void {
     if (!play) {
       fx.update(dt, window.innerWidth, window.innerHeight);
       for (const b of G.bushes) if (b) b.update(0, gt, false);
-      if (G.state === 'menu') player.update(dt, new Set<string>(), null, world.colliders, world.terrain);
+      if (G.state === 'menu') player.update(dt, new Set<string>(), null, world.colliders, world.terrain, world.limit);
       return;
     }
 
@@ -725,11 +729,11 @@ export function runGame(): void {
     if (player.down) {
       G.respawnT -= sdt;
       if (G.respawnT <= 0) {
-        player.revive(RESPAWN.x, RESPAWN.z);
+        player.revive(spawnAt.x, spawnAt.z);
         fx.burst(player.pos.clone().setY(0.6), [new THREE.Color(3, 2.6, 1)], 16, { speed: 2, up: 3, size: 0.08, life: 0.7, glow: true, gravity: 0 });
       }
     }
-    player.update(sdt, keys, aim, world.colliders, world.terrain);
+    player.update(sdt, keys, aim, world.colliders, world.terrain, world.limit);
     combat.trigger(G.firing && !player.down, sdt);
     combat.update(sdt, gt);
     // пули понемногу копятся сами, чтобы автомат не замолкал насовсем
@@ -763,7 +767,7 @@ export function runGame(): void {
     // жуки
     for (const b of G.beetles) {
       if (b.dead) continue;
-      b.update(sdt, gt, G.bushes, player, G.beetles, onBite, onShoot);
+      b.update(sdt, gt, G.bushes, player, G.beetles, onBite, onShoot, world);
       // ближние кусают героя, если он рядом
       if (!player.down && b.frozenT <= 0 && !b.ranged) {
         const d = Math.hypot(b.pos.x - player.pos.x, b.pos.z - player.pos.z);

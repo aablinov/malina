@@ -21,6 +21,8 @@ export interface LevelJSON {
   /** Точки появления, свет, предметы — заполняет редактор позже */
   entities: LevelEntity[];
   spawn?: [number, number, number];
+  /** Произвольные данные: у комнат-заготовок — тип и двери */
+  meta?: Record<string, unknown>;
 }
 
 export interface LevelEntity { kind: string; x: number; y: number; z: number; rot?: number; data?: Record<string, unknown> }
@@ -38,6 +40,7 @@ export class Level {
   private readonly defs: BlockDef[] = [blockDef('air')];
   readonly entities: LevelEntity[] = [];
   spawn: [number, number, number] | null = null;
+  meta: Record<string, unknown> = {};
   /** Чанки, которые надо перестроить (ключи) */
   readonly dirty = new Set<string>();
   version = 0;
@@ -105,6 +108,7 @@ export class Level {
     this.chunks.clear();
     this.entities.length = 0;
     this.spawn = null;
+    this.meta = {};
     this.version++;
     this.bounds = null;
   }
@@ -162,7 +166,7 @@ export class Level {
     }
     const out: LevelJSON['rows'] = [];
     for (const [k, runs] of rows) { const [y, z] = k.split(',').map(Number); out.push([y, z, runs]); }
-    return { format: 'malina-level', version: 1, name: this.name, palette: this.palette.slice(), rows: out, entities: this.entities.slice(), ...(this.spawn ? { spawn: this.spawn } : {}) };
+    return { format: 'malina-level', version: 1, name: this.name, palette: this.palette.slice(), rows: out, entities: this.entities.slice(), ...(this.spawn ? { spawn: this.spawn } : {}), ...(Object.keys(this.meta).length ? { meta: this.meta } : {}) };
   }
 
   static fromJSON(j: LevelJSON): Level {
@@ -175,6 +179,7 @@ export class Level {
     }
     L.entities.push(...(j.entities ?? []));
     L.spawn = j.spawn ?? null;
+    Object.assign(L.meta, j.meta ?? {});
     L.dirty.clear();
     return L;
   }

@@ -6,6 +6,8 @@ import { LevelRenderer } from '../level/mesher';
 import { BLOCKS, CATEGORIES, blockDef, type BlockDef } from '../level/palette.ts';
 import { raycastVoxels } from '../level/collide.ts';
 import { DIRS } from '../level/obj.ts';
+import { MAPS, ROOMS } from '../level/maps';
+import { buildFloor } from '../level/dungeon.ts';
 import './editor.css';
 
 /**
@@ -23,7 +25,7 @@ import './editor.css';
 export const EDITOR_STORAGE = 'malina.editor.level';
 const QUICK = ['grass', 'dirt', 'stone', 'cobble', 'bricks', 'planks', 'log', 'leaves', 'water'];
 
-const maps = import.meta.glob('../../assets/maps/*.json', { eager: true, import: 'default' }) as Record<string, LevelJSON>;
+const maps = MAPS;
 
 interface Edit { x: number; y: number; z: number; was: [string, number]; now: [string, number] }
 
@@ -92,6 +94,7 @@ export function runEditor(): void {
       <input id="edName" class="ed-name" spellcheck="false" />
       <button id="edNew">Новая</button><button id="edOpen">Открыть…</button><button id="edSave">Скачать JSON</button>
       <select id="edMaps"><option value="">Встроенные карты…</option></select>
+      <button id="edFloor" title="Собрать этаж подземелья из комнат-заготовок">Этаж…</button>
       <button id="edPlay" title="Открыть игру с этой картой">Играть ▶</button>
       <span class="ed-stat" id="edStat"></span>
     </div>
@@ -130,7 +133,14 @@ export function runEditor(): void {
     }
   }
   const mapsSel = $<HTMLSelectElement>('edMaps');
-  for (const path of Object.keys(maps)) { const o = document.createElement('option'); o.value = path; o.textContent = `${maps[path].name} (${path.split('/').pop()})`; mapsSel.appendChild(o); }
+  for (const path of Object.keys(maps).sort()) { const o = document.createElement('option'); o.value = path; o.textContent = `${maps[path].name} (${path})`; mapsSel.appendChild(o); }
+  $('edFloor').addEventListener('click', () => {
+    const raw = prompt('Этаж подземелья: seed (и номер этажа через пробел)', `${Math.floor(Math.random() * 100000)} 1`);
+    if (!raw) return;
+    const [seed, floor] = raw.split(/\s+/).map(Number);
+    try { setLevel(buildFloor({ seed: seed || 1, floor: floor || 1, rooms: ROOMS })); toast(`Этаж собран: seed ${seed || 1}`); }
+    catch (e) { toast(`Не собрался: ${(e as Error).message}`); }
+  });
   mapsSel.addEventListener('change', () => { if (mapsSel.value) { setLevel(Level.fromJSON(maps[mapsSel.value])); toast(`Открыта «${level.name}»`); } mapsSel.value = ''; mapsSel.blur(); });
   $('edNew').addEventListener('click', () => { if (confirm('Начать новую карту? Несохранённое пропадёт.')) { const L = new Level('Новая карта'); L.fill(-8, -1, -8, 8, -1, 8, 'grass'); L.spawn = [0, 0, 0]; setLevel(L); } });
   $('edSave').addEventListener('click', save);
@@ -198,7 +208,7 @@ export function runEditor(): void {
       const raw = localStorage.getItem(EDITOR_STORAGE);
       if (raw) return Level.fromJSON(JSON.parse(raw) as LevelJSON);
     } catch { /* повреждённое автосохранение — берём встроенную карту */ }
-    const first = maps[Object.keys(maps).find((k) => k.endsWith('garden.json')) ?? Object.keys(maps)[0]];
+    const first = maps['garden.json'] ?? maps[Object.keys(maps)[0]];
     return first ? Level.fromJSON(first) : new Level('Новая карта');
   }
   function autosave(): void {

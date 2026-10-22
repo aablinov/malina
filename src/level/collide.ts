@@ -1,5 +1,6 @@
 import type { Level } from './level.ts';
 import { obstacle, type Obstacle } from '../collision';
+import { DIRS } from './obj.ts';
 
 /**
  * Столкновения тел с блоками уровня, с учётом высоты.
@@ -22,6 +23,8 @@ export interface Terrain {
   resolve(pos: { x: number; y: number; z: number }, r: number, h?: number): boolean;
   /** Пересекает ли отрезок (на высоте y) блок выше y */
   blocked(ax: number, az: number, bx: number, bz: number, y: number): boolean;
+  /** Точка, где отрезок на высоте y упирается в блок, и нормаль грани; null — путь свободен */
+  wallHit(ax: number, az: number, bx: number, bz: number, y: number): { x: number; z: number; nx: number; nz: number } | null;
 }
 
 /** Верх блока для столкновений (y + высота) или −Infinity, если проходимый */
@@ -84,13 +87,23 @@ export function terrainOf(L: Level): Terrain {
     }
     return false;
   };
-  return { floorAt, resolve, blocked };
+  const wallHit = (ax: number, az: number, bx: number, bz: number, y: number) => {
+    const dx = bx - ax, dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return null;
+    const h = raycastVoxels(L, ax, y, az, dx / len, 0, dz / len, len, Infinity, (x, cy, z) => collideTop(L, x, cy, z) > y);
+    if (!h || h.face < 0 || h.face > 3) return null;
+    const n = DIRS[h.face];
+    const t = Math.max(0, h.t - 0.02);
+    return { x: ax + (dx / len) * t, z: az + (dz / len) * t, nx: -n[0], nz: -n[2] };
+  };
+  return { floorAt, resolve, blocked, wallHit };
 }
 
 export interface VoxelHit { x: number; y: number; z: number; /** Направление грани (индекс DIRS), через которую вошёл луч */ face: number; t: number }
 
-/** Луч по вокселям (DDA): первая непустая клетка (y ≤ maxY) и грань входа */
-export function raycastVoxels(L: Level, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number, maxY = Infinity): VoxelHit | null {
+/** Луч по вокселям (DDA): первая клетка, где hit(x, y, z) (по умолчанию — непустая, y ≤ maxY), и грань входа */
+export function raycastVoxels(L: Level, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number, maxY = Infinity, hit?: (x: number, y: number, z: number) => boolean): VoxelHit | null {
   ox += 0.5; oz += 0.5;
   let x = Math.floor(ox), y = Math.floor(oy), z = Math.floor(oz);
   const sx = Math.sign(dx), sy = Math.sign(dy), sz = Math.sign(dz);
@@ -101,7 +114,7 @@ export function raycastVoxels(L: Level, ox: number, oy: number, oz: number, dx: 
   let face = -1, t = 0;
   const b = L.getBounds();
   for (let i = 0; i < 512; i++) {
-    if (b && y <= maxY && L.code(x, y, z)) return { x, y, z, face, t };
+    if (b && (hit ? hit(x, y, z) : y <= maxY && L.code(x, y, z) !== 0)) return { x, y, z, face, t };
     if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; face = sx > 0 ? 2 : 0; }
     else if (ty < tz) { y += sy; t = ty; ty += tdy; face = sy > 0 ? 5 : 4; }
     else { z += sz; t = tz; tz += tdz; face = sz > 0 ? 3 : 1; }
@@ -127,16 +140,16 @@ export function obstaclesOf(L: Level, y0: number, x0: number, z0: number, x1: nu
     return best;
   };
   for (let z = z0; z <= z1; z++) {
-    let run = -1, runH = 0;
+    let run: number | null = null, runH = 0;
     const flush = (x: number) => {
-      if (run < 0) return;
+      if (run === null) return;
       out.push(obstacle((run + x) / 2 - 0.5, z, x - run, 1, runH - y0));
-      run = -1;
+      run = null;
     };
     for (let x = x0; x <= x1 + 1; x++) {
       const t = x <= x1 ? top(x, z) : -Infinity;
       const solid = t > y0 + STEP + 1e-3;
-      if (solid && run >= 0 && Math.abs(t - runH) < 1e-6) continue;
+      if (solid && run !== null && Math.abs(t - runH) < 1e-6) continue;
       flush(x);
       if (solid) { run = x; runH = t; }
     }

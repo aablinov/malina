@@ -67,7 +67,7 @@ export interface Textures {
   gravel: THREE.Texture; sand: THREE.Texture; cobble: THREE.Texture; stoneBricks: THREE.Texture;
   stoneBricksMossy: THREE.Texture; stoneBricksCracked: THREE.Texture; stoneBricksOld: THREE.Texture; tiles: THREE.Texture;
   planksDark: THREE.Texture; roofDark: THREE.Texture; crate: THREE.Texture; berryBush: THREE.Texture; fern: THREE.Texture;
-  hay: THREE.Texture; hayTop: THREE.Texture; ash: THREE.Texture; leavesCut: THREE.Texture;
+  hay: THREE.Texture; hayTop: THREE.Texture; ash: THREE.Texture; leavesCut: THREE.Texture; acid: THREE.Texture; hole: THREE.Texture;
   flowerRed: THREE.Texture; flowerBlue: THREE.Texture; flowerWhite: THREE.Texture; flowerYellow: THREE.Texture;
   /** Вода: 16 × 16, двигается смещением UV */
   water: THREE.Texture;
@@ -299,6 +299,18 @@ export function makeTextures(): Textures {
     }
   }, 66);
   T.water.wrapS = T.water.wrapT = THREE.RepeatWrapping;
+  T.acid = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#5fc43a', '#55b434', '#6fd244', '#4aa62c'], 6);
+    for (let i = 0; i < 5; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#c8ff8a'); px(g, x + 1, y, '#a8f070'); }
+  }, 69);
+  T.acid.wrapS = T.acid.wrapT = THREE.RepeatWrapping;
+  T.hole = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, DIRT, 8);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      if (d < 5.2) px(g, x, y, jitter(d < 3.6 ? '#120a06' : '#3a2414', r, 6));
+    }
+  }, 70);
   T.fire = (() => {
     const c = document.createElement('canvas'); c.width = 16; c.height = 48;
     const g = ctx2d(c);

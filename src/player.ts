@@ -191,8 +191,8 @@ export class Player {
     this.model.rotation.set(0, 0, 0);
   }
 
-  /** terrain — блоки уровня: герой упирается в стены, поднимается на полублоки и падает с обрывов */
-  update(dt: number, input: ReadonlySet<string>, aim: THREE.Vector3 | null, colliders: readonly Collider[], terrain?: Terrain): void {
+  /** terrain — блоки уровня: герой упирается в стены, поднимается на полублоки и падает с обрывов; limit — граница поля по x и z */
+  update(dt: number, input: ReadonlySet<string>, aim: THREE.Vector3 | null, colliders: readonly Collider[], terrain?: Terrain, limit: number = CFG.FIELD): void {
     if (this.down) {
       this.model.rotation.z = lerp(this.model.rotation.z, Math.PI / 2, Math.min(1, dt * 8));
       this.root.position.set(this.pos.x, this.pos.y + 0.25, this.pos.z);
@@ -214,7 +214,7 @@ export class Player {
       this.pos.addScaledVector(this.dashV, Math.min(dt, this.dashT));
       this.dashT -= dt;
     }
-    const B = CFG.FIELD;
+    const B = limit;
     this.pos.x = THREE.MathUtils.clamp(this.pos.x, -B, B);
     this.pos.z = THREE.MathUtils.clamp(this.pos.z, -B, B);
     for (const c of colliders) {
