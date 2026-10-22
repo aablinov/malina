@@ -5,6 +5,7 @@ import type { Bush } from './bush';
 import type { FX } from './fx';
 import type { Player } from './player';
 import type { Textures } from './textures';
+import type { Terrain } from './level/collide.ts';
 import { AMMO, AMMO_TYPES, levelMul, modCdMul, type AmmoType, type GunSound, type WeaponDef } from './weapons';
 
 export type SoundKey = GunSound | 'ricochet' | 'empty' | 'explosion' | 'missile' | 'hook' | 'beam' | 'spit' | 'pickup' | 'heat' | 'spinup' | 'zap' | 'splat';
@@ -33,6 +34,8 @@ export interface CombatHooks {
   owned(t: AmmoType): boolean;
   /** Препятствия на поле: деревья, камни, домик, прилавок, фонари */
   colliders(): readonly Collider[];
+  /** Блоки уровня: снаряды отскакивают от стен из блоков */
+  terrain?: Terrain;
 }
 
 type ProjKind = 'bullet' | 'pellet' | 'plasma' | 'grenade' | 'bfg' | 'missile' | 'slug';
@@ -421,6 +424,8 @@ export class Combat {
       pos.z = Math.sign(pos.z) * W;
       return new THREE.Vector3(0, 0, -Math.sign(pos.z));
     }
+    const wall = this.h.terrain?.wallHit(prev.x, prev.z, pos.x, pos.z, pos.y);
+    if (wall) { pos.x = wall.x; pos.z = wall.z; return new THREE.Vector3(wall.nx, 0, wall.nz); }
     for (const c of this.h.colliders()) {
       const cp = new THREE.Vector3(c.x, 0, c.z);
       if (segDist(cp, prev, pos) > c.r) continue;

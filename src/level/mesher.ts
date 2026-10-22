@@ -16,7 +16,7 @@ import { getShape } from './shapes';
 
 interface LightSpot { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
 
-const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'fire'];
+const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire'];
 const AO_SHADE = [0.5, 0.68, 0.84, 1];
 const MAX_LIGHTS = 8;
 
@@ -49,16 +49,19 @@ export class LevelRenderer {
   private readonly lights = new Map<string, LightSpot[]>();
   private readonly pool: THREE.PointLight[] = [];
   private readonly waterTex: THREE.Texture;
+  private readonly acidTex: THREE.Texture;
   private readonly fireTex: THREE.Texture;
 
   constructor(private readonly scene: THREE.Scene, private readonly level: Level, T: Textures) {
     this.atlas = new Atlas(T, paletteTextures());
     this.waterTex = T.water;
+    this.acidTex = T.acid;
     this.fireTex = T.fire;
     this.mats = {
       opaque: new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true }),
       cutout: new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide }),
       water: new THREE.MeshLambertMaterial({ map: T.water, vertexColors: true, transparent: true, opacity: 0.8 }),
+      acid: new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
     };
     for (let i = 0; i < MAX_LIGHTS; i++) {
@@ -96,7 +99,7 @@ export class LevelRenderer {
     if (!chunk) return;
     const [cx, cy, cz] = key.split(',').map(Number);
     const L = this.level;
-    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), fire: new Bucket() };
+    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket() };
     const spots: LightSpot[] = [];
     const isFull = (x: number, y: number, z: number) => L.defAt(x, y, z).full;
 
@@ -169,7 +172,7 @@ export class LevelRenderer {
       if (b.empty) continue;
       const m = new THREE.Mesh(b.geometry(), this.mats[layer]);
       m.castShadow = layer === 'opaque' || layer === 'cutout';
-      m.receiveShadow = layer !== 'fire';
+      m.receiveShadow = layer === 'opaque' || layer === 'cutout';
       m.frustumCulled = true;
       this.group.add(m);
       meshes.push(m);
@@ -181,6 +184,7 @@ export class LevelRenderer {
   /** Анимация воды и огня, ближайшие к focus источники света. night 0..1 */
   update(t: number, night: number, focus: THREE.Vector3): void {
     this.waterTex.offset.set(Math.sin(t * 0.4) * 0.06, t * 0.02);
+    this.acidTex.offset.set(t * 0.015, Math.sin(t * 0.3) * 0.05);
     this.fireTex.offset.y = (2 - (Math.floor(t * 9) % 3)) / 3;
     const all: LightSpot[] = [];
     for (const l of this.lights.values()) all.push(...l);

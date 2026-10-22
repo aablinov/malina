@@ -4,7 +4,7 @@
  * поэтому имена не переименовывать — только добавлять.
  */
 
-export type Layer = 'opaque' | 'cutout' | 'water' | 'fire';
+export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire';
 
 export interface Part {
   /** Имя формы — файл assets/blocks/<obj>.obj */
@@ -73,6 +73,8 @@ export const BLOCKS: BlockDef[] = [
   solid('sand', 'Песок', 'земля', 'sand'),
   solid('farm', 'Грядка', 'земля', { top: 'farm', side: 'dirt', bottom: 'dirt' }),
   B('water', 'Вода', 'земля', [{ obj: 'water', layer: 'water', tex: same('water') }], { collide: 0, cullSame: true, jitter: 0 }),
+  B('acid', 'Кислота', 'земля', [{ obj: 'water', layer: 'acid', tex: same('acid') }], { collide: 0, cullSame: true, jitter: 0, light: { color: '#7dff5a', intensity: 3, dist: 5 } }),
+  B('hole', 'Нора жуков', 'земля', [cube(same('hole'), 'layer')], { collide: 0, replaceable: true }),
 
   // --- камень ---
   ...stoneSet('stone', 'Камень', 'камень', 'stone'),
@@ -83,6 +85,8 @@ export const BLOCKS: BlockDef[] = [
   solid('bricks_cracked', 'Кирпич треснутый', 'камень', 'stoneBricksCracked'),
   solid('bricks_old', 'Кирпич руинный', 'камень', ['stoneBricksOld', 'stoneBricksOld', 'stoneBricksMossy', 'stoneBricksCracked']),
   ...stoneSet('tiles', 'Плиты мостовой', 'камень', 'tiles', false),
+  B('bricks_low', 'Кирпич: низкое укрытие', 'камень', [cube(same('stoneBricks'), 'low')], { collide: 0.875, connects: true }),
+  B('cobble_low', 'Булыжник: низкое укрытие', 'камень', [cube(same('cobble'), 'low')], { collide: 0.875, connects: true }),
 
   // --- дерево ---
   solid('log', 'Бревно', 'дерево', { top: 'logTop', side: 'logSide', bottom: 'logTop' }),

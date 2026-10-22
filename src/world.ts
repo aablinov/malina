@@ -4,9 +4,14 @@ import { buildGunModel, WEAPON_BY_ID, type WeaponId } from './weapons';
 import type { Textures } from './textures';
 import { Level, type LevelJSON } from './level/level.ts';
 import { LevelRenderer } from './level/mesher';
-import { terrainOf, type Terrain } from './level/collide.ts';
-import { GARDEN_CRATES, GARDEN_HOUSE, GARDEN_LANTERNS, GARDEN_ROCKS, GARDEN_TREES } from './level/garden.ts';
+import { obstaclesOf, terrainOf, type Terrain } from './level/collide.ts';
+import { NavGrid } from './nav';
+import { obstacle, type Obstacle } from './collision';
+import { GARDEN_CRATES, GARDEN_HOUSE, GARDEN_LANTERNS, GARDEN_R, GARDEN_ROCKS, GARDEN_TREES } from './level/garden.ts';
 import gardenJson from '../assets/maps/garden.json';
+import { buildFloor } from './level/dungeon.ts';
+import { mapByName, ROOMS } from './level/maps';
+import { CFG } from './config';
 
 /**
  * Огород (хаб): блоки берутся из карты assets/maps/garden.json (пересобрать — `npm run map:garden`,
@@ -19,23 +24,40 @@ export interface World {
   renderer: LevelRenderer;
   /** Круглые препятствия для пуль и героя: деревья, домик, камни, фонари, лавка */
   colliders: Collider[];
+  /** Стены из блоков и пропсы как прямоугольники — для навигации жуков */
+  obstacles: Obstacle[];
+  /** Навигационная сетка жуков на уровне земли */
+  nav: NavGrid;
+  /** Граница поля для героя по x и z (огород — CFG.FIELD, остальные карты — без границы) */
+  limit: number;
   /** night: 0 — день, 1 — ночь; focus — куда смотрит камера (для ближайших источников света) */
   update(t: number, night: number, focus: THREE.Vector3): void;
 }
 
-/** ?map=editor — карта из автосохранения редактора (кнопка «Играть» в ?dev=editor), иначе встроенный огород */
-function pickMap(): LevelJSON {
-  if (new URLSearchParams(window.location.search).get('map') === 'editor') {
+/**
+ * Какую карту грузить: ?map=editor — автосохранение редактора (кнопка «Играть» в ?dev=editor),
+ * ?map=dungeon&seed=N — сгенерированный этаж, ?map=<имя> — файл из assets/maps/, иначе огород.
+ */
+function pickMap(): { json: LevelJSON; garden: boolean } {
+  const q = new URLSearchParams(window.location.search);
+  const name = q.get('map');
+  if (name === 'editor') {
     try {
       const raw = localStorage.getItem('malina.editor.level');
-      if (raw) return JSON.parse(raw) as LevelJSON;
+      if (raw) return { json: JSON.parse(raw) as LevelJSON, garden: false };
     } catch { /* нет сохранения — огород */ }
+  } else if (name === 'dungeon') {
+    return { json: buildFloor({ seed: Number(q.get('seed') ?? 1) || 1, floor: Number(q.get('floor') ?? 1) || 1, rooms: ROOMS }).toJSON(), garden: false };
+  } else if (name) {
+    const j = mapByName(name);
+    if (j) return { json: j, garden: false };
   }
-  return gardenJson as unknown as LevelJSON;
+  return { json: gardenJson as unknown as LevelJSON, garden: true };
 }
 
 export function buildWorld(scene: THREE.Scene, T: Textures): World {
-  const level = Level.fromJSON(pickMap());
+  const picked = pickMap();
+  const level = Level.fromJSON(picked.json);
   const renderer = new LevelRenderer(scene, level, T);
   const terrain = terrainOf(level);
 
@@ -46,6 +68,13 @@ export function buildWorld(scene: THREE.Scene, T: Textures): World {
   for (const [x, z] of GARDEN_ROCKS) colliders.push({ x, z, r: 0.7 });
   // место под лавку (сама лавка строится ниже)
   colliders.push({ x: SHOP.x, z: SHOP.z + 0.3, r: 1.65 });
+  const b = level.getBounds();
+  const obstacles = b ? obstaclesOf(level, 0, b.minX, b.minZ, b.maxX, b.maxZ) : [];
+  obstacles.push(obstacle(SHOP.x, SHOP.z + 0.3, 3, 2.6, 2));
+  for (const [x, z] of GARDEN_LANTERNS) obstacles.push(obstacle(x, z, 0.5, 0.5, 2));
+  const navHalf = b ? Math.max(GARDEN_R + 1, Math.abs(b.minX), Math.abs(b.maxX), Math.abs(b.minZ), Math.abs(b.maxZ)) + 1 : GARDEN_R + 1;
+  const nav = new NavGrid(navHalf, obstacles, 0.45);
+  const limit = picked.garden ? CFG.FIELD : Infinity;
 
   // Фонари
   const lanterns: THREE.PointLight[] = [];
@@ -132,7 +161,7 @@ export function buildWorld(scene: THREE.Scene, T: Textures): World {
   scene.add(flies);
 
   return {
-    level, terrain, renderer, colliders,
+    level, terrain, renderer, colliders, obstacles, nav, limit,
     update(t: number, night: number, focus: THREE.Vector3) {
       renderer.sync();
       renderer.update(t, night, focus);
