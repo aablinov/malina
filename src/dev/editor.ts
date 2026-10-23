@@ -11,6 +11,7 @@ import { buildFloor } from '../level/dungeon.ts';
 import { DECOR, DECOR_CATEGORIES, decorDef } from '../level/decor.ts';
 import { decorMatrix } from '../level/decor-render.ts';
 import { attachedTo, placeDecor, type DecorPlacement } from '../level/decor-place.ts';
+import { landscape } from '../level/kit.ts';
 import type { Layer } from '../level/palette.ts';
 import './editor.css';
 
@@ -29,6 +30,10 @@ import './editor.css';
  * ЛКМ по предмету — выбрать и тащить, Shift+ЛКМ или Del — убрать, R / Shift+R — поворот ±15°, T — наклон, Y — крен,
  * Z — случайный поворот, Q — взять предмет под курсором, Ctrl+D — копия выбранного, [ ] — листать, Esc — снять выбор.
  * Стёрли блок — предметы, прикреплённые к нему (поле on), удаляются в той же отмене.
+ *
+ * Ещё раз Tab — режим «Ландшафт» (src/level/kit.ts, landscape): ползунки — размер по X и Z, слои по 0,5 м, крупность плит,
+ * доля камня; ЛКМ по земле — поставить кусок ландшафта (проходим отовсюду); ползунки и «Случайно» (новый изгиб краёв
+ * и углов) перестраивают последний поставленный кусок на месте. Отмена — Ctrl+Z, как у блоков.
  */
 
 export const EDITOR_STORAGE = 'malina.editor.level';
@@ -99,7 +104,11 @@ export function runEditor(): void {
   let drag: 'place' | 'remove' | null = null;
   let dirtyAutosave = false;
   // декор
-  let mode: 'blocks' | 'decor' = 'blocks';
+  let mode: 'blocks' | 'decor' | 'land' = 'blocks';
+  /** Ландшафт: размеры, слои по 0,5 м, крупность плит, доля камня (%), зерно шума — от него изгибы краёв и углы */
+  const land = { w: 24, d: 18, layers: 4, scale: 22, stone: 30, seed: 1 };
+  /** Последний поставленный кусок: его перестраивают ползунки и «Случайно» */
+  let lastLand: { x: number; y: number; z: number; batch: Edit[] } | null = null;
   let curDecor = DECOR[0].name;
   /** Поворот пользователя: [рыск, наклон, крен], градусы */
   const dRot = [0, 0, 0];
@@ -118,10 +127,20 @@ export function runEditor(): void {
       <select id="edMaps"><option value="">Встроенные карты…</option></select>
       <button id="edFloor" title="Собрать этаж подземелья из комнат-заготовок">Этаж…</button>
       <button id="edPlay" title="Открыть игру с этой картой">Играть ▶</button>
-      <button id="edMode" title="Tab — блоки / декор">Режим: блоки</button>
+      <button id="edMode" title="Tab — блоки / декор / ландшафт">Режим: блоки</button>
       <span class="ed-stat" id="edStat"></span>
     </div>
-    <div class="ed-side"><div class="ed-cur" id="edCur"></div><div id="edPal"></div><div id="edDec" hidden></div></div>
+    <div class="ed-side"><div class="ed-cur" id="edCur"></div><div id="edPal"></div><div id="edDec" hidden></div>
+      <div id="edLand" class="ed-land" hidden>
+        <div class="ed-cat">ландшафт — проходим отовсюду</div>
+        <label class="ed-sl"><span>Размер X</span><input type="range" id="lnW" min="6" max="64" step="1"><b id="lnWv"></b></label>
+        <label class="ed-sl"><span>Размер Z</span><input type="range" id="lnD" min="6" max="64" step="1"><b id="lnDv"></b></label>
+        <label class="ed-sl"><span>Слои ×0,5 м</span><input type="range" id="lnL" min="1" max="10" step="1"><b id="lnLv"></b></label>
+        <label class="ed-sl"><span>Крупность</span><input type="range" id="lnS" min="8" max="40" step="1"><b id="lnSv"></b></label>
+        <label class="ed-sl"><span>Камень, %</span><input type="range" id="lnK" min="0" max="80" step="5"><b id="lnKv"></b></label>
+        <button id="lnRnd" class="ed-wide">Случайно: края и углы</button>
+        <div class="ed-note">ЛКМ по земле — поставить. Ползунки и «Случайно» перестраивают последний кусок. Ctrl+Z — отмена.</div>
+      </div></div>
     <div class="ed-help" id="edHelp"></div>
     <div class="ed-toast" id="edToast"></div>`;
   document.body.appendChild(ui);
@@ -157,7 +176,8 @@ export function runEditor(): void {
   }
   const HELP = {
     blocks: 'ЛКМ — поставить · Shift+ЛКМ — убрать · Ctrl+ЛКМ ×2 — залить · Ctrl+Shift+ЛКМ — вырезать · СКМ — вращать · ПКМ — двигать · Q — взять · R — повернуть · PgUp/PgDn — срез · P — спавн · Tab — декор · Ctrl+Z/Y · Ctrl+S',
-    decor: 'ЛКМ — поставить · ЛКМ по предмету — выбрать и тащить · Shift+ЛКМ / Del — убрать · R / Shift+R — поворот ±15° · T — наклон · Y — крен · Z — случайный поворот · Q — взять · Ctrl+D — копия · Esc — снять выбор · Tab — блоки',
+    decor: 'ЛКМ — поставить · ЛКМ по предмету — выбрать и тащить · Shift+ЛКМ / Del — убрать · R / Shift+R — поворот ±15° · T — наклон · Y — крен · Z — случайный поворот · Q — взять · Ctrl+D — копия · Esc — снять выбор · Tab — ландшафт',
+    land: 'ЛКМ по земле — поставить ландшафт · ползунки и «Случайно» — перестроить последний · Ctrl+Z — отмена · СКМ — вращать · ПКМ — двигать · Tab — блоки',
   };
   const decPal = $('edDec');
   const decThumbs = makeDecorThumbs();
@@ -171,7 +191,18 @@ export function runEditor(): void {
       decPal.appendChild(btn);
     }
   }
-  $('edMode').addEventListener('click', (e) => { setMode(mode === 'blocks' ? 'decor' : 'blocks'); (e.currentTarget as HTMLElement).blur(); });
+  const nextMode = () => (mode === 'blocks' ? 'decor' : mode === 'decor' ? 'land' : 'blocks');
+  $('edMode').addEventListener('click', (e) => { setMode(nextMode()); (e.currentTarget as HTMLElement).blur(); });
+  const landPanel = $('edLand');
+  const sliders: [string, keyof typeof land][] = [['lnW', 'w'], ['lnD', 'd'], ['lnL', 'layers'], ['lnS', 'scale'], ['lnK', 'stone']];
+  for (const [id, key] of sliders) {
+    const inp = $<HTMLInputElement>(id);
+    inp.value = String(land[key]);
+    $(`${id}v`).textContent = String(land[key]);
+    inp.addEventListener('input', () => { land[key] = Number(inp.value); $(`${id}v`).textContent = inp.value; relandscape(); });
+    inp.addEventListener('change', () => inp.blur());
+  }
+  $('lnRnd').addEventListener('click', (e) => { land.seed = 1 + Math.floor(Math.random() * 1e6); relandscape(); toast('Новые края и углы'); (e.currentTarget as HTMLElement).blur(); });
   const mapsSel = $<HTMLSelectElement>('edMaps');
   for (const path of Object.keys(maps).sort()) { const o = document.createElement('option'); o.value = path; o.textContent = `${maps[path].name} (${path})`; mapsSel.appendChild(o); }
   $('edFloor').addEventListener('click', () => {
@@ -194,6 +225,11 @@ export function runEditor(): void {
   }
   function refreshHud(): void {
     let n = 0; level.forEach(() => n++);
+    if (mode === 'land') {
+      $('edCur').innerHTML = `<div><b>Ландшафт ${land.w} × ${land.d} м, ${land.layers} слоёв (${land.layers / 2} м)</b><br><small>крупность ${land.scale} · камень ${land.stone}% · зерно ${land.seed}${lastLand ? ' · правится последний кусок' : ''}</small></div>`;
+      $('edStat').textContent = `${n} блоков · ${level.decor.length} декора · ${place ? `курсор ${place[0]}, ${place[1]}, ${place[2]}` : ''}`;
+      return;
+    }
     if (mode === 'decor') {
       const d = decorDef(curDecor);
       const r = dRot.some(Boolean) ? ` · ${dRot.join('° / ')}°` : '';
@@ -207,13 +243,15 @@ export function runEditor(): void {
     $('edCur').innerHTML = `<img src="${thumb(d)}" alt=""><div><b>${d.title}</b><br><small>${d.name}${d.rotatable ? ` · поворот ${rot * 90}°` : ''}</small></div>`;
     $('edStat').textContent = `${n} блоков · ${level.decor.length} декора · срез y ≤ ${maxY} · ${place ? `курсор ${place[0]}, ${place[1]}, ${place[2]}` : ''}`;
   }
-  function setMode(m: 'blocks' | 'decor'): void {
+  function setMode(m: 'blocks' | 'decor' | 'land'): void {
     mode = m;
     pal.hidden = m !== 'blocks';
     decPal.hidden = m !== 'decor';
-    $('edMode').textContent = `Режим: ${m === 'blocks' ? 'блоки' : 'декор'}`;
+    landPanel.hidden = m !== 'land';
+    landBox.visible = false;
+    $('edMode').textContent = `Режим: ${m === 'blocks' ? 'блоки' : m === 'decor' ? 'декор' : 'ландшафт'}`;
     $('edHelp').textContent = HELP[m];
-    if (m === 'blocks') { selected = hoverDecor = null; placement = null; moving = null; }
+    if (m !== 'decor') { selected = hoverDecor = null; placement = null; moving = null; }
     cursorBox.visible = hitBox.visible = false;
     ghost.visible = false; outline.visible = false;
     refreshHud();
@@ -328,6 +366,41 @@ export function runEditor(): void {
     for (const e of b) apply(e);
     undo.push(b); dirtyAutosave = true; toast('Повтор');
   }
+  /**
+   * Поставить кусок ландшафта с центром в (cx, cz) на уровне y: края спадают к земле, внутри — плиты по 0,5 м,
+   * не выше land.layers слоёв. Все изменённые клетки — одна правка в отмене.
+   */
+  function placeLand(cx: number, y: number, cz: number): void {
+    const x0 = cx - Math.floor(land.w / 2), z0 = cz - Math.floor(land.d / 2), x1 = x0 + land.w - 1, z1 = z0 + land.d - 1;
+    const y1 = y + Math.ceil(land.layers / 2) + 2;
+    const was = new Map<string, [string, number]>();
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let yy = y - 1; yy <= y1; yy++) was.set(`${x},${yy},${z}`, [level.nameAt(x, yy, z), level.rotAt(x, yy, z)]);
+    landscape(level, x0, z0, x1, z1, y, {
+      layers: land.layers, max: land.layers, scale: land.scale, stone: land.stone / 100, seed: land.seed, dry: 0.08, daisies: 0.04,
+      fade: Math.max(2, Math.min(land.w, land.d) / 5),
+      flat: (x, z) => x === x0 || x === x1 || z === z0 || z === z1,
+      bumps: [{ x: cx, z: cz, rx: land.w * 0.38, rz: land.d * 0.38, h: land.layers * 0.55 }],
+    });
+    beginBatch();
+    const b = batch!;
+    for (const [k, w0] of was) {
+      const [x, yy, z] = k.split(',').map(Number);
+      const now: [string, number] = [level.nameAt(x, yy, z), level.rotAt(x, yy, z)];
+      if (now[0] !== w0[0] || (now[0] !== 'air' && now[1] !== w0[1])) b.push({ x, y: yy, z, was: w0, now });
+    }
+    endBatch();
+    dirtyAutosave = true;
+    lastLand = b.length ? { x: cx, y, z: cz, batch: b } : null;
+    refreshHud();
+  }
+  /** Перестроить последний кусок с текущими ползунками (если он ещё последняя правка) */
+  function relandscape(): void {
+    if (!lastLand || undo[undo.length - 1] !== lastLand.batch) { refreshHud(); return; }
+    const { x, y, z, batch: b } = lastLand;
+    undo.pop();
+    for (let i = b.length - 1; i >= 0; i--) apply(b[i], true);
+    placeLand(x, y, z);
+  }
   function fillBox(a: [number, number, number], b: [number, number, number], name: string): void {
     beginBatch();
     for (let y = Math.min(a[1], b[1]); y <= Math.max(a[1], b[1]); y++)
@@ -394,6 +467,15 @@ export function runEditor(): void {
     }
     hitBox.visible = !!hit;
     cursorBox.visible = !!place;
+    if (mode === 'land') {
+      hitBox.visible = cursorBox.visible = false;
+      landBox.visible = !!place;
+      if (place) {
+        const hgt = Math.max(0.5, land.layers / 2);
+        landBox.scale.set(land.w, hgt, land.d);
+        landBox.position.set(place[0] - Math.floor(land.w / 2) + (land.w - 1) / 2, place[1] + hgt / 2, place[2] - Math.floor(land.d / 2) + (land.d - 1) / 2);
+      }
+    }
     if (hit) hitBox.position.set(hit[0], hit[1] + 0.5, hit[2]);
     if (place) cursorBox.position.set(place[0], place[1] + 0.5, place[2]);
     refreshHud();
@@ -472,10 +554,20 @@ export function runEditor(): void {
     refreshHud();
   }
 
+  // рамка будущего куска ландшафта под курсором
+  const landBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: '#ffd25a', depthTest: false, transparent: true }));
+  landBox.renderOrder = 20;
+  landBox.visible = false;
+  scene.add(landBox);
+
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     updateCursor(e);
+    if (mode === 'land') {
+      if (place) { placeLand(place[0], place[1], place[2]); toast('Ландшафт поставлен'); }
+      return;
+    }
     if (mode === 'decor') {
       if (hoverDecor) {
         if (e.shiftKey) { removeDecor(hoverDecor); toast('Предмет убран'); }
@@ -530,8 +622,9 @@ export function runEditor(): void {
     if (ctrl && e.code === 'KeyY') { e.preventDefault(); doRedo(); return; }
     if (ctrl && e.code === 'KeyS') { e.preventDefault(); save(); return; }
     if (ctrl && e.code === 'KeyO') { e.preventDefault(); open(); return; }
-    if (e.code === 'Tab') { e.preventDefault(); setMode(mode === 'blocks' ? 'decor' : 'blocks'); return; }
+    if (e.code === 'Tab') { e.preventDefault(); setMode(nextMode()); return; }
     if (mode === 'decor') { decorKey(e, ctrl); return; }
+    if (mode === 'land') { if (e.code === 'KeyG') grid.visible = !grid.visible; return; }
     if (ctrl) return;
     const list = BLOCKS.filter((b) => b.name !== 'air');
     switch (e.code) {
@@ -633,6 +726,9 @@ export function runEditor(): void {
     /** Поставить / убрать предмет через отмену, как мышью */
     addDecor: (d: DecorItem) => addDecor(d), removeDecor: (d: DecorItem) => removeDecor(d), changeDecor,
     undo: doUndo, redo: doRedo,
+    /** Ландшафт: параметры, поставить в точку, перестроить, случайные края */
+    land, placeLand, relandscape, get lastLand() { return lastLand; },
+    randomizeLand() { land.seed = 1 + Math.floor(Math.random() * 1e6); relandscape(); },
   };
 }
 
