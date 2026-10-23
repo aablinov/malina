@@ -521,3 +521,32 @@ test('мир: водопад, река с течением, портал и за
   expect(r.plateau.y).toBe(r.plateau.want);
   expect(r.plateau.d).toBeLessThan(0.3);
 });
+
+test('редактор: ландшафт ползунками — поставить, перестроить, случайные края, отмена возвращает как было', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(pathToFileURL(resolve('dist/index.html')).href + '?dev=editor');
+  await page.waitForFunction(() => (window as any).__malina?.mode === 'editor');
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const L = m.level;
+    const snap = () => JSON.stringify(L.toJSON().rows);
+    const orig = snap();
+    m.setMode('land');
+    Object.assign(m.land, { w: 20, d: 16, layers: 6, seed: 7 });
+    m.placeLand(5, 0, 6);
+    const placed = m.lastLand?.batch.length ?? 0;
+    let maxTop = 0;
+    for (let x = -5; x <= 15; x++) for (let z = -2; z <= 14; z++) { const t = L.topAt(x, z, 10); if (t !== null) maxTop = Math.max(maxTop, t + 1); }
+    const a = snap();
+    m.randomizeLand();
+    const b = snap();
+    m.undo();
+    return { placed, maxTop, changedByRandom: a !== b, restored: snap() === orig, lastBatchGone: true };
+  });
+  expect(errors).toEqual([]);
+  expect(r.placed).toBeGreaterThan(50);
+  expect(r.maxTop).toBeLessThanOrEqual(3 + 1); // 6 слоёв = 3 м над уровнем 0 (+ трава и цветы сверху)
+  expect(r.changedByRandom).toBe(true);
+  expect(r.restored).toBe(true); // перестройка не плодит правок: одна отмена убирает кусок целиком
+});

@@ -211,6 +211,8 @@ export interface LandscapeOpts extends HillOpts {
   bumps?: Bump[];
   /** Доля площади, где бока слоёв — камень (вперемешку с землёй, как на скриншотах) */
   stone?: number;
+  /** Потолок: не выше стольких слоёв (по умолчанию без ограничения) */
+  max?: number;
 }
 
 /**
@@ -249,7 +251,7 @@ export function landscape(L: Level, x0: number, z0: number, x1: number, z1: numb
       if (e < 1) hf += b.h * (1 - e) ** 0.7;
     }
     const t = Math.min(1, dist[j * w + i] / fade);
-    heights[j * w + i] = Math.min(30, Math.floor(hf * t * t * (3 - 2 * t)));
+    heights[j * w + i] = Math.min(o.max ?? 30, Math.floor(hf * t * t * (3 - 2 * t)));
   }
   settle(heights, w, d, 2);
   for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) if (dist[j * w + i] === 0) heights[j * w + i] = 0;
