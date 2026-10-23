@@ -472,7 +472,7 @@ test('трава поверх блоков: бахрома свисает с у�
   expect(r.restored).toBe(r.back);
 });
 
-test('мир: водопад, река с течением, портал и запечённый свет рисуются; через мост — на другой берег', async ({ page }) => {
+test('мир: водопад, река с течением, портал и запечённый свет рисуются; через мост — на другой берег, по пандусам — на плато', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -486,11 +486,19 @@ test('мир: водопад, река с течением, портал и за
     m.hero.place(46, 0, 0); m.step(0.2);
     m.click(58, 0); m.step(1 / 60); m.release();
     for (let t = 0; t < 10 && m.goal; t += 0.1) m.step(0.1);
+    const bridge = { x: m.hero.pos.x, z: m.hero.pos.z, y: m.hero.pos.y, left: !!m.goal };
+    // на плато (3 блока) — по пандусам из полублоков
+    const top = (x: number, z: number) => { const t = m.level.topAt(x, z); return t === null ? 0 : t + 1; };
+    m.hero.place(38, 3.5, 0); m.step(0.2);
+    m.click(37, 14, false, top(37, 14)); m.step(1 / 60); m.release();
+    for (let t = 0; t < 30 && m.goal; t += 0.1) m.step(0.1);
+    const plateau = { y: m.hero.pos.y, want: top(37, 14), d: Math.hypot(m.hero.pos.x - 37, m.hero.pos.z - 14) };
     return {
+      plateau,
       missing: want.filter((n) => !names.has(n)), missingDecor: wantDecor.filter((n) => !decor.has(n)),
       falls: v.triangles('falls'), river: v.triangles('river'), portal: v.triangles('portal'),
       baked: v.baked.length, bakedPoint: v.decor.lights.some((l: any) => l.intensity < 1.5 && l.dist < 3.5),
-      hero: { x: m.hero.pos.x, z: m.hero.pos.z, y: m.hero.pos.y, left: !!m.goal },
+      hero: bridge,
     };
   });
   expect(r.missing).toEqual([]);
@@ -503,4 +511,7 @@ test('мир: водопад, река с течением, портал и за
   expect(Math.hypot(r.hero.x - 58, r.hero.z)).toBeLessThan(0.3);
   expect(r.hero.y).toBe(0);
   expect(r.hero.left).toBe(false);
+  expect(r.plateau.want).toBe(3);
+  expect(r.plateau.y).toBe(3);
+  expect(r.plateau.d).toBeLessThan(0.3);
 });
