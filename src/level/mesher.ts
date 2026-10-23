@@ -18,7 +18,7 @@ import { getShape } from './shapes';
 
 interface LightSpot { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
 
-const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow'];
+const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow', 'detail'];
 
 /**
  * «Рентген»: блоки между камерой и героем (в цилиндре радиуса uXrayR вокруг луча камера → герой,
@@ -126,6 +126,13 @@ if (vTop > 0.5) {
 }
 
 const AO_SHADE = [0.5, 0.68, 0.84, 1];
+/** Бахрома: свисает на 8/16 и отстоит от грани на 1/16 (не мерцает с текстурой бока) */
+const FRINGE_H = 0.5, FRINGE_OUT = 1 / 16;
+/** Концы верхнего края блока в долях клетки для каждой стороны (0 +X, 1 +Z, 2 −X, 3 −Z), уже со сдвигом наружу */
+const FRINGE_EDGE: [number, number, number, number][] = [
+  [1 + FRINGE_OUT, 0, 1 + FRINGE_OUT, 1], [1, 1 + FRINGE_OUT, 0, 1 + FRINGE_OUT],
+  [-FRINGE_OUT, 1, -FRINGE_OUT, 0], [0, -FRINGE_OUT, 1, -FRINGE_OUT],
+];
 const MAX_LIGHTS = 8;
 
 function hash(x: number, y: number, z: number, s = 0): number {
@@ -174,6 +181,9 @@ export class LevelRenderer {
       water: liquid(new THREE.MeshLambertMaterial({ map: T.water, vertexColors: true, transparent: true, opacity: 0.82 }), '#e8fbff', [1.7, 1.9, 2.1], [0.12, 0.3, 0.36]),
       acid: liquid(new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }), '#d8ffb0', [1.4, 2.4, 0.8], [0.2, 0.4, 0.1]),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
+      // мелкая трава: только лицевая сторона (пучки выпускаются в обе стороны) — иначе обратная сторона переворачивает
+      // нормаль «вверх» и темнеет; тени не отбрасывает
+      detail: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5 })),
       // светится сам (грибы, стекло фонаря): без освещения, ярче 1 — подхватывает bloom
       glow: withXray(new THREE.MeshBasicMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, toneMapped: false, color: new THREE.Color(1.5, 1.4, 1.2) })),
     };
@@ -218,9 +228,27 @@ export class LevelRenderer {
     if (!chunk) return;
     const [cx, cy, cz] = key.split(',').map(Number);
     const L = this.level;
-    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket(), glow: new Bucket() };
+    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket(), glow: new Bucket(), detail: new Bucket() };
     const spots: LightSpot[] = [];
     const isFull = (x: number, y: number, z: number) => L.defAt(x, y, z).full;
+    /** Четырёхугольник в слой: 4 точки мира, uv в долях тайла атласа, нормаль, яркость */
+    const quad = (b: Bucket, p: number[][], uv: number[][], n: readonly number[], tex: string, c: number) => {
+      const r = this.atlas.uv(tex);
+      for (const k of [0, 1, 2, 0, 2, 3]) {
+        b.pos.push(p[k][0], p[k][1], p[k][2]);
+        b.nrm.push(n[0], n[1], n[2]);
+        b.uv.push(r.u0 + (r.u1 - r.u0) * uv[k][0], r.v0 + (r.v1 - r.v0) * uv[k][1]);
+        b.col.push(c, c, c);
+        b.shore.push(0);
+      }
+    };
+    /** Плотность пучков: плавный шум с шагом 5 м — трава растёт пятнами */
+    const density = (x: number, z: number) => {
+      const gx = Math.floor(x / 5), gz = Math.floor(z / 5), fx = x / 5 - gx, fz = z / 5 - gz;
+      const sm = (t: number) => t * t * (3 - 2 * t), u = sm(fx), v = sm(fz);
+      const a = hash(gx, 0, gz, 31), b = hash(gx + 1, 0, gz, 31), c = hash(gx, 0, gz + 1, 31), d = hash(gx + 1, 0, gz + 1, 31);
+      return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+    };
 
     for (let i = 0; i < chunk.length; i++) {
       const code = chunk[i];
@@ -291,6 +319,37 @@ export class LevelRenderer {
           }
         }
       }
+
+      // трава поверх блоков (как в Minecraft Dungeons): бахрома свисает с края уступа, сверху — пучки пятнами
+      if ((def.fringe || def.tufts) && !L.defAt(x, y + 1, z).full) {
+        const c0 = bright * 0.97;
+        if (def.fringe) for (let d = 0; d < 4; d++) {
+          const n = L.defAt(x + DIRS[d][0], y, z + DIRS[d][2]);
+          if (n.full || n.collide >= 1) continue;
+          const [ax, az, bx, bz] = FRINGE_EDGE[d];
+          const top = y + 1, bot = y + 1 - FRINGE_H;
+          quad(buckets.detail, [[x + ax - 0.5, top, z + az - 0.5], [x + bx - 0.5, top, z + bz - 0.5], [x + bx - 0.5, bot, z + bz - 0.5], [x + ax - 0.5, bot, z + az - 0.5]],
+            [[0, 1], [1, 1], [1, 1 - FRINGE_H], [0, 1 - FRINGE_H]], DIRS[d], def.fringe, c0);
+        }
+        if (def.tufts && L.isAir(x, y + 1, z)) {
+          const n = Math.max(0, Math.min(5, Math.floor(density(x, z) * 7 + hash(x, y, z, 32) * 1.5 - 1.2)));
+          for (let i = 0; i < n; i++) {
+            const tx = x - 0.38 + hash(x, y, z, 33 + i) * 0.76, tz = z - 0.38 + hash(x, y, z, 40 + i) * 0.76;
+            const sz = (4 + Math.floor(hash(x, y, z, 47 + i) * 4)) / 16;
+            const u0 = Math.floor(hash(x, y, z, 54 + i) * (17 - sz * 16)) / 16;
+            const tex = def.tufts[Math.floor(hash(x, y, z, 61 + i) * def.tufts.length)];
+            const ang = hash(x, y, z, 68 + i) * Math.PI;
+            const c = c0 * (0.88 + hash(x, y, z, 75 + i) * 0.2);
+            for (const a of [ang, ang + Math.PI / 2]) {
+              const dx = Math.cos(a) * sz / 2, dz = Math.sin(a) * sz / 2;
+              // нормаль вверх: пучок освещён, как земля под ним
+              const p0 = [tx - dx, y + 1, tz - dz], p1 = [tx + dx, y + 1, tz + dz], p2 = [tx + dx, y + 1 + sz, tz + dz], p3 = [tx - dx, y + 1 + sz, tz - dz];
+              quad(buckets.detail, [p0, p1, p2, p3], [[u0, 0], [u0 + sz, 0], [u0 + sz, sz], [u0, sz]], [0, 1, 0], tex, c);
+              quad(buckets.detail, [p1, p0, p3, p2], [[u0 + sz, 0], [u0, 0], [u0, sz], [u0 + sz, sz]], [0, 1, 0], tex, c);
+            }
+          }
+        }
+      }
     }
 
     const meshes: THREE.Mesh[] = [];
@@ -299,13 +358,20 @@ export class LevelRenderer {
       if (b.empty) continue;
       const m = new THREE.Mesh(b.geometry(), this.mats[layer]);
       m.castShadow = layer === 'opaque' || layer === 'cutout';
-      m.receiveShadow = layer === 'opaque' || layer === 'cutout';
+      m.receiveShadow = layer === 'opaque' || layer === 'cutout' || layer === 'detail';
       m.frustumCulled = true;
       this.group.add(m);
       meshes.push(m);
     }
     this.meshes.set(key, meshes);
     if (spots.length) this.lights.set(key, spots);
+  }
+
+  /** Сколько треугольников в слое по всем чанкам (для тестов и замеров) */
+  triangles(layer: Layer): number {
+    let n = 0;
+    for (const list of this.meshes.values()) for (const m of list) if (m.material === this.mats[layer]) n += m.geometry.getAttribute('position').count / 3;
+    return n;
   }
 
   /** Прозрачность стен между камерой и героем: hero — точка груди героя, radius — радиус окна (0 — выключить) */

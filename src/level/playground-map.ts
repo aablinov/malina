@@ -68,6 +68,22 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   for (const [fx, fz, f] of [[-22, 3, 'flower_blue'], [-22, 5, 'fern'], [-14, 4, 'flower_yellow'], [-18, 7, 'tall_grass'], [-17, 1, 'flower_white']] as [number, number, string][]) L.set(fx, 0, fz, f);
   labels.push({ text: 'пруд', x: -18, z: 7.8, size: 0.7 });
 
+  // травяной холм в три яруса у западной стены: уступы по 1 м с рваным краем — на них видна бахрома травы
+  const tier = (x0: number, x1: number, z0: number, z1: number, y: number) => {
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+      const edge = x === x0 || x === x1 || z === z0 || z === z1;
+      if (edge && ((x * 7 + z * 13 + y * 5) % 4 === 0)) continue; // рваный край
+      for (let k = 0; k < y; k++) L.set(x, k, z, 'dirt');
+      L.set(x, y, z, 'grass');
+    }
+  };
+  tier(-23, -16, 11, 22, 0);
+  tier(-23, -19, 13, 21, 1);
+  tier(-23, -21, 15, 19, 2);
+  // подъём: ступени с травы на 1-й ярус и с 1-го на 2-й
+  for (const z of [16, 17]) { L.set(-15, 0, z, 'cobble_stairs', 2); L.set(-18, 1, z, 'cobble_stairs', 2); }
+  labels.push({ text: 'уступы: трава свисает с края', x: -19.5, z: 23.6, size: 0.7 });
+
   // трава и цветы россыпью по свободной траве (детерминированно)
   const FLORA = ['tall_grass', 'tall_grass', 'tall_grass', 'fern', 'flower_red', 'flower_yellow', 'flower_blue', 'flower_white'];
   for (let x = -H + 1; x <= H - 1; x++) for (let z = -H + 1; z <= H - 1; z++) {

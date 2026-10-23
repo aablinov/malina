@@ -432,3 +432,26 @@ test('свет как в Unreal: AO, цветокоррекция и дымка 
   expect(r.night.bloom).toBeGreaterThan(r.day.bloom);
   expect(r.night.sun).toBeLessThan(r.day.sun);
 });
+
+test('трава поверх блоков: бахрома свисает с уступов, пучки растут пятнами и не отбрасывают теней', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const v = m.view;
+    let detailShadow = false;
+    v.group.traverse((o: any) => { if (o.isMesh && o.material === v.mats.detail && o.castShadow) detailShadow = true; });
+    const before = v.triangles('detail');
+    // срезать верхний ярус холма — бахрома и пучки пересобираются
+    const L = m.level;
+    L.set(-22, 3, 17, 'grass');
+    v.sync();
+    const after = v.triangles('detail');
+    L.set(-22, 3, 17, 'air');
+    v.sync();
+    return { before, after, back: v.triangles('detail'), opaque: v.triangles('opaque'), detailShadow };
+  });
+  expect(r.before).toBeGreaterThan(5000);
+  expect(r.after).toBeGreaterThan(r.before); // новая трава на вершине: ещё бахрома на 4 стороны
+  expect(r.back).toBe(r.before);
+  expect(r.detailShadow).toBe(false);
+});

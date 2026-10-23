@@ -81,6 +81,8 @@ export interface Textures {
   // декор (src/level/decor.ts)
   chain: THREE.Texture; cobweb: THREE.Texture; banner: THREE.Texture; bone: THREE.Texture; candle: THREE.Texture;
   mushroomRed: THREE.Texture; mushroomGlow: THREE.Texture; mushroomStem: THREE.Texture; lanternGlass: THREE.Texture; roots: THREE.Texture;
+  // трава поверх блоков: бахрома по краю уступа и мелкие пучки (mesher.ts)
+  grassFringe: THREE.Texture; grassTuft: THREE.Texture; flowerTuft: THREE.Texture;
   /** Вода: 16 × 16, двигается смещением UV */
   water: THREE.Texture;
   /** Огонь: 3 кадра по 16 × 16 друг над другом */
@@ -501,6 +503,24 @@ export function makeTextures(): Textures {
   T.lanternGlass = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(Math.hypot(x - 7.5, y - 9) < 4 ? '#fff2b0' : '#ffc860', r, 8));
   }, 128);
+  // бахрома: верхние 8 рядов — свисающая зубчатая трава (верхние 2 — сплошь), низ пустой; 16 px на метр, как у блока
+  T.grassFringe = canvasTex(16, (g, s, r) => {
+    for (let x = 0; x < s; x++) {
+      const len = 2 + Math.floor(r() * 7) - (x % 3 === 1 ? 1 : 0);
+      for (let y = 0; y < len; y++) px(g, x, y, jitter(pick(GRASS, r), r, y > len - 2 ? 4 : 8));
+    }
+  }, 130, { alpha: true });
+  // пучки: травинки растут от низа картинки, высота 2–8 px; квадрат пучка берёт окно этой полосы
+  const blades = (g: Ctx, s: number, r: Rand, flowers: readonly string[]) => {
+    for (let x = 0; x < s; x++) {
+      if (r() < 0.25) continue;
+      const h = 2 + Math.floor(r() * 7);
+      for (let y = s - h; y < s; y++) px(g, x, y, jitter(y < s - h + 2 ? '#a6dc6c' : pick(['#79b84f', '#86c45a', '#6dab43'], r), r, 8));
+      if (flowers.length && r() < 0.3) px(g, x, s - h - 1, jitter(pick(flowers, r), r, 6));
+    }
+  };
+  T.grassTuft = canvasTex(16, (g, s, r) => blades(g, s, r, []), 131, { alpha: true });
+  T.flowerTuft = canvasTex(16, (g, s, r) => blades(g, s, r, ['#f6f2ea', '#ffd84a', '#f070a8', '#8ac4ff']), 132, { alpha: true });
   // корни: тёмная кора с продольными бороздами
   T.roots = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 5 === 0 ? '#2e2016' : pick(['#5a3e28', '#4e3522', '#664830'], r), r, 6));
