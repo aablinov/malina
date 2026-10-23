@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import type { Textures } from '../textures';
 import { Atlas } from './atlas';
-import { CH, type Level } from './level.ts';
+import { CH, chunkKey, type Level } from './level.ts';
 import { DIRS } from './obj.ts';
-import { paletteTextures, type Layer } from './palette.ts';
+import { paletteTextures, type BlockDef, type Layer } from './palette.ts';
 import { decorTextures } from './decor.ts';
 import { DecorRenderer } from './decor-render.ts';
 import { getShape } from './shapes';
@@ -16,9 +16,12 @@ import { getShape } from './shapes';
  * Клетка (x, y, z) стоит в мире центром на целых x и z: занимает [x−0,5; x+0,5) × [y; y+1) × [z−0,5; z+0,5).
  */
 
+/** Запечённый источник: тёплый цвет в вершины блоков в радиусе dist, сила k (без PointLight — бесплатно по кадрам) */
+interface Baked { x: number; y: number; z: number; r: number; g: number; b: number; k: number; dist: number }
+
 interface LightSpot { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
 
-const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow', 'detail', 'river', 'falls'];
+const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow', 'detail', 'river', 'falls', 'portal'];
 
 /**
  * «Рентген»: блоки между камерой и героем (в цилиндре радиуса uXrayR вокруг луча камера → герой,
@@ -32,6 +35,13 @@ function withXray(m: THREE.Material, caps = false): THREE.Material {
   if (caps) m.side = THREE.DoubleSide;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, XRAY_UNIFORMS);
+    // запечённый свет (свечи, портал): атрибут bake добавляется к излучению — светит и ночью, без PointLight
+    if (sh.fragmentShader.includes('totalEmissiveRadiance')) {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 bake;\nvarying vec3 vBake;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBake = bake;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vBake;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vBake * diffuseColor.rgb;');
+    }
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vXrayPos;')
       .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
@@ -137,6 +147,26 @@ if (vTop > 0.5) {
   return m;
 }
 
+/**
+ * Портал (скриншот 14): золото светится само (ярче 1 — bloom), снизу вверх бегут светлые полосы, края мерцают.
+ * Время — общее с водой (uTime).
+ */
+function portalMaterial(map: THREE.Texture): THREE.Material {
+  const m = new THREE.MeshBasicMaterial({ map, toneMapped: false, color: new THREE.Color(1.35, 1.2, 0.95), side: THREE.DoubleSide });
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, WATER_UNIFORMS);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vPW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec3 vPW;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+float band = sin(vPW.y * 3.2 - uTime * 2.4 + sin(vPW.x * 1.7 + vPW.z * 1.7 + uTime * 0.8) * 0.9);
+diffuseColor.rgb *= 0.86 + 0.3 * smoothstep(0.2, 1.0, band) + 0.05 * sin(uTime * 7.0 + vPW.x * 3.0);`);
+  };
+  return m;
+}
+
 const AO_SHADE = [0.5, 0.68, 0.84, 1];
 /** Бахрома: свисает на 8/16 и отстоит от грани на 1/16 (не мерцает с текстурой бока) */
 const FRINGE_H = 0.5, FRINGE_OUT = 1 / 16;
@@ -167,6 +197,9 @@ function macroTint(x: number, z: number): [number, number, number] {
   return [1 + 0.06 * k, 1 + 0.045 * k, 1 - 0.01 * k];
 }
 
+/** Высота верха блока в клетке: полный куб — 1, полублок и ступени — по высоте столкновения */
+const topOf = (d: BlockDef): number => (d.full ? 1 : d.collide > 0 && d.collide < 1 ? d.collide : 1);
+
 function hash(x: number, y: number, z: number, s = 0): number {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 1103515245) + Math.imul(z | 0, 668265263) + Math.imul(s | 0, 1442695041);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -174,7 +207,7 @@ function hash(x: number, y: number, z: number, s = 0): number {
 }
 
 class Bucket {
-  pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = []; flow: number[] = [];
+  pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = []; flow: number[] = []; bake: number[] = [];
   get empty(): boolean { return this.pos.length === 0; }
   geometry(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
@@ -184,6 +217,7 @@ class Bucket {
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('shore', new THREE.Float32BufferAttribute(this.shore, 1));
     g.setAttribute('flow', new THREE.Float32BufferAttribute(this.flow, 2));
+    g.setAttribute('bake', new THREE.Float32BufferAttribute(this.bake, 3));
     return g;
   }
 }
@@ -218,6 +252,7 @@ export class LevelRenderer {
       river: liquid(new THREE.MeshLambertMaterial({ map: T.river, vertexColors: true, transparent: true, opacity: 0.96 }), '#e4f4f6', [1.2, 1.4, 1.5], [0.04, 0.1, 0.13], 0.22),
       // водопад: непрозрачные струи, текстура бежит вниз
       falls: withXray(new THREE.MeshLambertMaterial({ map: T.waterfall, vertexColors: true, emissive: new THREE.Color('#0d3a4a'), emissiveIntensity: 0.6 })),
+      portal: portalMaterial(this.atlas.texture),
       acid: liquid(new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }), '#d8ffb0', [1.4, 2.4, 0.8], [0.2, 0.4, 0.1]),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
       // мелкая трава: только лицевая сторона (пучки выпускаются в обе стороны) — иначе обратная сторона переворачивает
@@ -241,15 +276,50 @@ export class LevelRenderer {
   rebuildAll(): void {
     for (const k of this.meshes.keys()) this.level.dirty.add(k);
     for (const k of this.level.chunks.keys()) this.level.dirty.add(k);
-    this.sync();
     this.decor.maxY = this.maxY;
     this.decor.sync(true);
+    this.sync();
+  }
+
+  private baked: Baked[] = [];
+  private bakedKey = '';
+  private blockBaked: Baked[] = [];
+  private blockBakedVer = -1;
+  /**
+   * Запечённый свет: источники — декор со свечами (light.baked) и блоки с bakedLight. Если набор поменялся,
+   * помечаем чанки вокруг старых и новых источников — их вершины пересчитаются.
+   */
+  private refreshBaked(): void {
+    const L = this.level;
+    if (this.blockBakedVer !== L.version) {
+      this.blockBakedVer = L.version;
+      this.blockBaked = [];
+      L.forEach((x, y, z, id) => {
+        const b = L.defOf(id).bakedLight;
+        if (!b) return;
+        const c = new THREE.Color(b.color);
+        this.blockBaked.push({ x, y: y + 0.5, z, r: c.r, g: c.g, b: c.b, k: b.intensity, dist: b.dist });
+      });
+    }
+    const list: Baked[] = [...this.blockBaked, ...this.decor.baked.map((l) => ({ x: l.x, y: l.y, z: l.z, r: l.color.r, g: l.color.g, b: l.color.b, k: l.intensity, dist: l.dist }))];
+    const key = list.map((l) => `${l.x.toFixed(2)},${l.y.toFixed(2)},${l.z.toFixed(2)},${l.k},${l.dist}`).join('|');
+    if (key === this.bakedKey) return;
+    for (const l of [...this.baked, ...list]) {
+      const c0 = (v: number) => Math.floor((v - l.dist + 0.5) / CH), c1 = (v: number) => Math.floor((v + l.dist + 0.5) / CH);
+      for (let cx = c0(l.x); cx <= c1(l.x); cx++) for (let cy = Math.floor((l.y - l.dist) / CH); cy <= Math.floor((l.y + l.dist) / CH); cy++) for (let cz = c0(l.z); cz <= c1(l.z); cz++) {
+        const k = chunkKey(cx, cy, cz);
+        if (L.chunks.has(k)) L.dirty.add(k);
+      }
+    }
+    this.baked = list;
+    this.bakedKey = key;
   }
 
   /** Перестроить чанки, помеченные в level.dirty */
   sync(): void {
     this.decor.maxY = this.maxY;
     this.decor.sync();
+    this.refreshBaked();
     if (!this.level.dirty.size) return;
     for (const key of this.level.dirty) this.rebuild(key);
     this.level.dirty.clear();
@@ -268,9 +338,23 @@ export class LevelRenderer {
     if (!chunk) return;
     const [cx, cy, cz] = key.split(',').map(Number);
     const L = this.level;
-    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket(), glow: new Bucket(), detail: new Bucket(), river: new Bucket(), falls: new Bucket() };
+    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket(), glow: new Bucket(), detail: new Bucket(), river: new Bucket(), falls: new Bucket(), portal: new Bucket() };
     const spots: LightSpot[] = [];
     const isFull = (x: number, y: number, z: number) => L.defAt(x, y, z).full;
+    // запечённый свет: только источники, достающие до этого чанка
+    const near = this.baked.filter((l) => l.x + l.dist >= cx * CH - 0.5 && l.x - l.dist <= cx * CH + CH - 0.5 && l.z + l.dist >= cz * CH - 0.5 && l.z - l.dist <= cz * CH + CH - 0.5 && l.y + l.dist >= cy * CH && l.y - l.dist <= cy * CH + CH);
+    const lit: [number, number, number] = [0, 0, 0];
+    /** Запечённый свет в вершине: тёплое свечение, к краю радиуса сходит на нет (добавляется к излучению) */
+    const bake = (x: number, y: number, z: number): [number, number, number] => {
+      lit[0] = lit[1] = lit[2] = 0;
+      for (const l of near) {
+        const d = Math.hypot(x - l.x, y - l.y, z - l.z);
+        if (d >= l.dist) continue;
+        const f = (1 - d / l.dist) ** 2 * l.k;
+        lit[0] += l.r * f; lit[1] += l.g * f; lit[2] += l.b * f;
+      }
+      return lit;
+    };
     /** Четырёхугольник в слой: 4 точки мира, uv в долях тайла атласа, нормаль, яркость */
     const quad = (b: Bucket, p: number[][], uv: number[][], n: readonly number[], tex: string, c: number) => {
       const r = this.atlas.uv(tex);
@@ -281,6 +365,7 @@ export class LevelRenderer {
         // трава поверх блока — того же оттенка, что земля под ней
         const [tr, tg, tb] = macroTint(p[k][0], p[k][2]);
         b.col.push(c * tr, c * tg, c * tb);
+        if (near.length) b.bake.push(...bake(p[k][0], p[k][1], p[k][2])); else b.bake.push(0, 0, 0);
         b.shore.push(0);
         b.flow.push(0, 0);
       }
@@ -314,7 +399,7 @@ export class LevelRenderer {
           }
         } else placements.push(yaw);
         const bucket = buckets[part.layer ?? 'opaque'];
-        const atlasUV = (part.layer ?? 'opaque') === 'opaque' || part.layer === 'cutout' || part.layer === 'glow';
+        const atlasUV = (part.layer ?? 'opaque') === 'opaque' || part.layer === 'cutout' || part.layer === 'glow' || part.layer === 'portal';
         const isLiquid = part.layer === 'water' || part.layer === 'acid' || part.layer === 'river';
         const flowX = def.flow ? DIRS[rot][0] * def.flow : 0, flowZ = def.flow ? DIRS[rot][2] * def.flow : 0;
         for (const r of placements) {
@@ -351,10 +436,10 @@ export class LevelRenderer {
                 ao = AO_SHADE[s1 && s2 ? 0 : 3 - (s1 + s2 + s3)];
               }
               const cv = bright * ao;
-              if (def.natural) {
-                const [tr, tg, tb] = macroTint(x + (px - 0.5) * scale + ox, z + (pz - 0.5) * scale + oz);
-                bucket.col.push(cv * tr, cv * tg, cv * tb);
-              } else bucket.col.push(cv, cv, cv);
+              const wx = x + (px - 0.5) * scale + ox, wz = z + (pz - 0.5) * scale + oz;
+              const [tr, tg, tb] = def.natural ? macroTint(wx, wz) : [1, 1, 1];
+              bucket.col.push(cv * tr, cv * tg, cv * tb);
+              if (near.length) bucket.bake.push(...bake(wx, y + py * scale, wz)); else bucket.bake.push(0, 0, 0);
               // берег: в этом углу рядом нет той же жидкости
               let shore = 0;
               if (isLiquid) {
@@ -369,15 +454,18 @@ export class LevelRenderer {
       }
 
       // трава поверх блоков (как в Minecraft Dungeons): бахрома свисает с края уступа, сверху — пучки пятнами
+      const topH = topOf(def);
       if ((def.fringe || def.tufts) && !L.defAt(x, y + 1, z).full) {
         const c0 = bright * 0.97;
+        // у полублока бахрома короче — не длиннее трёх четвертей его высоты
+        const fh = Math.min(FRINGE_H, topH * 0.75);
         if (def.fringe) for (let d = 0; d < 4; d++) {
           const n = L.defAt(x + DIRS[d][0], y, z + DIRS[d][2]);
-          if (n.full || n.collide >= 1) continue;
+          if (n.full || (n.collide > 0 && topOf(n) >= topH)) continue;
           const [ax, az, bx, bz] = FRINGE_EDGE[d];
-          const top = y + 1, bot = y + 1 - FRINGE_H;
+          const top = y + topH, bot = top - fh;
           quad(buckets.detail, [[x + ax - 0.5, top, z + az - 0.5], [x + bx - 0.5, top, z + bz - 0.5], [x + bx - 0.5, bot, z + bz - 0.5], [x + ax - 0.5, bot, z + az - 0.5]],
-            [[0, 1], [1, 1], [1, 1 - FRINGE_H], [0, 1 - FRINGE_H]], DIRS[d], def.fringe, c0);
+            [[0, 1], [1, 1], [1, 1 - fh], [0, 1 - fh]], DIRS[d], def.fringe, c0);
         }
         if (def.tufts && L.isAir(x, y + 1, z)) {
           const n = Math.max(0, Math.min(5, Math.floor(density(x, z) * 7 + hash(x, y, z, 32) * 1.5 - 1.2)));
@@ -391,7 +479,8 @@ export class LevelRenderer {
             for (const a of [ang, ang + Math.PI / 2]) {
               const dx = Math.cos(a) * sz / 2, dz = Math.sin(a) * sz / 2;
               // нормаль вверх: пучок освещён, как земля под ним
-              const p0 = [tx - dx, y + 1, tz - dz], p1 = [tx + dx, y + 1, tz + dz], p2 = [tx + dx, y + 1 + sz, tz + dz], p3 = [tx - dx, y + 1 + sz, tz - dz];
+              const ty = y + topH;
+              const p0 = [tx - dx, ty, tz - dz], p1 = [tx + dx, ty, tz + dz], p2 = [tx + dx, ty + sz, tz + dz], p3 = [tx - dx, ty + sz, tz - dz];
               quad(buckets.detail, [p0, p1, p2, p3], [[u0, 0], [u0 + sz, 0], [u0 + sz, sz], [u0, sz]], [0, 1, 0], tex, c);
               quad(buckets.detail, [p1, p0, p3, p2], [[u0 + sz, 0], [u0, 0], [u0, sz], [u0 + sz, sz]], [0, 1, 0], tex, c);
             }
@@ -404,11 +493,11 @@ export class LevelRenderer {
         const nx = x + DIRS[d][0], nz = z + DIRS[d][2];
         const nDef = L.defAt(nx, y, nz);
         // своё семейство (трава ↔ скала с травой) не перекрываем — та же текстура
-        if (!nDef.natural || L.idAt(nx, y, nz) === id || nDef.bleed?.[0] === def.bleed[0] || L.defAt(nx, y + 1, nz).full) continue;
+        if (!nDef.natural || L.idAt(nx, y, nz) === id || nDef.bleed?.[0] === def.bleed[0] || L.defAt(nx, y + 1, nz).full || topOf(nDef) !== topH || nDef.stairs) continue;
         const tex = def.bleed[Math.floor(hash(x, y, z, 80 + d) * def.bleed.length)];
         const flip = hash(x, y, z, 84 + d) < 0.5;
         const [ax, az, bx, bz] = BLEED_EDGE[d], ox = DIRS[d][0] * BLEED_D, oz = DIRS[d][2] * BLEED_D;
-        const yy = y + 1 + BLEED_LIFT;
+        const yy = y + topH + BLEED_LIFT;
         const P = (u: number, w: number) => [x + u - 0.5, yy, z + w - 0.5];
         const u0 = flip ? 1 : 0, u1 = flip ? 0 : 1;
         const c = 1 - (nDef.jitter ?? 0) * hash(nx, y, nz, 9);

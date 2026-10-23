@@ -23,7 +23,8 @@ export interface DecorDef {
   /** Мешает пройти: боксы для героя, пути и врагов (поворачиваются вместе с предметом, наклон не учитывается) */
   solid?: DecorBox[];
   /** Источник света; at — точка в локальных координатах формы */
-  light?: { color: string; intensity: number; dist: number; at: [number, number, number] };
+  /** Источник света; at — точка в локальных координатах формы; baked — без PointLight, тёплый цвет «запекается» в вершины блоков рядом */
+  light?: { color: string; intensity: number; dist: number; at: [number, number, number]; baked?: boolean };
 }
 
 const D = (name: string, title: string, category: string, anchor: Anchor, parts: Part[], o: Partial<DecorDef> = {}): DecorDef =>
@@ -82,6 +83,13 @@ export const DECOR: DecorDef[] = [
   D('waterfall_splash', 'Брызги водопада', 'вода', 'floor', [p('waterfall_splash', { side: 'foam', top: 'foam', bottom: 'foam' })]),
   D('waterfall_foam', 'Пена у камней', 'вода', 'floor', [p('waterfall_foam', { side: 'foam', top: 'foam', bottom: 'foam' })]),
   D('foam_patch', 'Пена на воде', 'вода', 'floor', [p('foam_patch', { side: 'foam', top: 'foam', bottom: 'foam' })]),
+  // --- мир: свечи (скриншот 13) — свет запечён в соседние блоки, PointLight нет ---
+  D('candles_group', 'Свечи кучкой', 'свечи', 'floor', [p('candles_group', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candles_group_flame', { side: 'fire' }, 'fire')],
+    { light: { color: '#ffb25a', intensity: 0.9, dist: 2.6, at: [0, 0.4, 0], baked: true } }),
+  D('candles_row', 'Свечи в ряд', 'свечи', 'floor', [p('candles_row', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candles_row_flame', { side: 'fire' }, 'fire')],
+    { light: { color: '#ffb25a', intensity: 0.8, dist: 3, at: [0, 0.4, 0], baked: true } }),
+  D('candle_tall', 'Свеча высокая', 'свечи', 'floor', [p('candle_tall', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candle_tall_flame', { side: 'fire' }, 'fire')],
+    { light: { color: '#ffb25a', intensity: 0.6, dist: 2, at: [0, 0.8, 0], baked: true } }),
 ];
 
 export const DECOR_BY_NAME: Record<string, DecorDef> = Object.fromEntries(DECOR.map((d) => [d.name, d]));

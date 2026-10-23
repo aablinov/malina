@@ -65,6 +65,10 @@ const PATH_BASE = '#c99153', PATH_PRINT = '#d6a466';
 const HAY_BASE = '#cda652', HAY_BAND = '#c25a26', HAY_RIM = '#dcbd6c';
 const YARD_BASE = '#c39552', YARD_DASH = '#a7794a', WALL_STONE = '#a1a8b0';
 /** Мир: скалы, вода, мост (скриншоты 11, 12) */
+/** Мир: холмы (скриншоты 13, 15) — крона: тень, середина, свет, блик; сухая трава */
+const TREE = ['#4c6e2a', '#6a8c37', '#90b04e', '#a8c860'], DRY = ['#cdb862', '#c2ad58', '#d8c472'];
+/** Мир: портал (скриншот 14) */
+const PORTAL_GOLD = '#efb64a', PORTAL_LIGHT = '#ffe9a0', PORTAL_STONE = '#4c5155', PORTAL_INLAY = '#d9a640', PORTAL_FLOOR = '#b3a693';
 const CLIFF = '#9aa2ab', CLIFF_DARK = '#7b8996', BRIDGE_WOOD = '#c49458', BRIDGE_POST = '#8d6639', RIVER = '#2f586c', FALLS = '#1f88ab';
 const CRATE_WOOD = '#9a6a4c', CRATE_BAND = '#46414a', CRATE_PAINT = '#e2a936', CHEST_WOOD = '#8f5b35', CART_WOOD = '#a2694a';
 /** Камень: булыжник, кирпич, сланцевый кирпич руин, плиты, мох */
@@ -192,6 +196,10 @@ export interface Textures {
   // скалы, вода, мост (скриншоты 11, 12); river и waterfall — свои текстуры с повтором, не в атласе
   cliff: THREE.Texture; cliffDark: THREE.Texture; cliffGrassSide: THREE.Texture; foam: THREE.Texture;
   bridgePlank: THREE.Texture; bridgePost: THREE.Texture; river: THREE.Texture; waterfall: THREE.Texture;
+  // холмы (скриншоты 13, 15): пышная листва, сухая трава, ромашки
+  leavesClump: THREE.Texture; leavesPuff: THREE.Texture; dryGrass: THREE.Texture; daisies: THREE.Texture;
+  // портал (скриншот 14)
+  portal: THREE.Texture; portalFrame: THREE.Texture; portalTrim: THREE.Texture; portalFloor: THREE.Texture;
   // рваный край между травой и дорожкой (mesher.ts, bleed): 4 варианта маски у каждой
   grassEdge0: THREE.Texture; grassEdge1: THREE.Texture; grassEdge2: THREE.Texture; grassEdge3: THREE.Texture;
   pathEdge0: THREE.Texture; pathEdge1: THREE.Texture; pathEdge2: THREE.Texture; pathEdge3: THREE.Texture;
@@ -722,6 +730,82 @@ export function makeTextures(): Textures {
     }
   }, 177);
   T.waterfall.wrapS = T.waterfall.wrapT = THREE.RepeatWrapping;
+
+  // ---------- мир: холмы (скриншоты 13, 15) ----------
+  /** Гроздь листьев: лопастный круг, светлый верх, тёмный низ-право — листва «кустится», а не рябит */
+  const clump = (g: Ctx, r: Rand, cx: number, cy: number, rad: number) => {
+    for (let y = Math.floor(cy - rad - 1); y <= cy + rad + 1; y++) for (let x = Math.floor(cx - rad - 1); x <= cx + rad + 1; x++) {
+      const a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx), d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      const edge = rad * (0.82 + 0.18 * Math.cos(a * 5));
+      if (d > edge || x < 0 || y < 0 || x > 15 || y > 15) continue;
+      const lit = (cx - x) + (cy - y) > rad * 0.3 ? TREE[2] : (x - cx) + (y - cy) > rad * 0.7 ? TREE[0] : TREE[1];
+      px(g, x, y, jitter(d > edge - 0.9 ? mix(lit, TREE[0], 0.4) : lit, r, 3));
+    }
+  };
+  T.leavesClump = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const edge = Math.min(x, y, s - 1 - x, s - 1 - y);
+      if (r() < (edge === 0 ? 0.5 : 0.04)) continue;
+      px(g, x, y, jitter(TREE[0], r, 3));
+    }
+    for (let i = 0; i < 9; i++) clump(g, r, 1 + r() * 14, 1 + r() * 14, 2 + r() * 1.2);
+    for (let i = 0; i < 3; i++) clump(g, r, 2 + r() * 12, 1 + r() * 6, 1.6);
+    for (let i = 0; i < 2; i++) { const x = 2 + ((r() * 12) | 0), y = 2 + ((r() * 12) | 0); px(g, x, y, TREE[3]); }
+  }, 180, { alpha: true });
+  // «шапки» над гранями: редкие грозди с пустотой по краю — силуэт кроны пушится за пределы куба
+  T.leavesPuff = canvasTex(16, (g, _s, r) => {
+    for (let i = 0; i < 7; i++) { const a = r() * Math.PI * 2, d = 3.5 + r() * 3.5; clump(g, r, 8 + Math.cos(a) * d, 8 + Math.sin(a) * d, 1.6 + r() * 1.2); }
+  }, 181, { alpha: true });
+  // сухая трава: высокие светло-жёлтые стебли (поле на скриншоте 15)
+  T.dryGrass = canvasTex(16, (g, s, r) => {
+    for (let i = 0; i < 10; i++) {
+      let x = 1 + ((r() * 14) | 0); const h = 6 + ((r() * 9) | 0), col = pick(DRY, r);
+      for (let k = 0; k < h; k++) { px(g, x, s - 1 - k, jitter(k > h - 3 ? mix(col, '#ffffff', 0.15) : col, r, 3)); if (r() < 0.2) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); }
+    }
+  }, 182, { alpha: true });
+  // ромашки: низкие стебельки и белые цветки с жёлтой серединкой
+  T.daisies = canvasTex(16, (g, s, r) => {
+    for (let i = 0; i < 6; i++) {
+      const x = 1 + ((r() * 13) | 0), h = 3 + ((r() * 5) | 0);
+      for (let k = 0; k < h; k++) px(g, x, s - 1 - k, jitter(GRASS_DARK, r, 3));
+      const y = s - 1 - h;
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) px(g, x + dx, y + dy, jitter('#f4f2ea', r, 3));
+      px(g, x, y, '#f2c94a');
+    }
+  }, 183, { alpha: true });
+
+  // ---------- мир: портал (скриншот 14) ----------
+  // сияние: золото с мягкими вертикальными струями и светлыми пятнами (анимацию добавляет шейдер слоя portal)
+  T.portal = canvasTex(16, (g, s, r) => {
+    for (let x = 0; x < s; x++) {
+      const k = 0.5 + 0.5 * Math.sin(x * 0.9 + r() * 0.6);
+      for (let y = 0; y < s; y++) px(g, x, y, jitter(mix(PORTAL_GOLD, PORTAL_LIGHT, k * 0.45 + (y / s) * 0.35), r, 3));
+    }
+    overlayBlobs(g, s, r, PORTAL_LIGHT, 3, [2, 3.5], 0.6);
+  }, 190);
+  // рама: тёмный камень, по краю фаска светлее, в середине — квадратный узор
+  T.portalFrame = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, PORTAL_STONE, 2, [{ col: mix(PORTAL_STONE, '#ffffff', 0.08), n: 2, rad: [3, 5], k: 0.5 }]);
+    for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, mix(PORTAL_STONE, '#ffffff', 0.12)); px(g, k, i, mix(PORTAL_STONE, '#000000', 0.15)); }
+    for (let i = 4; i < 12; i++) for (const k of [4, 11]) { px(g, i, k, mix(PORTAL_STONE, '#000000', 0.08)); px(g, k, i, mix(PORTAL_STONE, '#000000', 0.08)); }
+  }, 191);
+  // перемычка: тот же камень с золотой инкрустацией-меандром
+  T.portalTrim = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, PORTAL_STONE, 2, []);
+    for (let x = 0; x < s; x++) { px(g, x, 2, PORTAL_INLAY); px(g, x, 13, PORTAL_INLAY); }
+    for (let x = 0; x < s; x += 4) for (let y = 5; y <= 10; y++) px(g, x + (y < 8 ? 0 : 2), y, PORTAL_INLAY);
+    for (let x = 0; x < s; x += 4) { px(g, x + 1, 5, PORTAL_INLAY); px(g, x + 3, 10, PORTAL_INLAY); }
+  }, 192);
+  // пол у портала: светлые тёплые плиты, на него заходит трава (natural)
+  T.portalFloor = canvasTex(16, (g, _s, r) => {
+    for (let ty = 0; ty < 2; ty++) for (let tx = 0; tx < 2; tx++) {
+      const t = (r() - 0.5) * 2, col = t > 0 ? mix(PORTAL_FLOOR, '#ffffff', t * 0.06) : mix(PORTAL_FLOOR, '#000000', -t * 0.05);
+      for (let y = ty * 8; y < ty * 8 + 8; y++) for (let x = tx * 8; x < tx * 8 + 8; x++) {
+        const lx = x - tx * 8, ly = y - ty * 8;
+        px(g, x, y, jitter(lx === 0 || ly === 0 ? mix(col, '#ffffff', 0.1) : lx === 7 || ly === 7 ? mix(col, '#000000', 0.07) : col, r, 2));
+      }
+    }
+  }, 193);
 
   T.square = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;

@@ -275,6 +275,15 @@ shape('foam_patch', (o) => {
   }
 });
 
+// --- мир: свечи на стенах (скриншот 13) — свет запекается в блоки, без PointLight ---
+const candleSet = (name, list) => {
+  shape(name, (o) => { for (const [x, z, h] of list) o.xf({ move: [x, 0, z] }, () => cbox(o, 2 * P, h, 2 * P)); });
+  shape(`${name}_flame`, (o) => { for (const [x, z, h] of list) o.xf({ move: [x - 0.5, h, z - 0.5] }, () => o.cross('side', 6.5 * P, 9.5 * P, 0, 3.5 * P)); });
+};
+candleSet('candles_group', [[-4 * P, -3 * P, 7 * P], [2 * P, -1 * P, 5 * P], [-1 * P, 4 * P, 4 * P], [5 * P, 4 * P, 6 * P], [-5 * P, 3 * P, 3 * P]]);
+candleSet('candles_row', [[-12 * P, 0, 5 * P], [-6 * P, P, 7 * P], [0, -P, 4 * P], [6 * P, 0, 6 * P], [12 * P, P, 5 * P]]);
+candleSet('candle_tall', [[0, 0, 11 * P]]);
+
 mkdirSync(OUT, { recursive: true });
 for (const s of shapes) writeFileSync(join(OUT, `${s.name}.obj`), s.text());
 console.log(`${shapes.length} форм декора → ${OUT}`);

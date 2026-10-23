@@ -471,3 +471,36 @@ test('трава поверх блоков: бахрома свисает с у�
   expect(r.bleed).toBe(8); // 4 стороны × 2 треугольника: дорожка заходит на траву
   expect(r.restored).toBe(r.back);
 });
+
+test('мир: водопад, река с течением, портал и запечённый свет рисуются; через мост — на другой берег', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const v = m.view;
+    const names = new Set<string>();
+    m.level.forEach((_x: number, _y: number, _z: number, id: number) => names.add(m.level.palette[id]));
+    const want = ['wall_stone', 'yard_floor', 'hay', 'cliff', 'cliff_dark', 'cliff_grass', 'waterfall', 'river', 'bridge_deck', 'bridge_post', 'grass_slab', 'leaves_fluffy', 'dry_grass', 'daisies', 'path_stairs', 'portal', 'portal_frame', 'portal_floor'];
+    const decor = new Set(m.level.decor.map((d: any) => d.name));
+    const wantDecor = ['crates_banded_stack', 'chest', 'cart_loaded', 'bench', 'lantern_post_double', 'lantern_wall', 'waterfall_splash', 'foam_patch', 'candles_group', 'candles_row', 'candle_tall'];
+    // по дороге через мост: от двора к порталу
+    m.hero.place(46, 0, 0); m.step(0.2);
+    m.click(58, 0); m.step(1 / 60); m.release();
+    for (let t = 0; t < 10 && m.goal; t += 0.1) m.step(0.1);
+    return {
+      missing: want.filter((n) => !names.has(n)), missingDecor: wantDecor.filter((n) => !decor.has(n)),
+      falls: v.triangles('falls'), river: v.triangles('river'), portal: v.triangles('portal'),
+      baked: v.baked.length, bakedPoint: v.decor.lights.some((l: any) => l.intensity < 1.5 && l.dist < 3.5),
+      hero: { x: m.hero.pos.x, z: m.hero.pos.z, y: m.hero.pos.y, left: !!m.goal },
+    };
+  });
+  expect(r.missing).toEqual([]);
+  expect(r.missingDecor).toEqual([]);
+  expect(r.falls).toBeGreaterThan(0);
+  expect(r.river).toBeGreaterThan(0);
+  expect(r.portal).toBeGreaterThan(0);
+  expect(r.baked).toBeGreaterThan(5); // свечи и портал
+  expect(r.bakedPoint).toBe(false); // у свечей нет PointLight
+  expect(Math.hypot(r.hero.x - 58, r.hero.z)).toBeLessThan(0.3);
+  expect(r.hero.y).toBe(0);
+  expect(r.hero.left).toBe(false);
+});
