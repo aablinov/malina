@@ -522,7 +522,7 @@ test('мир: водопад, река с течением, портал и за
   expect(r.plateau.d).toBeLessThan(0.3);
 });
 
-test('редактор: ландшафт ползунками — поставить, перестроить, случайные края, отмена возвращает как было', async ({ page }) => {
+test('редактор: ландшафт — поставить, выбрать, править, сдвинуть, убрать; отмена и JSON', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(pathToFileURL(resolve('dist/index.html')).href + '?dev=editor');
@@ -534,19 +534,42 @@ test('редактор: ландшафт ползунками — постави
     const orig = snap();
     m.setMode('land');
     Object.assign(m.land, { w: 20, d: 16, layers: 6, seed: 7 });
-    m.placeLand(5, 0, 6);
-    const placed = m.lastLand?.batch.length ?? 0;
+    const a = m.placeLand(5, 0, 6);
+    const placed = a.cells.length;
     let maxTop = 0;
     for (let x = -5; x <= 15; x++) for (let z = -2; z <= 14; z++) { const t = L.topAt(x, z, 10); if (t !== null) maxTop = Math.max(maxTop, t + 1); }
-    const a = snap();
+    const afterA = snap();
+    // второй кусок в стороне, затем выбрать первый кликом по его клетке и править
+    const b = m.placeLand(40, 0, 6);
+    const afterB = snap();
+    const picked = m.landAt(5, 1, 6) === a && m.landAt(40, 0, 6) === b && m.landAt(80, 0, 80) === null;
+    m.selectLand(a);
+    const undoBefore = m.lands.length;
     m.randomizeLand();
-    const b = snap();
+    m.editLand({ w: 14, layers: 4 });
+    const edited = a.w === 14 && a.layers === 4 && m.selectedLand === a;
+    m.editLand({ x: 8 });
+    const moved = a.x === 8;
+    // ручной блок поверх куска переживает перестройку
+    m.edit(8, 6, 6, 'cobble');
+    m.selectLand(a);
+    m.randomizeLand();
+    const manualKept = L.nameAt(8, 6, 6) === 'cobble';
+    const json = L.toJSON();
+    const inJson = Array.isArray(json.meta?.lands) && json.meta.lands.length === 2 && json.meta.lands[0].x === 8;
+    m.removeLand(a);
+    const removed = m.lands.length === 1 && m.selectedLand === null;
+    m.undo(); // вернуть кусок
+    const back = m.lands.length === 2;
+    m.undo(); m.undo(); m.undo(); // правка после ручного блока, ручной блок, слитые правки куска
+    const restoredB = snap() === afterB && a.x === 5 && a.w === 20;
+    m.undo(); // второй кусок
+    const restoredA = snap() === afterA && m.lands.length === 1;
     m.undo();
-    return { placed, maxTop, changedByRandom: a !== b, restored: snap() === orig, lastBatchGone: true };
+    return { placed, maxTop, picked, undoBefore, edited, moved, manualKept, inJson, removed, back, restoredB, restoredA, restored: snap() === orig && m.lands.length === 0 };
   });
   expect(errors).toEqual([]);
   expect(r.placed).toBeGreaterThan(50);
   expect(r.maxTop).toBeLessThanOrEqual(3 + 1); // 6 слоёв = 3 м над уровнем 0 (+ трава и цветы сверху)
-  expect(r.changedByRandom).toBe(true);
-  expect(r.restored).toBe(true); // перестройка не плодит правок: одна отмена убирает кусок целиком
+  expect(r).toMatchObject({ picked: true, edited: true, moved: true, manualKept: true, inJson: true, removed: true, back: true, restoredB: true, restoredA: true, restored: true });
 });

@@ -32,8 +32,11 @@ import './editor.css';
  * Стёрли блок — предметы, прикреплённые к нему (поле on), удаляются в той же отмене.
  *
  * Ещё раз Tab — режим «Ландшафт» (src/level/kit.ts, landscape): ползунки — размер по X и Z, слои по 0,5 м, крупность плит,
- * доля камня; ЛКМ по земле — поставить кусок ландшафта (проходим отовсюду); ползунки и «Случайно» (новый изгиб краёв
- * и углов) перестраивают последний поставленный кусок на месте. Отмена — Ctrl+Z, как у блоков.
+ * доля камня; ЛКМ по земле — поставить кусок ландшафта (проходим отовсюду), ЛКМ по куску — выбрать его, Shift+ЛКМ — новый
+ * кусок поверх. Выбранный кусок правят ползунки и «Случайно» (новый изгиб краёв и углов), стрелки — сдвиг, Del — убрать,
+ * Esc — снять выбор. Куски хранятся в карте (meta.lands) с параметрами и изменёнными клетками — их можно править и после
+ * сохранения; блоки, поставленные поверх куска руками, перестройка не трогает. Отмена — Ctrl+Z, подряд идущие правки
+ * одного куска — одна запись.
  */
 
 export const EDITOR_STORAGE = 'malina.editor.level';
@@ -44,8 +47,20 @@ const maps = MAPS;
 interface BlockEdit { x: number; y: number; z: number; was: [string, number]; now: [string, number] }
 /** Правка декора: before null — предмет добавлен, after null — убран, иначе — изменён (снимки полей) */
 interface DecorEdit { decor: DecorItem; before: DecorItem | null; after: DecorItem | null }
-type Edit = BlockEdit | DecorEdit;
+/** Кусок ландшафта на карте (meta.lands): центр, параметры и клетки, которые он поменял, — [x, y, z, было, поворот, стало, поворот] */
+interface LandPiece { x: number; y: number; z: number; w: number; d: number; layers: number; scale: number; stone: number; seed: number; cells: [number, number, number, string, number, string, number][] }
+type LandParams = Omit<LandPiece, 'cells'>;
+/** Правка куска ландшафта: снимки записи до и после (null — куска нет) */
+interface LandEdit { land: LandPiece; before: LandPiece | null; after: LandPiece | null }
+type Edit = BlockEdit | DecorEdit | LandEdit;
 const snapDecor = (d: DecorItem): DecorItem => JSON.parse(JSON.stringify(d)) as DecorItem;
+const snapLand = (p: LandPiece): LandPiece => JSON.parse(JSON.stringify(p)) as LandPiece;
+const landParams = ({ cells: _, ...p }: LandPiece): LandParams => p;
+/** Прямоугольник куска: x0, z0, x1, z1 и верх рамки по высоте */
+const landRect = (p: LandParams): [number, number, number, number, number] => {
+  const x0 = p.x - Math.floor(p.w / 2), z0 = p.z - Math.floor(p.d / 2);
+  return [x0, z0, x0 + p.w - 1, z0 + p.d - 1, p.y + Math.ceil(p.layers / 2) + 2];
+};
 
 export function runEditor(): void {
   document.body.classList.add('dev-editor');
@@ -105,10 +120,11 @@ export function runEditor(): void {
   let dirtyAutosave = false;
   // декор
   let mode: 'blocks' | 'decor' | 'land' = 'blocks';
-  /** Ландшафт: размеры, слои по 0,5 м, крупность плит, доля камня (%), зерно шума — от него изгибы краёв и углы */
+  /** Ландшафт для нового куска: размеры, слои по 0,5 м, крупность плит, доля камня (%), зерно шума — от него изгибы краёв и углов */
   const land = { w: 24, d: 18, layers: 4, scale: 22, stone: 30, seed: 1 };
-  /** Последний поставленный кусок: его перестраивают ползунки и «Случайно» */
-  let lastLand: { x: number; y: number; z: number; batch: Edit[] } | null = null;
+  /** Выбранный кусок — его правят ползунки, «Случайно», стрелки и Del; live — последняя правка куска, к ней сливаются следующие */
+  let selLand: LandPiece | null = null, hoverLand: LandPiece | null = null;
+  let live: { piece: LandPiece; batch: Edit[] } | null = null;
   let curDecor = DECOR[0].name;
   /** Поворот пользователя: [рыск, наклон, крен], градусы */
   const dRot = [0, 0, 0];
@@ -139,7 +155,7 @@ export function runEditor(): void {
         <label class="ed-sl"><span>Крупность</span><input type="range" id="lnS" min="8" max="40" step="1"><b id="lnSv"></b></label>
         <label class="ed-sl"><span>Камень, %</span><input type="range" id="lnK" min="0" max="80" step="5"><b id="lnKv"></b></label>
         <button id="lnRnd" class="ed-wide">Случайно: края и углы</button>
-        <div class="ed-note">ЛКМ по земле — поставить. Ползунки и «Случайно» перестраивают последний кусок. Ctrl+Z — отмена.</div>
+        <div class="ed-note">ЛКМ по земле — поставить, ЛКМ по куску — выбрать, Shift+ЛКМ — новый поверх. Ползунки и «Случайно» правят выбранный кусок, стрелки — сдвиг, Del — убрать, Esc — снять выбор.</div>
       </div></div>
     <div class="ed-help" id="edHelp"></div>
     <div class="ed-toast" id="edToast"></div>`;
@@ -177,7 +193,7 @@ export function runEditor(): void {
   const HELP = {
     blocks: 'ЛКМ — поставить · Shift+ЛКМ — убрать · Ctrl+ЛКМ ×2 — залить · Ctrl+Shift+ЛКМ — вырезать · СКМ — вращать · ПКМ — двигать · Q — взять · R — повернуть · PgUp/PgDn — срез · P — спавн · Tab — декор · Ctrl+Z/Y · Ctrl+S',
     decor: 'ЛКМ — поставить · ЛКМ по предмету — выбрать и тащить · Shift+ЛКМ / Del — убрать · R / Shift+R — поворот ±15° · T — наклон · Y — крен · Z — случайный поворот · Q — взять · Ctrl+D — копия · Esc — снять выбор · Tab — ландшафт',
-    land: 'ЛКМ по земле — поставить ландшафт · ползунки и «Случайно» — перестроить последний · Ctrl+Z — отмена · СКМ — вращать · ПКМ — двигать · Tab — блоки',
+    land: 'ЛКМ по земле — поставить · ЛКМ по куску — выбрать · Shift+ЛКМ — новый поверх · ползунки и «Случайно» — править выбранный · стрелки — сдвиг (Shift ×4) · Del — убрать · Esc — снять выбор · Ctrl+Z — отмена · Tab — блоки',
   };
   const decPal = $('edDec');
   const decThumbs = makeDecorThumbs();
@@ -197,12 +213,20 @@ export function runEditor(): void {
   const sliders: [string, keyof typeof land][] = [['lnW', 'w'], ['lnD', 'd'], ['lnL', 'layers'], ['lnS', 'scale'], ['lnK', 'stone']];
   for (const [id, key] of sliders) {
     const inp = $<HTMLInputElement>(id);
-    inp.value = String(land[key]);
-    $(`${id}v`).textContent = String(land[key]);
-    inp.addEventListener('input', () => { land[key] = Number(inp.value); $(`${id}v`).textContent = inp.value; relandscape(); });
+    inp.addEventListener('input', () => { setLandParam(key, Number(inp.value)); $(`${id}v`).textContent = inp.value; });
     inp.addEventListener('change', () => inp.blur());
   }
-  $('lnRnd').addEventListener('click', (e) => { land.seed = 1 + Math.floor(Math.random() * 1e6); relandscape(); toast('Новые края и углы'); (e.currentTarget as HTMLElement).blur(); });
+  $('lnRnd').addEventListener('click', (e) => { randomizeLand(); toast('Новые края и углы'); (e.currentTarget as HTMLElement).blur(); });
+  /** Ползунки показывают выбранный кусок, без выбора — параметры нового */
+  function syncSliders(): void {
+    const src = selLand ?? land;
+    for (const [id, key] of sliders) { $<HTMLInputElement>(id).value = String(src[key]); $(`${id}v`).textContent = String(src[key]); }
+  }
+  function setLandParam(key: keyof typeof land, v: number): void {
+    if (selLand) changeLand(selLand, { ...landParams(selLand), [key]: v });
+    else { land[key] = v; refreshHud(); }
+  }
+  function randomizeLand(): void { setLandParam('seed', 1 + Math.floor(Math.random() * 1e6)); }
   const mapsSel = $<HTMLSelectElement>('edMaps');
   for (const path of Object.keys(maps).sort()) { const o = document.createElement('option'); o.value = path; o.textContent = `${maps[path].name} (${path})`; mapsSel.appendChild(o); }
   $('edFloor').addEventListener('click', () => {
@@ -226,8 +250,11 @@ export function runEditor(): void {
   function refreshHud(): void {
     let n = 0; level.forEach(() => n++);
     if (mode === 'land') {
-      $('edCur').innerHTML = `<div><b>Ландшафт ${land.w} × ${land.d} м, ${land.layers} слоёв (${land.layers / 2} м)</b><br><small>крупность ${land.scale} · камень ${land.stone}% · зерно ${land.seed}${lastLand ? ' · правится последний кусок' : ''}</small></div>`;
-      $('edStat').textContent = `${n} блоков · ${level.decor.length} декора · ${place ? `курсор ${place[0]}, ${place[1]}, ${place[2]}` : ''}`;
+      const p = selLand ?? land;
+      const head = selLand ? `Выбран кусок в ${selLand.x}, ${selLand.y}, ${selLand.z}` : 'Новый кусок';
+      $('edCur').innerHTML = `<div><b>${head}: ${p.w} × ${p.d} м, ${p.layers} слоёв (${p.layers / 2} м)</b><br><small>крупность ${p.scale} · камень ${p.stone}% · зерно ${p.seed}${selLand ? ' · стрелки — сдвиг · Del — убрать · Esc — снять' : ''}</small></div>`;
+      $('edStat').textContent = `${n} блоков · ${level.decor.length} декора · ${lands().length} кусков ландшафта · ${place ? `курсор ${place[0]}, ${place[1]}, ${place[2]}` : ''}`;
+      frameLand(selBox, selLand);
       return;
     }
     if (mode === 'decor') {
@@ -249,6 +276,9 @@ export function runEditor(): void {
     decPal.hidden = m !== 'decor';
     landPanel.hidden = m !== 'land';
     landBox.visible = false;
+    if (m !== 'land') { selLand = hoverLand = null; live = null; }
+    selBox.visible = false;
+    syncSliders();
     $('edMode').textContent = `Режим: ${m === 'blocks' ? 'блоки' : m === 'decor' ? 'декор' : 'ландшафт'}`;
     $('edHelp').textContent = HELP[m];
     if (m !== 'decor') { selected = hoverDecor = null; placement = null; moving = null; }
@@ -292,6 +322,7 @@ export function runEditor(): void {
   }
   function setLevel(L: Level): void {
     selected = hoverDecor = null; moving = null;
+    selLand = hoverLand = null; live = null;
     view.dispose();
     level = L;
     view = new LevelRenderer(scene, level, T);
@@ -301,6 +332,7 @@ export function runEditor(): void {
     nameInput.value = level.name;
     if (level.spawn) controls.target.set(level.spawn[0], level.spawn[1], level.spawn[2]);
     buildGhost();
+    syncSliders();
     dirtyAutosave = true;
     refreshHud();
   }
@@ -313,8 +345,17 @@ export function runEditor(): void {
     Object.assign(e.decor, snapDecor(to));
     if (level.decor.includes(e.decor)) level.touchDecor(); else level.addDecor(e.decor);
   }
+  /** Куски ландшафта карты: хранятся в meta.lands и уходят в JSON вместе с картой */
+  function lands(): LandPiece[] { return ((level.meta.lands as LandPiece[] | undefined) ??= []); }
+  function applyLand(e: LandEdit, to: LandPiece | null): void {
+    const arr = lands();
+    if (!to) { const i = arr.indexOf(e.land); if (i >= 0) arr.splice(i, 1); if (selLand === e.land) selLand = null; return; }
+    Object.assign(e.land, snapLand(to));
+    if (!arr.includes(e.land)) arr.push(e.land);
+  }
   function apply(e: Edit, back = false): void {
-    if ('decor' in e) applyDecor(e, back ? e.before : e.after);
+    if ('land' in e) applyLand(e, back ? e.before : e.after);
+    else if ('decor' in e) applyDecor(e, back ? e.before : e.after);
     else if (back) level.set(e.x, e.y, e.z, e.was[0], e.was[1]);
     else level.set(e.x, e.y, e.z, e.now[0], e.now[1]);
   }
@@ -366,41 +407,82 @@ export function runEditor(): void {
     for (const e of b) apply(e);
     undo.push(b); dirtyAutosave = true; toast('Повтор');
   }
-  /**
-   * Поставить кусок ландшафта с центром в (cx, cz) на уровне y: края спадают к земле, внутри — плиты по 0,5 м,
-   * не выше land.layers слоёв. Все изменённые клетки — одна правка в отмене.
-   */
-  function placeLand(cx: number, y: number, cz: number): void {
-    const x0 = cx - Math.floor(land.w / 2), z0 = cz - Math.floor(land.d / 2), x1 = x0 + land.w - 1, z1 = z0 + land.d - 1;
-    const y1 = y + Math.ceil(land.layers / 2) + 2;
+  /** Построить кусок по его параметрам (внутри пакета правок): края спадают к земле, внутри — плиты по 0,5 м; клетки — в p.cells */
+  function buildLand(p: LandPiece): void {
+    const [x0, z0, x1, z1, y1] = landRect(p);
     const was = new Map<string, [string, number]>();
-    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let yy = y - 1; yy <= y1; yy++) was.set(`${x},${yy},${z}`, [level.nameAt(x, yy, z), level.rotAt(x, yy, z)]);
-    landscape(level, x0, z0, x1, z1, y, {
-      layers: land.layers, max: land.layers, scale: land.scale, stone: land.stone / 100, seed: land.seed, dry: 0.08, daisies: 0.04,
-      fade: Math.max(2, Math.min(land.w, land.d) / 5),
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let yy = p.y - 1; yy <= y1; yy++) was.set(`${x},${yy},${z}`, [level.nameAt(x, yy, z), level.rotAt(x, yy, z)]);
+    landscape(level, x0, z0, x1, z1, p.y, {
+      layers: p.layers, max: p.layers, scale: p.scale, stone: p.stone / 100, seed: p.seed, dry: 0.08, daisies: 0.04,
+      fade: Math.max(2, Math.min(p.w, p.d) / 5),
       flat: (x, z) => x === x0 || x === x1 || z === z0 || z === z1,
-      bumps: [{ x: cx, z: cz, rx: land.w * 0.38, rz: land.d * 0.38, h: land.layers * 0.55 }],
+      bumps: [{ x: p.x, z: p.z, rx: p.w * 0.38, rz: p.d * 0.38, h: p.layers * 0.55 }],
     });
-    beginBatch();
-    const b = batch!;
+    p.cells = [];
     for (const [k, w0] of was) {
       const [x, yy, z] = k.split(',').map(Number);
       const now: [string, number] = [level.nameAt(x, yy, z), level.rotAt(x, yy, z)];
-      if (now[0] !== w0[0] || (now[0] !== 'air' && now[1] !== w0[1])) b.push({ x, y: yy, z, was: w0, now });
+      if (now[0] === w0[0] && (now[0] === 'air' || now[1] === w0[1])) continue;
+      batch!.push({ x, y: yy, z, was: w0, now });
+      p.cells.push([x, yy, z, w0[0], w0[1], now[0], now[1]]);
     }
+  }
+  /** Вернуть клетки куска как было до него — кроме тех, что после него поменяли руками */
+  function clearLand(p: LandPiece): void {
+    for (let i = p.cells.length - 1; i >= 0; i--) {
+      const [x, y, z, wn, wr, nn, nr] = p.cells[i];
+      if (level.nameAt(x, y, z) === nn && (nn === 'air' || level.rotAt(x, y, z) === nr)) edit(x, y, z, wn, wr);
+    }
+  }
+  /**
+   * Поставить новый кусок (p = null) или перестроить кусок p с новыми параметрами и центром — одной правкой.
+   * Если прошлая правка была правкой этого же куска и она последняя в отмене — сливаем: откатываем её и строим заново.
+   */
+  function changeLand(p: LandPiece | null, params: LandParams): LandPiece {
+    if (p && live?.piece === p && undo[undo.length - 1] === live.batch) {
+      const b = undo.pop()!;
+      for (let i = b.length - 1; i >= 0; i--) apply(b[i], true);
+    }
+    const piece = p ?? { ...params, cells: [] };
+    const before = lands().includes(piece) ? snapLand(piece) : null;
+    beginBatch();
+    const b = batch!;
+    if (before) clearLand(piece);
+    Object.assign(piece, params);
+    buildLand(piece);
+    b.push({ land: piece, before, after: snapLand(piece) });
+    if (!lands().includes(piece)) lands().push(piece);
     endBatch();
+    live = { piece, batch: b };
+    selLand = piece;
     dirtyAutosave = true;
-    lastLand = b.length ? { x: cx, y, z: cz, batch: b } : null;
+    syncSliders();
+    refreshHud();
+    return piece;
+  }
+  function placeLand(x: number, y: number, z: number): LandPiece { return changeLand(null, { ...land, x, y, z }); }
+  /** Убрать кусок: клетки — как было до него, запись — из карты */
+  function removeLand(p: LandPiece): void {
+    beginBatch();
+    clearLand(p);
+    batch!.push({ land: p, before: snapLand(p), after: null });
+    applyLand({ land: p, before: null, after: null }, null);
+    endBatch();
+    live = null; selLand = hoverLand = null;
+    dirtyAutosave = true;
+    syncSliders();
     refreshHud();
   }
-  /** Перестроить последний кусок с текущими ползунками (если он ещё последняя правка) */
-  function relandscape(): void {
-    if (!lastLand || undo[undo.length - 1] !== lastLand.batch) { refreshHud(); return; }
-    const { x, y, z, batch: b } = lastLand;
-    undo.pop();
-    for (let i = b.length - 1; i >= 0; i--) apply(b[i], true);
-    placeLand(x, y, z);
+  /** Кусок под клеткой: в его прямоугольнике и по высоте в его рамке; из перекрытых — поставленный позже */
+  function landAt(c: [number, number, number]): LandPiece | null {
+    const arr = lands();
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const [x0, z0, x1, z1, y1] = landRect(arr[i]);
+      if (c[0] >= x0 && c[0] <= x1 && c[2] >= z0 && c[2] <= z1 && c[1] >= arr[i].y - 1 && c[1] <= y1) return arr[i];
+    }
+    return null;
   }
+  function selectLand(p: LandPiece | null): void { selLand = p; live = null; syncSliders(); refreshHud(); }
   function fillBox(a: [number, number, number], b: [number, number, number], name: string): void {
     beginBatch();
     for (let y = Math.min(a[1], b[1]); y <= Math.max(a[1], b[1]); y++)
@@ -448,7 +530,7 @@ export function runEditor(): void {
   // ---------- курсор ----------
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  function updateCursor(ev: { clientX: number; clientY: number }): void {
+  function updateCursor(ev: { clientX: number; clientY: number; shiftKey?: boolean }): void {
     ndc.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     if (mode === 'decor') { updateDecorCursor(); return; }
@@ -469,12 +551,11 @@ export function runEditor(): void {
     cursorBox.visible = !!place;
     if (mode === 'land') {
       hitBox.visible = cursorBox.visible = false;
-      landBox.visible = !!place;
-      if (place) {
-        const hgt = Math.max(0.5, land.layers / 2);
-        landBox.scale.set(land.w, hgt, land.d);
-        landBox.position.set(place[0] - Math.floor(land.w / 2) + (land.w - 1) / 2, place[1] + hgt / 2, place[2] - Math.floor(land.d / 2) + (land.d - 1) / 2);
-      }
+      // над куском — его рамка (выбрать), иначе — рамка нового куска
+      hoverLand = hit && !ev.shiftKey ? landAt(hit) : null;
+      (landBox.material as THREE.LineBasicMaterial).color.set(hoverLand ? '#ffffff' : '#ffd25a');
+      if (hoverLand) frameLand(landBox, hoverLand === selLand ? null : hoverLand);
+      else frameLand(landBox, place ? { ...land, x: place[0], y: place[1], z: place[2] } : null);
     }
     if (hit) hitBox.position.set(hit[0], hit[1] + 0.5, hit[2]);
     if (place) cursorBox.position.set(place[0], place[1] + 0.5, place[2]);
@@ -555,17 +636,31 @@ export function runEditor(): void {
   }
 
   // рамка будущего куска ландшафта под курсором
-  const landBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: '#ffd25a', depthTest: false, transparent: true }));
-  landBox.renderOrder = 20;
-  landBox.visible = false;
-  scene.add(landBox);
+  const landBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: '#ffd25a', depthTest: false, transparent: true, toneMapped: false }));
+  const selBox = new THREE.LineSegments(landBox.geometry, new THREE.LineBasicMaterial({ color: '#4cff7a', depthTest: false, transparent: true, toneMapped: false }));
+  // выбранный кусок — ещё и лёгкая заливка объёма: тонкую рамку на пёстрой траве легко потерять
+  selBox.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: '#4cff7a', transparent: true, opacity: 0.12, depthWrite: false, toneMapped: false })));
+  landBox.renderOrder = selBox.renderOrder = 20;
+  landBox.visible = selBox.visible = false;
+  scene.add(landBox, selBox);
+  /** Рамка куска ландшафта: прямоугольник и высота в его слоях; null — спрятать */
+  function frameLand(box: THREE.LineSegments, p: LandParams | null): void {
+    box.visible = !!p && mode === 'land';
+    if (!p) return;
+    const [x0, z0, x1, z1] = landRect(p);
+    const hgt = Math.max(0.5, p.layers / 2);
+    box.scale.set(p.w + 0.04, hgt + 0.04, p.d + 0.04);
+    box.position.set((x0 + x1) / 2, p.y + hgt / 2, (z0 + z1) / 2);
+  }
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     updateCursor(e);
     if (mode === 'land') {
-      if (place) { placeLand(place[0], place[1], place[2]); toast('Ландшафт поставлен'); }
+      if (hoverLand) { selectLand(hoverLand); toast('Кусок выбран — ползунки правят его'); }
+      else if (place) { placeLand(place[0], place[1], place[2]); toast('Ландшафт поставлен'); }
+      updateCursor(e);
       return;
     }
     if (mode === 'decor') {
@@ -624,7 +719,7 @@ export function runEditor(): void {
     if (ctrl && e.code === 'KeyO') { e.preventDefault(); open(); return; }
     if (e.code === 'Tab') { e.preventDefault(); setMode(nextMode()); return; }
     if (mode === 'decor') { decorKey(e, ctrl); return; }
-    if (mode === 'land') { if (e.code === 'KeyG') grid.visible = !grid.visible; return; }
+    if (mode === 'land') { landKey(e); return; }
     if (ctrl) return;
     const list = BLOCKS.filter((b) => b.name !== 'air');
     switch (e.code) {
@@ -645,6 +740,14 @@ export function runEditor(): void {
     }
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
+  function landKey(e: KeyboardEvent): void {
+    const k = e.shiftKey ? 4 : 1;
+    const mv: Record<string, [number, number]> = { ArrowLeft: [-k, 0], ArrowRight: [k, 0], ArrowUp: [0, -k], ArrowDown: [0, k] };
+    if (e.code === 'KeyG') grid.visible = !grid.visible;
+    else if (e.code === 'Escape') selectLand(null);
+    else if (selLand && (e.code === 'Delete' || e.code === 'Backspace' || e.code === 'KeyX')) { removeLand(selLand); toast('Кусок убран'); }
+    else if (selLand && mv[e.code]) { e.preventDefault(); changeLand(selLand, { ...landParams(selLand), x: selLand.x + mv[e.code][0], z: selLand.z + mv[e.code][1] }); }
+  }
   function decorKey(e: KeyboardEvent, ctrl: boolean): void {
     const step = e.shiftKey ? -15 : 15;
     const turn = (axis: number) => {
@@ -727,8 +830,11 @@ export function runEditor(): void {
     addDecor: (d: DecorItem) => addDecor(d), removeDecor: (d: DecorItem) => removeDecor(d), changeDecor,
     undo: doUndo, redo: doRedo,
     /** Ландшафт: параметры, поставить в точку, перестроить, случайные края */
-    land, placeLand, relandscape, get lastLand() { return lastLand; },
-    randomizeLand() { land.seed = 1 + Math.floor(Math.random() * 1e6); relandscape(); },
+    land, placeLand, randomizeLand, removeLand, selectLand, get lands() { return lands(); }, get selectedLand() { return selLand; },
+    /** Ландшафт под клеткой (как клик мышью по куску) */
+    landAt: (x: number, y: number, z: number) => landAt([x, y, z]),
+    /** Править выбранный кусок: любые параметры и центр */
+    editLand(params: Partial<LandParams>) { if (selLand) changeLand(selLand, { ...landParams(selLand), ...params }); },
   };
 }
 
