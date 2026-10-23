@@ -338,3 +338,54 @@ test('декор мешает пройти: герой упирается в о�
   expect(r.solids).toBeGreaterThanOrEqual(8);
   expect(r.inObstacles).toBe(r.solids);
 });
+
+test('редактор: декор на пол, стену и потолок, перенос, отмена; стёрли стену — факел ушёл вместе с ней', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(pathToFileURL(resolve('dist/index.html')).href + '?dev=editor');
+  await page.waitForFunction(() => (window as any).__malina?.mode === 'editor');
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const L = m.level;
+    m.setMode('decor');
+    const n0 = L.decor.length;
+    m.setDecor('rubble');
+    const floor = m.aimDecor([3, 10, 3], [0, -1, 0]);
+    m.setDecor('torch_wall');
+    const wall = m.aimDecor([18, 1.5, 0], [0, 0, 1]); // стена «угла» z = 5
+    m.setDecor('chain');
+    const ceiling = m.aimDecor([9, 0.5, 49], [0, 1, 0]); // навес витрины
+    m.setDecor('torch_wall');
+    const wrong = m.aimDecor([3, 10, 3], [0, -1, 0]); // настенный на пол — нельзя
+    const item = m.addDecor({ name: 'torch_wall', pos: wall.pos, rot: wall.rot, on: wall.on });
+    const added = L.decor.length - n0;
+    m.changeDecor(item, (d: any) => { d.pos = [d.pos[0] + 1, d.pos[1], d.pos[2]]; });
+    const moved = item.pos[0];
+    m.undo();
+    const back = item.pos[0];
+    // стёрли клетку стены, к которой прикреплён факел, — уходит и факел; отмена возвращает оба
+    m.edit(wall.on[0], wall.on[1], wall.on[2], 'air');
+    const erased = { decor: L.decor.length - n0, block: L.nameAt(...wall.on) };
+    m.undo();
+    const restored = { decor: L.decor.length - n0, block: L.nameAt(...wall.on), same: L.decor.includes(item) };
+    m.undo(); // убрать сам факел
+    m.view.sync();
+    return { floor, wall, ceiling, wrong, added, moved, back, erased, restored, after: L.decor.length - n0, inst: m.view.decor.instances > 0 };
+  });
+  expect(errors).toEqual([]);
+  expect(r.floor.pos).toEqual([3, 0, 3]);
+  expect(r.wall.pos).toEqual([18, 1.5, 4.5]);
+  expect(Math.abs(r.wall.rot[0])).toBe(180);
+  expect(r.wall.on).toEqual([18, 1, 5]);
+  expect(r.ceiling.pos).toEqual([9, 2, 49]);
+  expect(r.wrong).toBe(null);
+  expect(r.added).toBe(1);
+  expect(r.moved).toBe(19);
+  expect(r.back).toBe(18);
+  expect(r.erased).toEqual({ decor: 0, block: 'air' });
+  expect(r.restored.decor).toBe(1);
+  expect(r.restored.block).not.toBe('air');
+  expect(r.restored.same).toBe(true);
+  expect(r.after).toBe(0);
+  expect(r.inst).toBe(true);
+});

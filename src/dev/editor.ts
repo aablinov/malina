@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { makeTextures, textureByName } from '../textures';
-import { Level, type LevelJSON } from '../level/level.ts';
+import { Level, type DecorItem, type LevelJSON } from '../level/level.ts';
 import { LevelRenderer } from '../level/mesher';
 import { BLOCKS, CATEGORIES, blockDef, type BlockDef } from '../level/palette.ts';
 import { raycastVoxels } from '../level/collide.ts';
 import { DIRS } from '../level/obj.ts';
 import { MAPS, ROOMS } from '../level/maps';
 import { buildFloor } from '../level/dungeon.ts';
+import { DECOR, DECOR_CATEGORIES, decorDef } from '../level/decor.ts';
+import { decorMatrix } from '../level/decor-render.ts';
+import { attachedTo, placeDecor, type DecorPlacement } from '../level/decor-place.ts';
+import type { Layer } from '../level/palette.ts';
 import './editor.css';
 
 /**
@@ -20,6 +24,11 @@ import './editor.css';
  * Q — взять блок под курсором, R — повернуть, [ ] — листать палитру, 1–9 — быстрые блоки,
  * PgUp/PgDn — срез по высоте, P — точка появления, G — сетка, WASD — сдвинуть камеру,
  * Ctrl+Z / Ctrl+Y — отмена/повтор, Ctrl+S — скачать JSON, Ctrl+O — открыть JSON.
+ *
+ * Tab — режим «Декор» (src/level/decor.ts): ЛКМ — поставить предмет (на пол, стену или потолок — по его опоре),
+ * ЛКМ по предмету — выбрать и тащить, Shift+ЛКМ или Del — убрать, R / Shift+R — поворот ±15°, T — наклон, Y — крен,
+ * Z — случайный поворот, Q — взять предмет под курсором, Ctrl+D — копия выбранного, [ ] — листать, Esc — снять выбор.
+ * Стёрли блок — предметы, прикреплённые к нему (поле on), удаляются в той же отмене.
  */
 
 export const EDITOR_STORAGE = 'malina.editor.level';
@@ -27,7 +36,11 @@ const QUICK = ['grass', 'dirt', 'stone', 'cobble', 'bricks', 'planks', 'log', 'l
 
 const maps = MAPS;
 
-interface Edit { x: number; y: number; z: number; was: [string, number]; now: [string, number] }
+interface BlockEdit { x: number; y: number; z: number; was: [string, number]; now: [string, number] }
+/** Правка декора: before null — предмет добавлен, after null — убран, иначе — изменён (снимки полей) */
+interface DecorEdit { decor: DecorItem; before: DecorItem | null; after: DecorItem | null }
+type Edit = BlockEdit | DecorEdit;
+const snapDecor = (d: DecorItem): DecorItem => JSON.parse(JSON.stringify(d)) as DecorItem;
 
 export function runEditor(): void {
   document.body.classList.add('dev-editor');
@@ -85,6 +98,15 @@ export function runEditor(): void {
   let lastPainted = '';
   let drag: 'place' | 'remove' | null = null;
   let dirtyAutosave = false;
+  // декор
+  let mode: 'blocks' | 'decor' = 'blocks';
+  let curDecor = DECOR[0].name;
+  /** Поворот пользователя: [рыск, наклон, крен], градусы */
+  const dRot = [0, 0, 0];
+  let randomYaw = false, randYaw = 0;
+  let placement: DecorPlacement | null = null;
+  let hoverDecor: DecorItem | null = null, selected: DecorItem | null = null;
+  let moving: { item: DecorItem; before: DecorItem } | null = null;
 
   // ---------- интерфейс ----------
   const ui = document.createElement('div');
@@ -96,10 +118,11 @@ export function runEditor(): void {
       <select id="edMaps"><option value="">Встроенные карты…</option></select>
       <button id="edFloor" title="Собрать этаж подземелья из комнат-заготовок">Этаж…</button>
       <button id="edPlay" title="Открыть игру с этой картой">Играть ▶</button>
+      <button id="edMode" title="Tab — блоки / декор">Режим: блоки</button>
       <span class="ed-stat" id="edStat"></span>
     </div>
-    <div class="ed-side"><div class="ed-cur" id="edCur"></div><div id="edPal"></div></div>
-    <div class="ed-help">ЛКМ — поставить · Shift+ЛКМ — убрать · Ctrl+ЛКМ ×2 — залить · Ctrl+Shift+ЛКМ — вырезать · СКМ — вращать · ПКМ — двигать · Q — взять · R — повернуть · PgUp/PgDn — срез · P — спавн · Ctrl+Z/Y · Ctrl+S</div>
+    <div class="ed-side"><div class="ed-cur" id="edCur"></div><div id="edPal"></div><div id="edDec" hidden></div></div>
+    <div class="ed-help" id="edHelp"></div>
     <div class="ed-toast" id="edToast"></div>`;
   document.body.appendChild(ui);
   const $ = <E extends HTMLElement = HTMLElement>(id: string): E => ui.querySelector<E>('#' + id)!;
@@ -132,6 +155,23 @@ export function runEditor(): void {
       pal.appendChild(btn);
     }
   }
+  const HELP = {
+    blocks: 'ЛКМ — поставить · Shift+ЛКМ — убрать · Ctrl+ЛКМ ×2 — залить · Ctrl+Shift+ЛКМ — вырезать · СКМ — вращать · ПКМ — двигать · Q — взять · R — повернуть · PgUp/PgDn — срез · P — спавн · Tab — декор · Ctrl+Z/Y · Ctrl+S',
+    decor: 'ЛКМ — поставить · ЛКМ по предмету — выбрать и тащить · Shift+ЛКМ / Del — убрать · R / Shift+R — поворот ±15° · T — наклон · Y — крен · Z — случайный поворот · Q — взять · Ctrl+D — копия · Esc — снять выбор · Tab — блоки',
+  };
+  const decPal = $('edDec');
+  const decThumbs = makeDecorThumbs();
+  for (const cat of DECOR_CATEGORIES) {
+    const h = document.createElement('div'); h.className = 'ed-cat'; h.textContent = cat; decPal.appendChild(h);
+    for (const d of DECOR.filter((d) => d.category === cat)) {
+      const btn = document.createElement('button');
+      btn.className = 'ed-blk'; btn.dataset.name = d.name; btn.title = `${d.name} · ${d.anchor === 'floor' ? 'на пол' : d.anchor === 'wall' ? 'на стену' : 'к потолку'}`;
+      btn.innerHTML = `<img src="${decThumbs.get(d.name) ?? ''}" alt=""><span>${d.title}</span>`;
+      btn.addEventListener('click', () => { setDecor(d.name); btn.blur(); });
+      decPal.appendChild(btn);
+    }
+  }
+  $('edMode').addEventListener('click', (e) => { setMode(mode === 'blocks' ? 'decor' : 'blocks'); (e.currentTarget as HTMLElement).blur(); });
   const mapsSel = $<HTMLSelectElement>('edMaps');
   for (const path of Object.keys(maps).sort()) { const o = document.createElement('option'); o.value = path; o.textContent = `${maps[path].name} (${path})`; mapsSel.appendChild(o); }
   $('edFloor').addEventListener('click', () => {
@@ -153,12 +193,67 @@ export function runEditor(): void {
     refreshHud();
   }
   function refreshHud(): void {
+    let n = 0; level.forEach(() => n++);
+    if (mode === 'decor') {
+      const d = decorDef(curDecor);
+      const r = dRot.some(Boolean) ? ` · ${dRot.join('° / ')}°` : '';
+      const sel = selected ? `<br><small>выбран: ${decorDef(selected.name).title}</small>` : '';
+      $('edCur').innerHTML = `<img src="${decThumbs.get(d.name) ?? ''}" alt=""><div><b>${d.title}</b><br><small>${d.name}${r}${randomYaw ? ' · случайный поворот' : ''}</small>${sel}</div>`;
+      const at = placement ? `точка ${placement.pos.map((v) => +v.toFixed(3)).join(', ')}` : '';
+      $('edStat').textContent = `${n} блоков · ${level.decor.length} декора · срез y ≤ ${maxY} · ${at}`;
+      return;
+    }
     const d = blockDef(current);
     $('edCur').innerHTML = `<img src="${thumb(d)}" alt=""><div><b>${d.title}</b><br><small>${d.name}${d.rotatable ? ` · поворот ${rot * 90}°` : ''}</small></div>`;
-    let n = 0; level.forEach(() => n++);
-    $('edStat').textContent = `${n} блоков · срез y ≤ ${maxY} · ${place ? `курсор ${place[0]}, ${place[1]}, ${place[2]}` : ''}`;
+    $('edStat').textContent = `${n} блоков · ${level.decor.length} декора · срез y ≤ ${maxY} · ${place ? `курсор ${place[0]}, ${place[1]}, ${place[2]}` : ''}`;
+  }
+  function setMode(m: 'blocks' | 'decor'): void {
+    mode = m;
+    pal.hidden = m !== 'blocks';
+    decPal.hidden = m !== 'decor';
+    $('edMode').textContent = `Режим: ${m === 'blocks' ? 'блоки' : 'декор'}`;
+    $('edHelp').textContent = HELP[m];
+    if (m === 'blocks') { selected = hoverDecor = null; placement = null; moving = null; }
+    cursorBox.visible = hitBox.visible = false;
+    ghost.visible = false; outline.visible = false;
+    refreshHud();
+  }
+  function setDecor(name: string): void {
+    curDecor = name;
+    for (const b of decPal.querySelectorAll<HTMLElement>('.ed-blk')) b.classList.toggle('on', b.dataset.name === name);
+    buildGhost();
+    refreshHud();
+  }
+  /** Превью декора для палитры: каждый предмет рисуется один раз отдельным маленьким рендером */
+  function makeDecorThumbs(): Map<string, string> {
+    const out = new Map<string, string>();
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = 72;
+      const r = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true });
+      const sc = new THREE.Scene();
+      const dl = new THREE.DirectionalLight('#fff3d6', 2.2); dl.position.set(3, 5, 4);
+      sc.add(new THREE.HemisphereLight('#dfeaff', '#7a6a50', 1.2), dl);
+      const L = new Level('превью');
+      const v = new LevelRenderer(sc, L, T);
+      const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 50);
+      const box = new THREE.Box3(), ctr = new THREE.Vector3(), size = new THREE.Vector3();
+      for (const d of DECOR) {
+        L.decor.length = 0;
+        L.addDecor({ name: d.name, pos: [0, 0, 0] });
+        v.sync();
+        box.setFromObject(v.decor.group).getCenter(ctr); box.getSize(size);
+        const k = Math.max(size.x, size.y, size.z, 0.3);
+        cam.position.copy(ctr).add(new THREE.Vector3(1, 0.85, 1.25).normalize().multiplyScalar(k * 2.3));
+        cam.lookAt(ctr);
+        r.render(sc, cam);
+        out.set(d.name, c.toDataURL());
+      }
+      v.dispose(); r.dispose(); r.forceContextLoss();
+    } catch { /* без WebGL превью нет — палитра всё равно работает */ }
+    return out;
   }
   function setLevel(L: Level): void {
+    selected = hoverDecor = null; moving = null;
     view.dispose();
     level = L;
     view = new LevelRenderer(scene, level, T);
@@ -167,26 +262,65 @@ export function runEditor(): void {
     undo.length = redo.length = 0;
     nameInput.value = level.name;
     if (level.spawn) controls.target.set(level.spawn[0], level.spawn[1], level.spawn[2]);
+    buildGhost();
     dirtyAutosave = true;
     refreshHud();
   }
 
   // ---------- правки ----------
-  function apply(e: Edit): void { level.set(e.x, e.y, e.z, e.now[0], e.now[1]); }
+  /** Привести предмет к снимку: null — убрать с карты, иначе — вернуть на карту с полями снимка */
+  function applyDecor(e: DecorEdit, to: DecorItem | null): void {
+    if (!to) { level.removeDecor(e.decor); if (selected === e.decor) selected = null; return; }
+    delete e.decor.rot; delete e.decor.on;
+    Object.assign(e.decor, snapDecor(to));
+    if (level.decor.includes(e.decor)) level.touchDecor(); else level.addDecor(e.decor);
+  }
+  function apply(e: Edit, back = false): void {
+    if ('decor' in e) applyDecor(e, back ? e.before : e.after);
+    else if (back) level.set(e.x, e.y, e.z, e.was[0], e.was[1]);
+    else level.set(e.x, e.y, e.z, e.now[0], e.now[1]);
+  }
+  function record(e: Edit): void {
+    if (batch) batch.push(e);
+    else { undo.push([e]); redo.length = 0; if (undo.length > 200) undo.shift(); }
+    dirtyAutosave = true;
+  }
   function edit(x: number, y: number, z: number, name: string, r: number): void {
     const was: [string, number] = [level.nameAt(x, y, z), level.rotAt(x, y, z)];
     if (was[0] === name && (name === 'air' || was[1] === r)) return;
-    const e: Edit = { x, y, z, was, now: [name, r] };
+    const own = !batch;
+    if (own) beginBatch();
+    const e: BlockEdit = { x, y, z, was, now: [name, r] };
     apply(e);
-    (batch ?? (() => { const b: Edit[] = []; undo.push(b); redo.length = 0; return b; })()).push(e);
-    if (!batch && undo.length > 200) undo.shift();
-    dirtyAutosave = true;
+    record(e);
+    // стёрли блок — убрать прикреплённый к нему декор (факел на стене, цепь на потолке)
+    if (name === 'air') for (const d of level.decor.filter((d) => attachedTo(d, x, y, z))) removeDecor(d);
+    if (own) endBatch();
+  }
+  function addDecor(d: DecorItem): DecorItem {
+    level.addDecor(d);
+    record({ decor: d, before: null, after: snapDecor(d) });
+    return d;
+  }
+  function removeDecor(d: DecorItem): void {
+    const before = snapDecor(d);
+    level.removeDecor(d);
+    if (selected === d) selected = null;
+    if (hoverDecor === d) hoverDecor = null;
+    record({ decor: d, before, after: null });
+  }
+  /** Изменить предмет на месте (поворот, перенос) одной правкой */
+  function changeDecor(d: DecorItem, fn: (d: DecorItem) => void): void {
+    const before = snapDecor(d);
+    fn(d);
+    level.touchDecor();
+    record({ decor: d, before, after: snapDecor(d) });
   }
   function beginBatch(): void { batch = []; undo.push(batch); redo.length = 0; if (undo.length > 200) undo.shift(); }
   function endBatch(): void { if (batch && !batch.length) undo.pop(); batch = null; }
   function doUndo(): void {
     const b = undo.pop(); if (!b) return;
-    for (let i = b.length - 1; i >= 0; i--) level.set(b[i].x, b[i].y, b[i].z, b[i].was[0], b[i].was[1]);
+    for (let i = b.length - 1; i >= 0; i--) apply(b[i], true);
     redo.push(b); dirtyAutosave = true; toast('Отмена');
   }
   function doRedo(): void {
@@ -244,6 +378,7 @@ export function runEditor(): void {
   function updateCursor(ev: { clientX: number; clientY: number }): void {
     ndc.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1);
     ray.setFromCamera(ndc, camera);
+    if (mode === 'decor') { updateDecorCursor(); return; }
     const o = ray.ray.origin, d = ray.ray.direction;
     const h = raycastVoxels(level, o.x, o.y, o.z, d.x, d.y, d.z, 300, maxY);
     hit = null; place = null;
@@ -264,10 +399,95 @@ export function runEditor(): void {
     refreshHud();
   }
 
+  // ---------- декор: призрак под курсором и рамка выбранного ----------
+  const ghost = new THREE.Group();
+  ghost.visible = false;
+  scene.add(ghost);
+  const outline = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color('#4cff7a'));
+  (outline.material as THREE.LineBasicMaterial).depthTest = false;
+  outline.renderOrder = 21;
+  outline.visible = false;
+  scene.add(outline);
+  function buildGhost(): void {
+    for (const m of [...ghost.children] as THREE.Mesh[]) { ghost.remove(m); (m.material as THREE.Material).dispose(); }
+    const def = decorDef(curDecor);
+    for (const layer of ['opaque', 'cutout', 'glow', 'fire'] as Layer[]) {
+      const g = view.decor.geometryOf(def, layer);
+      if (!g) continue;
+      const mat = layer === 'fire'
+        ? new THREE.MeshBasicMaterial({ map: T.fire, transparent: true, opacity: 0.7, alphaTest: 0.3, depthWrite: false, side: THREE.DoubleSide })
+        : new THREE.MeshLambertMaterial({ map: view.atlas.texture, vertexColors: true, transparent: true, opacity: 0.6, alphaTest: 0.3, depthWrite: false, side: THREE.DoubleSide });
+      ghost.add(new THREE.Mesh(g, mat));
+    }
+  }
+  /** Рамка предмета: габариты его форм с поворотом */
+  function frameDecor(d: DecorItem): void {
+    const def = decorDef(d.name);
+    const box = outline.box.makeEmpty();
+    const m = decorMatrix(d);
+    for (const layer of ['opaque', 'cutout', 'glow', 'fire'] as Layer[]) {
+      const g = view.decor.geometryOf(def, layer);
+      if (!g) continue;
+      if (!g.boundingBox) g.computeBoundingBox();
+      box.union(g.boundingBox!.clone().applyMatrix4(m));
+    }
+    box.expandByScalar(0.03);
+    outline.visible = true;
+  }
+  function aim(anchorOf: DecorItem | null): DecorPlacement | null {
+    const def = decorDef(anchorOf?.name ?? curDecor);
+    // переносим — сохраняем поворот предмета (у настенного — наклон и крен, рыск задаёт стена)
+    const extra = anchorOf ? (def.anchor === 'wall' ? [0, anchorOf.rot?.[1] ?? 0, anchorOf.rot?.[2] ?? 0] : [anchorOf.rot?.[0] ?? 0, anchorOf.rot?.[1] ?? 0, anchorOf.rot?.[2] ?? 0])
+      : [dRot[0] + (randomYaw ? randYaw : 0), dRot[1], dRot[2]];
+    return placeDecor(level, def.anchor, ray.ray.origin, ray.ray.direction, extra, maxY);
+  }
+  function updateDecorCursor(): void {
+    cursorBox.visible = hitBox.visible = false;
+    placement = aim(moving?.item ?? null);
+    if (moving) {
+      if (placement) {
+        const p = placement;
+        moving.item.pos = p.pos;
+        if (p.rot.length) moving.item.rot = p.rot; else delete moving.item.rot;
+        if (p.on) moving.item.on = p.on; else delete moving.item.on;
+        level.touchDecor();
+      }
+      ghost.visible = false;
+      frameDecor(moving.item);
+      refreshHud();
+      return;
+    }
+    const dh = view.decor.raycast(ray);
+    const o = ray.ray.origin;
+    const pd = placement ? Math.hypot(placement.pos[0] - o.x, placement.pos[1] - o.y, placement.pos[2] - o.z) : Infinity;
+    hoverDecor = dh && dh.distance < pd + 0.3 ? dh.item : null;
+    ghost.visible = !!placement && !hoverDecor;
+    if (placement && ghost.visible) {
+      decorMatrix({ name: curDecor, pos: placement.pos, rot: placement.rot }, ghost.matrix);
+      ghost.matrixAutoUpdate = false;
+      ghost.matrixWorldNeedsUpdate = true;
+    }
+    const show = hoverDecor ?? selected;
+    if (show) frameDecor(show); else outline.visible = false;
+    refreshHud();
+  }
+
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     updateCursor(e);
+    if (mode === 'decor') {
+      if (hoverDecor) {
+        if (e.shiftKey) { removeDecor(hoverDecor); toast('Предмет убран'); }
+        else { selected = hoverDecor; moving = { item: selected, before: snapDecor(selected) }; }
+      } else if (placement && !e.shiftKey) {
+        const p = placement;
+        selected = addDecor({ name: curDecor, pos: p.pos, ...(p.rot.length ? { rot: p.rot } : {}), ...(p.on ? { on: p.on } : {}) });
+        if (randomYaw) randYaw = Math.round(Math.random() * 24) * 15;
+      } else selected = null;
+      updateDecorCursor();
+      return;
+    }
     if (e.ctrlKey || e.metaKey) {
       const cell = e.shiftKey ? hit : place;
       if (!cell) return;
@@ -290,7 +510,14 @@ export function runEditor(): void {
     if (drag === 'place') edit(cell[0], cell[1], cell[2], current, rot);
     else edit(cell[0], cell[1], cell[2], 'air', 0);
   }
-  window.addEventListener('pointerup', () => { if (drag) { endBatch(); drag = null; } });
+  window.addEventListener('pointerup', () => {
+    if (drag) { endBatch(); drag = null; }
+    if (moving) {
+      const { item, before } = moving;
+      moving = null;
+      if (JSON.stringify(before) !== JSON.stringify(item)) record({ decor: item, before, after: snapDecor(item) });
+    }
+  });
   canvas.addEventListener('pointermove', (e) => { updateCursor(e); paint(); });
 
   // ---------- клавиши ----------
@@ -303,6 +530,8 @@ export function runEditor(): void {
     if (ctrl && e.code === 'KeyY') { e.preventDefault(); doRedo(); return; }
     if (ctrl && e.code === 'KeyS') { e.preventDefault(); save(); return; }
     if (ctrl && e.code === 'KeyO') { e.preventDefault(); open(); return; }
+    if (e.code === 'Tab') { e.preventDefault(); setMode(mode === 'blocks' ? 'decor' : 'blocks'); return; }
+    if (mode === 'decor') { decorKey(e, ctrl); return; }
     if (ctrl) return;
     const list = BLOCKS.filter((b) => b.name !== 'air');
     switch (e.code) {
@@ -323,6 +552,43 @@ export function runEditor(): void {
     }
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
+  function decorKey(e: KeyboardEvent, ctrl: boolean): void {
+    const step = e.shiftKey ? -15 : 15;
+    const turn = (axis: number) => {
+      if (selected) changeDecor(selected, (d) => {
+        const r = [d.rot?.[0] ?? 0, d.rot?.[1] ?? 0, d.rot?.[2] ?? 0];
+        r[axis] = ((r[axis] + step) % 360 + 540) % 360 - 180;
+        while (r.length > 1 && r[r.length - 1] === 0) r.pop();
+        if (r.length === 1 && r[0] === 0) delete d.rot; else d.rot = r;
+      });
+      else dRot[axis] = ((dRot[axis] + step) % 360 + 540) % 360 - 180;
+    };
+    if (ctrl && e.code === 'KeyD') {
+      e.preventDefault();
+      if (selected) { const c = snapDecor(selected); c.pos = [c.pos[0] + 0.5, c.pos[1], c.pos[2] + 0.5]; selected = addDecor(c); toast('Копия'); }
+    } else if (ctrl) return;
+    const list = DECOR.map((d) => d.name);
+    switch (e.code) {
+      case 'KeyR': turn(0); break;
+      case 'KeyT': turn(1); break;
+      case 'KeyY': turn(2); break;
+      case 'KeyZ': randomYaw = !randomYaw; randYaw = randomYaw ? Math.round(Math.random() * 24) * 15 : 0; toast(`Случайный поворот: ${randomYaw ? 'вкл' : 'выкл'}`); break;
+      case 'KeyQ': {
+        const d = hoverDecor ?? selected;
+        if (d) { setDecor(d.name); const r = d.rot ?? []; dRot[0] = decorDef(d.name).anchor === 'wall' ? 0 : r[0] ?? 0; dRot[1] = r[1] ?? 0; dRot[2] = r[2] ?? 0; }
+        break;
+      }
+      case 'Delete': case 'Backspace': case 'KeyX': { const d = selected ?? hoverDecor; if (d) { removeDecor(d); toast('Предмет убран'); } break; }
+      case 'BracketLeft': setDecor(list[(list.indexOf(curDecor) - 1 + list.length) % list.length]); break;
+      case 'BracketRight': setDecor(list[(list.indexOf(curDecor) + 1) % list.length]); break;
+      case 'Escape': selected = null; outline.visible = false; break;
+      case 'PageUp': maxY = Math.min(64, maxY + 1); view.maxY = maxY; view.rebuildAll(); break;
+      case 'PageDown': maxY = Math.max(-8, maxY - 1); view.maxY = maxY; view.rebuildAll(); break;
+      case 'KeyG': grid.visible = !grid.visible; break;
+      default: break;
+    }
+    updateDecorCursor();
+  }
 
   function resize(): void {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -332,6 +598,8 @@ export function runEditor(): void {
   window.addEventListener('resize', resize);
   resize();
   setCurrent(current);
+  setDecor(curDecor);
+  setMode('blocks');
 
   const clock = new THREE.Clock();
   function frame(): void {
@@ -356,7 +624,16 @@ export function runEditor(): void {
   }
   frame();
 
-  window.__malina = { mode: 'editor', get level() { return level; }, camera, controls, setCurrent, edit: (x: number, y: number, z: number, n: string, r = 0) => edit(x, y, z, n, r) };
+  window.__malina = {
+    mode: 'editor', get level() { return level; }, get view() { return view; }, camera, controls, setCurrent, edit: (x: number, y: number, z: number, n: string, r = 0) => edit(x, y, z, n, r),
+    /** Режим редактора: блоки или декор */
+    get editMode() { return mode; }, setMode, setDecor, get selected() { return selected; },
+    /** Куда встанет текущий декор под лучом o → d (как под курсором) */
+    aimDecor(o: [number, number, number], d: [number, number, number]) { ray.ray.origin.set(...o); ray.ray.direction.set(...d).normalize(); return aim(null); },
+    /** Поставить / убрать предмет через отмену, как мышью */
+    addDecor: (d: DecorItem) => addDecor(d), removeDecor: (d: DecorItem) => removeDecor(d), changeDecor,
+    undo: doUndo, redo: doRedo,
+  };
 }
 
 declare global {

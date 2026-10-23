@@ -44,7 +44,7 @@ export class DecorRenderer {
   constructor(private readonly level: Level, private readonly atlas: Atlas, private readonly mats: Record<Layer, THREE.Material>) {}
 
   /** Геометрия одного слоя предмета: все части этого слоя, UV из атласа (огонь — своя текстура) */
-  private geometry(def: DecorDef, layer: Layer): THREE.BufferGeometry | null {
+  geometryOf(def: DecorDef, layer: Layer): THREE.BufferGeometry | null {
     const key = `${def.name}:${layer}`;
     if (this.geoms.has(key)) return this.geoms.get(key)!;
     const pos: number[] = [], nrm: number[] = [], uv: number[] = [], col: number[] = [];
@@ -96,7 +96,7 @@ export class DecorRenderer {
     for (const [name, items] of byName) {
       const def = decorDef(name);
       for (const layer of Object.keys(this.mats) as Layer[]) {
-        const g = this.geometry(def, layer);
+        const g = this.geometryOf(def, layer);
         if (!g) continue;
         const mesh = new THREE.InstancedMesh(g, this.mats[layer], items.length);
         items.forEach((d, i) => {
