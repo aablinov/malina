@@ -5,7 +5,7 @@
  */
 
 /** detail — мелкая трава поверх блоков: как cutout, но без теней (дёшево) */
-export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow' | 'detail' | 'river' | 'falls';
+export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow' | 'detail' | 'river' | 'falls' | 'portal';
 
 export interface Part {
   /** Имя формы — файл assets/blocks/<obj>.obj */
@@ -51,6 +51,8 @@ export interface BlockDef {
    * текстуры-маски, выбор по хэшу; так граница не идёт по линейке клеток
    */
   bleed?: string[];
+  /** Запечённый свет: без PointLight, цвет подмешивается в вершины блоков вокруг (портал, свечи — mesher.ts) */
+  bakedLight?: { color: string; intensity: number; dist: number };
   /** Течение жидкости, м/с: блики и полосы бегут по направлению поворота (rot 0 — к +X) */
   flow?: number;
   /** Природная земля: цвет плавно гуляет крупными пятнами по миру (светлее-желтее / темнее), а не по блокам */
@@ -168,6 +170,21 @@ export const BLOCKS: BlockDef[] = [
   B('river', 'Река', 'скалы и вода', [{ obj: 'water', layer: 'river', tex: same('river') }], { collide: 0.5, cullSame: true, jitter: 0, rotatable: true, flow: 1.2 }),
   B('bridge_deck', 'Настил моста', 'скалы и вода', [cube(same('bridgePlank'))], { full: true, connects: true, rotatable: true, jitter: 0.04 }),
   B('bridge_beam', 'Брус моста', 'скалы и вода', [cube({ top: 'bridgePost', side: 'bridgePost', bottom: 'bridgePost' }, 'cube_x')], { full: true, connects: true, rotatable: true, jitter: 0.04 }),
+  // портал (скриншот 14): золотое сияние с анимацией и запечённым светом, тёмная рама, перемычка с инкрустацией, светлый пол
+  B('portal', 'Портал: сияние', 'портал', [{ obj: 'pane', layer: 'portal', tex: same('portal') }], { collide: 0, rotatable: true, jitter: 0, bakedLight: { color: '#ffc248', intensity: 1.1, dist: 4.5 } }),
+  solid('portal_frame', 'Портал: рама', 'портал', 'portalFrame', { jitter: 0.02 }),
+  solid('portal_trim', 'Портал: перемычка', 'портал', { top: 'portalFrame', side: 'portalTrim', bottom: 'portalFrame' }, { jitter: 0.02 }),
+  solid('portal_floor', 'Портал: пол', 'портал', 'portalFloor', { jitter: 0.02, natural: true }),
+
+  // холмы (скриншоты 13, 15): полублок травы для мягких уступов, пышная листва, сухая трава, ромашки, ступени тропинки
+  B('grass_slab', 'Трава: полублок', 'холмы', [cube({ top: 'grassTop', side: 'grassSide', bottom: 'dirt' }, 'slab')], {
+    collide: 0.5, connects: true, jitter: 0.02, natural: true, fringe: 'grassFringe', tufts: ['grassTuft', 'grassTuft', 'flowerTuft'], bleed: ['grassEdge0', 'grassEdge1', 'grassEdge2', 'grassEdge3'],
+  }),
+  B('leaves_fluffy', 'Листва пышная', 'холмы', [{ obj: 'leaves_fluffy', layer: 'cutout', tex: { side: 'leavesClump', puff: 'leavesPuff' } }], { jitter: 0.1 }),
+  B('dry_grass', 'Сухая трава', 'холмы', [{ obj: 'cross', layer: 'cutout', tex: { side: 'dryGrass' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.1 }),
+  B('daisies', 'Ромашки', 'холмы', [{ obj: 'cross', layer: 'cutout', tex: { side: 'daisies' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.05 }),
+  B('path_stairs', 'Тропинка: ступени', 'холмы', [cube(same('path'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true, jitter: 0.02, natural: true }),
+  B('path_slab', 'Тропинка: полублок', 'холмы', [cube(same('path'), 'slab')], { collide: 0.5, connects: true, jitter: 0.02, natural: true }),
   B('bridge_post', 'Столб моста', 'скалы и вода', [cube(same('bridgePost'), 'post')], { collide: 1.5, connects: true, jitter: 0.04 }),
 
   // --- служебные блоки плейграунда: нейтральная сетка и клетчатые стены, стиль игры не задают ---

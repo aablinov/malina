@@ -108,3 +108,81 @@ export function stairway(L: Level, x: number, y: number, z: number, dx: number, 
     L.set(cx, y + k, cz, `${block}_stairs`, rot);
   }
 }
+
+/**
+ * Холм террасами (скриншоты 13, 15): эллипс радиусов rx × rz, h ярусов по 1 м, каждый ярус уже предыдущего,
+ * край рваный по шуму. Опции: soft — по краю ярусов полублоки травы (мягкий подъём), stone — сторона (±X/±Z) из скалы
+ * с травой (обрыв), dry/daisies — доля клеток сухой травы и ромашек сверху.
+ */
+export interface HillOpts { soft?: number; stone?: 'x+' | 'x-' | 'z+' | 'z-'; dry?: number; daisies?: number; seed?: number }
+export function hill(L: Level, cx: number, cz: number, rx: number, rz: number, h: number, y: number, o: HillOpts = {}): void {
+  const seed = o.seed ?? 0;
+  for (let k = 0; k < h; k++) {
+    const sx = rx * (1 - k / (h + 0.6)), sz = rz * (1 - k / (h + 0.6));
+    for (let x = Math.floor(cx - sx - 1); x <= Math.ceil(cx + sx + 1); x++) for (let z = Math.floor(cz - sz - 1); z <= Math.ceil(cz + sz + 1); z++) {
+      const e = ((x - cx) / sx) ** 2 + ((z - cz) / sz) ** 2 + (noise2(x, z, 4, seed + k) - 0.5) * 0.28;
+      if (e > 1) continue;
+      const stone = o.stone && ((o.stone === 'x+' && x > cx + sx * 0.35) || (o.stone === 'x-' && x < cx - sx * 0.35) || (o.stone === 'z+' && z > cz + sz * 0.35) || (o.stone === 'z-' && z < cz - sz * 0.35));
+      const yy = y + k;
+      L.set(x, yy - 1, z, stone ? 'cliff' : 'dirt');
+      L.set(x, yy, z, stone ? 'cliff_grass' : e > 0.82 && (o.soft ?? 0) > hash2(x, z, seed + 30 + k) ? 'grass_slab' : 'grass');
+    }
+  }
+  // флора сверху: сухая трава и ромашки по свободным верхушкам
+  for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) for (let z = Math.floor(cz - rz - 1); z <= Math.ceil(cz + rz + 1); z++) {
+    for (let yy = y + h; yy >= y; yy--) {
+      const n = L.nameAt(x, yy, z);
+      if (n === 'air') continue;
+      if ((n === 'grass' || n === 'cliff_grass') && L.isAir(x, yy + 1, z)) {
+        const r = hash2(x, z, seed + 50);
+        if (r < (o.dry ?? 0)) L.set(x, yy + 1, z, 'dry_grass');
+        else if (r < (o.dry ?? 0) + (o.daisies ?? 0)) L.set(x, yy + 1, z, 'daisies');
+      }
+      break;
+    }
+  }
+}
+
+/** Дерево (скриншот 13): ствол trunk блоков и пышная крона-эллипсоид из leaves_fluffy */
+export function tree(L: Level, x: number, y: number, z: number, trunk = 3, r = 2): void {
+  for (let k = 0; k < trunk; k++) L.set(x, y + k, z, 'log');
+  const cy = y + trunk + r * 0.5;
+  for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) for (let dy = -r; dy <= r; dy++) {
+    const d = (dx * dx + dz * dz) / (r * r) + (dy * dy) / ((r * 0.8) ** 2) + (hash2(x + dx * 7, z + dz * 5, dy + 60) - 0.5) * 0.45;
+    if (d <= 1 && !(dx === 0 && dz === 0 && dy < 0)) L.set(x + dx, Math.round(cy + dy), z + dz, 'leaves_fluffy');
+  }
+}
+
+/** Крепостная стена с зубцами-ступенями (скриншот 13): вдоль X или Z, высота h, через блок зубец, наверху место под свечи */
+export function rampart(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, h: number): void {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0)), dx = Math.sign(x1 - x0), dz = Math.sign(z1 - z0);
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + dx * i, z = z0 + dz * i;
+    for (let k = 0; k < h; k++) L.set(x, y + k, z, 'wall_stone');
+    L.set(x, y + h, z, i % 3 === 0 ? 'wall_stone' : 'air');
+  }
+}
+
+/**
+ * Портал в холме (скриншот 14), лицом к +Z: проём ширины w и высоты h с нижним краем на y, рама из тёмного камня,
+ * перемычка с инкрустацией, сияние в глубине (2 блока внутрь), боковые стенки проёма, перед ним светлый пол —
+ * трава на него заходит рваным краем. (x, z) — левый нижний угол проёма снаружи.
+ */
+export function portal(L: Level, x: number, y: number, z: number, w = 2, h = 3): void {
+  const depth = 1;
+  for (let dz = -depth - 1; dz <= 0; dz++) for (let dx = -1; dx <= w; dx++) {
+    for (let k = 0; k <= h; k++) {
+      const side = dx === -1 || dx === w, back = dz === -depth - 1, top = k === h;
+      const cell = side || back ? 'portal_frame' : top ? (dz === 0 ? 'portal_trim' : 'portal_frame') : 'air';
+      L.set(x + dx, y + k, z + dz, cell);
+    }
+    // сверху рамы — дёрн, как на холме вокруг
+    L.set(x + dx, y + h + 1, z + dz, 'grass');
+  }
+  for (let dx = 0; dx < w; dx++) for (let k = 0; k < h; k++) L.set(x + dx, y + k, z - depth, 'portal', 0);
+  // перед порталом — расчищенная площадка с полом из плит
+  for (let dz = -depth; dz <= 3; dz++) for (let dx = -2; dx <= w + 1; dx++) {
+    L.set(x + dx, y - 1, z + dz, 'portal_floor');
+    if (dz > 0) for (let k = 0; k <= h + 2; k++) L.set(x + dx, y + k, z + dz, 'air');
+  }
+}

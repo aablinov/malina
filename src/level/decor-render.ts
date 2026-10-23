@@ -36,6 +36,8 @@ export class DecorRenderer {
   /** Рисовать только предметы не выше этого y (срез в редакторе) */
   maxY = Infinity;
   lights: DecorLight[] = [];
+  /** Запечённые источники (свечи): в вершины блоков, без PointLight */
+  baked: DecorLight[] = [];
   private readonly geoms = new Map<string, THREE.BufferGeometry>();
   private meshes: { mesh: THREE.InstancedMesh; items: DecorItem[] }[] = [];
   private builtVersion = -1;
@@ -85,6 +87,7 @@ export class DecorRenderer {
     for (const m of this.meshes) { this.group.remove(m.mesh); m.mesh.dispose(); }
     this.meshes = [];
     this.lights = [];
+    this.baked = [];
     const byName = new Map<string, DecorItem[]>();
     for (const d of this.level.decor) {
       if (d.pos[1] > this.maxY + 1) continue;
@@ -114,7 +117,7 @@ export class DecorRenderer {
         const v = new THREE.Vector3();
         for (const d of items) {
           v.set(...def.light.at).applyMatrix4(decorMatrix(d, m4));
-          this.lights.push({ x: v.x, y: v.y, z: v.z, color: new THREE.Color(def.light.color), intensity: def.light.intensity, dist: def.light.dist, seed: hash(Math.round(d.pos[0] * 16), Math.round(d.pos[2] * 16)) * 10 });
+          (def.light.baked ? this.baked : this.lights).push({ x: v.x, y: v.y, z: v.z, color: new THREE.Color(def.light.color), intensity: def.light.intensity, dist: def.light.dist, seed: hash(Math.round(d.pos[0] * 16), Math.round(d.pos[2] * 16)) * 10 });
         }
       }
     }
