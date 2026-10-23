@@ -411,7 +411,7 @@ test('этаж подземелья: декор комнат переезжае�
   expect(r.inst).toBeGreaterThanOrEqual(r.n);
 });
 
-test('свет как в Unreal: AO, цветокоррекция, дымка и tilt-shift включаются и выключаются, кадр рисуется', async ({ page }) => {
+test('свет как в Unreal: AO, цветокоррекция и дымка включаются и выключаются, кадр рисуется', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -427,7 +427,7 @@ test('свет как в Unreal: AO, цветокоррекция, дымка и
     m.setNight(false); m.render();
     return { on, off, night, day: { bloom: L.bloom.strength, sun: L.sun.intensity } };
   });
-  expect(r.on).toEqual({ unreal: true, passes: 7, fog: true, ao: true });
+  expect(r.on).toEqual({ unreal: true, passes: 5, fog: true, ao: true });
   expect(r.off).toEqual({ passes: 3, fog: false, ao: false });
   expect(r.night.bloom).toBeGreaterThan(r.day.bloom);
   expect(r.night.sun).toBeLessThan(r.day.sun);
