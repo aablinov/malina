@@ -53,8 +53,34 @@ function noiseFill(g: Ctx, s: number, r: Rand, pal: readonly string[], amt = 8):
   for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(pick(pal, r), r, amt));
 }
 
-const GRASS = ['#6dab43', '#5f9c39', '#79b84f', '#548f31', '#67a63f'];
-const DIRT = ['#8b5e3c', '#7a5134', '#966844', '#6b452c'];
+/**
+ * Земля в пастельной гамме Minecraft Dungeons (wiki/style-terrain.md): почти ровная заливка, зерно ±3,
+ * несколько крупных мягких пятен — без пиксельного шума, который рябит и выдаёт повтор тайла.
+ * Цвета подобраны по скриншотам так, чтобы на экране (солнце + небо + ACES) вышло как там.
+ */
+const GRASS_BASE = '#6d994e', GRASS_LIGHT = '#7ba558', GRASS_DARK = '#608b46';
+const DIRT_BASE = '#9a6942', DIRT_DARK = '#8a5c39';
+const DIRT = [DIRT_BASE, DIRT_BASE, DIRT_DARK];
+
+/** Смешать два цвета #rrggbb: t = 0 — a, 1 — b; результат тоже #rrggbb */
+function mix(a: string, b: string, t: number): string {
+  const x = hexToRgb(a), y = hexToRgb(b);
+  return '#' + [0, 1, 2].map((i) => Math.round(x[i] + (y[i] - x[i]) * t).toString(16).padStart(2, '0')).join('');
+}
+/** Мягкая заливка: ровный цвет с зерном ±grain и пятна — круги, к краю сходящие на нет (с переносом через край тайла) */
+function softFill(g: Ctx, s: number, r: Rand, base: string, grain: number, blobs: readonly { col: string; n: number; rad: [number, number]; k: number }[]): void {
+  const cells: string[] = [];
+  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) cells.push(base);
+  for (const b of blobs) for (let i = 0; i < b.n; i++) {
+    const cx = r() * s, cy = r() * s, rad = b.rad[0] + r() * (b.rad[1] - b.rad[0]);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const dx = Math.min(Math.abs(x + 0.5 - cx), s - Math.abs(x + 0.5 - cx)), dy = Math.min(Math.abs(y + 0.5 - cy), s - Math.abs(y + 0.5 - cy));
+      const t = 1 - Math.hypot(dx, dy) / rad;
+      if (t > 0) cells[y * s + x] = mix(cells[y * s + x], b.col, Math.min(1, t * 1.6) * b.k);
+    }
+  }
+  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(cells[y * s + x], r, grain));
+}
 
 export interface Textures {
   grassTop: THREE.Texture; grassSide: THREE.Texture; dirt: THREE.Texture; farm: THREE.Texture;
@@ -98,18 +124,19 @@ export function textureByName(T: Textures, name: string): THREE.Texture {
 
 export function makeTextures(): Textures {
   const T = {} as Textures;
-  T.grassTop = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, GRASS, 8);
-    for (let i = 0; i < 10; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#86c45a');
-  }, 11);
+  T.grassTop = canvasTex(16, (g, s, r) => softFill(g, s, r, GRASS_BASE, 3, [
+    { col: GRASS_LIGHT, n: 3, rad: [3, 5], k: 0.7 },
+    { col: GRASS_DARK, n: 2, rad: [2.5, 4], k: 0.55 },
+  ]), 11);
+  // бок травяного блока: ровная земля, сверху зубчатая полоса травы 3–6 px (низ полосы чуть темнее)
   T.grassSide = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, DIRT, 8);
+    softFill(g, s, r, DIRT_BASE, 3, [{ col: DIRT_DARK, n: 3, rad: [2, 3.5], k: 0.6 }]);
     for (let x = 0; x < s; x++) {
-      const d = 3 + ((r() * 3) | 0);
-      for (let y = 0; y < d; y++) px(g, x, y, jitter(pick(GRASS, r), r, 8));
+      const d = 3 + ((r() * 4) | 0);
+      for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? GRASS_DARK : GRASS_BASE, r, 3));
     }
   }, 12);
-  T.dirt = canvasTex(16, (g, s, r) => noiseFill(g, s, r, DIRT, 8), 13);
+  T.dirt = canvasTex(16, (g, s, r) => softFill(g, s, r, DIRT_BASE, 3, [{ col: DIRT_DARK, n: 3, rad: [2, 3.5], k: 0.6 }, { col: '#a6744b', n: 2, rad: [2, 3], k: 0.5 }]), 13);
   T.farm = canvasTex(16, (g, s, r) => {
     noiseFill(g, s, r, ['#5a3a22', '#4e321d', '#634127'], 6);
     for (let y = 0; y < s; y += 4) for (let x = 0; x < s; x++) {
@@ -117,16 +144,16 @@ export function makeTextures(): Textures {
       px(g, x, y + 1, jitter('#70482c', r, 6));
     }
   }, 14);
-  T.path = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#8a6a48', '#7b5d3e', '#9a7a55', '#7a7470', '#857560', '#6f655c'], 8);
-  }, 15);
-  T.stone = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#7d7d7d', '#717171', '#888888', '#666666'], 6);
-    for (let i = 0; i < 5; i++) {
-      let x = (r() * s) | 0, y = (r() * s) | 0;
-      for (let k = 0; k < 4; k++) { px(g, x, y, '#555'); x += (r() * 3 - 1) | 0; y += 1; }
-    }
-  }, 16);
+  // дорожка: тёплый беж и светлые круглые «следы», как утоптанная земля на скриншотах
+  T.path = canvasTex(16, (g, s, r) => softFill(g, s, r, '#cf9e57', 2, [
+    { col: '#dcb370', n: 3, rad: [1.4, 2.2], k: 0.9 },
+    { col: '#c18f52', n: 2, rad: [2.5, 4], k: 0.5 },
+  ]), 15);
+  // камень: светлый голубовато-серый, как ограда на скриншотах, пятна вместо трещин
+  T.stone = canvasTex(16, (g, s, r) => softFill(g, s, r, '#a4abb4', 3, [
+    { col: '#b3b9c1', n: 3, rad: [2.5, 4], k: 0.6 },
+    { col: '#959ca6', n: 2, rad: [2, 3], k: 0.5 },
+  ]), 16);
   T.mossy = canvasTex(16, (g, s, r) => {
     noiseFill(g, s, r, ['#7d7d7d', '#717171', '#888888', '#666666'], 6);
     for (let i = 0; i < 70; i++) px(g, (r() * s) | 0, (r() * s) | 0, jitter(pick(['#4f7d33', '#5d8f3a', '#3f6a2a'], r), r, 8));
@@ -184,7 +211,7 @@ export function makeTextures(): Textures {
   T.tallGrass = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 9; i++) {
       let x = 1 + ((r() * 14) | 0); const h = 6 + ((r() * 9) | 0);
-      const col = pick(['#6fb048', '#5b9b38', '#82c25a', '#4f8a30'], r);
+      const col = pick([GRASS_BASE, GRASS_LIGHT, GRASS_DARK, '#8fbf60'], r);
       for (let k = 0; k < h; k++) { px(g, x, s - 1 - k, jitter(col, r, 6)); if (r() < 0.2) x += r() < 0.5 ? -1 : 1; x = Math.max(0, Math.min(15, x)); }
     }
   }, 30, { alpha: true });
@@ -220,10 +247,10 @@ export function makeTextures(): Textures {
 
   // ---------- блоки уровня ----------
   T.gravel = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#8a8580', '#7a756f', '#96908a', '#6e6a66', '#a39c93'], 7);
-    for (let i = 0; i < 14; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#5a5652'); px(g, x + 1, y, '#b3ada4'); }
+    softFill(g, s, r, '#a69d92', 3, [{ col: '#b5ada2', n: 3, rad: [2, 3], k: 0.6 }]);
+    for (let i = 0; i < 10; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#8f877d'); px(g, x + 1, y, '#bdb5aa'); }
   }, 50);
-  T.sand = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#dccb8f', '#d2c184', '#e3d39b', '#c9b87b'], 6), 51);
+  T.sand = canvasTex(16, (g, s, r) => softFill(g, s, r, '#e4d19b', 3, [{ col: '#eedcaa', n: 3, rad: [2.5, 4], k: 0.6 }, { col: '#d6c18a', n: 2, rad: [2, 3], k: 0.5 }]), 51);
   const stoneyCells = (g: Ctx, s: number, r: Rand, pal: readonly string[], mortar: string, cell: number, rows: number) => {
     noiseFill(g, s, r, pal, 5);
     for (let row = 0; row < rows; row++) {
@@ -280,9 +307,9 @@ export function makeTextures(): Textures {
     for (let k = 0; k < 3; k++) {
       let x = 7 + k - 1;
       for (let y = s - 1; y >= 3 + k * 2; y--) {
-        px(g, x, y, '#3f8a2f');
+        px(g, x, y, GRASS_DARK);
         const len = Math.max(1, ((s - y) / 3) | 0);
-        for (let d = 1; d <= len; d++) { px(g, x - d, y, jitter('#5aa342', r, 8)); px(g, x + d, y, jitter('#5aa342', r, 8)); }
+        for (let d = 1; d <= len; d++) { px(g, x - d, y, jitter(GRASS_BASE, r, 4)); px(g, x + d, y, jitter(GRASS_BASE, r, 4)); }
         if (r() < 0.3) x += k === 0 ? -1 : k === 2 ? 1 : 0;
       }
     }
@@ -319,7 +346,7 @@ export function makeTextures(): Textures {
   }, 69);
   T.acid.wrapS = T.acid.wrapT = THREE.RepeatWrapping;
   T.hole = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, DIRT, 8);
+    noiseFill(g, s, r, DIRT, 3);
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
       const d = Math.hypot(x - 7.5, y - 7.5);
       if (d < 5.2) px(g, x, y, jitter(d < 3.6 ? '#120a06' : '#3a2414', r, 6));
@@ -507,7 +534,7 @@ export function makeTextures(): Textures {
   T.grassFringe = canvasTex(16, (g, s, r) => {
     for (let x = 0; x < s; x++) {
       const len = 2 + Math.floor(r() * 7) - (x % 3 === 1 ? 1 : 0);
-      for (let y = 0; y < len; y++) px(g, x, y, jitter(pick(GRASS, r), r, y > len - 2 ? 4 : 8));
+      for (let y = 0; y < len; y++) px(g, x, y, jitter(y === len - 1 ? GRASS_DARK : GRASS_BASE, r, 3));
     }
   }, 130, { alpha: true });
   // пучки: травинки растут от низа картинки, высота 2–8 px; квадрат пучка берёт окно этой полосы
@@ -515,7 +542,7 @@ export function makeTextures(): Textures {
     for (let x = 0; x < s; x++) {
       if (r() < 0.25) continue;
       const h = 2 + Math.floor(r() * 7);
-      for (let y = s - h; y < s; y++) px(g, x, y, jitter(y < s - h + 2 ? '#a6dc6c' : pick(['#79b84f', '#86c45a', '#6dab43'], r), r, 8));
+      for (let y = s - h; y < s; y++) px(g, x, y, jitter(y < s - h + 2 ? GRASS_LIGHT : GRASS_BASE, r, 3));
       if (flowers.length && r() < 0.3) px(g, x, s - h - 1, jitter(pick(flowers, r), r, 6));
     }
   };

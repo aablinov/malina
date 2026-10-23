@@ -57,7 +57,7 @@ const GradeShader = {
     uShadow: { value: new THREE.Vector3() },
     uHigh: { value: new THREE.Vector3() },
     uSat: { value: 1.1 },
-    uContrast: { value: 1.04 },
+    uContrast: { value: 0.98 },
     uVignette: { value: 0.12 },
   },
   vertexShader: FULLSCREEN_VERT,
@@ -86,9 +86,11 @@ interface Mood {
   shadow: [number, number, number]; high: [number, number, number]; sat: number;
 }
 const DAY: Mood = {
-  sky: '#9ed6f0', haze: '#d6ecf4', hemiSky: '#bfe4ff', hemiGround: '#7fa45a', hemi: 1.2, ambient: 0.12,
-  sun: '#ffdcae', sunI: 2.7, bloom: 0.42, exposure: 1.08,
-  shadow: [-0.025, 0.012, 0.055], high: [0.045, 0.022, -0.02], sat: 1.12,
+  // мягкий свет MCD: неба много, солнца меньше — тени светлые, бока блоков тёплые от отражённого снизу (hemiGround)
+  sky: '#9ed6f0', haze: '#d6ecf4', hemiSky: '#bfe4ff', hemiGround: '#d8c49a', hemi: 2.0, ambient: 0.2,
+  sun: '#ffdcae', sunI: 2.2, bloom: 0.42, exposure: 1.02,
+  // пастель Minecraft Dungeons: насыщенность не поднимаем, светлое теплеет слегка (wiki/style-terrain.md)
+  shadow: [-0.02, 0.012, 0.045], high: [0.02, 0.012, -0.004], sat: 1.0,
 };
 const NIGHT: Mood = {
   sky: '#0e2a44', haze: '#1b3c5c', hemiSky: '#5f8ed6', hemiGround: '#1d3a3a', hemi: 0.85, ambient: 0.1,

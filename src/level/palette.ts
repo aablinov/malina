@@ -46,6 +46,8 @@ export interface BlockDef {
   fringe?: string;
   /** Мелкие пучки на открытом верху, гуще пятнами — текстуры (выбор по хэшу) */
   tufts?: string[];
+  /** Природная земля: цвет плавно гуляет крупными пятнами по миру (светлее-желтее / темнее), а не по блокам */
+  natural?: boolean;
 }
 
 const cube = (tex: Record<string, string | string[]>, obj = 'cube'): Part => ({ obj, tex });
@@ -73,11 +75,11 @@ export const BLOCKS: BlockDef[] = [
   B('air', 'Воздух', 'служебные', [], { collide: 0 }),
 
   // --- земля ---
-  solid('grass', 'Трава', 'земля', { top: 'grassTop', side: 'grassSide', bottom: 'dirt' }, { jitter: 0.14, fringe: 'grassFringe', tufts: ['grassTuft', 'grassTuft', 'grassTuft', 'flowerTuft'] }),
-  solid('dirt', 'Земля', 'земля', 'dirt', { jitter: 0.12 }),
-  solid('path', 'Тропинка', 'земля', 'path'),
-  solid('gravel', 'Гравий', 'земля', 'gravel'),
-  solid('sand', 'Песок', 'земля', 'sand'),
+  solid('grass', 'Трава', 'земля', { top: 'grassTop', side: 'grassSide', bottom: 'dirt' }, { jitter: 0.02, natural: true, fringe: 'grassFringe', tufts: ['grassTuft', 'grassTuft', 'grassTuft', 'flowerTuft'] }),
+  solid('dirt', 'Земля', 'земля', 'dirt', { jitter: 0.02, natural: true }),
+  solid('path', 'Тропинка', 'земля', 'path', { jitter: 0.02, natural: true }),
+  solid('gravel', 'Гравий', 'земля', 'gravel', { jitter: 0.03, natural: true }),
+  solid('sand', 'Песок', 'земля', 'sand', { jitter: 0.02, natural: true }),
   solid('farm', 'Грядка', 'земля', { top: 'farm', side: 'dirt', bottom: 'dirt' }),
   // вброд: пол в жидкости на полблока ниже верха клетки — заходишь по колено и выходишь обычным шагом (прыжка нет)
   B('water', 'Вода', 'земля', [{ obj: 'water', layer: 'water', tex: same('water') }], { collide: 0.5, cullSame: true, jitter: 0 }),
