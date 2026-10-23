@@ -78,6 +78,9 @@ export interface Textures {
   fabricRed: THREE.Texture; blanket: THREE.Texture; pillow: THREE.Texture; rug: THREE.Texture; lampShade: THREE.Texture;
   ironDark: THREE.Texture; cabinet: THREE.Texture; bookshelf: THREE.Texture; counterTop: THREE.Texture;
   stoveTop: THREE.Texture; fridge: THREE.Texture; fridgeTop: THREE.Texture;
+  // декор (src/level/decor.ts)
+  chain: THREE.Texture; cobweb: THREE.Texture; banner: THREE.Texture; bone: THREE.Texture; candle: THREE.Texture;
+  mushroomRed: THREE.Texture; mushroomGlow: THREE.Texture; mushroomStem: THREE.Texture; lanternGlass: THREE.Texture; roots: THREE.Texture;
   /** Вода: 16 × 16, двигается смещением UV */
   water: THREE.Texture;
   /** Огонь: 3 кадра по 16 × 16 друг над другом */
@@ -457,6 +460,51 @@ export function makeTextures(): Textures {
     for (let y = 3; y < 13; y++) px(g, 12, y, '#8a9096');
   }, 107);
   T.fridgeTop = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#dfe2e5', '#e8eaec'], 3), 108);
+
+  // ---------- декор ----------
+  // цепь: звенья по 4 пикселя, вырезная — между звеньями пусто
+  T.chain = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 6; x < 10; x++) {
+      const k = y % 8, edge = x === 6 || x === 9 || k === 0 || k === 5;
+      if (k < 6 && edge) px(g, x, y, jitter(x === 6 || k === 0 ? '#5a5650' : '#3a3632', r, 6));
+    }
+  }, 120, { alpha: true });
+  // паутина: лучи из угла и дуги, полупрозрачная белая
+  T.cobweb = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const a = Math.atan2(y, x), d = Math.hypot(x, y);
+      const ray = Math.abs(Math.sin(a * 5)) < 0.12, arc = Math.abs((d % 4.5) - 2.2) < 0.45 && d < 15;
+      if ((ray && d < 15.5) || arc) if (r() < 0.9) px(g, x, y, jitter('#e8ecf0', r, 8));
+    }
+  }, 121, { alpha: true });
+  // знамя: малиновое полотнище с золотой каймой и ягодой
+  T.banner = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const border = x < 2 || x > 13;
+      const berry = Math.hypot(x - 7.5, y - 8.5) < 3.2;
+      const leaf = y >= 3 && y <= 4 && x >= 6 && x <= 9;
+      px(g, x, y, jitter(border ? '#e0b048' : leaf ? '#5aa03a' : berry ? ((x + y) % 2 ? '#f0507a' : '#ff7098') : '#a8243c', r, 6));
+    }
+  }, 122);
+  T.bone = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#ece4cc', '#e2d8bc', '#f4eedc', '#d8ccae'], 5), 123);
+  T.candle = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y < 2 ? '#fff4d0' : pick(['#f2e2b0', '#e8d49a', '#f6e8c0'], r), r, 5));
+  }, 124);
+  // шляпки грибов: красная в белый горох (style/ref-02) и светящаяся жёлтая (style/ref-01)
+  const dots = (base: string, dot: string) => (g: Ctx, s: number, r: Rand) => {
+    noiseFill(g, s, r, [base], 6);
+    for (const [cx, cy] of [[3, 3], [11, 2], [7, 8], [13, 11], [2, 12], [9, 14]]) { px(g, cx, cy, jitter(dot, r, 4)); px(g, cx + 1, cy, jitter(dot, r, 4)); px(g, cx, cy + 1, jitter(dot, r, 4)); }
+  };
+  T.mushroomRed = canvasTex(16, dots('#d8262c', '#f6f0e8'), 125);
+  T.mushroomGlow = canvasTex(16, dots('#ffc83a', '#fff4b0'), 126);
+  T.mushroomStem = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#efe6d2', '#e4d8c0', '#f6efe0'], 4), 127);
+  T.lanternGlass = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(Math.hypot(x - 7.5, y - 9) < 4 ? '#fff2b0' : '#ffc860', r, 8));
+  }, 128);
+  // корни: тёмная кора с продольными бороздами
+  T.roots = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 5 === 0 ? '#2e2016' : pick(['#5a3e28', '#4e3522', '#664830'], r), r, 6));
+  }, 129);
 
   T.square = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;

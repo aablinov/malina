@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "playwright test",
     "blocks": "node scripts/gen-blocks.mjs",
+    "decor": "node scripts/gen-decor.mjs",
     "map:playground": "node scripts/export-map.ts playground",
     "map:rooms": "node scripts/export-map.ts rooms"
   },

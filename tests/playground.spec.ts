@@ -268,3 +268,34 @@ test('склад: сундук на E, бочки взрываются цепо�
   expect(r.verChanged).toBe(true);
   expect(r.healed).toBeGreaterThan(20);
 });
+
+test('декор: предметы из карты рисуются экземплярами, переживают JSON, светят', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const L = m.level;
+    const back = L.constructor.fromJSON(JSON.parse(JSON.stringify(L.toJSON())));
+    const names = new Set(L.decor.map((d: any) => d.name));
+    const before = m.view.decor.instances;
+    const v0 = L.decorVersion;
+    L.addDecor({ name: 'rubble', pos: [3, 0, 3], rot: [30] });
+    m.view.sync();
+    const added = m.view.decor.instances - before;
+    L.removeDecor(L.decor[L.decor.length - 1]);
+    m.view.sync();
+    return {
+      count: L.decor.length, back: back.decor.length, same: JSON.stringify(back.decor) === JSON.stringify(L.decor),
+      names: names.size, before, added, after: m.view.decor.instances, bumped: L.decorVersion - v0,
+      lights: m.view.decor.lights.length,
+    };
+  });
+  expect(r.count).toBeGreaterThan(30);
+  expect(r.back).toBe(r.count);
+  expect(r.same).toBe(true);
+  expect(r.names).toBeGreaterThanOrEqual(16);
+  expect(r.before).toBeGreaterThanOrEqual(r.count);
+  expect(r.added).toBe(1);
+  expect(r.after).toBe(r.before);
+  expect(r.bumped).toBe(2);
+  expect(r.lights).toBeGreaterThan(5);
+});

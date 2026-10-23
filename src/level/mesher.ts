@@ -4,6 +4,8 @@ import { Atlas } from './atlas';
 import { CH, type Level } from './level.ts';
 import { DIRS } from './obj.ts';
 import { paletteTextures, type Layer } from './palette.ts';
+import { decorTextures } from './decor.ts';
+import { DecorRenderer } from './decor-render.ts';
 import { getShape } from './shapes';
 
 /**
@@ -16,7 +18,7 @@ import { getShape } from './shapes';
 
 interface LightSpot { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
 
-const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire'];
+const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow'];
 
 /**
  * «Рентген»: блоки между камерой и героем (в цилиндре радиуса uXrayR вокруг луча камера → герой,
@@ -32,7 +34,12 @@ function withXray(m: THREE.Material, caps = false): THREE.Material {
     Object.assign(sh.uniforms, XRAY_UNIFORMS);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vXrayPos;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvXrayPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+vec4 xrayP = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+xrayP = instanceMatrix * xrayP;
+#endif
+vXrayPos = (modelMatrix * xrayP).xyz;`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 varying vec3 vXrayPos;
@@ -153,9 +160,11 @@ export class LevelRenderer {
   private readonly waterTex: THREE.Texture;
   private readonly acidTex: THREE.Texture;
   private readonly fireTex: THREE.Texture;
+  /** Свободный декор поверх блоков (src/level/decor.ts) */
+  readonly decor: DecorRenderer;
 
   constructor(private readonly scene: THREE.Scene, private readonly level: Level, T: Textures) {
-    this.atlas = new Atlas(T, paletteTextures());
+    this.atlas = new Atlas(T, [...new Set([...paletteTextures(), ...decorTextures()])]);
     this.waterTex = T.water;
     this.acidTex = T.acid;
     this.fireTex = T.fire;
@@ -165,12 +174,16 @@ export class LevelRenderer {
       water: liquid(new THREE.MeshLambertMaterial({ map: T.water, vertexColors: true, transparent: true, opacity: 0.82 }), '#e8fbff', [1.7, 1.9, 2.1], [0.12, 0.3, 0.36]),
       acid: liquid(new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }), '#d8ffb0', [1.4, 2.4, 0.8], [0.2, 0.4, 0.1]),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
+      // светится сам (грибы, стекло фонаря): без освещения, ярче 1 — подхватывает bloom
+      glow: withXray(new THREE.MeshBasicMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, toneMapped: false, color: new THREE.Color(1.5, 1.4, 1.2) })),
     };
     for (let i = 0; i < MAX_LIGHTS; i++) {
       const l = new THREE.PointLight('#ffa040', 0, 8, 1.6);
       this.group.add(l);
       this.pool.push(l);
     }
+    this.decor = new DecorRenderer(level, this.atlas, this.mats);
+    this.group.add(this.decor.group);
     scene.add(this.group);
     this.rebuildAll();
   }
@@ -179,10 +192,14 @@ export class LevelRenderer {
     for (const k of this.meshes.keys()) this.level.dirty.add(k);
     for (const k of this.level.chunks.keys()) this.level.dirty.add(k);
     this.sync();
+    this.decor.maxY = this.maxY;
+    this.decor.sync(true);
   }
 
   /** Перестроить чанки, помеченные в level.dirty */
   sync(): void {
+    this.decor.maxY = this.maxY;
+    this.decor.sync();
     if (!this.level.dirty.size) return;
     for (const key of this.level.dirty) this.rebuild(key);
     this.level.dirty.clear();
@@ -201,7 +218,7 @@ export class LevelRenderer {
     if (!chunk) return;
     const [cx, cy, cz] = key.split(',').map(Number);
     const L = this.level;
-    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket() };
+    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket(), glow: new Bucket() };
     const spots: LightSpot[] = [];
     const isFull = (x: number, y: number, z: number) => L.defAt(x, y, z).full;
 
@@ -226,7 +243,7 @@ export class LevelRenderer {
           }
         } else placements.push(yaw);
         const bucket = buckets[part.layer ?? 'opaque'];
-        const atlasUV = (part.layer ?? 'opaque') === 'opaque' || part.layer === 'cutout';
+        const atlasUV = (part.layer ?? 'opaque') === 'opaque' || part.layer === 'cutout' || part.layer === 'glow';
         const isLiquid = part.layer === 'water' || part.layer === 'acid';
         for (const r of placements) {
           const shape = getShape(part.obj, r);
@@ -311,6 +328,7 @@ export class LevelRenderer {
     this.fireTex.offset.y = (2 - (Math.floor(t * 9) % 3)) / 3;
     const all: LightSpot[] = [];
     for (const l of this.lights.values()) all.push(...l);
+    all.push(...this.decor.lights);
     all.sort((a, b) => (a.x - focus.x) ** 2 + (a.z - focus.z) ** 2 - (b.x - focus.x) ** 2 - (b.z - focus.z) ** 2);
     const k = 0.35 + 0.65 * night;
     this.pool.forEach((pl, i) => {
@@ -325,6 +343,7 @@ export class LevelRenderer {
 
   dispose(): void {
     for (const k of [...this.meshes.keys()]) this.drop(k);
+    this.decor.dispose();
     this.scene.remove(this.group);
     for (const m of Object.values(this.mats)) m.dispose();
     this.atlas.texture.dispose();

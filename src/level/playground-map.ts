@@ -1,9 +1,10 @@
 import { Level } from './level.ts';
 import { BLOCKS } from './palette.ts';
+import { DECOR } from './decor.ts';
 
 /**
  * Карта плейграунда: арена 48 × 48 м из блоков (трава, стены, укрытия, колонна, диагональ, угол, коридор, пруд, площадка со ступенями)
- * и «витрина» за южной стеной — все блоки палитры, вода, дерево, лестницы, забор, костёр.
+ * и «витрина» за южной стеной — все блоки палитры, вода, дерево, лестницы, забор, костёр, весь декор.
  * `npm run map:playground` пишет assets/maps/playground.json; дальше карту можно править в редакторе.
  */
 
@@ -14,6 +15,9 @@ export interface PgLabel { text: string; x: number; z: number; size?: number }
 export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   const L = new Level('Плейграунд');
   const labels: PgLabel[] = [];
+  /** Предмет декора: rot — рыск в градусах (как у блоков), on — клетка, к которой прикреплён */
+  const dec = (name: string, x: number, y: number, z: number, rot = 0, on?: [number, number, number]) =>
+    L.addDecor({ name, pos: [x, y, z], ...(rot ? { rot: [rot] } : {}), ...(on ? { on } : {}) });
   const H = PG_HALF;
 
   // ---------- арена ----------
@@ -76,7 +80,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   }
 
   // ---------- витрина ----------
-  const Z0 = W + 1, Z1 = W + 20;
+  const Z0 = W + 1, Z1 = W + 30;
   for (let x = -W; x <= W; x++) for (let z = Z0; z <= Z1; z++) L.set(x, -1, z, Math.abs(x) <= 1 && z <= Z0 + 3 ? 'gravel' : 'grass');
   // низкая ограда витрины
   for (let x = -W; x <= W; x++) L.set(x, 0, Z1, 'fence');
@@ -161,6 +165,45 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   }
   L.set(hx - 1, 0, hz - 2, 'torch'); L.set(hx + 1, 0, hz - 2, 'torch');
   labels.push({ text: 'домик', x: hx, z: zb + 4.4, size: 0.6 });
+
+  // ряд 5: декор — свободные предметы поверх блоков; у стены — настенный и потолочный, перед ней — напольный
+  const zw = Z0 + 22;
+  for (let x = -22; x <= 22; x++) for (let y = 0; y < 3; y++) L.set(x, y, zw, y === 2 ? 'bricks' : 'bricks_old');
+  for (let x = 6; x <= 12; x++) L.set(x, 2, zw + 1, 'bricks_slab');
+  labels.push({ text: 'декор: стоит где угодно, под любым углом, из кубиков 1/16', x: 0, z: zw - 1.3, size: 0.9 });
+  const face = zw + 0.5;
+  const onWall: [string, number, number][] = [['roots', -19, 2.3], ['cobweb', -15, 2.3], ['banner', -11, 2.6], ['torch_wall', -7, 1.4], ['banner', -3, 2.6], ['torch_wall', 1, 1.4]];
+  for (const [name, x, y] of onWall) {
+    dec(name, x, y, face, 0, [x, Math.floor(y), zw]);
+    labels.push({ text: DECOR.find((d) => d.name === name)!.title, x, z: face + 1, size: 0.45 });
+  }
+  for (const x of [7, 9, 11]) dec('chain', x, 2, zw + 1, x * 30, [x, 2, zw + 1]);
+  labels.push({ text: 'Цепь', x: 9, z: face + 1.4, size: 0.45 });
+  const floorItems = DECOR.filter((d) => d.anchor === 'floor');
+  floorItems.forEach((d, k) => {
+    const x = -21 + k * 4, z = zw + 4;
+    dec(d.name, x, 0, z, d.name === 'column_fallen' ? 0 : 20);
+    labels.push({ text: d.title, x, z: z + 1.7, size: 0.45 });
+  });
+
+  // декор в арене: знамёна между факелами, корни и паутина на дальних стенах, руины, фонари, ящики с цветами
+  for (const x of [-16, -8, 8, 16]) dec('banner', x, 2.6, -H - 0.5, 0, [x, 2, -W]);
+  dec('cobweb', -23.4, 2.4, -H - 0.5, 0, [-23, 2, -W]);
+  for (const [z, name] of [[-14, 'roots'], [-6, 'torch_wall'], [14, 'roots']] as [number, string][]) dec(name, -H - 0.5, name === 'roots' ? 2.5 : 1.4, z, -90, [-W, 2, z]);
+  dec('column_fallen', 13, 0, -20, 25);
+  dec('column_stump', -2, 0, -21.5, 10);
+  dec('rubble', 11, 0, -2);
+  dec('bricks_loose', 8, 0, -1.5, 40);
+  dec('bones', -0.5, 0, -19.6, 15);
+  dec('lantern_post', -13.5, 0, 8.5, 90);
+  dec('lantern_post', 22, 0, -22, 180);
+  dec('mushrooms_glow', -22, 0, -10, 30);
+  dec('mushrooms_glow', -21.4, 0, -11.2, 75);
+  dec('mushrooms', -19.5, 0, 9.5, 10);
+  dec('planter', 5, 0, 23.6);
+  dec('planter', 8, 0, 23.6);
+  dec('crates_tilted', 21, 0, 21, -30);
+  dec('candles', -17.6, 2, -20.4);
 
   L.spawn = [0, 0, 0];
   L.meta = { labels };
