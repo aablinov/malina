@@ -472,7 +472,7 @@ test('трава поверх блоков: бахрома свисает с у�
   expect(r.restored).toBe(r.back);
 });
 
-test('мир: водопад, река с течением, портал и запечённый свет рисуются; через мост — на другой берег, по пандусам — на плато', async ({ page }) => {
+test('мир: водопад, река с течением, портал и запечённый свет рисуются; через мост — на другой берег, по слоям ландшафта — на вершину', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -487,12 +487,18 @@ test('мир: водопад, река с течением, портал и за
     m.click(58, 0); m.step(1 / 60); m.release();
     for (let t = 0; t < 10 && m.goal; t += 0.1) m.step(0.1);
     const bridge = { x: m.hero.pos.x, z: m.hero.pos.z, y: m.hero.pos.y, left: !!m.goal };
-    // на плато (3 блока) — по пандусам из полублоков
-    const top = (x: number, z: number) => { const t = m.level.topAt(x, z); return t === null ? 0 : t + 1; };
+    // ландшафт проходим отовсюду: на самую высокую плиту юго-запада — без лестниц, по слоям 0,5 м
+    let best = { x: 0, z: 0, y: -1 };
+    for (let x = 28; x <= 46; x++) for (let z = 8; z <= 22; z++) {
+      const t = m.level.topAt(x, z, 12);
+      if (t === null || !['grass', 'grass_slab'].includes(m.level.nameAt(x, t, z)) || !m.level.isAir(x, t + 1, z)) continue;
+      const f = m.terrain.floorAt(x, z, t + 1.2);
+      if (f > best.y) best = { x, z, y: f };
+    }
     m.hero.place(38, 3.5, 0); m.step(0.2);
-    m.click(37, 14, false, top(37, 14)); m.step(1 / 60); m.release();
+    m.click(best.x, best.z, false, best.y); m.step(1 / 60); m.release();
     for (let t = 0; t < 30 && m.goal; t += 0.1) m.step(0.1);
-    const plateau = { y: m.hero.pos.y, want: top(37, 14), d: Math.hypot(m.hero.pos.x - 37, m.hero.pos.z - 14) };
+    const plateau = { y: m.hero.pos.y, want: best.y, d: Math.hypot(m.hero.pos.x - best.x, m.hero.pos.z - best.z) };
     return {
       plateau,
       missing: want.filter((n) => !names.has(n)), missingDecor: wantDecor.filter((n) => !decor.has(n)),
@@ -511,7 +517,7 @@ test('мир: водопад, река с течением, портал и за
   expect(Math.hypot(r.hero.x - 58, r.hero.z)).toBeLessThan(0.3);
   expect(r.hero.y).toBe(0);
   expect(r.hero.left).toBe(false);
-  expect(r.plateau.want).toBe(3);
-  expect(r.plateau.y).toBe(3);
+  expect(r.plateau.want).toBeGreaterThanOrEqual(1);
+  expect(r.plateau.y).toBe(r.plateau.want);
   expect(r.plateau.d).toBeLessThan(0.3);
 });
