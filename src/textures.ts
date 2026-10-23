@@ -69,7 +69,7 @@ const YARD_BASE = '#c39552', YARD_DASH = '#a7794a', WALL_STONE = '#a1a8b0';
 const TREE = ['#4c6e2a', '#6a8c37', '#90b04e', '#a8c860'], DRY = ['#cdb862', '#c2ad58', '#d8c472'];
 /** Мир: портал (скриншот 14) */
 const PORTAL_GOLD = '#efb64a', PORTAL_LIGHT = '#ffe9a0', PORTAL_STONE = '#4c5155', PORTAL_INLAY = '#d9a640', PORTAL_FLOOR = '#b3a693';
-const CLIFF = '#9aa2ab', CLIFF_DARK = '#7b8996', BRIDGE_WOOD = '#c49458', BRIDGE_POST = '#8d6639', RIVER = '#2f586c', FALLS = '#1f88ab';
+const CLIFF = '#9aa2ab', CLIFF_DARK = '#7b8996', BRIDGE_WOOD = '#c49458', BRIDGE_POST = '#8d6639', RIVER = '#356577', FALLS = '#1f88ab';
 const CRATE_WOOD = '#9a6a4c', CRATE_BAND = '#46414a', CRATE_PAINT = '#e2a936', CHEST_WOOD = '#8f5b35', CART_WOOD = '#a2694a';
 /** Камень: булыжник, кирпич, сланцевый кирпич руин, плиты, мох */
 const STONE_BASE = '#88929d', BRICK_BASE = '#86919c', SLATE_BASE = '#6a8592', TILE_BASE = '#a0a2a2', MOSS = '#6f9a4c';
