@@ -21,9 +21,13 @@ const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire'];
 /**
  * «Рентген»: блоки между камерой и героем (в цилиндре радиуса uXrayR вокруг луча камера → герой,
  * выше ног героя) растворяются сеточкой Байера, чтобы стены не закрывали бойца. uXrayR = 0 — выключено.
+ * «Разрез»: всё выше uXrayCut не рисуется (герой в доме — видно этаж без потолка и верхних этажей).
+ * У непрозрачных блоков (caps) тогда рисуются и задние грани — тёмным, это «срез» стен сверху.
  */
-const XRAY_UNIFORMS = { uXrayHero: { value: new THREE.Vector3() }, uXrayCam: { value: new THREE.Vector3() }, uXrayR: { value: 0 } };
-function withXray(m: THREE.Material): THREE.Material {
+const XRAY_UNIFORMS = { uXrayHero: { value: new THREE.Vector3() }, uXrayCam: { value: new THREE.Vector3() }, uXrayR: { value: 0 }, uXrayCut: { value: 1e9 } };
+const CUT_OFF = 1e8;
+function withXray(m: THREE.Material, caps = false): THREE.Material {
+  if (caps) m.side = THREE.DoubleSide;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, XRAY_UNIFORMS);
     sh.vertexShader = sh.vertexShader
@@ -32,7 +36,7 @@ function withXray(m: THREE.Material): THREE.Material {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 varying vec3 vXrayPos;
-uniform vec3 uXrayHero; uniform vec3 uXrayCam; uniform float uXrayR;
+uniform vec3 uXrayHero; uniform vec3 uXrayCam; uniform float uXrayR; uniform float uXrayCut;
 float xrayBayer() {
   int x = int(mod(gl_FragCoord.x, 4.0)), y = int(mod(gl_FragCoord.y, 4.0));
   int i = x + y * 4;
@@ -41,6 +45,8 @@ float xrayBayer() {
   return 0.5;
 }`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+if (vXrayPos.y > uXrayCut) discard;
+${caps ? `if (!gl_FrontFacing && uXrayCut > ${CUT_OFF.toFixed(1)}) discard;` : ''}
 if (uXrayR > 0.0 && vXrayPos.y > uXrayHero.y - 0.55) {
   vec3 ab = uXrayHero - uXrayCam;
   float t = clamp(dot(vXrayPos - uXrayCam, ab) / dot(ab, ab), 0.0, 1.0);
@@ -49,10 +55,69 @@ if (uXrayR > 0.0 && vXrayPos.y > uXrayHero.y - 0.55) {
     float hole = smoothstep(uXrayR, uXrayR * 0.45, d);
     if (xrayBayer() < hole) discard;
   }
+}`)
+      .replace('#include <opaque_fragment>', `#include <opaque_fragment>
+${caps ? 'if (!gl_FrontFacing) gl_FragColor = vec4(0.11, 0.1, 0.09, 1.0);' : ''}`);
+  };
+  return m;
+}
+/**
+ * Живая вода (и кислота): верх колышется волнами, по поверхности бегут каустика и мерцающие блики,
+ * у берегов — пена. Атрибут shore = 1 в углах, где рядом нет такой же жидкости.
+ * Блики ярче 1 — их подхватывает bloom.
+ */
+const WATER_UNIFORMS = { uTime: { value: 0 } };
+/** Время анимации воды (для тестов) */
+export const liquidTime = (): number => WATER_UNIFORMS.uTime.value;
+function liquid(m: THREE.Material, foam: string, spark: [number, number, number], caustic: [number, number, number]): THREE.Material {
+  const f = new THREE.Color(foam);
+  const v3 = (c: [number, number, number] | THREE.Color) => Array.isArray(c) ? `vec3(${c.map((x) => x.toFixed(3)).join(',')})` : `vec3(${c.r.toFixed(3)},${c.g.toFixed(3)},${c.b.toFixed(3)})`;
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, WATER_UNIFORMS);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>
+attribute float shore;
+uniform float uTime;
+varying vec3 vWater; varying float vShore; varying float vTop;
+float waterWave(vec2 p, float t) {
+  return sin(p.x * 1.1 + t * 1.4) * 0.035 + sin(p.y * 1.4 - t * 1.1 + p.x * 0.5) * 0.03 + sin((p.x + p.y) * 2.3 + t * 2.2) * 0.012;
+}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+vec3 wp0 = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vTop = step(0.8, fract(wp0.y + 0.001));
+transformed.y += vTop * (waterWave(wp0.xz, uTime) - 0.05);
+vWater = wp0; vShore = shore;`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform float uTime;
+varying vec3 vWater; varying float vShore; varying float vTop;
+float wHash(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }`)
+      .replace('#include <opaque_fragment>', `#include <opaque_fragment>
+if (vTop > 0.5) {
+  float t = uTime;
+  vec2 p = vWater.xz;
+  // наклон волны: склоны к солнцу светлее
+  float sx = cos(p.x * 1.1 + t * 1.4) * 0.0385 + cos(p.y * 1.4 - t * 1.1 + p.x * 0.5) * 0.015;
+  float sz = cos(p.y * 1.4 - t * 1.1 + p.x * 0.5) * 0.042;
+  vec3 col = gl_FragColor.rgb * (1.0 + (sz - sx) * 6.0);
+  // каустика: светлые переплетающиеся полосы
+  float caus = pow(abs(sin(p.x * 2.1 + sin(p.y * 1.7 + t) * 1.3 + t * 0.8) * sin(p.y * 2.3 + sin(p.x * 1.5 - t * 0.9) * 1.2 - t * 0.6)), 6.0);
+  col += ${v3(caustic)} * caus;
+  // мерцающие пиксельные блики (1/8 блока), медленно плывут
+  vec2 cell = floor(p * 8.0 + vec2(t * 0.35, t * 0.2));
+  float h = wHash(cell);
+  float tw = 0.5 + 0.5 * sin(t * 3.0 + h * 40.0);
+  col += ${v3(spark)} * step(0.968, h) * smoothstep(0.55, 1.0, tw);
+  // пена у берега: рваный пиксельный край, дышит
+  float fn = wHash(floor(p * 8.0) + floor(t * 2.0) * 0.37);
+  float foam = smoothstep(0.68, 0.9, vShore + (fn - 0.5) * 0.22 + sin(t * 2.0 + p.x * 3.0 + p.y * 2.0) * 0.07);
+  col = mix(col, ${v3(f)}, foam * 0.7);
+  gl_FragColor = vec4(col, max(gl_FragColor.a, foam * 0.95));
 }`);
   };
   return m;
 }
+
 const AO_SHADE = [0.5, 0.68, 0.84, 1];
 const MAX_LIGHTS = 8;
 
@@ -63,7 +128,7 @@ function hash(x: number, y: number, z: number, s = 0): number {
 }
 
 class Bucket {
-  pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = [];
+  pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = [];
   get empty(): boolean { return this.pos.length === 0; }
   geometry(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
@@ -71,6 +136,7 @@ class Bucket {
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nrm, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    g.setAttribute('shore', new THREE.Float32BufferAttribute(this.shore, 1));
     return g;
   }
 }
@@ -94,10 +160,10 @@ export class LevelRenderer {
     this.acidTex = T.acid;
     this.fireTex = T.fire;
     this.mats = {
-      opaque: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true })),
+      opaque: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true }), true),
       cutout: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide })),
-      water: new THREE.MeshLambertMaterial({ map: T.water, vertexColors: true, transparent: true, opacity: 0.8 }),
-      acid: new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }),
+      water: liquid(new THREE.MeshLambertMaterial({ map: T.water, vertexColors: true, transparent: true, opacity: 0.82 }), '#e8fbff', [1.7, 1.9, 2.1], [0.12, 0.3, 0.36]),
+      acid: liquid(new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }), '#d8ffb0', [1.4, 2.4, 0.8], [0.2, 0.4, 0.1]),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
     };
     for (let i = 0; i < MAX_LIGHTS; i++) {
@@ -161,6 +227,7 @@ export class LevelRenderer {
         } else placements.push(yaw);
         const bucket = buckets[part.layer ?? 'opaque'];
         const atlasUV = (part.layer ?? 'opaque') === 'opaque' || part.layer === 'cutout';
+        const isLiquid = part.layer === 'water' || part.layer === 'acid';
         for (const r of placements) {
           const shape = getShape(part.obj, r);
           for (const t of shape.tris) {
@@ -196,6 +263,13 @@ export class LevelRenderer {
               }
               const cv = bright * ao;
               bucket.col.push(cv, cv, cv);
+              // берег: в этом углу рядом нет той же жидкости
+              let shore = 0;
+              if (isLiquid) {
+                const sx = px < 0.5 ? -1 : 1, sz = pz < 0.5 ? -1 : 1;
+                if (L.idAt(x + sx, y, z) !== id || L.idAt(x, y, z + sz) !== id || L.idAt(x + sx, y, z + sz) !== id) shore = 1;
+              }
+              bucket.shore.push(shore);
             }
           }
         }
@@ -224,8 +298,14 @@ export class LevelRenderer {
     XRAY_UNIFORMS.uXrayR.value = radius;
   }
 
+  /** Разрез: не рисовать блоки выше y; Infinity — выключить */
+  setCut(y: number): void {
+    XRAY_UNIFORMS.uXrayCut.value = Math.min(y, 1e9);
+  }
+
   /** Анимация воды и огня, ближайшие к focus источники света. night 0..1 */
   update(t: number, night: number, focus: THREE.Vector3): void {
+    WATER_UNIFORMS.uTime.value = t;
     this.waterTex.offset.set(Math.sin(t * 0.4) * 0.06, t * 0.02);
     this.acidTex.offset.set(t * 0.015, Math.sin(t * 0.3) * 0.05);
     this.fireTex.offset.y = (2 - (Math.floor(t * 9) % 3)) / 3;

@@ -1,6 +1,6 @@
 # ADR-003. Визуальный стиль — как в Minecraft Dungeons, без гиперреализма
 
-- **Статус:** принято
+- **Статус:** принято, уточнено `claude/adr-004-mystic-coop-melee.md` и `claude/style-guide.md` (22.10.2026): стиль добрый и детский, плейграунд тоже в игровом стиле; пункты про стволы и броню устарели
 - **Дата:** 21.10.2026
 - **Уточняет:** `claude/adr-002-realistic-weapons-tactical-movement.md`
 - **Связано:** `claude/design-dungeon.md`, `claude/project-brief.md`

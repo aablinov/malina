@@ -111,6 +111,16 @@ export function terrainOf(L: Level): Terrain {
   return { floorAt, resolve, blocked, wallHit };
 }
 
+/**
+ * Потолок над точкой: низ ближайшего твёрдого блока не ниже y + gap (перемычку двери над головой пропускаем).
+ * Infinity — над головой открыто. Нужен для разреза дома в рендере.
+ */
+export function ceilingAt(L: Level, x: number, z: number, y: number, gap = 2.5, range = 8): number {
+  const cx = cell(x), cz = cell(z);
+  for (let cy = Math.ceil(y + gap); cy <= y + range; cy++) if (L.defAt(cx, cy, cz).collide > 0) return cy;
+  return Infinity;
+}
+
 export interface VoxelHit { x: number; y: number; z: number; /** Направление грани (индекс DIRS), через которую вошёл луч */ face: number; t: number }
 
 /** Луч по вокселям (DDA): первая клетка, где hit(x, y, z) (по умолчанию — непустая, y ≤ maxY), и грань входа */

@@ -74,8 +74,9 @@ export const BLOCKS: BlockDef[] = [
   solid('gravel', 'Гравий', 'земля', 'gravel'),
   solid('sand', 'Песок', 'земля', 'sand'),
   solid('farm', 'Грядка', 'земля', { top: 'farm', side: 'dirt', bottom: 'dirt' }),
-  B('water', 'Вода', 'земля', [{ obj: 'water', layer: 'water', tex: same('water') }], { collide: 0, cullSame: true, jitter: 0 }),
-  B('acid', 'Кислота', 'земля', [{ obj: 'water', layer: 'acid', tex: same('acid') }], { collide: 0, cullSame: true, jitter: 0, light: { color: '#7dff5a', intensity: 3, dist: 5 } }),
+  // вброд: пол в жидкости на полблока ниже верха клетки — заходишь по колено и выходишь обычным шагом (прыжка нет)
+  B('water', 'Вода', 'земля', [{ obj: 'water', layer: 'water', tex: same('water') }], { collide: 0.5, cullSame: true, jitter: 0 }),
+  B('acid', 'Кислота', 'земля', [{ obj: 'water', layer: 'acid', tex: same('acid') }], { collide: 0.5, cullSame: true, jitter: 0, light: { color: '#7dff5a', intensity: 3, dist: 5 } }),
   B('hole', 'Нора жуков', 'земля', [cube(same('hole'), 'layer')], { collide: 0, replaceable: true }),
 
   // --- камень ---
@@ -113,6 +114,30 @@ export const BLOCKS: BlockDef[] = [
   B('flower_blue', 'Цветок синий', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerBlue' } }], { collide: 0, scatter: true, replaceable: true }),
   B('flower_white', 'Цветок белый', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerWhite' } }], { collide: 0, scatter: true, replaceable: true }),
   B('flower_yellow', 'Цветок жёлтый', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerYellow' } }], { collide: 0, scatter: true, replaceable: true }),
+
+  // --- дом: стены, окно, перила ---
+  solid('plaster_teal', 'Штукатурка бирюзовая', 'дом', 'plasterTeal'),
+  solid('plaster_white', 'Штукатурка белая', 'дом', 'plasterWhite'),
+  solid('plaster_rust', 'Штукатурка оранжевая', 'дом', 'plasterRust'),
+  solid('brick_brown', 'Кирпич бурый', 'дом', 'brickBrown'),
+  solid('concrete', 'Бетон', 'дом', 'concrete'),
+  B('window', 'Окно', 'дом', [cube(same('window'), 'pane')], { rotatable: true, jitter: 0 }),
+  B('rust_rail', 'Перила ржавые', 'дом', [cube(same('rustMetal'), 'fence_post'), { obj: 'fence_rail', tex: same('rustMetal'), connect: true }], { collide: 1.5, connects: true }),
+
+  // --- мебель: смотрит к +X, поворот разворачивает ---
+  B('table', 'Стол', 'мебель', [cube(same('planks'), 'table')], { collide: 13 / 16 }),
+  B('chair', 'Стул', 'мебель', [cube(same('planksDark'), 'chair')], { collide: 9 / 16, rotatable: true }),
+  B('sofa', 'Диван', 'мебель', [cube({ top: 'fabricRed', side: 'fabricRed', bottom: 'ironDark' }, 'sofa')], { collide: 14 / 16, rotatable: true, connects: true }),
+  B('bed', 'Кровать: изножье', 'мебель', [cube({ top: 'blanket', side: 'blanket', bottom: 'planksDark' }, 'bed')], { collide: 9 / 16, rotatable: true }),
+  B('bed_head', 'Кровать: изголовье', 'мебель', [cube({ top: 'blanket', side: 'blanket', bottom: 'planksDark', pillow: 'pillow', wood: 'planksDark' }, 'bed_head')], { collide: 9 / 16, rotatable: true }),
+  B('lamp', 'Торшер', 'мебель', [cube({ pole: 'ironDark', shade: 'lampShade' }, 'lamp')], { light: { color: '#ffd28a', intensity: 5, dist: 7 } }),
+  B('counter', 'Кухонная тумба', 'мебель', [cube({ top: 'counterTop', side: 'cabinet', bottom: 'planksDark' }, 'low')], { collide: 0.875, connects: true }),
+  B('stove', 'Плита', 'мебель', [cube({ top: 'stoveTop', side: 'cabinet', bottom: 'planksDark' }, 'low')], { collide: 0.875, connects: true }),
+  B('cabinet_low', 'Тумбочка', 'мебель', [cube({ top: 'planksDark', side: 'cabinet', bottom: 'planksDark' }, 'low')], { collide: 0.875, connects: true }),
+  solid('cabinet', 'Шкаф', 'мебель', { top: 'planksDark', side: 'cabinet', bottom: 'planksDark' }, { jitter: 0.04 }),
+  solid('bookshelf', 'Книжный шкаф', 'мебель', { top: 'planksDark', side: 'bookshelf', bottom: 'planksDark' }, { jitter: 0.04 }),
+  solid('fridge', 'Холодильник', 'мебель', { top: 'fridgeTop', side: 'fridge', bottom: 'fridgeTop' }, { jitter: 0 }),
+  B('rug', 'Ковёр', 'мебель', [cube(same('rug'), 'carpet')], { collide: 0, jitter: 0 }),
 
   // --- служебные блоки плейграунда: нейтральная сетка и клетчатые стены, стиль игры не задают ---
   solid('dev_light', 'Сетка: светлая', 'служебные', 'devLight', { jitter: 0 }),

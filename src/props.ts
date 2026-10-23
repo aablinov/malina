@@ -1,21 +1,22 @@
 import * as THREE from 'three';
 import { obstacle, type Obstacle } from './collision';
 import type { FX } from './fx';
-import type { Rand, Shootable } from './gunplay';
+import type { Target } from './target';
+import type { Rand } from './textures';
 import { distToObstacle } from './nav';
 import { pixelTex } from './textures';
 
 /**
  * Интерактивные предметы карты:
- * - красные бочки с горючим: от пуль загораются и через секунду взрываются, задевая соседние бочки (цепная реакция);
+ * - красные бочки с горючим: от ударов загораются и через секунду взрываются, задевая соседние бочки (цепная реакция);
  * - ящики с припасами: подойти и нажать E — крышка откидывается, лут вываливается на пол, его подбирают проходя;
  * - терминал здоровья: E — лечит, пока стоишь рядом, запас заряда восстанавливается;
- * - деревянные ящики: укрытие, которое разбивается пулями и взрывами.
+ * - деревянные ящики: разбиваются мечом и взрывами.
  *
- * Предметы — препятствия для движения и пуль (через solids), бочки и деревянные ящики — ещё и цели.
+ * Предметы — препятствия для движения (через solids), бочки и деревянные ящики — ещё и цели для ударов.
  */
 
-export type LootKind = 'ammo' | 'pistolAmmo' | 'grenade' | 'berry' | 'med';
+export type LootKind = 'berry' | 'med';
 
 export const PROPS = {
   barrelHp: 20,
@@ -54,7 +55,7 @@ const MAT = {
 
 // ---------- бочка ----------
 
-export class Barrel implements Shootable {
+export class Barrel implements Target {
   readonly pos: THREE.Vector3;
   readonly radius = 0.36;
   readonly topY = 0.95;
@@ -119,7 +120,7 @@ export class Barrel implements Shootable {
 
 // ---------- деревянный ящик ----------
 
-export class BreakCrate implements Shootable {
+export class BreakCrate implements Target {
   readonly pos: THREE.Vector3;
   readonly radius = 0.56;
   readonly topY = 1.0;
@@ -316,9 +317,6 @@ export interface Pickup {
 }
 
 const LOOT_LOOK: Record<LootKind, { color: string; glow: [number, number, number]; size: [number, number, number] }> = {
-  ammo: { color: '#b9952e', glow: [3, 2.4, 0.6], size: [0.34, 0.2, 0.22] },
-  pistolAmmo: { color: '#8a7a3a', glow: [2.4, 2.2, 1], size: [0.24, 0.16, 0.16] },
-  grenade: { color: '#4c5a2e', glow: [1.2, 2.4, 0.6], size: [0.16, 0.2, 0.16] },
   berry: { color: '#c4284f', glow: [3.2, 0.5, 1], size: [0.2, 0.2, 0.2] },
   med: { color: '#eeeeee', glow: [3, 0.6, 0.6], size: [0.3, 0.2, 0.24] },
 };
@@ -363,7 +361,7 @@ export interface PropsLayout {
   terminals: [number, number, number][];
 }
 
-const LOOT_TABLE: [LootKind, number][] = [['ammo', 30], ['ammo', 30], ['pistolAmmo', 16], ['grenade', 1], ['berry', 5], ['berry', 5], ['med', 25]];
+const LOOT_TABLE: [LootKind, number][] = [['berry', 3], ['berry', 3], ['berry', 5], ['berry', 5], ['med', 25], ['med', 15]];
 
 export class Props {
   barrels: Barrel[] = [];
@@ -399,7 +397,7 @@ export class Props {
     this.spawn();
   }
 
-  /** Препятствия от предметов (для движения, пуль и навигации) */
+  /** Препятствия от предметов (для движения и навигации) */
   get solids(): Obstacle[] {
     if (this.solidsVer !== this.version) {
       this.solidsCache = [
@@ -413,8 +411,8 @@ export class Props {
     return this.solidsCache;
   }
 
-  /** Цели для пуль: бочки и деревянные ящики */
-  get targets(): Shootable[] {
+  /** Цели для ударов: бочки и деревянные ящики */
+  get targets(): Target[] {
     return [...this.barrels.filter((b) => !b.exploded), ...this.crates.filter((c) => !c.broken)];
   }
 
