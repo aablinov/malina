@@ -60,6 +60,8 @@ function noiseFill(g: Ctx, s: number, r: Rand, pal: readonly string[], amt = 8):
  */
 const GRASS_BASE = '#6d994e', GRASS_LIGHT = '#7ba558', GRASS_DARK = '#608b46';
 const DIRT_BASE = '#9a6942', DIRT_DARK = '#8a5c39';
+/** Камень: булыжник, кирпич, сланцевый кирпич руин, плиты, мох */
+const STONE_BASE = '#88929d', BRICK_BASE = '#86919c', SLATE_BASE = '#6a8592', TILE_BASE = '#a0a2a2', MOSS = '#6f9a4c';
 const DIRT = [DIRT_BASE, DIRT_BASE, DIRT_DARK];
 
 /** Смешать два цвета #rrggbb: t = 0 — a, 1 — b; результат тоже #rrggbb */
@@ -81,6 +83,74 @@ function softFill(g: Ctx, s: number, r: Rand, base: string, grain: number, blobs
   }
   for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(cells[y * s + x], r, grain));
 }
+/** Мягкие пятна поверх уже нарисованного (мох на камне): смешивание с тем, что на холсте */
+function overlayBlobs(g: Ctx, s: number, r: Rand, col: string, n: number, rad: [number, number], k: number, yBias = 0): void {
+  const img = g.getImageData(0, 0, s, s), d = img.data, c = hexToRgb(col);
+  for (let i = 0; i < n; i++) {
+    const cx = r() * s, cy = Math.pow(r(), 1 + yBias) * s, rr = rad[0] + r() * (rad[1] - rad[0]);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const dx = Math.min(Math.abs(x + 0.5 - cx), s - Math.abs(x + 0.5 - cx)), dy = Math.abs(y + 0.5 - cy);
+      const t = Math.min(1, (1 - Math.hypot(dx, dy) / rr) * 1.8) * k;
+      if (t <= 0) continue;
+      const o = (y * s + x) * 4;
+      for (let j = 0; j < 3; j++) d[o + j] = d[o + j] + (c[j] - d[o + j]) * t;
+    }
+  }
+  g.putImageData(img, 0, 0);
+}
+/**
+ * Мягкая кладка: у каждого кирпича свой тон (±vary к белому / чёрному), верхний ряд кирпича чуть светлее,
+ * шов — тот же цвет, темнее на 12 %: кладка читается, но не рябит (Minecraft Dungeons, wiki/style-terrain.md).
+ */
+function softBricks(g: Ctx, s: number, r: Rand, base: string, cellW: number, rows: number, vary = 0.08, seam = 0.12): void {
+  const h = s / rows, mortar = mix(base, '#000000', seam);
+  for (let row = 0; row < rows; row++) {
+    const off = row % 2 ? cellW / 2 : 0;
+    for (let bx = -1; bx * cellW + off < s; bx++) {
+      const t = (r() - 0.5) * 2;
+      const col = t > 0 ? mix(base, '#ffffff', t * vary) : mix(base, '#000000', -t * vary);
+      const x0 = bx * cellW + off;
+      for (let y = row * h; y < (row + 1) * h; y++) for (let x = Math.max(0, x0); x < Math.min(s, x0 + cellW); x++) {
+        const edge = y === row * h || x === x0;
+        px(g, x, y, edge ? jitter(mortar, r, 2) : jitter(y === row * h + 1 ? mix(col, '#ffffff', 0.05) : col, r, 2));
+      }
+    }
+  }
+}
+/** Булыжник: светлая основа и скруглённые камни, сверху-слева чуть светлее, снизу-справа шов чуть темнее */
+function softCobble(g: Ctx, s: number, r: Rand, base: string): void {
+  softFill(g, s, r, mix(base, '#000000', 0.1), 2, []);
+  for (let i = 0; i < 11; i++) {
+    const cx = r() * s, cy = r() * s, w = 2.2 + r() * 1.6, h = 1.8 + r() * 1.4;
+    const t = (r() - 0.5) * 2, col = t > 0 ? mix(base, '#ffffff', t * 0.08) : mix(base, '#000000', -t * 0.06);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const dx0 = x + 0.5 - cx, dy0 = y + 0.5 - cy;
+      const dx = Math.abs(dx0) > s / 2 ? dx0 - Math.sign(dx0) * s : dx0, dy = Math.abs(dy0) > s / 2 ? dy0 - Math.sign(dy0) * s : dy0;
+      const e = (dx / w) ** 2 + (dy / h) ** 2;
+      if (e > 1) continue;
+      px(g, x, y, jitter(e > 0.55 && (dx > 0 || dy > 0) ? mix(col, '#000000', 0.05) : e > 0.5 ? mix(col, '#ffffff', 0.06) : col, r, 2));
+    }
+  }
+}
+/** Листва: «листочки» 2 × 2 из пяти тонов, сверху светлее; holes — дырки по краю (вырезная листва) */
+function softLeaves(g: Ctx, s: number, r: Rand, tones: readonly [string, string, string, string], holes: boolean, berries = false): void {
+  for (let cy = 0; cy < s; cy += 2) for (let cx = 0; cx < s; cx += 2) {
+    const up = 1 - cy / s; // сверху больше светлых
+    const v = r() + up * 0.25;
+    const col = v < 0.22 ? tones[0] : v < 0.62 ? tones[1] : v < 1.0 ? tones[2] : tones[3];
+    for (let y = cy; y < cy + 2; y++) for (let x = cx; x < cx + 2; x++) {
+      if (holes) {
+        const edge = Math.min(x, y, s - 1 - x, s - 1 - y);
+        if (r() < (edge === 0 ? 0.45 : edge === 1 ? 0.22 : 0.05)) continue;
+      }
+      px(g, x, y, jitter(col, r, 3));
+    }
+  }
+  if (berries) for (let i = 0; i < 7; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#d8344f'); px(g, x + 1, y, '#f0607a'); }
+}
+/** Тона листвы, откалиброваны по дереву на скриншоте 4 (wiki/style-terrain.md): тень, середина, свет, блик */
+const LEAF: [string, string, string, string] = ['#486e37', '#6b8a42', '#839f52', '#9cb063'];
+const BUSH: [string, string, string, string] = ['#466a39', '#627f43', '#76914f', '#8ca25b'];
 
 export interface Textures {
   grassTop: THREE.Texture; grassSide: THREE.Texture; dirt: THREE.Texture; farm: THREE.Texture;
@@ -91,7 +161,7 @@ export interface Textures {
   overalls: THREE.Texture; straw: THREE.Texture; square: THREE.Texture; glow: THREE.Texture;
   /** Текстуры блоков уровня (палитра — src/level/palette.ts) */
   gravel: THREE.Texture; sand: THREE.Texture; cobble: THREE.Texture; stoneBricks: THREE.Texture;
-  stoneBricksMossy: THREE.Texture; stoneBricksCracked: THREE.Texture; stoneBricksOld: THREE.Texture; tiles: THREE.Texture;
+  stoneBricksMossy: THREE.Texture; stoneBricksCracked: THREE.Texture; stoneBricksOld: THREE.Texture; stoneBricksOldMossy: THREE.Texture; tiles: THREE.Texture;
   planksDark: THREE.Texture; roofDark: THREE.Texture; crate: THREE.Texture; berryBush: THREE.Texture; fern: THREE.Texture;
   hay: THREE.Texture; hayTop: THREE.Texture; ash: THREE.Texture; leavesCut: THREE.Texture; acid: THREE.Texture; hole: THREE.Texture;
   flowerRed: THREE.Texture; flowerBlue: THREE.Texture; flowerWhite: THREE.Texture; flowerYellow: THREE.Texture;
@@ -155,8 +225,8 @@ export function makeTextures(): Textures {
     { col: '#959ca6', n: 2, rad: [2, 3], k: 0.5 },
   ]), 16);
   T.mossy = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#7d7d7d', '#717171', '#888888', '#666666'], 6);
-    for (let i = 0; i < 70; i++) px(g, (r() * s) | 0, (r() * s) | 0, jitter(pick(['#4f7d33', '#5d8f3a', '#3f6a2a'], r), r, 8));
+    softCobble(g, s, r, STONE_BASE);
+    overlayBlobs(g, s, r, MOSS, 5, [2, 3.5], 0.85, 1);
   }, 17);
   T.logSide = canvasTex(16, (g, s, r) => {
     for (let x = 0; x < s; x++) {
@@ -171,14 +241,8 @@ export function makeTextures(): Textures {
       px(g, x, y, jitter(col, r, 5));
     }
   }, 19);
-  T.leaves = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#3f7d2c', '#356b25', '#4b8f35', '#2c5a1e', '#457f2f'], 10);
-    for (let i = 0; i < 18; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#1f4415');
-  }, 20);
-  T.bushLeaves = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#3e8a33', '#4c9b3a', '#367a2c', '#58a845'], 10);
-    for (let i = 0; i < 14; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#285e20');
-  }, 21);
+  T.leaves = canvasTex(16, (g, s, r) => softLeaves(g, s, r, LEAF, false), 20);
+  T.bushLeaves = canvasTex(16, (g, s, r) => softLeaves(g, s, r, BUSH, false), 21);
   T.planks = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) {
       const board = Math.floor(y / 4);
@@ -251,37 +315,35 @@ export function makeTextures(): Textures {
     for (let i = 0; i < 10; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#8f877d'); px(g, x + 1, y, '#bdb5aa'); }
   }, 50);
   T.sand = canvasTex(16, (g, s, r) => softFill(g, s, r, '#e4d19b', 3, [{ col: '#eedcaa', n: 3, rad: [2.5, 4], k: 0.6 }, { col: '#d6c18a', n: 2, rad: [2, 3], k: 0.5 }]), 51);
-  const stoneyCells = (g: Ctx, s: number, r: Rand, pal: readonly string[], mortar: string, cell: number, rows: number) => {
-    noiseFill(g, s, r, pal, 5);
-    for (let row = 0; row < rows; row++) {
-      const y0 = (row * s) / rows, off = row % 2 ? cell / 2 : 0;
-      for (let x = 0; x < s; x++) px(g, x, y0 | 0, jitter(mortar, r, 4));
-      for (let x = off; x <= s; x += cell) for (let y = y0; y < y0 + s / rows; y++) px(g, x % s, y | 0, jitter(mortar, r, 4));
-    }
-  };
-  T.cobble = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#8d8d8d', '#7f7f7f', '#999999', '#737373'], 6);
-    // булыжники: случайные пятна со светлым верхом и тёмным низом
-    for (let i = 0; i < 9; i++) {
-      const cx = (r() * s) | 0, cy = (r() * s) | 0, w = 3 + ((r() * 3) | 0), h = 2 + ((r() * 3) | 0);
-      const base = pick(['#8a8a8a', '#9a9a9a', '#7a7a7a', '#a0a0a0'], r);
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(g, (cx + x) % s, (cy + y) % s, jitter(y === 0 ? '#b0b0b0' : y === h - 1 ? '#5c5c5c' : base, r, 5));
-    }
-  }, 52);
-  T.stoneBricks = canvasTex(16, (g, s, r) => stoneyCells(g, s, r, ['#8a8a8a', '#808080', '#949494', '#777777'], '#5a5a5a', 8, 4), 53);
+  // ---------- кладка: светлый голубовато-серый камень ограды и руин (скриншоты 1, 3) ----------
+  T.cobble = canvasTex(16, (g, s, r) => softCobble(g, s, r, STONE_BASE), 52);
+  T.stoneBricks = canvasTex(16, (g, s, r) => softBricks(g, s, r, BRICK_BASE, 8, 4), 53);
   T.stoneBricksMossy = canvasTex(16, (g, s, r) => {
-    stoneyCells(g, s, r, ['#8a8a8a', '#808080', '#949494', '#777777'], '#5a5a5a', 8, 4);
-    for (let i = 0; i < 50; i++) px(g, (r() * s) | 0, (r() * s) | 0, jitter(pick(['#4f7d33', '#5d8f3a', '#3f6a2a'], r), r, 8));
+    softBricks(g, s, r, BRICK_BASE, 8, 4);
+    overlayBlobs(g, s, r, MOSS, 4, [2, 3.5], 0.85, 1);
   }, 54);
   T.stoneBricksCracked = canvasTex(16, (g, s, r) => {
-    stoneyCells(g, s, r, ['#8a8a8a', '#808080', '#949494', '#777777'], '#5a5a5a', 8, 4);
-    let x = (r() * s) | 0;
-    for (let y = 0; y < s; y++) { px(g, x, y, '#4a4a4a'); if (r() < 0.6) x = Math.max(0, Math.min(s - 1, x + (r() < 0.5 ? -1 : 1))); }
+    softBricks(g, s, r, BRICK_BASE, 8, 4);
+    const crack = mix(BRICK_BASE, '#000000', 0.16);
+    let x = 3 + ((r() * 10) | 0);
+    for (let y = 2; y < s - 2; y++) { px(g, x, y, crack); if (r() < 0.5) x = Math.max(1, Math.min(s - 2, x + (r() < 0.5 ? -1 : 1))); }
   }, 55);
-  T.stoneBricksOld = canvasTex(16, (g, s, r) => stoneyCells(g, s, r, ['#8b7f93', '#7d7287', '#978ba0', '#6f6478'], '#4c4454', 8, 4), 56);
-  T.tiles = canvasTex(16, (g, s, r) => {
-    stoneyCells(g, s, r, ['#9a948c', '#8f8982', '#a39d95', '#857f78'], '#5e5952', 8, 2);
-    for (let i = 0; i < 10; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#b5afa6');
+  // руинный: сланцевый, синее и темнее (колонны руин на скриншоте 3)
+  T.stoneBricksOld = canvasTex(16, (g, s, r) => softBricks(g, s, r, SLATE_BASE, 8, 4, 0.1, 0.14), 56);
+  T.stoneBricksOldMossy = canvasTex(16, (g, s, r) => {
+    softBricks(g, s, r, SLATE_BASE, 8, 4, 0.1, 0.14);
+    overlayBlobs(g, s, r, MOSS, 4, [2, 3.5], 0.85, 1);
+  }, 58);
+  // плиты мостовой: крупные, шов сверху-слева светлый, как на полу руин
+  T.tiles = canvasTex(16, (g, _s, r) => {
+    for (let ty = 0; ty < 2; ty++) for (let tx = 0; tx < 2; tx++) {
+      const t = (r() - 0.5) * 2, col = t > 0 ? mix(TILE_BASE, '#ffffff', t * 0.07) : mix(TILE_BASE, '#000000', -t * 0.06);
+      for (let y = ty * 8; y < ty * 8 + 8; y++) for (let x = tx * 8; x < tx * 8 + 8; x++) {
+        const lx = x - tx * 8, ly = y - ty * 8;
+        const c = lx === 0 || ly === 0 ? mix(col, '#ffffff', 0.12) : lx === 7 || ly === 7 ? mix(col, '#000000', 0.08) : col;
+        px(g, x, y, jitter(c, r, 2));
+      }
+    }
   }, 57);
   T.planksDark = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) {
@@ -298,11 +360,7 @@ export function makeTextures(): Textures {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(['#a7824f', '#9c7746', '#b08b57'][Math.floor(y / 5) % 3], r, 6));
     for (let i = 0; i < s; i++) { for (const k of [0, 1, s - 2, s - 1]) { px(g, i, k, '#6e5230'); px(g, k, i, '#6e5230'); } px(g, i, i, '#6e5230'); px(g, i, s - 1 - i, '#7a5a34'); }
   }, 60);
-  T.berryBush = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#3e8a33', '#4c9b3a', '#367a2c', '#58a845'], 10);
-    for (let i = 0; i < 14; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#285e20');
-    for (let i = 0; i < 7; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#d0123f'); px(g, x + 1, y, '#ff4a6a'); }
-  }, 61);
+  T.berryBush = canvasTex(16, (g, s, r) => softLeaves(g, s, r, BUSH, false, true), 61);
   T.fern = canvasTex(16, (g, s, r) => {
     for (let k = 0; k < 3; k++) {
       let x = 7 + k - 1;
@@ -321,15 +379,7 @@ export function makeTextures(): Textures {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter((x + y) % 4 === 0 ? '#b8912e' : pick(['#e8c35a', '#dbb34a', '#f0cf6c'], r), r, 8));
   }, 64);
   // листва кроны: с дырками по краям, чтобы кубы кроны не читались как кубы
-  T.leavesCut = canvasTex(16, (g, s, r) => {
-    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
-      const edge = Math.min(x, y, s - 1 - x, s - 1 - y);
-      const hole = edge === 0 ? 0.45 : edge === 1 ? 0.25 : 0.08;
-      if (r() < hole) continue;
-      px(g, x, y, jitter(pick(['#3f7d2c', '#356b25', '#4b8f35', '#2c5a1e', '#457f2f'], r), r, 10));
-    }
-    for (let i = 0; i < 12; i++) px(g, 2 + ((r() * 12) | 0), 2 + ((r() * 12) | 0), '#1f4415');
-  }, 68, { alpha: true });
+  T.leavesCut = canvasTex(16, (g, s, r) => softLeaves(g, s, r, LEAF, true), 68, { alpha: true });
   T.ash = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#3a3835', '#2e2c2a', '#454240'], 6), 65);
   [T.flowerRed, T.flowerBlue, T.flowerWhite, T.flowerYellow] = T.flowers;
   T.water = canvasTex(16, (g, s, r) => {
@@ -417,7 +467,7 @@ export function makeTextures(): Textures {
     blots(g, s, r, ['#f6d8a8', '#e8e0d0', '#a8441a'], 5, 6);
   }, 92);
   T.brickBrown = canvasTex(16, (g, s, r) => {
-    stoneyCells(g, s, r, ['#7a5d4c', '#6a5040', '#86685a', '#5e4638'], '#3e302a', 8, 4);
+    softBricks(g, s, r, '#7a5d4c', 8, 4, 0.1, 0.25);
     blots(g, s, r, ['#4a3a30', '#9a7c68'], 4, 4);
   }, 93);
   T.concrete = canvasTex(16, (g, s, r) => {
