@@ -23,11 +23,12 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     const mark = (x % 10 === 0 && Math.abs(z) <= H - 1) || (z % 10 === 0 && Math.abs(x) <= H - 1);
     L.set(x, -1, z, plaza ? 'tiles' : mark ? 'path' : 'grass');
   }
-  // стены по периметру: дальние (−X, −Z) 3 блока, со стороны камеры (+X, +Z) — 1 блок; на юге проём к витрине, на востоке — во двор с домом
+  // стены по периметру: дальние (−X, −Z) 3 блока, со стороны камеры (+X, +Z) — 1 блок; на юге проём к витрине
   const W = H + 1;
   for (let i = -W; i <= W; i++) {
     for (let y = 0; y < 3; y++) { L.set(i, y, -W, y === 2 ? 'bricks' : 'bricks_old'); L.set(-W, y, i, y === 2 ? 'bricks' : 'bricks_old'); }
-    if (Math.abs(i) > 1) { L.set(W, 0, i, 'bricks_mossy'); L.set(i, 0, W, 'bricks_mossy'); }
+    L.set(W, 0, i, 'bricks_mossy');
+    if (Math.abs(i) > 1) L.set(i, 0, W, 'bricks_mossy');
   }
   for (let i = -W; i <= W; i++) { L.set(i, -1, -W, 'stone'); L.set(i, -1, W, 'stone'); L.set(-W, -1, i, 'stone'); L.set(W, -1, i, 'stone'); }
   // факелы на дальних стенах — тёплые пятна света
@@ -161,118 +162,8 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   L.set(hx - 1, 0, hz - 2, 'torch'); L.set(hx + 1, 0, hz - 2, 'torch');
   labels.push({ text: 'домик', x: hx, z: zb + 4.4, size: 0.6 });
 
-  // ---------- двор с двухэтажным домом за восточной стеной ----------
-  const X0 = W + 1, X1 = W + 30, YZ0 = -16, YZ1 = 14;
-  for (let x = X0; x <= X1; x++) for (let z = YZ0; z <= YZ1; z++) L.set(x, -1, z, x < X0 + 4 && Math.abs(z) <= 1 ? 'path' : 'grass');
-  for (let x = X0; x <= X1; x++) { L.set(x, 0, YZ0, 'fence'); L.set(x, 0, YZ1, 'fence'); }
-  for (let z = YZ0; z <= YZ1; z++) L.set(X1, 0, z, 'fence');
-  labels.push(...buildHouse(L, X0 + 4, -12));
-
   L.spawn = [0, 0, 0];
   L.meta = { labels };
   L.dirty.clear();
   return { level: L, labels };
-}
-
-/**
- * Двухэтажный дом по референсу: бирюзовый верх, белый и оранжевый низ, бурый кирпичный пояс и парапет.
- * Корпус 11 × 11 м, этажи по 3 м (пол второго — верх клеток y = 3), внутри лестница, кухня, столовая,
- * гостиная, на втором — коридор вдоль лестничного проёма, спальня и кабинет. Сбоку гараж-навес,
- * его крыша — терраса: на неё дверь со второго этажа и наружная лестница. (ox, oz) — северо-западный угол корпуса.
- * Двери 1 × 2 м, пол по обе стороны на одном уровне — иначе боец ростом 1,6 м цепляет перемычку.
- */
-function buildHouse(L: Level, ox: number, oz: number): PgLabel[] {
-  const set = (x: number, y: number, z: number, name: string, rot = 0) => L.set(ox + x, y, oz + z, name, rot);
-  const fill = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, name: string, rot = 0) =>
-    L.fill(ox + x0, y0, oz + z0, ox + x1, y1, oz + z1, name, rot);
-
-  // ---------- корпус: x, z 0..10 ----------
-  fill(0, -1, 0, 10, -1, 10, 'planks');
-  for (let x = 0; x <= 10; x++) for (let z = 0; z <= 10; z++) {
-    if (x > 0 && x < 10 && z > 0 && z < 10) continue;
-    set(x, -1, z, 'brick_brown');
-    fill(x, 0, z, x, 2, z, z === 10 ? 'plaster_rust' : 'plaster_white');
-    set(x, 3, z, 'brick_brown');
-    fill(x, 4, z, x, 6, z, 'plaster_teal');
-    set(x, 7, z, 'brick_brown');
-    set(x, 8, z, z === 10 ? 'rust_rail' : 'brick_brown');
-  }
-  fill(1, 3, 1, 9, 3, 9, 'planks'); // перекрытие = пол второго этажа
-  fill(1, 7, 1, 9, 7, 9, 'concrete'); // плоская крыша
-  fill(2, 8, 1, 3, 9, 2, 'brick_brown'); // труба
-
-  // проёмы: двери на улицу и в гараж, окна на обоих этажах
-  fill(6, 0, 10, 6, 1, 10, 'air');
-  fill(10, 0, 5, 10, 1, 5, 'air');
-  for (const y of [1, 5]) {
-    for (const x of [2, 3, 8]) { set(x, y, 10, 'window'); }
-    set(8, y, 0, 'window');
-    for (const z of [3, 7]) set(0, y, z, 'window', 1);
-  }
-  set(10, 5, 4, 'window', 1); set(10, 5, 9, 'window', 1);
-  fill(10, 4, 7, 10, 5, 7, 'air'); // дверь на террасу
-
-  // лестница вдоль северной стены: 4 ступени к +X, шириной 2, под ней — опоры, над ней — проём в перекрытии
-  for (let k = 0; k < 4; k++) {
-    fill(3 + k, k, 1, 3 + k, k, 2, 'planks_stairs', 0);
-    if (k > 0) fill(3 + k, 0, 1, 3 + k, k - 1, 2, 'planks');
-  }
-  fill(3, 3, 1, 5, 3, 2, 'air');
-  fill(3, 4, 3, 5, 4, 3, 'fence'); fill(2, 4, 1, 2, 4, 2, 'fence'); // ограждение проёма
-
-  // 1 этаж: кухня у западной стены, столовая, гостиная
-  set(1, 0, 4, 'counter'); set(1, 0, 5, 'counter'); set(1, 0, 6, 'stove'); set(1, 0, 7, 'counter');
-  fill(1, 0, 8, 1, 1, 8, 'fridge'); set(1, 0, 9, 'cabinet_low'); set(1, 0, 1, 'lamp');
-  set(3, 0, 6, 'table'); set(4, 0, 6, 'table');
-  for (const x of [3, 4]) { set(x, 0, 5, 'chair', 1); set(x, 0, 7, 'chair', 3); }
-  fill(9, 0, 6, 9, 0, 8, 'sofa', 2); fill(6, 0, 6, 8, 0, 8, 'rug');
-  set(7, 0, 9, 'cabinet_low'); set(9, 0, 9, 'lamp');
-  fill(9, 0, 1, 9, 1, 2, 'bookshelf');
-
-  // 2 этаж: коридор z 3..4, перегородка z = 5 с двумя дверями, спальня (x 1..5) и кабинет (x 7..9)
-  fill(1, 4, 5, 9, 6, 5, 'plaster_white');
-  fill(6, 4, 6, 6, 6, 9, 'plaster_white');
-  fill(2, 4, 5, 2, 5, 5, 'air'); fill(8, 4, 5, 8, 5, 5, 'air');
-  fill(1, 4, 7, 1, 4, 8, 'bed_head', 0); fill(2, 4, 7, 2, 4, 8, 'bed', 0);
-  set(1, 4, 6, 'cabinet_low'); set(1, 4, 9, 'cabinet_low'); set(5, 4, 6, 'lamp');
-  fill(4, 4, 9, 5, 5, 9, 'cabinet'); fill(3, 4, 7, 4, 4, 8, 'rug');
-  set(8, 4, 9, 'table'); set(9, 4, 9, 'table'); set(8, 4, 8, 'chair', 1);
-  fill(7, 4, 9, 7, 5, 9, 'bookshelf'); set(9, 4, 6, 'lamp');
-  fill(1, 4, 1, 1, 5, 1, 'bookshelf'); set(9, 4, 1, 'lamp');
-
-  // ---------- гараж-навес: x 10..18, z 2..14; крыша — терраса с бирюзовым парапетом ----------
-  fill(11, -1, 3, 17, -1, 13, 'concrete');
-  for (let x = 10; x <= 18; x++) for (let z = 2; z <= 14; z++) {
-    if (x === 10 && z <= 10) continue; // стена корпуса
-    if (x > 10 && x < 18 && z > 2 && z < 14) continue;
-    set(x, -1, z, 'brick_brown');
-    fill(x, 0, z, x, 2, z, 'plaster_white');
-    fill(x, 3, z, x, 4, z, 'plaster_teal');
-  }
-  fill(11, 3, 3, 17, 3, 13, 'concrete');
-  fill(11, 0, 14, 13, 1, 14, 'air'); fill(15, 0, 14, 17, 1, 14, 'air'); fill(14, 0, 14, 14, 1, 14, 'planks_dark');
-  set(18, 1, 5, 'window', 1); set(18, 1, 9, 'window', 1);
-  fill(16, 0, 3, 17, 0, 3, 'crate'); set(17, 0, 4, 'crate'); set(17, 1, 3, 'crate');
-  set(12, 0, 3, 'table'); set(13, 0, 3, 'table'); set(12, 0, 4, 'chair', 3); fill(11, 0, 3, 11, 1, 3, 'cabinet');
-  // терраса: столик, два стула, проход в парапете к наружной лестнице
-  set(14, 4, 8, 'table'); set(13, 4, 8, 'chair', 0); set(15, 4, 8, 'chair', 2);
-  fill(18, 4, 7, 18, 4, 8, 'air');
-
-  // наружная лестница: площадка у парапета (верх 4) и 4 ступени вниз к +Z, шириной 2
-  fill(19, -1, 6, 20, -1, 13, 'brick_brown');
-  fill(19, 0, 7, 20, 3, 8, 'brick_brown');
-  for (let k = 0; k < 4; k++) {
-    fill(19, k, 12 - k, 20, k, 12 - k, 'bricks_stairs', 3);
-    if (k > 0) fill(19, 0, 12 - k, 20, k - 1, 12 - k, 'brick_brown');
-  }
-
-  // крыльцо перед дверью
-  fill(0, -1, 11, 9, -1, 13, 'cobble');
-  set(4, 0, 11, 'torch'); set(8, 0, 11, 'torch');
-  set(0, 0, 13, 'berry_bush'); set(9, 0, 13, 'berry_bush');
-
-  return [
-    { text: 'дом: 2 этажа, лестница, терраса', x: ox + 5, z: oz + 15, size: 0.9 },
-    { text: 'наружная лестница', x: ox + 20, z: oz + 14.2, size: 0.6 },
-  ];
 }

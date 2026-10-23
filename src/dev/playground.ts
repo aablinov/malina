@@ -48,7 +48,7 @@ function pickMap(): LevelJSON {
 export function runPlayground(): void {
   /**
    * Плейграунд: основная сцена разработки (ADR-004). Арена из блоков, соломенные чучела для меча, склад, пруд,
-   * ступени на площадку, витрина блоков и дом во дворе. Механики живут в общих модулях (knight.ts, trail.ts), здесь — сцена и отладка.
+   * ступени на площадку, витрина блоков. Механики живут в общих модулях (knight.ts, trail.ts), здесь — сцена и отладка.
    */
 
   snapshotTuning();
@@ -369,7 +369,7 @@ export function runPlayground(): void {
     pointer.down = lmb && !panel.el.contains(document.activeElement);
     pointer.shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
     if (mouseSeen) {
-      // курсор на земле — верх блока под лучом камеры (срезанные этажи дома пропускаем), цель — по тому же лучу
+      // курсор на земле — верх блока под лучом камеры (срезанное над героем пропускаем), цель — по тому же лучу
       raycaster.setFromCamera(mouseNdc, camera);
       groundAt(raycaster.ray, pointer.ground);
       pointer.hover = pickRay(raycaster.ray);
@@ -400,7 +400,7 @@ export function runPlayground(): void {
   let repathT = 0;
   let stuckRepaths = 0;
   let arrived = false;
-  /** Срез этажей дома (всё выше не рисуется и не ловит клик) */
+  /** Срез над героем под крышей (всё выше не рисуется и не ловит клик) */
   let cutY = Infinity;
 
   /** Точка на земле под лучом: верх первого твёрдого блока; мимо уровня — плоскость на высоте героя */
@@ -642,7 +642,7 @@ export function runPlayground(): void {
     view.sync();
     view.update(simTime, night ? 1 : 0.4, hero.pos);
     view.setXray(hero.pos.clone().setY(hero.pos.y + 0.9), camera.position, 2.0);
-    // в доме: срезать потолок и всё, что выше, — виден этаж, где стоит герой
+    // под крышей: срезать потолок и всё, что выше, — виден этаж, где стоит герой
     cutY = ceilingAt(level, hero.pos.x, hero.pos.z, hero.pos.y);
     view.setCut(cutY - 0.01);
 
