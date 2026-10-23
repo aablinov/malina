@@ -23,9 +23,26 @@ export interface LevelJSON {
   spawn?: [number, number, number];
   /** Произвольные данные: у комнат-заготовок — тип и двери */
   meta?: Record<string, unknown>;
+  /** Свободный декор поверх блоков (src/level/decor.ts); в старых картах поля нет */
+  decor?: DecorItem[];
 }
 
 export interface LevelEntity { kind: string; x: number; y: number; z: number; rot?: number; data?: Record<string, unknown> }
+
+/**
+ * Предмет декора: стоит где угодно с шагом 1/16 и под любым углом, но сделан «из блоков» (wiki/design-level-decor.md).
+ * Логики у декора нет — что ломается или открывается, то предмет (props.ts) или сущность.
+ */
+export interface DecorItem {
+  /** Имя из реестра декора (src/level/decor.ts) */
+  name: string;
+  /** Точка опоры в метрах, мировые координаты (x, z — как у центров клеток) */
+  pos: [number, number, number];
+  /** [поворот, наклон, крен] в градусах; поворот как у блоков — 90° переводит +X в +Z */
+  rot?: number[];
+  /** Клетка, к которой предмет прикреплён (факел к стене): стёрли клетку в редакторе — предмет удаляется вместе с ней */
+  on?: [number, number, number];
+}
 
 export interface Bounds { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number }
 
@@ -39,6 +56,10 @@ export class Level {
   private readonly index = new Map<string, number>([['air', 0]]);
   private readonly defs: BlockDef[] = [blockDef('air')];
   readonly entities: LevelEntity[] = [];
+  /** Декор; меняешь — вызови touchDecor(), чтобы рендер и столкновения пересобрались */
+  readonly decor: DecorItem[] = [];
+  /** Растёт при каждом изменении декора */
+  decorVersion = 0;
   spawn: [number, number, number] | null = null;
   meta: Record<string, unknown> = {};
   /** Чанки, которые надо перестроить (ключи) */
@@ -107,10 +128,20 @@ export class Level {
     for (const k of this.chunks.keys()) this.dirty.add(k);
     this.chunks.clear();
     this.entities.length = 0;
+    this.decor.length = 0;
+    this.decorVersion++;
     this.spawn = null;
     this.meta = {};
     this.version++;
     this.bounds = null;
+  }
+
+  /** Декор изменился: рендер и столкновения перестроятся */
+  touchDecor(): void { this.decorVersion++; }
+  addDecor(d: DecorItem): DecorItem { this.decor.push(d); this.decorVersion++; return d; }
+  removeDecor(d: DecorItem): void {
+    const i = this.decor.indexOf(d);
+    if (i >= 0) { this.decor.splice(i, 1); this.decorVersion++; }
   }
 
   /** Обойти все непустые клетки */
@@ -166,7 +197,7 @@ export class Level {
     }
     const out: LevelJSON['rows'] = [];
     for (const [k, runs] of rows) { const [y, z] = k.split(',').map(Number); out.push([y, z, runs]); }
-    return { format: 'malina-level', version: 1, name: this.name, palette: this.palette.slice(), rows: out, entities: this.entities.slice(), ...(this.spawn ? { spawn: this.spawn } : {}), ...(Object.keys(this.meta).length ? { meta: this.meta } : {}) };
+    return { format: 'malina-level', version: 1, name: this.name, palette: this.palette.slice(), rows: out, entities: this.entities.slice(), ...(this.decor.length ? { decor: this.decor.map((d) => ({ ...d })) } : {}), ...(this.spawn ? { spawn: this.spawn } : {}), ...(Object.keys(this.meta).length ? { meta: this.meta } : {}) };
   }
 
   static fromJSON(j: LevelJSON): Level {
@@ -178,6 +209,7 @@ export class Level {
       for (let i = 0; i < n; i++) L.set(x0 + i, y, z, name, rot);
     }
     L.entities.push(...(j.entities ?? []));
+    for (const d of j.decor ?? []) L.decor.push({ ...d });
     L.spawn = j.spawn ?? null;
     Object.assign(L.meta, j.meta ?? {});
     L.dirty.clear();

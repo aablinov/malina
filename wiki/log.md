@@ -11,3 +11,7 @@
 
 ## [2026-10-23] вики | Вики по схеме Карпатого
 `README.md` → [index.md](index.md) (оглавление по разделам), заведены [log.md](log.md) и правила [CLAUDE.md](CLAUDE.md), папка источников `sources/`.
+
+## [2026-10-23] код | Декор, этап 1: формат, формы, рендер, витрина
+Поле `decor` в карте, реестр `src/level/decor.ts` (16 предметов), формы `assets/decor/*.obj` из `scripts/gen-decor.mjs` (общий писатель `obj-writer.mjs`: грани режутся по сетке клеток, повороты частей), рендер `InstancedMesh` в `LevelRenderer`, слой `glow`. Витрина декора и декор в арене плейграунда. Тест «декор».
+Страницы: [design-level-decor.md](design-level-decor.md).

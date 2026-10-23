@@ -722,6 +722,8 @@ export function runPlayground(): void {
   window.__malina = {
     mode: 'playground',
     hero, input, dummies, obstacles, camera, HERO, SWORD, props, level, terrain,
+    /** Рендер уровня и декора */
+    view,
     get berries() { return berries; },
     /** Нажать E */
     interact() { interactReq = true; },

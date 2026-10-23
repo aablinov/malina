@@ -4,7 +4,7 @@
  * поэтому имена не переименовывать — только добавлять.
  */
 
-export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire';
+export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow';
 
 export interface Part {
   /** Имя формы — файл assets/blocks/<obj>.obj */
