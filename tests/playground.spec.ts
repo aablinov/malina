@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 /**
  * Плейграунд (ADR-004): герой с мечом — управление мышью как в Minecraft Dungeons, комбо из трёх ударов со следом клинка,
- * перекат, ступени без прыжка, живая вода, склад и дом. Врагов и огнестрела нет.
+ * перекат, ступени без прыжка, живая вода, склад. Врагов и огнестрела нет.
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground';
@@ -131,7 +131,7 @@ test('мышь: клик — идти, клик по чучелу — подой
   expect(r.goalAfterKeys).toBe(null);
 });
 
-test('поиск пути: клик ведёт в обход стен, по ступеням, вброд через пруд и на второй этаж дома', async ({ page }) => {
+test('поиск пути: клик ведёт в обход стен, по ступеням, вброд через пруд и на площадку витрины', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -154,9 +154,9 @@ test('поиск пути: клик ведёт в обход стен, по ст
     m.hero.place(-12, 4, 0); m.step(0.1);
     out.pond = go(-18, 4);
     out.shore = go(-12, 4);
-    // от старта — в кабинет на втором этаже дома (вокруг стены, в дверь, по лестнице)
+    // от старта — на площадку 2 м в витрине (через проём в южной стене, по ступеням)
     m.hero.place(0, 4, 0); m.step(0.1);
-    out.study = go(38, -5, 4);
+    out.study = go(10, 42, 2);
     // клик по чучелу за прудом: подходит в обход и бьёт
     m.resetTargets();
     const d = m.dummies.find((x: any) => x.name === 'одиночное');
@@ -171,7 +171,7 @@ test('поиск пути: клик ведёт в обход стен, по ст
   expect(near(r.platform, -18, -20, 2)).toBe(true);
   expect(near(r.pond, -18, 4, -0.5)).toBe(true);
   expect(near(r.shore, -12, 4, 0)).toBe(true);
-  expect(near(r.study, 38, -5, 4)).toBe(true);
+  expect(near(r.study, 10, 42, 2)).toBe(true);
   expect(r.dummyHits).toBe(1);
 });
 
@@ -267,33 +267,4 @@ test('склад: сундук на E, бочки взрываются цепо�
   expect(r.crateBroken).toBe(true);
   expect(r.verChanged).toBe(true);
   expect(r.healed).toBeGreaterThan(20);
-});
-
-test('дом во дворе: в дверь, по лестнице на 2 этаж, на террасу и вниз по наружной лестнице', async ({ page }) => {
-  await open(page);
-  const r = await page.evaluate(() => {
-    const m = (window as any).__malina;
-    // угол корпуса — (30, −12), маршрут в локальных координатах дома (src/level/playground-map.ts, buildHouse)
-    const OX = 30, OZ = -12;
-    const route: [number, number, number][] = [
-      [6, 12, 0], [6, 8, 0], [5, 4, 0], [2, 3, 0], [2, 1.5, 0], // крыльцо → дверь → к подножию лестницы
-      [7.5, 1.5, 4], [8, 4, 4], [8, 7, 4], [10, 7, 4], [17, 7.5, 4], // 2 этаж → кабинет → дверь на террасу → терраса
-      [19.5, 7.5, 4], [19.5, 14, 0], [12, 15, 0], [12, 8, 0], [10, 5, 0], [8, 5, 0], // наружная лестница → гараж → в дом
-    ];
-    m.hero.place(OX + 6, OZ + 14, Math.PI);
-    const fails: string[] = [];
-    for (const [lx, lz, y] of route) {
-      const tx = OX + lx, tz = OZ + lz;
-      let reached = false;
-      for (let t = 0; t < 8 && !reached; t += 0.05) {
-        const dx = tx - m.hero.pos.x, dz = tz - m.hero.pos.z, d = Math.hypot(dx, dz);
-        if (d < 0.25) reached = true;
-        else { m.input.move.set(dx / d, dz / d); m.step(0.05); }
-      }
-      m.input.move.set(0, 0); m.step(0.3);
-      if (!reached || Math.abs(m.hero.pos.y - y) > 0.01) fails.push(`${lx},${lz}: дошёл ${reached}, y ${m.hero.pos.y.toFixed(2)} вместо ${y}`);
-    }
-    return fails;
-  });
-  expect(r).toEqual([]);
 });
