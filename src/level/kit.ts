@@ -110,20 +110,16 @@ export function stairway(L: Level, x: number, y: number, z: number, dx: number, 
 }
 
 /**
- * Холмы и ландшафт как в Minecraft Dungeons (скриншоты 13, 15–17): не пирамидки, а широкие почти плоские плиты
- * одна над другой с перепадом в 1 блок. Край плиты — длинные прямые и ступенчатые диагонали под 45°.
- * На верхних площадках стоят мобы, поэтому между уровнями есть пандусы из полублоков травы (шаг героя 0,5 м).
- * На перепаде в stoneDrop блоков и больше бок становится скалой под травой (скриншот 17).
+ * Рельеф карты — две разные сущности (скриншоты 13–17):
+ *  1. Ландшафт (`landscape`, `hill`) — проходим везде и с любой стороны. Огромные плиты в несколько слоёв, но каждый слой —
+ *     полметра (полный блок + полублок травы), перепад между соседними клетками не больше слоя: шаг героя 0,5 м, поэтому
+ *     на любую площадку поднимаются откуда угодно, без лестниц. Мобы стоят на любых уровнях.
+ *  2. Скала (`rockOutcrop`, `cliffMass`) — непроходимый каменный массив с травой сверху и отвесными боками; в неё
+ *     встраивают то, к чему ведёт один вход (портал, пещера). Скалы ставят поверх ландшафта — по краям, у дороги, у реки.
  */
 export interface HillOpts {
-  /** Сторона холма из скалы с травой (обрыв): ±X/±Z */
-  stone?: 'x+' | 'x-' | 'z+' | 'z-';
   /** Доля верхушек с сухой травой и с ромашками */
   dry?: number; daisies?: number;
-  /** Пандусы: примерная доля клеток края с подъёмом из полублока (0 — без пандусов) */
-  ramps?: number;
-  /** С какого перепада бок — скала, а не земля (по умолчанию 2) */
-  stoneDrop?: number;
   seed?: number;
 }
 
@@ -133,88 +129,67 @@ export function surfaceAt(L: Level, x: number, z: number): number {
   return t === null ? 0 : t + 1;
 }
 
-/**
- * Поставить ландшафт по сетке высот heights (уровни над y, 0 — земля) в прямоугольнике x0..x0+w−1 × z0..z0+d−1.
- * Тело — земля, верх — трава; на высоких перепадах — скала; пандусы и флора по опциям.
- */
-export function buildHeights(L: Level, x0: number, z0: number, w: number, d: number, y: number, heights: Int8Array, o: HillOpts & { stoneAt?: (x: number, z: number) => boolean } = {}): void {
-  const seed = o.seed ?? 0, stoneDrop = o.stoneDrop ?? 2;
-  const H = (x: number, z: number) => (x < 0 || z < 0 || x >= w || z >= d ? 0 : heights[z * w + x]);
-  for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) {
-    const h = H(i, j);
-    if (h <= 0) continue;
-    const x = x0 + i, z = z0 + j;
-    const drop = h - Math.min(H(i + 1, j), H(i - 1, j), H(i, j + 1), H(i, j - 1));
-    const stone = drop >= stoneDrop || (o.stoneAt?.(x, z) ?? false);
-    for (let k = 0; k < h - 1; k++) L.set(x, y + k, z, stone ? (hash2(x, z, seed + 2) < 0.22 ? 'cliff_dark' : 'cliff') : 'dirt');
-    L.set(x, y + h - 1, z, stone ? 'cliff_grass' : 'grass');
-  }
-  // пандусы: на краю в 1 блок полублок травы у подножия — с нижней площадки на верхнюю шагом 0,5
-  if (o.ramps !== undefined) {
-    const slab = new Uint8Array(w * d);
-    const put = (i: number, j: number, di: number, dj: number) => {
-      // пандус шириной 2: нижняя клетка и соседняя вдоль края (если там тот же уровень)
-      for (const s of [0, 1]) {
-        const ei = i + (dj ? s : 0), ej = j + (di ? s : 0);
-        if (ei < 0 || ej < 0 || ei >= w || ej >= d || H(ei, ej) !== H(i, j)) continue;
-        slab[ej * w + ei] = 1;
-      }
-    };
-    const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    // случайные пандусы для разнообразия
-    for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) {
-      const h = H(i, j);
-      if (h <= 0 || hash2(x0 + i, z0 + j, seed + 7) > o.ramps) continue;
-      for (const [di, dj] of N4) if (H(i + di, j + dj) === h - 1) { put(i + di, j + dj, di, dj); break; }
-    }
-    // гарантия: каждая площадка достижима с земли — поиск в ширину, недостижимым добавляем пандус на границе
-    const eff = (i: number, j: number) => H(i, j) + (i >= 0 && j >= 0 && i < w && j < d && slab[j * w + i] ? 0.5 : 0);
-    for (let guard = 0; guard < 400; guard++) {
-      const seen = new Uint8Array(w * d), queue: number[] = [];
-      for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) if (H(i, j) === 0 && (i === 0 || j === 0 || i === w - 1 || j === d - 1)) { seen[j * w + i] = 1; queue.push(j * w + i); }
-      for (let q = 0; q < queue.length; q++) {
-        const i = queue[q] % w, j = (queue[q] / w) | 0;
-        for (const [di, dj] of N4) {
-          const ni = i + di, nj = j + dj;
-          if (ni < 0 || nj < 0 || ni >= w || nj >= d || seen[nj * w + ni]) continue;
-          if (Math.abs(eff(ni, nj) - eff(i, j)) > 0.5) continue;
-          seen[nj * w + ni] = 1; queue.push(nj * w + ni);
-        }
-      }
-      // первая по хэшу граница «достижимая клетка → недостижимая на уровень выше»
-      let best: [number, number, number, number] | null = null, bestH = 2;
-      for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) {
-        if (!seen[j * w + i] || slab[j * w + i]) continue;
-        for (const [di, dj] of N4) {
-          const ni = i + di, nj = j + dj;
-          if (ni < 0 || nj < 0 || ni >= w || nj >= d || seen[nj * w + ni] || H(ni, nj) !== H(i, j) + 1) continue;
-          const r = hash2(x0 + i, z0 + j, seed + 9);
-          if (r < bestH) { bestH = r; best = [i, j, -di, -dj]; }
-        }
-      }
-      if (!best) break;
-      put(best[0], best[1], best[2], best[3]);
-    }
-    for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) {
-      if (!slab[j * w + i]) continue;
-      const x = x0 + i, z = z0 + j, yy = y + H(i, j);
-      if (L.isAir(x, yy, z)) L.set(x, yy, z, 'grass_slab');
-    }
-  }
-  // флора по верхушкам
-  if (o.dry || o.daisies) for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) {
-    if (H(i, j) <= 0) continue;
-    const x = x0 + i, z = z0 + j, yy = y + H(i, j);
-    if (!L.isAir(x, yy, z)) continue;
-    const r = hash2(x, z, seed + 50), n = noise2(x, z, 4, seed + 51);
-    if (r < (o.dry ?? 0) * 2 * n) L.set(x, yy, z, 'dry_grass');
-    else if (r > 1 - (o.daisies ?? 0)) L.set(x, yy, z, 'daisies');
-  }
-}
-
 /** Сгладить сетку уровней: одиночные выступы опускаются, ямки засыпаются — площадки широкие, края длинные */
 function settle(heights: Int8Array, w: number, d: number, passes = 3): void {
   const H = (x: number, z: number) => (x < 0 || z < 0 || x >= w || z >= d ? 0 : heights[z * w + x]);
+  // каждый уровень отдельно: маска «высота ≥ t» сглаживается большинством в окне 5 × 5 — контур плиты плавный,
+  // заливы и зубцы в 2–3 клетки исчезают; высота собирается заново из сглаженных масок (уровни не перекрещиваются)
+  let maxH = 0;
+  for (const v of heights) maxH = Math.max(maxH, v);
+  const out = new Int8Array(w * d);
+  for (let t = 1; t <= maxH; t++) {
+    for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
+      let c = 0, n = 0;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+        const ni = i + di, nj = j + dj;
+        n++;
+        if (ni >= 0 && nj >= 0 && ni < w && nj < d && heights[nj * w + ni] >= t) c++;
+      }
+      if (c * 2 > n) out[j * w + i]++;
+    }
+  }
+  heights.set(out);
+  // большинство в окне 3 × 3: ямки и выступы в 1–2 клетки исчезают, контур плиты сглаживается, крупная форма остаётся
+  for (let p = 0; p < 3; p++) {
+    const src = heights.slice();
+    for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
+      const cnt = new Map<number, number>();
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const ni = i + di, nj = j + dj, v = ni < 0 || nj < 0 || ni >= w || nj >= d ? 0 : src[nj * w + ni];
+        cnt.set(v, (cnt.get(v) ?? 0) + 1);
+      }
+      // своё значение встречается в окне 3 раза и реже — клетка узкая (ямка, выступ, зубец), берём самое частое
+      const own = src[j * w + i];
+      if ((cnt.get(own) ?? 0) > 3) continue;
+      let best = own, bc = 0;
+      for (const [v, c] of cnt) if (c > bc) { best = v; bc = c; }
+      heights[j * w + i] = best;
+    }
+  }
+  // мелкие области одной высоты (впадинки, островки меньше minArea клеток) заливаем самой частой высотой вокруг
+  const minArea = 14;
+  for (let p = 0; p < 2; p++) {
+    const label = new Int32Array(w * d).fill(-1);
+    for (let start = 0; start < w * d; start++) {
+      if (label[start] >= 0) continue;
+      const hv = heights[start], cells = [start], around = new Map<number, number>();
+      label[start] = start;
+      for (let q = 0; q < cells.length; q++) {
+        const i = cells[q] % w, j = (cells[q] / w) | 0;
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ni = i + di, nj = j + dj;
+          if (ni < 0 || nj < 0 || ni >= w || nj >= d) { around.set(0, (around.get(0) ?? 0) + 1); continue; }
+          const k = nj * w + ni;
+          if (heights[k] === hv) { if (label[k] < 0) { label[k] = start; cells.push(k); } }
+          else around.set(heights[k], (around.get(heights[k]) ?? 0) + 1);
+        }
+      }
+      if (cells.length >= minArea || !around.size) continue;
+      let best = hv, bc = 0;
+      for (const [v, c] of around) if (c > bc) { best = v; bc = c; }
+      for (const k of cells) heights[k] = best;
+    }
+  }
   for (let p = 0; p < passes; p++) for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
     const h = H(i, j), nb = [H(i + 1, j), H(i - 1, j), H(i, j + 1), H(i, j - 1)];
     if (nb.filter((v) => v >= h).length < 2 && h > 0) heights[j * w + i] = h - 1;
@@ -222,55 +197,125 @@ function settle(heights: Int8Array, w: number, d: number, passes = 3): void {
   }
 }
 
+/** Подъём ландшафта в точке: эллипс полуосей rx × rz, высота h слоёв, к краю спадает плавно */
+export interface Bump { x: number; z: number; rx: number; rz: number; h: number }
+
+export interface LandscapeOpts extends HillOpts {
+  /** Сколько слоёв по 0,5 м даёт шум (3–4 — холмистая местность MCD) */
+  layers?: number;
+  /** Масштаб шума, клеток: чем больше, тем шире плиты (24–32) */
+  scale?: number;
+  /** Клетки, где ландшафт ровный (дорога, двор, русло): к ним высота плавно спадает за fade клеток */
+  flat?: (x: number, z: number) => boolean;
+  fade?: number;
+  bumps?: Bump[];
+  /** Доля площади, где бока слоёв — камень (вперемешку с землёй, как на скриншотах) */
+  stone?: number;
+}
+
 /**
- * Холм-плиты (скриншоты 16, 17): h уровней, нижняя плита rx × rz (полуширины), каждая следующая уже на inset клеток,
- * углы срезаны под 45° ступеньками (chamfer — доля меньшей полуширины), край чуть гуляет по шуму на клетку.
+ * Ландшафт: плавная поверхность нарезана на плиты-слои по 0,5 м. S-кривая делает площадки широкими, контуры —
+ * извилистыми (шум с искажением координат), сглаживание убирает мелочь, а ограничение крутизны — перепады больше
+ * одного слоя: по ландшафту можно пройти везде. Слой — полный блок травы (чётный) или полублок травы сверху (нечётный).
  */
-export function hill(L: Level, cx: number, cz: number, rx: number, rz: number, h: number, y: number, o: HillOpts & { inset?: number; chamfer?: number } = {}): void {
-  const seed = o.seed ?? 0, inset = o.inset ?? 3, ch = o.chamfer ?? 0.55;
-  const x0 = Math.floor(cx - rx - 2), z0 = Math.floor(cz - rz - 2), w = Math.ceil(rx * 2 + 5), d = Math.ceil(rz * 2 + 5);
+export function landscape(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, o: LandscapeOpts = {}): void {
+  const seed = o.seed ?? 0, scale = o.scale ?? 28, layers = o.layers ?? 4, fade = o.fade ?? 6, stoneK = o.stone ?? 0.3;
+  const w = x1 - x0 + 1, d = z1 - z0 + 1;
+  // расстояние до ровных клеток (поиск в ширину, 8 соседей)
+  const dist = new Float32Array(w * d).fill(1e9);
+  const queue: number[] = [];
+  if (o.flat) for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) if (o.flat(x0 + i, z0 + j)) { dist[j * w + i] = 0; queue.push(j * w + i); }
+  for (let q = 0; q < queue.length; q++) {
+    const i = queue[q] % w, j = (queue[q] / w) | 0, dv = dist[queue[q]];
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const ni = i + di, nj = j + dj;
+      if (ni < 0 || nj < 0 || ni >= w || nj >= d) continue;
+      const nd = dv + (di && dj ? 1.41 : 1);
+      if (nd < dist[nj * w + ni]) { dist[nj * w + ni] = nd; queue.push(nj * w + ni); }
+    }
+  }
   const heights = new Int8Array(w * d);
   for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
-    const x = x0 + i, z = z0 + j, dx = Math.abs(x - cx), dz = Math.abs(z - cz);
-    const wob = noise2(x, z, 6, seed) < 0.25 ? -1 : noise2(x, z, 6, seed) > 0.78 ? 1 : 0;
-    let lv = 0;
-    for (let k = 0; k < h; k++) {
-      const ax = rx - k * inset + wob, az = rz - k * inset + wob;
-      if (ax < 1 || az < 1) break;
-      if (dx <= ax && dz <= az && dx + dz <= ax + az - Math.min(ax, az) * ch) lv = k + 1;
+    const x = x0 + i, z = z0 + j;
+    if (dist[j * w + i] === 0) continue;
+    // искажение координат — контуры извилистые, как береговая линия
+    const wx = x + (noise2(x, z, 20, seed + 3) - 0.5) * 9, wz = z + (noise2(x, z, 20, seed + 4) - 0.5) * 9;
+    const n = noise2(wx, wz, scale, seed) * 0.72 + noise2(wx, wz, scale * 0.45, seed + 1) * 0.28;
+    // S-кривая: широкие ровные площадки, перепады собраны в короткие склоны
+    const k = Math.max(0, Math.min(1, (n - 0.2) / 0.6));
+    let hf = (k * 0.35 + (Math.round(k * layers) / layers) * 0.65) * layers;
+    for (const b of o.bumps ?? []) {
+      const e = ((wx - b.x) / b.rx) ** 2 + ((wz - b.z) / b.rz) ** 2;
+      if (e < 1) hf += b.h * (1 - e) ** 0.7;
     }
-    heights[j * w + i] = lv;
+    const t = Math.min(1, dist[j * w + i] / fade);
+    heights[j * w + i] = Math.min(30, Math.floor(hf * t * t * (3 - 2 * t)));
   }
   settle(heights, w, d, 2);
-  const side = o.stone;
-  buildHeights(L, x0, z0, w, d, y, heights, {
-    ...o,
-    stoneAt: side ? (x, z) => (side === 'x+' && x > cx + rx * 0.3) || (side === 'x-' && x < cx - rx * 0.3) || (side === 'z+' && z > cz + rz * 0.3) || (side === 'z-' && z < cz - rz * 0.3) : undefined,
+  for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) if (dist[j * w + i] === 0) heights[j * w + i] = 0;
+  // проходимость: соседние клетки отличаются не больше чем на слой (0,5 м) — понижаем, пока не станет так
+  for (let changed = true, guard = 0; changed && guard < 64; guard++) {
+    changed = false;
+    for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
+      const h = heights[j * w + i];
+      let lo = h;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = i + di, nj = j + dj;
+        lo = Math.min(lo, ni < 0 || nj < 0 || ni >= w || nj >= d ? 0 : heights[nj * w + ni]);
+      }
+      if (h > lo + 1) { heights[j * w + i] = lo + 1; changed = true; }
+    }
+  }
+  // постройка: n слоёв = n/2 полных блоков и полублок сверху, если n нечётно; в «каменных» местах бока — скала
+  const stoneAt = (x: number, z: number) => noise2(x + 40, z - 17, 11, seed + 5) > 1 - stoneK;
+  for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
+    const n = heights[j * w + i];
+    if (n <= 0) continue;
+    const x = x0 + i, z = z0 + j, full = n >> 1, half = n & 1, rock = stoneAt(x, z);
+    for (let k = 0; k < full; k++) {
+      const topBlock = k === full - 1 && !half;
+      L.set(x, y + k, z, topBlock ? (rock ? 'cliff_grass' : 'grass') : rock ? (hash2(x, z, seed + 2) < 0.22 ? 'cliff_dark' : 'cliff') : 'dirt');
+    }
+    if (half) {
+      if (full > 0) L.set(x, y + full - 1, z, rock ? 'cliff' : 'dirt');
+      L.set(x, y + full, z, 'grass_slab');
+    }
+  }
+  // флора по верхушкам
+  if (o.dry || o.daisies) for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
+    const n = heights[j * w + i];
+    if (n <= 0) continue;
+    const x = x0 + i, z = z0 + j, yy = y + (n >> 1) + (n & 1);
+    if (n & 1 || !L.isAir(x, yy, z)) continue; // на полублоке трава из креста висела бы
+    const r = hash2(x, z, seed + 50), nn = noise2(x, z, 4, seed + 51);
+    if (r < (o.dry ?? 0) * 2 * nn) L.set(x, yy, z, 'dry_grass');
+    else if (r > 1 - (o.daisies ?? 0)) L.set(x, yy, z, 'daisies');
+  }
+}
+
+/** Холм — подъём ландшафта в точке: те же проходимые слои по 0,5 м, извилистый контур */
+export function hill(L: Level, cx: number, cz: number, rx: number, rz: number, h: number, y: number, o: LandscapeOpts = {}): void {
+  const m = 6;
+  landscape(L, Math.floor(cx - rx - m), Math.floor(cz - rz - m), Math.ceil(cx + rx + m), Math.ceil(cz + rz + m), y, {
+    layers: 0, fade: 3, ...o, bumps: [{ x: cx, z: cz, rx: rx + 2, rz: rz + 2, h: h + 0.6 }],
+    flat: (x, z) => ((x - cx) / (rx + m - 1)) ** 2 + ((z - cz) / (rz + m - 1)) ** 2 > 1,
   });
 }
 
 /**
- * Ландшафт-плато (скриншоты 16, 17) на прямоугольник: крупный плавный шум (масштаб scale клеток) квантуется в levels уровней,
- * к краям прямоугольника спадает к земле (fade клеток), одиночные выступы вычищаются. mask(x, z) = false — клетку не трогать
- * (дорога, река, площадки).
+ * Скала (скриншоты 11, 12, 14, 17): непроходимый каменный массив с извилистым контуром, отвесными боками из светлых и
+ * тёмных пластов и травой сверху. Высота гуляет на блок. Ставится поверх ландшафта; в неё встраивают портал, пещеру.
  */
-export function plateaus(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, levels: number, o: HillOpts & { scale?: number; fade?: number; mask?: (x: number, z: number) => boolean } = {}): void {
-  const seed = o.seed ?? 0, scale = o.scale ?? 14, fade = o.fade ?? 5;
-  const w = x1 - x0 + 1, d = z1 - z0 + 1;
-  const heights = new Int8Array(w * d);
-  for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
-    const x = x0 + i, z = z0 + j;
-    if (o.mask && !o.mask(x, z)) continue;
-    const n = noise2(x, z, scale, seed) * 0.7 + noise2(x, z, scale * 0.45, seed + 1) * 0.3;
-    const edge = Math.min(i, j, w - 1 - i, d - 1 - j);
-    const f = Math.min(1, edge / fade);
-    // уровни смещены вверх: плиты занимают большую часть площади, земля остаётся заливами
-    const t = Math.max(0, Math.min(1, (n - 0.12) / 0.55)) * f;
-    heights[j * w + i] = Math.min(levels, Math.floor(t * (levels + 0.999)));
+export function rockOutcrop(L: Level, cx: number, cz: number, rx: number, rz: number, h: number, y: number, seed = 0): void {
+  for (let x = Math.floor(cx - rx - 2); x <= Math.ceil(cx + rx + 2); x++) for (let z = Math.floor(cz - rz - 2); z <= Math.ceil(cz + rz + 2); z++) {
+    const wx = x + (noise2(x, z, 7, seed + 1) - 0.5) * 4, wz = z + (noise2(x, z, 7, seed + 2) - 0.5) * 4;
+    if (((wx - cx) / rx) ** 2 + ((wz - cz) / rz) ** 2 > 1) continue;
+    const hh = h + Math.floor(noise2(x, z, 4, seed + 3) * 2.2) - 1;
+    const dark = noise2(x, z, 3, seed + 4) > 0.62;
+    for (let k = -1; k < hh - 1; k++) L.set(x, y + k, z, dark ? 'cliff_dark' : 'cliff');
+    L.set(x, y + hh - 1, z, 'cliff_grass');
+    for (let k = hh; k < hh + 3; k++) if (L.nameAt(x, y + k, z) !== 'air') L.set(x, y + k, z, 'air');
   }
-  settle(heights, w, d, 5);
-  if (o.mask) for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) if (!o.mask(x0 + i, z0 + j)) heights[j * w + i] = 0;
-  buildHeights(L, x0, z0, w, d, y, heights, o);
 }
 
 /** Дерево (скриншот 13): ствол trunk блоков и пышная крона-эллипсоид из leaves_fluffy */
@@ -310,9 +355,14 @@ export function portal(L: Level, x: number, y: number, z: number, w = 2, h = 3):
     L.set(x + dx, y + h + 1, z + dz, 'grass');
   }
   for (let dx = 0; dx < w; dx++) for (let k = 0; k < h; k++) L.set(x + dx, y + k, z - depth, 'portal', 0);
-  // перед порталом — расчищенная площадка с полом из плит
-  for (let dz = -depth; dz <= 3; dz++) for (let dx = -2; dx <= w + 1; dx++) {
-    L.set(x + dx, y - 1, z + dz, 'portal_floor');
-    if (dz > 0) for (let k = 0; k <= h + 2; k++) L.set(x + dx, y + k, z + dz, 'air');
+  // перед порталом — площадка с полом из плит, дальше проход вперёд прорубается до уровня земли (выход не перекрыт)
+  for (let dz = -depth; dz <= 16; dz++) {
+    let blocked = false;
+    for (let dx = -2; dx <= w + 1; dx++) for (let k = 0; k <= h + 6; k++) if (dz > 0 && !L.isAir(x + dx, y + k, z + dz)) blocked = true;
+    if (dz > 3 && !blocked) break;
+    for (let dx = -2; dx <= w + 1; dx++) {
+      L.set(x + dx, y - 1, z + dz, dz <= 3 ? 'portal_floor' : 'path');
+      if (dz > 0) for (let k = 0; k <= h + 6; k++) L.set(x + dx, y + k, z + dz, 'air');
+    }
   }
 }

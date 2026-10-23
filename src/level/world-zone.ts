@@ -1,6 +1,6 @@
 import type { Level } from './level.ts';
 import type { PgLabel } from './playground-map.ts';
-import { bridgeX, cliffMass, cliffSteps, floorRect, hayStack, hill, noise2, plateaus, portal, rampart, riverBed, stairway, steppedWall, surfaceAt, tree, waterfall } from './kit.ts';
+import { bridgeX, cliffMass, floorRect, hash2, hayStack, landscape, noise2, portal, rampart, riverBed, rockOutcrop, stairway, steppedWall, surfaceAt, tree, waterfall } from './kit.ts';
 
 /**
  * Зона «мир» плейграунда за восточной стеной: наборы по скриншотам Minecraft Dungeons (wiki/style-world.md),
@@ -23,6 +23,7 @@ export function buildWorldZone(L: Level, labels: PgLabel[], dec: Dec): void {
     if (Math.abs(z) <= 1 || (Math.abs(z) === 2 && n > 0.62)) L.set(x, -1, z, 'path');
   }
   labels.push({ text: 'мир: наборы по скриншотам Minecraft Dungeons', x: X0 + 8, z: 4.4, size: 1 });
+  buildTerrain(L, labels);
   buildBounds(L, labels);
   buildYard(L, labels, dec);
   buildRiver(L, labels, dec);
@@ -30,35 +31,54 @@ export function buildWorldZone(L: Level, labels: PgLabel[], dec: Dec): void {
   buildPortal(L, labels, dec);
 }
 
-/** 5. Портал (скриншот 14): холм-плиты с обрывом из скалы, в лицевой стороне — проём с рамой и золотым сиянием */
-function buildPortal(L: Level, labels: PgLabel[], dec: Dec): void {
-  hill(L, 66, 12, 9, 7, 4, 0, { inset: 2, stone: 'x+', dry: 0.15, ramps: 0.04, seed: 41 });
-  tree(L, 63, surfaceAt(L, 63, 9), 9, 2, 2);
-  tree(L, 71, surfaceAt(L, 71, 7), 7, 2, 2);
-  portal(L, 66, 0, 15, 2, 3);
-  dec('candles_group', 64.4, 0, 17.4);
-  dec('candles_group', 69.6, 0, 17.6, 60);
-  labels.push({ text: 'холм-плиты: обрыв из скалы, портал в склоне', x: 67, z: 21.4, size: 0.6 });
+/**
+ * Рельеф зоны (скриншоты 13–17) — две сущности. Ландшафт: плиты в 4 слоя по 0,5 м, проходим везде, к дороге, двору,
+ * реке и стене со свечами спадает плавно. Скалы: непроходимые каменные массивы поверх ландшафта — по краям, у дороги;
+ * в одну встроен портал, на другую ведут земляные ступени.
+ */
+function buildTerrain(L: Level, labels: PgLabel[]): void {
+  const { X0, X1, Z } = WORLD;
+  const flat = (x: number, z: number) =>
+    Math.abs(z) <= 3 // дорога
+    || (x <= 46 && z <= -8) // двор
+    || (x >= 49 && x <= 56) // русло, пруд, водопад
+    || (x >= 37 && x <= 48 && z >= 4 && z <= 9) // стена со свечами
+    || x <= X0 + 1; // у проёма в стене арены
+  landscape(L, X0, -Z + 2, X1 - 1, Z - 1, 0, { layers: 4, scale: 28, fade: 6, stone: 0.3, dry: 0.12, daisies: 0.05, seed: 71, flat });
+  labels.push({ text: 'ландшафт: плиты по 0,5 м — пройти можно отовсюду', x: 38, z: 23.6, size: 0.7 });
+  // скалы по краям ландшафта — непроходимые, с травой сверху
+  rockOutcrop(L, 30, 20, 3, 2.5, 4, 0, 81);
+  rockOutcrop(L, 73, 17, 3, 4, 5, 0, 82);
+  // низкая скала у дороги и земляные ступени на неё (скриншот 15): земля здесь ровная, высоты ступеней точные
+  rockOutcrop(L, 35, -6, 3, 1.4, 3, 0, 83);
+  for (const sx of [35, 36]) {
+    let zf = -3;
+    while (zf > -8 && L.nameAt(sx, surfaceAt(L, sx, zf) - 1, zf) !== 'cliff_grass') zf--;
+    const hs = surfaceAt(L, sx, zf);
+    if (hs > 0 && hs < 6) stairway(L, sx, 0, zf + hs, 0, -1, hs, 1, 'path');
+  }
+  labels.push({ text: 'скалы непроходимы; на низкую — земляные ступени', x: 37, z: 22.4, size: 0.6 });
 }
 
-/**
- * 4 и 6. Холмы (скриншоты 13, 15–17): ландшафт-плато — широкие площадки на 1–3 блока, длинные края со ступенчатыми
- * диагоналями, пандусы из полублоков, скала на высоких перепадах; деревья и флора на площадках; крепостная стена со свечами
- * у подножия — свет запечён в камень.
- */
+/** 5. Портал (скриншот 14): в скале к северу от дороги, лицом к дороге — проём с рамой и золотым сиянием, выход прорублен до земли */
+function buildPortal(L: Level, labels: PgLabel[], dec: Dec): void {
+  rockOutcrop(L, 66, -12, 7, 5, 5, 0, 84);
+  portal(L, 66, 0, -6, 2, 3);
+  dec('candles_group', 64.4, 0, -3.8);
+  dec('candles_group', 69.6, 0, -3.6, 60);
+  labels.push({ text: 'портал в скале: рама, сияние, выход к дороге', x: 67, z: 5.4, size: 0.6 });
+}
+
+/** 4 и 6. Деревья и флора на террасах; крепостная стена со свечами — свет запечён в камень */
 function buildHills(L: Level, labels: PgLabel[], dec: Dec): void {
-  const wallZone = (x: number, z: number) => !(x >= 37 && x <= 48 && z <= 8);
-  plateaus(L, 27, 5, 49, 23, 0, 3, { scale: 20, fade: 3, ramps: 0.05, dry: 0.12, daisies: 0.06, seed: 61, mask: wallZone });
-  for (const [x, z] of [[31, 12], [44, 17], [36, 19]] as [number, number][]) tree(L, x, surfaceAt(L, x, z), z, 2, 2);
-  // земляные ступени (скриншот 15): на первом крае плато в 1 блок, обращённом к дороге (−Z), — лестница шириной 2
-  stairs: for (let z = 6; z <= 20; z++) for (let x = 30; x <= 46; x++) {
-    const up = surfaceAt(L, x, z), up2 = surfaceAt(L, x + 1, z);
-    if (up !== 1 || up2 !== 1 || surfaceAt(L, x, z - 1) !== 0 || surfaceAt(L, x + 1, z - 1) !== 0) continue;
-    if (L.nameAt(x, 0, z) !== 'grass' || L.nameAt(x + 1, 0, z) !== 'grass') continue;
-    for (const dx of [0, 1]) { L.set(x + dx, 0, z - 1, 'path_stairs', 1); L.set(x + dx, 0, z, 'path'); }
-    break stairs;
+  const { X0, X1, Z } = WORLD;
+  // деревья: по сетке 7 клеток со сдвигом, только на траве террас
+  for (let x = X0 + 4; x <= X1 - 4; x += 7) for (let z = -Z + 5; z <= Z - 3; z += 7) {
+    const tx = x + Math.floor(hash2(x, z, 81) * 4) - 2, tz = z + Math.floor(hash2(x, z, 82) * 4) - 2;
+    const y = surfaceAt(L, tx, tz);
+    if (y < 1 || hash2(tx, tz, 83) > 0.33 || L.nameAt(tx, y - 1, tz) !== 'grass' || Math.hypot(tx - 67, tz + 6) < 6) continue;
+    tree(L, tx, y, tz, 2, 2);
   }
-  labels.push({ text: 'плато: широкие площадки, пандусы, скала на перепадах', x: 38, z: 24.4, size: 0.7 });
   // крепостная стена со свечами: свет только запечённый
   rampart(L, 39, 6, 46, 6, 0, 3);
   // зубцы — на x = 39, 42, 45; свечи — между ними
@@ -72,17 +92,14 @@ function buildHills(L: Level, labels: PgLabel[], dec: Dec): void {
 
 /**
  * 3. Края уровня (скриншот 12): высокие скалы на дальней стороне (−Z) — массив 2–3 блока толщиной, 5–8 высотой,
- * светлые и тёмные столбы, трава сверху; со стороны камеры (+X, +Z) — низкие скалы в 1–2 блока; лестница из скальных ступеней.
+ * светлые и тёмные столбы, трава сверху; со стороны камеры (+X, +Z) — низкие скалы в 1–2 блока.
  */
 function buildBounds(L: Level, labels: PgLabel[]): void {
   const { X0, X1, Z } = WORLD;
   cliffMass(L, X0, -Z, X1, -Z + 1, -1, 5, 8, 11);
   cliffMass(L, X1, -Z, X1, Z, -1, 1, 2, 12);
   cliffMass(L, X0 + 1, Z, X1, Z, -1, 1, 2, 13);
-  // уступ и лестница на скалы: скальные ступени к дальней стене
-  cliffMass(L, 66, -Z + 2, 71, -Z + 4, -1, 4, 4, 14, 0.1);
-  stairway(L, 68, -1, -Z + 8, 0, -1, 4, 2, 'cliff');
-  labels.push({ text: 'края уровня: скалы, тёмные пласты, трава сверху, скальные ступени', x: 66, z: -Z + 11.4, size: 0.7 });
+  labels.push({ text: 'края уровня: скалы, тёмные пласты, трава сверху', x: 40, z: -6.6, size: 0.7 });
 }
 
 /** 2. Река (скриншот 11): водопад из скалы, пруд с брызгами, река с течением к +Z, мост с фонарями, скальные ступени к воде */
@@ -107,9 +124,7 @@ function buildRiver(L: Level, labels: PgLabel[], dec: Dec): void {
   bridgeX(L, 51, 54, -1, 1, -1);
   dec('lantern_post', 50.3, 0, -3.3, 0);
   dec('lantern_post_double', 55.2, 0, 3.4, 90);
-  // справа от реки скалы спускаются к воде уступами
-  cliffSteps(L, 55, -Z + 4, 63, -10, -1, 5, -1, 2, 22);
-  labels.push({ text: 'река: водопад, брызги, течение, мост, фонари, уступы', x: 52.5, z: 5.4, size: 0.7 });
+  labels.push({ text: 'река: водопад, брызги, течение, мост, фонари', x: 52.5, z: 5.4, size: 0.7 });
 }
 
 /** 1. Двор со складом (скриншот 10): пол с уступом, ступенчатые ограды, стог, ящики, сундук, телеги, скамья, фонари */
