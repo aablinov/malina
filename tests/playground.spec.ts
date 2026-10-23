@@ -438,7 +438,7 @@ test('свет как в Unreal: AO, цветокоррекция и дымка 
   expect(r.res.ao).toBeCloseTo(0.5, 2);
 });
 
-test('трава поверх блоков: бахрома свисает с уступов, пучки растут пятнами и не отбрасывают теней', async ({ page }) => {
+test('трава поверх блоков: бахрома свисает с уступов, пучки растут пятнами, край дорожки рваный', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -453,10 +453,21 @@ test('трава поверх блоков: бахрома свисает с у�
     const after = v.triangles('detail');
     L.set(-22, 3, 17, 'air');
     v.sync();
-    return { before, after, back: v.triangles('detail'), opaque: v.triangles('opaque'), detailShadow };
+    const back = v.triangles('detail');
+    // клетка дорожки посреди травы: рваный край в обе стороны (трава на дорожку и дорожка на траву) — до 8 наложений
+    // сравнение с землёй в той же клетке: пучки пропадают одинаково, трава заходит на обе, а дорожка ещё и сама заходит на траву
+    const was = L.nameAt(6, -1, -6);
+    L.set(6, -1, -6, 'path'); v.sync();
+    const withPath = v.triangles('detail');
+    L.set(6, -1, -6, 'dirt'); v.sync();
+    const bleed = withPath - v.triangles('detail');
+    L.set(6, -1, -6, was); v.sync();
+    return { before, after, back, opaque: v.triangles('opaque'), detailShadow, bleed, restored: v.triangles('detail') };
   });
   expect(r.before).toBeGreaterThan(5000);
   expect(r.after).toBeGreaterThan(r.before); // новая трава на вершине: ещё бахрома на 4 стороны
   expect(r.back).toBe(r.before);
   expect(r.detailShadow).toBe(false);
+  expect(r.bleed).toBe(8); // 4 стороны × 2 треугольника: дорожка заходит на траву
+  expect(r.restored).toBe(r.back);
 });

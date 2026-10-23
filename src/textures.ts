@@ -60,6 +60,7 @@ function noiseFill(g: Ctx, s: number, r: Rand, pal: readonly string[], amt = 8):
  */
 const GRASS_BASE = '#6d994e', GRASS_LIGHT = '#7ba558', GRASS_DARK = '#608b46';
 const DIRT_BASE = '#9a6942', DIRT_DARK = '#8a5c39';
+const PATH_BASE = '#c99153', PATH_PRINT = '#d6a466';
 /** Камень: булыжник, кирпич, сланцевый кирпич руин, плиты, мох */
 const STONE_BASE = '#88929d', BRICK_BASE = '#86919c', SLATE_BASE = '#6a8592', TILE_BASE = '#a0a2a2', MOSS = '#6f9a4c';
 const DIRT = [DIRT_BASE, DIRT_BASE, DIRT_DARK];
@@ -179,6 +180,9 @@ export interface Textures {
   mushroomRed: THREE.Texture; mushroomGlow: THREE.Texture; mushroomStem: THREE.Texture; lanternGlass: THREE.Texture; roots: THREE.Texture;
   // трава поверх блоков: бахрома по краю уступа и мелкие пучки (mesher.ts)
   grassFringe: THREE.Texture; grassTuft: THREE.Texture; flowerTuft: THREE.Texture;
+  // рваный край между травой и дорожкой (mesher.ts, bleed): 4 варианта маски у каждой
+  grassEdge0: THREE.Texture; grassEdge1: THREE.Texture; grassEdge2: THREE.Texture; grassEdge3: THREE.Texture;
+  pathEdge0: THREE.Texture; pathEdge1: THREE.Texture; pathEdge2: THREE.Texture; pathEdge3: THREE.Texture;
   /** Вода: 16 × 16, двигается смещением UV */
   water: THREE.Texture;
   /** Огонь: 3 кадра по 16 × 16 друг над другом */
@@ -214,10 +218,10 @@ export function makeTextures(): Textures {
       px(g, x, y + 1, jitter('#70482c', r, 6));
     }
   }, 14);
-  // дорожка: тёплый беж и светлые круглые «следы», как утоптанная земля на скриншотах
-  T.path = canvasTex(16, (g, s, r) => softFill(g, s, r, '#cf9e57', 2, [
-    { col: '#dcb370', n: 3, rad: [1.4, 2.2], k: 0.9 },
-    { col: '#c18f52', n: 2, rad: [2.5, 4], k: 0.5 },
+  // дорожка: тёплый оранжевый беж, мягкие светлые «следы» ≈ 0,3 м и тёмные пятна (скриншот 1, wiki/style-terrain.md)
+  T.path = canvasTex(16, (g, s, r) => softFill(g, s, r, PATH_BASE, 1, [
+    { col: '#bb864b', n: 2, rad: [3, 5], k: 0.45 },
+    { col: PATH_PRINT, n: 3, rad: [2, 2.7], k: 0.6 },
   ]), 15);
   // камень: светлый голубовато-серый, как ограда на скриншотах, пятна вместо трещин
   T.stone = canvasTex(16, (g, s, r) => softFill(g, s, r, '#a4abb4', 3, [
@@ -598,6 +602,32 @@ export function makeTextures(): Textures {
   };
   T.grassTuft = canvasTex(16, (g, s, r) => blades(g, s, r, []), 131, { alpha: true });
   T.flowerTuft = canvasTex(16, (g, s, r) => blades(g, s, r, ['#f6f2ea', '#ffd84a', '#f070a8', '#8ac4ff']), 132, { alpha: true });
+  /**
+   * Рваный край: материал «заходит» на соседний блок от нижнего края картинки (это общая грань) на 0–8 px.
+   * Глубина гуляет плавно, ступеньками по 2 px, к концам тайла сходится к 3 px — края соседних тайлов стыкуются;
+   * крайний пиксель — полутон с соседним материалом (мягкость), плюс 1–2 островка поодаль.
+   */
+  const edgeMask = (base: string, other: string, light: string) => (g: Ctx, s: number, r: Rand) => {
+    const p1 = r() * 6.3, p2 = r() * 6.3, amp = 1.6 + r() * 1.6;
+    const depth: number[] = [];
+    for (let x = 0; x < s; x += 2) {
+      const w = Math.min(1, Math.min(x, s - 2 - x) / 4);
+      const d = 3 + w * (amp * Math.sin(x * 0.45 + p1) + 1.3 * Math.sin(x * 1.1 + p2) + (r() - 0.5) * 1.4);
+      const k = Math.max(0, Math.min(8, Math.round(d)));
+      depth.push(k, k + (r() < 0.3 ? (r() < 0.5 ? -1 : 1) : 0));
+    }
+    const put = (x: number, y: number, edge: boolean) => {
+      const c = edge ? mix(base, other, 0.45) : r() < 0.08 ? light : base;
+      px(g, x, y, jitter(c, r, 3));
+    };
+    for (let x = 0; x < s; x++) for (let k = 0; k < depth[x]; k++) put(x, s - 1 - k, k === depth[x] - 1);
+    for (let i = 0, n = 1 + (r() < 0.6 ? 1 : 0); i < n; i++) {
+      const bx = 2 + ((r() * 11) | 0), by = s - 1 - (depth[bx] + 2 + ((r() * 3) | 0)), bw = 2 + ((r() * 2) | 0), bh = 1 + ((r() * 2) | 0);
+      for (let y = by - bh + 1; y <= by; y++) for (let x = bx; x < bx + bw; x++) if (y >= 0) put(x, y, y === by - bh + 1 || x === bx);
+    }
+  };
+  [T.grassEdge0, T.grassEdge1, T.grassEdge2, T.grassEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(GRASS_BASE, PATH_BASE, GRASS_LIGHT), 140 + i, { alpha: true }));
+  [T.pathEdge0, T.pathEdge1, T.pathEdge2, T.pathEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(PATH_BASE, GRASS_BASE, PATH_PRINT), 150 + i, { alpha: true }));
   // корни: тёмная кора с продольными бороздами
   T.roots = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 5 === 0 ? '#2e2016' : pick(['#5a3e28', '#4e3522', '#664830'], r), r, 6));
