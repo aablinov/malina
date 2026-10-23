@@ -32,7 +32,17 @@ class SolidAOPass extends GTAOPass {
       if (m.alphaTest > 0 || m.transparent || (m as THREE.MeshBasicMaterial).isMeshBasicMaterial) o.visible = false;
     });
   }
+  /** AO мягкий и так — считаем в половине разрешения буфера (в полном он один стоил ~15 мс на 2048 × 1536) */
+  setSize(width: number, height: number): void {
+    super.setSize(Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(height / 2)));
+  }
 }
+
+/**
+ * Плотность пикселей буфера постобработки. На ретине (DPR 2) полноэкранный HDR-буфер — главная цена кадра:
+ * замер 23.10.2026 (GPU, 2048 × 1536): DPR 2 — 20,8 мс, DPR 1,5 — 6,3 мс с AO и bloom. MSAA на этом буфере ещё дороже (35 мс).
+ */
+const POST_MAX_DPR = 1.5;
 
 const FULLSCREEN_VERT = /* glsl */`
 varying vec2 vUv;
@@ -108,9 +118,11 @@ export class Lighting {
     scene.add(this.hemi, this.ambient, this.sun, this.sun.target);
 
     this.composer = new EffectComposer(renderer);
+    this.composer.setPixelRatio(Math.min(renderer.getPixelRatio(), POST_MAX_DPR));
     this.composer.addPass(new RenderPass(scene, camera));
     this.ao = new SolidAOPass(scene, camera, 512, 512);
-    this.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.2, thickness: 1.2, scale: 1, samples: 12 });
+    this.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.2, thickness: 1.2, scale: 1, samples: 10 });
+    this.ao.updatePdMaterial({ samples: 12 });
     this.ao.blendIntensity = 0.85;
     this.composer.addPass(this.ao);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), DAY.bloom, 0.4, 0.85);

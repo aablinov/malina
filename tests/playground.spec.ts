@@ -425,12 +425,17 @@ test('свет как в Unreal: AO, цветокоррекция и дымка 
     m.setNight(true); m.render();
     const night = { bloom: L.bloom.strength, sun: L.sun.intensity };
     m.setNight(false); m.render();
-    return { on, off, night, day: { bloom: L.bloom.strength, sun: L.sun.intensity } };
+    // цена кадра: буфер постобработки не плотнее DPR 1,5, AO — в половину буфера
+    const buf = L.composer.renderTarget1, css = window.innerWidth;
+    const res = { dpr: buf.width / css, ao: L.ao.width / buf.width };
+    return { on, off, night, day: { bloom: L.bloom.strength, sun: L.sun.intensity }, res };
   });
   expect(r.on).toEqual({ unreal: true, passes: 5, fog: true, ao: true });
   expect(r.off).toEqual({ passes: 3, fog: false, ao: false });
   expect(r.night.bloom).toBeGreaterThan(r.day.bloom);
   expect(r.night.sun).toBeLessThan(r.day.sun);
+  expect(r.res.dpr).toBeLessThanOrEqual(1.5);
+  expect(r.res.ao).toBeCloseTo(0.5, 2);
 });
 
 test('трава поверх блоков: бахрома свисает с уступов, пучки растут пятнами и не отбрасывают теней', async ({ page }) => {
