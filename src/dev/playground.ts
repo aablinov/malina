@@ -1,9 +1,6 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { initAudio, sfx, toggleMute } from '../audio';
+import { Lighting } from '../lighting';
 import { Props, type LootKind } from '../props';
 import { type Obstacle } from '../collision';
 import { FX } from '../fx';
@@ -84,41 +81,18 @@ export function runPlayground(): void {
   let camOverride: THREE.Vector3 | null = null;
   const camTarget = new THREE.Vector3();
 
-  // свет: день — тёплое солнце и голубое небо, ночь — лунный синий, а светят факелы, вода и светлячки (style-guide.md)
-  const hemi = new THREE.HemisphereLight('#cdeeff', '#6f9a4a', 1.15);
-  const ambient = new THREE.AmbientLight('#ffffff', 0.15);
-  scene.add(hemi, ambient);
-  const sun = new THREE.DirectionalLight('#fff0d2', 2.3);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 90 });
-  sun.shadow.bias = -0.0005;
-  sun.shadow.normalBias = 0.03;
-  scene.add(sun, sun.target);
-  const SUN_OFFSET = new THREE.Vector3(-14, 30, 9);
+  // свет и постобработка «как в Unreal» (src/lighting.ts, wiki/style-lighting.md): день — тёплое низкое солнце и голубое небо,
+  // ночь — лунный синий, а светят факелы, вода и светлячки; AO, bloom, цветокоррекция, дымка, tilt-shift. U — сравнить без них
+  const look = new Lighting(renderer, scene, camera);
+  const sun = look.sun;
   let night = false;
-  function applyNight(): void {
-    scene.background = new THREE.Color(night ? '#0e2a44' : '#8fd3f5');
-    hemi.color.set(night ? '#5a86c8' : '#cdeeff');
-    hemi.groundColor.set(night ? '#1d3a3a' : '#6f9a4a');
-    hemi.intensity = night ? 0.75 : 1.15;
-    sun.color.set(night ? '#8fb4ff' : '#fff0d2');
-    sun.intensity = night ? 0.55 : 2.3;
-    bloom.strength = night ? 0.75 : 0.45;
-  }
-
-  const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.45, 0.4, 0.85);
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
+  function applyNight(): void { look.setNight(night); }
   let postFX = true;
-  applyNight();
 
   function resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
-    composer.setSize(w, h);
+    look.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
@@ -344,6 +318,7 @@ export function runPlayground(): void {
       case 'KeyE': interactReq = true; break;
       case 'KeyM': toggleMute(); break;
       case 'KeyL': night = !night; applyNight(); toast(night ? 'Ночь' : 'День'); refreshControls(); break;
+      case 'KeyU': look.unreal = !look.unreal; toast(look.unreal ? 'Свет как в Unreal' : 'Простой свет'); refreshControls(); break;
       case 'KeyB': postFX = !postFX; toast(postFX ? 'Постобработка включена' : 'Постобработка выключена'); refreshControls(); break;
       case 'KeyN': resetTargets(); break;
       case 'F1': panel.toggle(); break;
@@ -565,6 +540,7 @@ export function runPlayground(): void {
     refreshers.push(toggle(c, 'Ночь (L)', () => night, (v) => { night = v; applyNight(); }));
     refreshers.push(toggle(c, 'Бессмертие (F6)', () => hero.god, (v) => { hero.god = v; }));
     refreshers.push(toggle(c, 'Постобработка, bloom (B)', () => postFX, (v) => { postFX = v; }));
+    refreshers.push(toggle(c, 'Свет как в Unreal: AO, цвет, дымка, tilt-shift (U)', () => look.unreal, (v) => { look.unreal = v; }));
     refreshers.push(toggle(c, 'Тени', () => sun.castShadow, (v) => { sun.castShadow = v; }));
     const row = document.createElement('div');
     row.className = 'pg-btnrow';
@@ -589,7 +565,7 @@ export function runPlayground(): void {
     </div>
     <div class="pg-prompt" id="pgPrompt"></div>
     <div class="pg-help">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо из трёх) · Shift + ЛКМ — бить на месте · WASD — ходьба · Space — перекат · 1/2/3 — заклинания · E — использовать · L — день/ночь<br>
-    F1 параметры · F2 коллайдеры и путь · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · B bloom · N сброс чучел и склада · F10 редактор</div>
+    F1 параметры · F2 коллайдеры и путь · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · B bloom · U свет Unreal · N сброс чучел и склада · F10 редактор</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(hud);
 
@@ -708,8 +684,7 @@ export function runPlayground(): void {
     const sh = fx.shake * 0.2;
     camera.position.copy(camTarget).addScaledVector(CAM_DIR, camDist).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh));
     camera.lookAt(camTarget.x, camTarget.y + 0.6, camTarget.z);
-    sun.position.copy(camTarget).add(SUN_OFFSET);
-    sun.target.position.copy(camTarget);
+    look.follow(camTarget, camDist);
     updateMotes(simTime);
 
     overlays.update();
@@ -730,7 +705,7 @@ export function runPlayground(): void {
     updateHUD(real, fpsVal, frameMs);
 
 
-    if (postFX) composer.render();
+    if (postFX) look.render();
     else renderer.render(scene, camera);
   }
   frame();
@@ -770,6 +745,7 @@ export function runPlayground(): void {
     /** Время воды в шейдере — растёт, значит вода анимирована */
     get waterTime() { return liquidTime(); },
     trail: hero.trail,
-    toggles: { get postFX() { return postFX; }, set postFX(v: boolean) { postFX = v; } },
+    toggles: { get postFX() { return postFX; }, set postFX(v: boolean) { postFX = v; }, get unreal() { return look.unreal; }, set unreal(v: boolean) { look.unreal = v; } },
+    look,
   };
 }
