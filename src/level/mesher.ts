@@ -135,6 +135,22 @@ const FRINGE_EDGE: [number, number, number, number][] = [
 ];
 const MAX_LIGHTS = 8;
 
+/**
+ * Пятна цвета природной земли по миру (как трава на скриншотах Minecraft Dungeons): два слоя плавного шума — 9 м и 3 м;
+ * светлые пятна теплее и желтее, тёмные — холоднее. Множители RGB для вершины, ±6 %.
+ */
+function macroTint(x: number, z: number): [number, number, number] {
+  const vn = (sx: number, sz: number, cell: number, seed: number) => {
+    const gx = Math.floor(sx / cell), gz = Math.floor(sz / cell), fx = sx / cell - gx, fz = sz / cell - gz;
+    const sm = (t: number) => t * t * (3 - 2 * t), u = sm(fx), v = sm(fz);
+    const a = hash(gx, 0, gz, seed), b = hash(gx + 1, 0, gz, seed), c = hash(gx, 0, gz + 1, seed), d = hash(gx + 1, 0, gz + 1, seed);
+    return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  };
+  const t = vn(x, z, 9, 91) * 0.65 + vn(x + 17, z - 5, 3, 92) * 0.35;
+  const k = (t - 0.5) * 2; // −1 … 1
+  return [1 + 0.06 * k, 1 + 0.045 * k, 1 - 0.01 * k];
+}
+
 function hash(x: number, y: number, z: number, s = 0): number {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 1103515245) + Math.imul(z | 0, 668265263) + Math.imul(s | 0, 1442695041);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -238,7 +254,9 @@ export class LevelRenderer {
         b.pos.push(p[k][0], p[k][1], p[k][2]);
         b.nrm.push(n[0], n[1], n[2]);
         b.uv.push(r.u0 + (r.u1 - r.u0) * uv[k][0], r.v0 + (r.v1 - r.v0) * uv[k][1]);
-        b.col.push(c, c, c);
+        // трава поверх блока — того же оттенка, что земля под ней
+        const [tr, tg, tb] = macroTint(p[k][0], p[k][2]);
+        b.col.push(c * tr, c * tg, c * tb);
         b.shore.push(0);
       }
     };
@@ -307,7 +325,10 @@ export class LevelRenderer {
                 ao = AO_SHADE[s1 && s2 ? 0 : 3 - (s1 + s2 + s3)];
               }
               const cv = bright * ao;
-              bucket.col.push(cv, cv, cv);
+              if (def.natural) {
+                const [tr, tg, tb] = macroTint(x + (px - 0.5) * scale + ox, z + (pz - 0.5) * scale + oz);
+                bucket.col.push(cv * tr, cv * tg, cv * tb);
+              } else bucket.col.push(cv, cv, cv);
               // берег: в этом углу рядом нет той же жидкости
               let shore = 0;
               if (isLiquid) {
