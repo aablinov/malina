@@ -25,8 +25,9 @@ export class Overlays {
       const cs = [corner(-o.hx, -o.hz), corner(o.hx, -o.hz), corner(o.hx, o.hz), corner(-o.hx, o.hz)];
       for (let i = 0; i < 4; i++) {
         const a = cs[i], b = cs[(i + 1) % 4];
-        for (const y of [0.02, o.h]) pts.push(a[0], y, a[1], b[0], y, b[1]);
-        pts.push(a[0], 0.02, a[1], a[0], o.h, a[1]);
+        const y0 = (o.y0 ?? 0) + 0.02, y1 = (o.y0 ?? 0) + o.h;
+        for (const y of [y0, y1]) pts.push(a[0], y, a[1], b[0], y, b[1]);
+        pts.push(a[0], y0, a[1], a[0], y1, a[1]);
       }
     }
     const g = new THREE.BufferGeometry();

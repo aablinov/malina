@@ -12,7 +12,7 @@ import type { Target } from '../target';
 import { makeTextures, rng } from '../textures';
 import { Level, type LevelJSON } from '../level/level.ts';
 import { LevelRenderer, liquidTime } from '../level/mesher';
-import { ceilingAt, collideTop, obstaclesOf, raycastVoxels, terrainOf } from '../level/collide.ts';
+import { ceilingAt, collideTop, decorSolids, obstaclesOf, raycastVoxels, terrainOf } from '../level/collide.ts';
 import { Pathfinder } from '../level/pathfind.ts';
 import { mapByName } from '../level/maps';
 import type { PgLabel } from '../level/playground-map.ts';
@@ -131,7 +131,8 @@ export function runPlayground(): void {
   const terrain = terrainOf(level);
   const pathfinder = new Pathfinder(level, terrain);
   const bounds = level.getBounds() ?? { minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF, minY: -1, maxY: 0 };
-  const obstacles: Obstacle[] = obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ);
+  // для врагов и пуль: блоки выше шага и декор с коллайдерами (колонны, фонари, ящики)
+  const obstacles: Obstacle[] = [...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)];
 
   // ---------- Надписи на полу ----------
   function floorLabel(text: string, x: number, z: number, size = 1, rot = 0, color = '#1f3a22'): void {
@@ -191,6 +192,16 @@ export function runPlayground(): void {
     terminals: [[-2.6, 10.6, 50]],
   });
   floorLabel('склад: бочки, сундуки (E), источник здоровья (E), ящики', -7.5, 21.3, 0.9);
+  /** Плоские препятствия героя и пути: предметы склада и декор (пересобираются, когда меняется одно из них) */
+  let solidsCache: Obstacle[] = [], solidsKey: [Obstacle[], number] | null = null;
+  const solids = (): Obstacle[] => {
+    const p = props.solids;
+    if (!solidsKey || solidsKey[0] !== p || solidsKey[1] !== level.decorVersion) {
+      solidsCache = [...p, ...decorSolids(level)];
+      solidsKey = [p, level.decorVersion];
+    }
+    return solidsCache;
+  };
   let berries = 0;
   /** Нажали E — использовать ближайший предмет */
   let interactReq = false;
@@ -425,7 +436,7 @@ export function runPlayground(): void {
     if (arrived && !moved) return;
     if (path.length && !(moved && repathT <= 0) && repathT > -1e8) return;
     arrived = false;
-    path = pathfinder.find(hero.pos, to, { solids: props.solids });
+    path = pathfinder.find(hero.pos, to, { solids: solids() });
     pathTo.copy(to);
     repathT = 0.15;
   }
@@ -638,7 +649,7 @@ export function runPlayground(): void {
     marker.visible = markerT > 0;
     (marker.material as THREE.MeshBasicMaterial).opacity = Math.max(0, markerT * 2);
     marker.scale.setScalar(1 + (0.5 - markerT));
-    hero.update(dt, input, props.solids, terrain);
+    hero.update(dt, input, solids(), terrain);
     view.sync();
     view.update(simTime, night ? 1 : 0.4, hero.pos);
     view.setXray(hero.pos.clone().setY(hero.pos.y + 0.9), camera.position, 2.0);
@@ -724,6 +735,8 @@ export function runPlayground(): void {
     hero, input, dummies, obstacles, camera, HERO, SWORD, props, level, terrain,
     /** Рендер уровня и декора */
     view,
+    /** Препятствия героя: склад и декор */
+    get solids() { return solids(); },
     get berries() { return berries; },
     /** Нажать E */
     interact() { interactReq = true; },

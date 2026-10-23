@@ -1,4 +1,5 @@
 import type { Level } from './level.ts';
+import { decorDef } from './decor.ts';
 import { obstacle, type Obstacle } from '../collision';
 import { DIRS } from './obj.ts';
 
@@ -176,4 +177,31 @@ export function obstaclesOf(L: Level, y0: number, x0: number, z0: number, x1: nu
     }
   }
   return out;
+}
+
+const decorCache = new WeakMap<Level, { v: number; list: Obstacle[] }>();
+
+/**
+ * Препятствия декора (src/level/decor.ts, поле solid): боксы, повёрнутые по рыску предмета (наклон и крен не учитываются),
+ * с низом на высоте точки опоры. Для героя, поиска пути, врагов и пуль — как бочки и ящики. Кэш по level.decorVersion.
+ */
+export function decorSolids(L: Level): Obstacle[] {
+  const c = decorCache.get(L);
+  if (c && c.v === L.decorVersion) return c.list;
+  const list: Obstacle[] = [];
+  for (const d of L.decor) {
+    const def = decorDef(d.name);
+    if (!def.solid) continue;
+    // рыск декора 90° переводит +X в +Z; у препятствия угол обратный (как поворот three вокруг Y)
+    const yaw = d.rot?.[0] ?? 0;
+    const a = (-yaw * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+    for (const b of def.solid) {
+      const bx = b.x ?? 0, bz = b.z ?? 0;
+      const o = obstacle(d.pos[0] + bx * ca + bz * sa, d.pos[2] - bx * sa + bz * ca, b.w, b.d, b.h, -yaw);
+      o.y0 = d.pos[1];
+      list.push(o);
+    }
+  }
+  decorCache.set(L, { v: L.decorVersion, list });
+  return list;
 }

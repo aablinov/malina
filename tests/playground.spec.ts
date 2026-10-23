@@ -299,3 +299,42 @@ test('декор: предметы из карты рисуются экземп
   expect(r.bumped).toBe(2);
   expect(r.lights).toBeGreaterThan(5);
 });
+
+test('декор мешает пройти: герой упирается в обломок колонны, путь обходит упавшую, через щебень — насквозь', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    // обломок колонны 1 × 1 м в (−2, −21,5): идём на него с юга и упираемся
+    m.hero.place(-2, -19, Math.PI);
+    m.step(0.2);
+    m.input.move.set(0, -1);
+    let touching = false;
+    for (let t = 0; t < 1.2; t += 0.05) { m.step(0.05); touching ||= m.hero.touching; }
+    m.input.move.set(0, 0);
+    const blocked = { z: m.hero.pos.z, touching };
+    // колонна лежит в (13, −20) под 25°: клик за неё — путь в обход
+    m.hero.place(13, -17, Math.PI); m.step(0.2);
+    const to = m.hero.pos.clone().set(13, 0, -22.5);
+    const path = m.pathfinder.find(m.hero.pos, to, { solids: m.solids });
+    m.click(13, -22.5); m.step(1 / 60); m.release();
+    for (let t = 0; t < 12 && m.goal; t += 0.1) m.step(0.1);
+    const around = { x: m.hero.pos.x, z: m.hero.pos.z, left: !!m.goal };
+    // щебень без коллайдера: проходим насквозь
+    m.hero.place(11, 0, Math.PI); m.step(0.2);
+    m.input.move.set(0, -1); m.step(1); m.input.move.set(0, 0);
+    const rubble = m.hero.pos.z;
+    return {
+      blocked, path: path.length, around, rubble,
+      solids: m.solids.filter((o: any) => o.y0 !== undefined).length,
+      inObstacles: m.obstacles.filter((o: any) => o.y0 !== undefined).length,
+    };
+  });
+  expect(r.blocked.z).toBeGreaterThan(-21.05); // передняя грань обломка — z = −21, герой перед ней
+  expect(r.blocked.touching).toBe(true);
+  expect(r.path).toBeGreaterThan(1);
+  expect(Math.hypot(r.around.x - 13, r.around.z + 22.5)).toBeLessThan(0.3);
+  expect(r.around.left).toBe(false);
+  expect(r.rubble).toBeLessThan(-3.5);
+  expect(r.solids).toBeGreaterThanOrEqual(8);
+  expect(r.inObstacles).toBe(r.solids);
+});
