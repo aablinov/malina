@@ -114,6 +114,10 @@ src/dev/playground.ts — сцена, src/dev/editor.ts — редактор
 
 Удалены вместе с огородом: `game.ts`, `world.ts`, `player.ts`, `combat.ts`, `weapons.ts`, `shop.ts`, `daynight.ts`, `icons.ts`, `map.ts`, `mission.ts`, `lobby.ts`, `minimap.ts`, `session.ts`, `profile.ts`, `garden.ts`. Остались `beetle.ts` и `bush.ts` (цель жуков) с `config.ts`.
 
+## 11¼. Мир: новые слои и механизмы
+
+Для зоны «мир» ([style-world.md](style-world.md)) в мешере появились: слой `falls` (водопад, текстура бежит вниз), слой `river` (вода с течением — атрибут `flow` по повороту блока), слой `portal` (самосветящееся золото с бегущими полосами), высота верха блока `topOf` (полублоки травы), **запечённый свет** — атрибут `bake`: источники `bakedLight` у блоков и `light.baked` у декора, при изменении пересобираются только задетые чанки.
+
 ## 11½. Декор
 
 Поверх блоков — свободный декор (колонны, щебень, цепи, корни, знамёна, фонари): поле `decor` в карте, свои формы и рендер экземплярами. Отдельная страница — [design-level-decor.md](design-level-decor.md).
