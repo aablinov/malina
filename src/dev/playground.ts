@@ -82,7 +82,7 @@ export function runPlayground(): void {
   const camTarget = new THREE.Vector3();
 
   // свет и постобработка «как в Unreal» (src/lighting.ts, wiki/style-lighting.md): день — тёплое низкое солнце и голубое небо,
-  // ночь — лунный синий, а светят факелы, вода и светлячки; AO, bloom, цветокоррекция, дымка, tilt-shift. U — сравнить без них
+  // ночь — лунный синий, а светят факелы, вода и светлячки; AO, bloom, цветокоррекция, дымка. U — сравнить без них
   const look = new Lighting(renderer, scene, camera);
   const sun = look.sun;
   let night = false;
@@ -540,7 +540,7 @@ export function runPlayground(): void {
     refreshers.push(toggle(c, 'Ночь (L)', () => night, (v) => { night = v; applyNight(); }));
     refreshers.push(toggle(c, 'Бессмертие (F6)', () => hero.god, (v) => { hero.god = v; }));
     refreshers.push(toggle(c, 'Постобработка, bloom (B)', () => postFX, (v) => { postFX = v; }));
-    refreshers.push(toggle(c, 'Свет как в Unreal: AO, цвет, дымка, tilt-shift (U)', () => look.unreal, (v) => { look.unreal = v; }));
+    refreshers.push(toggle(c, 'Свет как в Unreal: AO, цвет, дымка (U)', () => look.unreal, (v) => { look.unreal = v; }));
     refreshers.push(toggle(c, 'Тени', () => sun.castShadow, (v) => { sun.castShadow = v; }));
     const row = document.createElement('div');
     row.className = 'pg-btnrow';

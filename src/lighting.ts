@@ -15,7 +15,8 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
  *  3. Bloom на огне, магии, светящихся грибах.
  *  4. Цветокоррекция после тонмаппинга ACES: тени уходят в бирюзу, светлое — в тепло, насыщенность чуть выше.
  *  5. Воздушная дымка: дальнее светлеет и голубеет (Fog от камеры), без серой мути.
- *  6. Tilt-shift: верх и низ кадра размыты, резкая полоса — там, где герой: мир выглядит игрушечной диорамой.
+ *
+ * Tilt-shift (размытие верха и низа кадра) был и убран 23.10.2026: два полноэкранных прохода на полном разрешении съедали кадры.
  *
  * `unreal = false` оставляет только солнце, небо и bloom — как было до этого слоя (сравнить: клавиша U).
  */
@@ -68,31 +69,6 @@ void main() {
 }`,
 };
 
-/** Tilt-shift: гауссово размытие вдоль uDir, сила растёт за пределами резкой полосы вокруг uFocus (доля высоты кадра) */
-const TiltShader = {
-  uniforms: {
-    tDiffuse: { value: null as THREE.Texture | null },
-    uDir: { value: new THREE.Vector2() },
-    uFocus: { value: 0.47 },
-    uBand: { value: 0.16 },
-    uAmount: { value: 1 },
-  },
-  vertexShader: FULLSCREEN_VERT,
-  fragmentShader: /* glsl */`
-uniform sampler2D tDiffuse;
-uniform vec2 uDir;
-uniform float uFocus, uBand, uAmount;
-varying vec2 vUv;
-void main() {
-  float k = smoothstep(uBand, uBand + 0.32, abs(vUv.y - uFocus)) * uAmount;
-  vec2 st = uDir * k;
-  vec4 s = texture2D(tDiffuse, vUv) * 0.2270270270;
-  s += (texture2D(tDiffuse, vUv + st * 1.3846153846) + texture2D(tDiffuse, vUv - st * 1.3846153846)) * 0.3162162162;
-  s += (texture2D(tDiffuse, vUv + st * 3.2307692308) + texture2D(tDiffuse, vUv - st * 3.2307692308)) * 0.0702702703;
-  gl_FragColor = s;
-}`,
-};
-
 interface Mood {
   sky: string; haze: string; hemiSky: string; hemiGround: string; hemi: number; ambient: number;
   sun: string; sunI: number; bloom: number; exposure: number;
@@ -117,8 +93,6 @@ export class Lighting {
   readonly bloom: UnrealBloomPass;
   readonly ao: SolidAOPass;
   readonly grade = new ShaderPass(GradeShader);
-  private readonly tiltH = new ShaderPass(TiltShader);
-  private readonly tiltV = new ShaderPass(TiltShader);
   private readonly fog = new THREE.Fog('#ffffff', 30, 120);
   /** Откуда светит солнце относительно точки, за которой следит камера: низко и сбоку — длинные тени */
   readonly sunOffset = new THREE.Vector3(-20, 26, 12);
@@ -143,15 +117,13 @@ export class Lighting {
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.grade);
-    this.composer.addPass(this.tiltH);
-    this.composer.addPass(this.tiltV);
     this.setNight(false);
   }
 
   get unreal(): boolean { return this.unrealOn; }
   set unreal(on: boolean) {
     this.unrealOn = on;
-    this.ao.enabled = this.grade.enabled = this.tiltH.enabled = this.tiltV.enabled = on;
+    this.ao.enabled = this.grade.enabled = on;
     this.scene.fog = on ? this.fog : null;
     // солнце без цветокоррекции — прежнее, белее и выше
     this.sunOffset.set(on ? -20 : -14, on ? 26 : 30, on ? 12 : 9);
@@ -184,9 +156,6 @@ export class Lighting {
 
   setSize(w: number, h: number): void {
     this.composer.setSize(w, h);
-    // радиус размытия в пикселях экрана: до ~12 px у краёв кадра
-    (this.tiltH.uniforms.uDir.value as THREE.Vector2).set(3.6 / w, 0);
-    (this.tiltV.uniforms.uDir.value as THREE.Vector2).set(0, 3.6 / h);
   }
 
   /** Солнце и тени — за точкой интереса; дымка начинается за ней и густеет вдаль */
