@@ -410,3 +410,25 @@ test('этаж подземелья: декор комнат переезжае�
   expect(r.floating).toBe(0);
   expect(r.inst).toBeGreaterThanOrEqual(r.n);
 });
+
+test('свет как в Unreal: AO, цветокоррекция, дымка и tilt-shift включаются и выключаются, кадр рисуется', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const L = m.look;
+    const passes = () => L.composer.passes.filter((p: any) => p.enabled).length;
+    m.render();
+    const on = { unreal: L.unreal, passes: passes(), fog: !!m.view.group.parent.fog, ao: L.ao.enabled };
+    m.toggles.unreal = false; m.render();
+    const off = { passes: passes(), fog: !!m.view.group.parent.fog, ao: L.ao.enabled };
+    m.toggles.unreal = true;
+    m.setNight(true); m.render();
+    const night = { bloom: L.bloom.strength, sun: L.sun.intensity };
+    m.setNight(false); m.render();
+    return { on, off, night, day: { bloom: L.bloom.strength, sun: L.sun.intensity } };
+  });
+  expect(r.on).toEqual({ unreal: true, passes: 7, fog: true, ao: true });
+  expect(r.off).toEqual({ passes: 3, fog: false, ao: false });
+  expect(r.night.bloom).toBeGreaterThan(r.day.bloom);
+  expect(r.night.sun).toBeLessThan(r.day.sun);
+});

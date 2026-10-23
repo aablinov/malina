@@ -29,3 +29,9 @@
 | Страница | О чём |
 |---|---|
 | [style-guide.md](style-guide.md) | 9 референсов (`style/`) и правила — добрый детский воксельный мир, свет, вода, эффекты |
+| [style-lighting.md](style-lighting.md) | Свет «как в Unreal»: солнце, голубые тени, AO, bloom, цветокоррекция, дымка, tilt-shift — слои и настройки |
+
+## Источники
+| Источник | Что из него взято |
+|---|---|
+| [sources/mcd-lighting.md](sources/mcd-lighting.md) | 4 скриншота Minecraft Dungeons: свет, tilt-shift, дымка, декор не по сетке, травяная бахрома |

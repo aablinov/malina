@@ -27,3 +27,11 @@
 ## [2026-10-23] код | Декор, этап 4: комнаты и этаж
 Комнаты-заготовки «одеваются» проходимым декором (`dressRoom`), этаж переносит декор комнат со сдвигом крепления. Плейграунд научился `?map=dungeon&seed=…&floor=…` (README это уже обещал). Тест «этаж подземелья».
 Страницы: [design-level-decor.md](design-level-decor.md), [design-level-blocks.md](design-level-blocks.md).
+
+## [2026-10-23] источник | Скриншоты Minecraft Dungeons: свет и декор
+4 скриншота в `sources/mcd-lighting/`, конспект: тёплое низкое солнце, голубые тени, AO, tilt-shift, дымка, декор вне сетки, травяная бахрома.
+Страницы: [sources/mcd-lighting.md](sources/mcd-lighting.md), [style-lighting.md](style-lighting.md), [style-guide.md](style-guide.md).
+
+## [2026-10-23] код | Свет как в Unreal
+`src/lighting.ts` (`Lighting`): солнце ниже и теплее, небо заливает тени, GTAO без травы и листьев, bloom, цветокоррекция после ACES, дымка от камеры, tilt-shift. Плейграунд берёт свет оттуда; U — сравнить с простым светом. Тест «свет как в Unreal».
+Страницы: [style-lighting.md](style-lighting.md).
