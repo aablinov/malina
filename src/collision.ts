@@ -15,6 +15,13 @@ export interface Obstacle {
   rot: number;
   /** Высота для пуль, м (визуально стена может быть ниже — как стены со стороны камеры) */
   h: number;
+  /** Низ препятствия, м (декор на втором ярусе); нет — стоит на полу арены, мешает на любой высоте */
+  y0?: number;
+}
+
+/** Тело ростом 1,6 м на высоте ног y задевает препятствие по вертикали */
+export function overlapsY(o: Obstacle, y: number, bodyH = 1.6): boolean {
+  return o.y0 === undefined || (y + bodyH > o.y0 && y < o.y0 + o.h);
 }
 
 export function obstacle(x: number, z: number, w: number, d: number, h: number, rotDeg = 0): Obstacle {
@@ -27,6 +34,7 @@ export function resolveCircle(pos: THREE.Vector3, r: number, obs: readonly Obsta
   for (let iter = 0; iter < 3; iter++) {
     let any = false;
     for (const o of obs) {
+      if (!overlapsY(o, pos.y)) continue;
       const c = Math.cos(o.rot), s = Math.sin(o.rot);
       const dx = pos.x - o.x, dz = pos.z - o.z;
       // в локальные оси препятствия (поворот на −rot)
@@ -72,7 +80,7 @@ export interface RayHit {
 export function raycastObstacles(ox: number, oz: number, dx: number, dz: number, maxT: number, y: number, obs: readonly Obstacle[]): RayHit | null {
   let best: RayHit | null = null;
   for (const o of obs) {
-    if (y >= o.h) continue;
+    if (o.y0 === undefined ? y >= o.h : y >= o.y0 + o.h || y < o.y0) continue;
     const c = Math.cos(o.rot), s = Math.sin(o.rot);
     const rx = ox - o.x, rz = oz - o.z;
     const lox = rx * c - rz * s, loz = rx * s + rz * c;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Obstacle } from '../collision';
+import { overlapsY, type Obstacle } from '../collision';
 import { distToObstacle } from '../nav';
 import { BODY_H, collideTop, STEP, type Terrain } from './collide.ts';
 import type { Level } from './level.ts';
@@ -18,7 +18,7 @@ const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, 
 const MAX_EXPAND = 30000;
 
 export interface PathOptions {
-  /** Плоские препятствия (бочки, ящики) — обходить */
+  /** Плоские препятствия (бочки, ящики, декор) — обходить */
   solids?: readonly Obstacle[];
   /** Насколько можно спрыгнуть вниз, м */
   dropMax?: number;
@@ -45,7 +45,7 @@ export class Pathfinder {
     const f = this.terrain.floorAt(x, z, from);
     if (f === -Infinity || f < from - dropMax - 1e-3) return null;
     if (!this.clear(x, z, f)) return null;
-    if (f < 1) for (const o of solids) if (distToObstacle(x, z, o) < 0.35) return null;
+    for (const o of solids) if ((o.y0 === undefined ? f < 1 : overlapsY(o, f, BODY_H)) && distToObstacle(x, z, o) < 0.35) return null;
     return f;
   }
 
