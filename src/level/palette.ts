@@ -4,7 +4,8 @@
  * поэтому имена не переименовывать — только добавлять.
  */
 
-export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow';
+/** detail — мелкая трава поверх блоков: как cutout, но без теней (дёшево) */
+export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow' | 'detail';
 
 export interface Part {
   /** Имя формы — файл assets/blocks/<obj>.obj */
@@ -41,6 +42,10 @@ export interface BlockDef {
   rotatable?: boolean;
   /** Ступени: низкая половина 0,5, высокая 1 — по ним поднимаются на блок */
   stairs?: boolean;
+  /** Бахрома: свисает с верхнего края на сторону, где сосед ниже (уступ, берег) — текстура */
+  fringe?: string;
+  /** Мелкие пучки на открытом верху, гуще пятнами — текстуры (выбор по хэшу) */
+  tufts?: string[];
 }
 
 const cube = (tex: Record<string, string | string[]>, obj = 'cube'): Part => ({ obj, tex });
@@ -68,7 +73,7 @@ export const BLOCKS: BlockDef[] = [
   B('air', 'Воздух', 'служебные', [], { collide: 0 }),
 
   // --- земля ---
-  solid('grass', 'Трава', 'земля', { top: 'grassTop', side: 'grassSide', bottom: 'dirt' }, { jitter: 0.14 }),
+  solid('grass', 'Трава', 'земля', { top: 'grassTop', side: 'grassSide', bottom: 'dirt' }, { jitter: 0.14, fringe: 'grassFringe', tufts: ['grassTuft', 'grassTuft', 'grassTuft', 'flowerTuft'] }),
   solid('dirt', 'Земля', 'земля', 'dirt', { jitter: 0.12 }),
   solid('path', 'Тропинка', 'земля', 'path'),
   solid('gravel', 'Гравий', 'земля', 'gravel'),
@@ -167,7 +172,11 @@ export function blockDef(name: string): BlockDef {
 /** Все имена текстур, которые нужны палитре (для атласа) */
 export function paletteTextures(): string[] {
   const s = new Set<string>();
-  for (const b of BLOCKS) for (const p of b.parts) for (const t of Object.values(p.tex)) for (const n of Array.isArray(t) ? t : [t]) s.add(n);
+  for (const b of BLOCKS) {
+    for (const p of b.parts) for (const t of Object.values(p.tex)) for (const n of Array.isArray(t) ? t : [t]) s.add(n);
+    if (b.fringe) s.add(b.fringe);
+    for (const t of b.tufts ?? []) s.add(t);
+  }
   return [...s];
 }
 
