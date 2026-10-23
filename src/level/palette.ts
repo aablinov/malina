@@ -5,7 +5,7 @@
  */
 
 /** detail — мелкая трава поверх блоков: как cutout, но без теней (дёшево) */
-export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow' | 'detail';
+export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow' | 'detail' | 'river' | 'falls';
 
 export interface Part {
   /** Имя формы — файл assets/blocks/<obj>.obj */
@@ -51,6 +51,8 @@ export interface BlockDef {
    * текстуры-маски, выбор по хэшу; так граница не идёт по линейке клеток
    */
   bleed?: string[];
+  /** Течение жидкости, м/с: блики и полосы бегут по направлению поворота (rot 0 — к +X) */
+  flow?: number;
   /** Природная земля: цвет плавно гуляет крупными пятнами по миру (светлее-желтее / темнее), а не по блокам */
   natural?: boolean;
 }
@@ -152,6 +154,22 @@ export const BLOCKS: BlockDef[] = [
   solid('fridge', 'Холодильник', 'мебель', { top: 'fridgeTop', side: 'fridge', bottom: 'fridgeTop' }, { jitter: 0 }),
   B('rug', 'Ковёр', 'мебель', [cube(same('rug'), 'carpet')], { collide: 0, jitter: 0 }),
 
+  // --- мир (скриншоты Minecraft Dungeons 10–15, wiki/style-world.md): двор — ограды и пол ---
+  ...stoneSet('wall_stone', 'Камень ограды', 'двор', 'wallStone'),
+  ...stoneSet('yard_floor', 'Пол двора', 'двор', 'yardFloor', false),
+
+  // скалы и вода (скриншоты 11, 12): скалы по краю уровня, водопад, река с течением, мост
+  ...stoneSet('cliff', 'Скала', 'скалы и вода', 'cliff', false),
+  solid('cliff_dark', 'Скала тёмная', 'скалы и вода', 'cliffDark'),
+  solid('cliff_grass', 'Скала с травой', 'скалы и вода', { top: 'grassTop', side: 'cliffGrassSide', bottom: 'cliff' }, {
+    jitter: 0.02, natural: true, fringe: 'grassFringe', tufts: ['grassTuft', 'grassTuft', 'grassTuft', 'flowerTuft'], bleed: ['grassEdge0', 'grassEdge1', 'grassEdge2', 'grassEdge3'],
+  }),
+  B('waterfall', 'Водопад', 'скалы и вода', [{ obj: 'cube', layer: 'falls', tex: same('waterfall') }], { cullSame: true, jitter: 0 }),
+  B('river', 'Река', 'скалы и вода', [{ obj: 'water', layer: 'river', tex: same('river') }], { collide: 0.5, cullSame: true, jitter: 0, rotatable: true, flow: 1.2 }),
+  B('bridge_deck', 'Настил моста', 'скалы и вода', [cube(same('bridgePlank'))], { full: true, connects: true, rotatable: true, jitter: 0.04 }),
+  B('bridge_beam', 'Брус моста', 'скалы и вода', [cube({ top: 'bridgePost', side: 'bridgePost', bottom: 'bridgePost' }, 'cube_x')], { full: true, connects: true, rotatable: true, jitter: 0.04 }),
+  B('bridge_post', 'Столб моста', 'скалы и вода', [cube(same('bridgePost'), 'post')], { collide: 1.5, connects: true, jitter: 0.04 }),
+
   // --- служебные блоки плейграунда: нейтральная сетка и клетчатые стены, стиль игры не задают ---
   solid('dev_light', 'Сетка: светлая', 'служебные', 'devLight', { jitter: 0 }),
   solid('dev_dark', 'Сетка: тёмная', 'служебные', 'devDark', { jitter: 0 }),
@@ -168,6 +186,9 @@ export const BLOCKS: BlockDef[] = [
   B('campfire', 'Костёр', 'свет', [cube({ top: 'logTop', side: 'logSide', bottom: 'ash' }, 'campfire_logs'), { obj: 'campfire_fire', layer: 'fire', tex: { side: 'fire' } }], { collide: 1, light: { color: '#ff9a3a', intensity: 12, dist: 10 } }),
   B('fire', 'Огонь', 'свет', [{ obj: 'fire', layer: 'fire', tex: { side: 'fire' } }], { collide: 0, replaceable: true, light: { color: '#ff8a2a', intensity: 8, dist: 8 } }),
 ];
+
+/** Категории набора «мир» — показываются в зоне «мир» плейграунда, а не в рядах витрины */
+export const WORLD_CATEGORIES = ['двор', 'скалы и вода', 'холмы', 'портал'];
 
 export const BLOCK_BY_NAME: Record<string, BlockDef> = Object.fromEntries(BLOCKS.map((b) => [b.name, b]));
 

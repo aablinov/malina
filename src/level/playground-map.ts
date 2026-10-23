@@ -1,6 +1,7 @@
 import { Level } from './level.ts';
-import { BLOCKS } from './palette.ts';
-import { DECOR } from './decor.ts';
+import { BLOCKS, WORLD_CATEGORIES } from './palette.ts';
+import { DECOR, WORLD_DECOR_CATEGORIES } from './decor.ts';
+import { buildWorldZone } from './world-zone.ts';
 
 /**
  * Карта плейграунда: арена 48 × 48 м из блоков (трава, стены, укрытия, колонна, диагональ, угол, коридор, пруд, площадка со ступенями)
@@ -51,11 +52,11 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     else if (me === 'grass' && n > 0.68) flips.push([x, z, 'path']);
   }
   for (const [x, z, name] of flips) L.set(x, -1, z, name);
-  // стены по периметру: дальние (−X, −Z) 3 блока, со стороны камеры (+X, +Z) — 1 блок; на юге проём к витрине
+  // стены по периметру: дальние (−X, −Z) 3 блока, со стороны камеры (+X, +Z) — 1 блок; на юге проём к витрине, на востоке — в зону «мир»
   const W = H + 1;
   for (let i = -W; i <= W; i++) {
     for (let y = 0; y < 3; y++) { L.set(i, y, -W, y === 2 ? 'bricks' : 'bricks_old'); L.set(-W, y, i, y === 2 ? 'bricks' : 'bricks_old'); }
-    L.set(W, 0, i, 'bricks_mossy');
+    if (Math.abs(i) > 1) L.set(W, 0, i, 'bricks_mossy'); // проём на восток — в зону «мир»
     if (Math.abs(i) > 1) L.set(i, 0, W, 'bricks_mossy');
   }
   for (let i = -W; i <= W; i++) { L.set(i, -1, -W, 'stone'); L.set(i, -1, W, 'stone'); L.set(-W, -1, i, 'stone'); L.set(W, -1, i, 'stone'); }
@@ -128,7 +129,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   labels.push({ text: 'витрина блоков: все блоки палитры', x: 0, z: Z0 + 1.2, size: 1.1 });
 
   // ряды 1–3: все «твёрдые» блоки палитры по одному, подпись под каждым
-  const solids = BLOCKS.filter((b) => b.category !== 'служебные' && !b.scatter && !b.name.endsWith('_stairs') && b.parts.length && b.collide > 0 && b.name !== 'water' && b.name !== 'acid');
+  const solids = BLOCKS.filter((b) => b.category !== 'служебные' && !WORLD_CATEGORIES.includes(b.category) && !b.scatter && !b.name.endsWith('_stairs') && b.parts.length && b.collide > 0 && b.name !== 'water' && b.name !== 'acid');
   let i = 0;
   for (const b of solids) {
     const x = -22 + (i % 23) * 2, z = Z0 + 4 + Math.floor(i / 23) * 3;
@@ -137,7 +138,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     i++;
   }
   // ряд 3: ступени в четырёх поворотах и проходимые блоки
-  const stairs = BLOCKS.filter((b) => b.name.endsWith('_stairs'));
+  const stairs = BLOCKS.filter((b) => b.name.endsWith('_stairs') && !WORLD_CATEGORIES.includes(b.category));
   let x = -22;
   const zs = Z0 + 12;
   for (const b of stairs) {
@@ -219,7 +220,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   }
   for (const x of [7, 9, 11]) dec('chain', x, 2, zw + 1, x * 30, [x, 2, zw + 1]);
   labels.push({ text: 'Цепь', x: 9, z: face + 1.4, size: 0.45 });
-  const floorItems = DECOR.filter((d) => d.anchor === 'floor');
+  const floorItems = DECOR.filter((d) => d.anchor === 'floor' && !WORLD_DECOR_CATEGORIES.includes(d.category));
   floorItems.forEach((d, k) => {
     const x = -21 + k * 4, z = zw + 4;
     dec(d.name, x, 0, z, d.name === 'column_fallen' ? 0 : 20);
@@ -244,6 +245,9 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   dec('planter', 8, 0, 23.6);
   dec('crates_tilted', 21, 0, 21, -30);
   dec('candles', -17.6, 2, -20.4);
+
+  // ---------- зона «мир» за восточной стеной: наборы по скриншотам Minecraft Dungeons ----------
+  buildWorldZone(L, labels, (name, x, y, z, rot = 0, on) => { dec(name, x, y, z, rot, on); });
 
   L.spawn = [0, 0, 0];
   L.meta = { labels };
