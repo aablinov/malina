@@ -93,10 +93,55 @@ export function roomFromTemplate(t: RoomTemplate): Level {
       default: floor(x, z);
     }
   }
+  dressRoom(L, t);
   const meta: RoomMeta = { type: t.type, w, d, doors: ['n', 'e', 's', 'w'] };
   L.meta = { room: meta };
   L.dirty.clear();
   return L;
+}
+
+/**
+ * «Одевалка» комнаты: декор поверх блоков (src/level/decor.ts), детерминированно от клеток.
+ * Только проходимые предметы — пути и укрытия заготовки не меняются. На дальних стенах (−Z, −X, высокие) —
+ * знамёна, паутина в углах, корни; у стен на полу — щебень, кирпичи, кости; у алтаря — свечи, у норы — светящиеся грибы.
+ */
+function dressRoom(L: Level, t: RoomTemplate): void {
+  const d = t.rows.length, w = t.rows[0].length;
+  const cx = Math.floor(w / 2), cz = Math.floor(d / 2);
+  const at = (x: number, z: number) => t.rows[z]?.[x] ?? '#';
+  const nearDoor = (x: number, z: number) => (Math.abs(x - cx) <= 2 && (z <= 1 || z >= d - 2)) || (Math.abs(z - cz) <= 2 && (x <= 1 || x >= w - 2));
+  const put = (name: string, x: number, y: number, z: number, rot: number, on?: [number, number, number]) =>
+    L.addDecor({ name, pos: [x, y, z], ...(rot ? { rot: [rot] } : {}), ...(on ? { on } : {}) });
+  // северная стена (z = 0), грань к комнате — z = 0,5
+  for (let x = 2; x < w - 2; x++) {
+    if (Math.abs(x - cx) <= 2) continue;
+    const r = hash(x, 0, 40);
+    if ((x - 2) % 6 === 3 && t.type !== 'storage') put('banner', x, 2.6, 0.5, 0, [x, 2, 0]);
+    else if (r < 0.14) put('roots', x, 2.5, 0.5, 0, [x, 2, 0]);
+  }
+  // западная стена (x = 0), грань к комнате — x = 0,5, предмет смотрит к +X
+  for (let z = 2; z < d - 2; z++) {
+    if (Math.abs(z - cz) <= 2) continue;
+    if (hash(0, z, 41) < 0.16) put('roots', 0.5, 2.5, z, -90, [0, 2, z]);
+  }
+  // паутина в дальнем углу и иногда у западной стены
+  put('cobweb', 1, 2.4, 0.5, 0, [1, 2, 0]);
+  if (hash(w, d, 42) < 0.6) put('cobweb', 0.5, 2.4, d - 3, -90, [0, 2, d - 3]);
+  // мусор у стен на полу
+  const JUNK = ['rubble', 'bricks_loose', 'bones', 'rubble'];
+  for (let z = 1; z < d - 1; z++) for (let x = 1; x < w - 1; x++) {
+    if (at(x, z) !== '.' || nearDoor(x, z)) continue;
+    const wall = at(x - 1, z) === '#' || at(x, z - 1) === '#' || at(x + 1, z) === '#' || at(x, z + 1) === '#';
+    if (!wall || hash(x, z, 43) > 0.07) continue;
+    put(JUNK[Math.floor(hash(x, z, 44) * JUNK.length)], x + (hash(x, z, 45) - 0.5) * 0.5, 0, z + (hash(x, z, 46) - 0.5) * 0.5, Math.round(hash(x, z, 47) * 24) * 15);
+  }
+  // свечи у алтаря, грибы у нор, свечи у трона босса
+  for (let z = 1; z < d - 1; z++) for (let x = 1; x < w - 1; x++) {
+    const ch = at(x, z);
+    if (ch === 'A') for (const [dx, dz] of [[-1, 0], [1, 0]]) put('candles', x + dx, 0, z + dz, 0);
+    if (ch === 'n' && hash(x, z, 48) < 0.7) put('mushrooms_glow', x + 0.9, 0, z - 0.6, Math.round(hash(x, z, 49) * 24) * 15);
+    if (ch === 'B') for (const [dx, dz] of [[-2, -2], [2, -2]]) put('candles', x + dx, 0, z + dz, 0);
+  }
 }
 
 // ---------- заготовки ----------

@@ -106,6 +106,10 @@ src/dev/playground.ts — сцена, src/dev/editor.ts — редактор
 
 Удалены вместе с огородом: `game.ts`, `world.ts`, `player.ts`, `combat.ts`, `weapons.ts`, `shop.ts`, `daynight.ts`, `icons.ts`, `map.ts`, `mission.ts`, `lobby.ts`, `minimap.ts`, `session.ts`, `profile.ts`, `garden.ts`. Остались `beetle.ts` и `bush.ts` (цель жуков) с `config.ts`.
 
+## 11½. Декор
+
+Поверх блоков — свободный декор (колонны, щебень, цепи, корни, знамёна, фонари): поле `decor` в карте, свои формы и рендер экземплярами. Отдельная страница — [design-level-decor.md](design-level-decor.md).
+
 ## 12. Дальше
 
 1. Режим подземелья поверх плейграунда: двери закрываются на бой, волны из нор (`entities` типа `hole`), награда, переход между этажами (design‑doc, разделы 2–4).

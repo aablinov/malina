@@ -14,7 +14,8 @@ import { Level, type LevelJSON } from '../level/level.ts';
 import { LevelRenderer, liquidTime } from '../level/mesher';
 import { ceilingAt, collideTop, decorSolids, obstaclesOf, raycastVoxels, terrainOf } from '../level/collide.ts';
 import { Pathfinder } from '../level/pathfind.ts';
-import { mapByName } from '../level/maps';
+import { mapByName, ROOMS } from '../level/maps';
+import { buildFloor } from '../level/dungeon.ts';
 import type { PgLabel } from '../level/playground-map.ts';
 import { HERO, SWORD, snapshotTuning } from '../tuning';
 import { Dummy } from './dummies';
@@ -28,9 +29,14 @@ declare global {
   interface Window { __malina?: unknown }
 }
 
-/** ?map=editor — автосохранение редактора (кнопка «Играть»), ?map=<имя> — файл из assets/maps/, иначе playground.json */
+/**
+ * ?map=editor — автосохранение редактора (кнопка «Играть»), ?map=dungeon&seed=42&floor=2 — этаж подземелья из комнат-заготовок,
+ * ?map=<имя> — файл из assets/maps/, иначе playground.json
+ */
 function pickMap(): LevelJSON {
-  const name = new URLSearchParams(window.location.search).get('map');
+  const q = new URLSearchParams(window.location.search);
+  const name = q.get('map');
+  if (name === 'dungeon') return buildFloor({ seed: Number(q.get('seed')) || 1, floor: Number(q.get('floor')) || 1, rooms: ROOMS }).toJSON();
   if (name === 'editor') {
     try {
       const raw = localStorage.getItem('malina.editor.level');

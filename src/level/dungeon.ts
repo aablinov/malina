@@ -129,6 +129,10 @@ export function buildFloor(o: FloorOpts): Level {
       }
       L.entities.push({ ...e, x: e.x + x0, z: e.z + z0, data: { ...(e.data ?? {}), room: cell.type, cell: [cell.gx, cell.gz] } });
     }
+    // декор комнаты — со сдвигом, вместе с клеткой крепления
+    for (const dc of level.decor) {
+      L.addDecor({ ...dc, pos: [dc.pos[0] + x0, dc.pos[1], dc.pos[2] + z0], ...(dc.on ? { on: [dc.on[0] + x0, dc.on[1], dc.on[2] + z0] } : {}) });
+    }
     if (cell.type === 'start' && level.spawn) L.spawn = [level.spawn[0] + x0, level.spawn[1], level.spawn[2] + z0];
     // лишние двери закладываем стеной
     for (const side of ['n', 'e', 's', 'w'] as Side[]) {

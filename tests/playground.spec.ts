@@ -389,3 +389,24 @@ test('редактор: декор на пол, стену и потолок, п
   expect(r.after).toBe(0);
   expect(r.inst).toBe(true);
 });
+
+test('этаж подземелья: декор комнат переезжает вместе с ними, крепления — на стенах', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=dungeon&seed=42&floor=2');
+  await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const L = m.level;
+    const rooms = L.meta.rooms as { x0: number; z0: number; w: number; d: number }[];
+    const inRoom = (x: number, z: number) => rooms.some((q) => x >= q.x0 - 0.5 && x <= q.x0 + q.w - 0.5 && z >= q.z0 - 0.5 && z <= q.z0 + q.d - 0.5);
+    const outside = L.decor.filter((d: any) => !inRoom(d.pos[0], d.pos[2])).length;
+    const floating = L.decor.filter((d: any) => d.on && L.nameAt(...d.on) === 'air').length;
+    return { n: L.decor.length, rooms: rooms.length, outside, floating, inst: m.view.decor.instances };
+  });
+  expect(errors).toEqual([]);
+  expect(r.n).toBeGreaterThan(r.rooms * 5);
+  expect(r.outside).toBe(0);
+  expect(r.floating).toBe(0);
+  expect(r.inst).toBeGreaterThanOrEqual(r.n);
+});
