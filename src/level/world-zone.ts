@@ -1,6 +1,6 @@
 import type { Level } from './level.ts';
 import type { PgLabel } from './playground-map.ts';
-import { bridgeX, cliffMass, cliffSteps, floorRect, hash2, hayStack, hill, noise2, portal, rampart, riverBed, stairway, steppedWall, tree, waterfall } from './kit.ts';
+import { bridgeX, cliffMass, cliffSteps, floorRect, hayStack, hill, noise2, plateaus, portal, rampart, riverBed, stairway, steppedWall, surfaceAt, tree, waterfall } from './kit.ts';
 
 /**
  * Зона «мир» плейграунда за восточной стеной: наборы по скриншотам Minecraft Dungeons (wiki/style-world.md),
@@ -30,37 +30,35 @@ export function buildWorldZone(L: Level, labels: PgLabel[], dec: Dec): void {
   buildPortal(L, labels, dec);
 }
 
-/** 5. Портал (скриншот 14): холм с проёмом, рама, сияние с анимацией и запечённым золотым светом, пол с заходящей травой */
+/** 5. Портал (скриншот 14): холм-плиты с обрывом из скалы, в лицевой стороне — проём с рамой и золотым сиянием */
 function buildPortal(L: Level, labels: PgLabel[], dec: Dec): void {
-  hill(L, 67, 13, 6, 5, 4, 0, { soft: 0.3, dry: 0.25, seed: 41 });
-  tree(L, 70, 3, 11, 2, 2);
-  portal(L, 66, 0, 17, 2, 3);
-  dec('candles_group', 64.4, 0, 19.2);
-  dec('candles_group', 69.6, 0, 19.4, 60);
-  labels.push({ text: 'портал: рама, сияние, пол, трава заходит на плиты', x: 67, z: 22.4, size: 0.6 });
+  hill(L, 66, 12, 9, 7, 4, 0, { inset: 2, stone: 'x+', dry: 0.15, ramps: 0.04, seed: 41 });
+  tree(L, 63, surfaceAt(L, 63, 9), 9, 2, 2);
+  tree(L, 71, surfaceAt(L, 71, 7), 7, 2, 2);
+  portal(L, 66, 0, 15, 2, 3);
+  dec('candles_group', 64.4, 0, 17.4);
+  dec('candles_group', 69.6, 0, 17.6, 60);
+  labels.push({ text: 'холм-плиты: обрыв из скалы, портал в склоне', x: 67, z: 21.4, size: 0.6 });
 }
 
 /**
- * 4 и 6. Холмы (скриншоты 13, 15): мягкий холм с полублоками и пышными деревьями, холм со скальным обрывом и сухой травой,
- * холм с тропинкой-лестницей, поле сухой травы и ромашек; крепостная стена со свечами — свет запечён в камень.
+ * 4 и 6. Холмы (скриншоты 13, 15–17): ландшафт-плато — широкие площадки на 1–3 блока, длинные края со ступенчатыми
+ * диагоналями, пандусы из полублоков, скала на высоких перепадах; деревья и флора на площадках; крепостная стена со свечами
+ * у подножия — свет запечён в камень.
  */
 function buildHills(L: Level, labels: PgLabel[], dec: Dec): void {
-  hill(L, 33, 11, 5, 4, 3, 0, { soft: 0.6, daisies: 0.12, seed: 31 });
-  tree(L, 33, 3, 11, 2, 2);
-  tree(L, 29, 0, 15, 3, 2);
-  labels.push({ text: 'холм: полублоки травы, пышные деревья', x: 33, z: 16.4, size: 0.6 });
-  hill(L, 42, 17, 4, 4, 4, 0, { stone: 'x+', dry: 0.3, seed: 32 });
-  labels.push({ text: 'холм с обрывом: скала с травой, сухая трава', x: 42, z: 22.6, size: 0.6 });
-  hill(L, 33, 20, 4, 2.5, 2, 0, { daisies: 0.1, seed: 33 });
-  stairway(L, 37, 0, 20, -1, 0, 2, 2, 'path');
-  labels.push({ text: 'тропинка-лестница', x: 38.5, z: 23.2, size: 0.55 });
-  // поле: сухая трава пятнами, ромашки
-  for (let x = 44; x <= 49; x++) for (let z = 6; z <= 12; z++) {
-    if (!L.isAir(x, 0, z) || L.nameAt(x, -1, z) !== 'grass') continue;
-    const n = noise2(x, z, 3, 34), r = hash2(x, z, 35);
-    if (n > 0.45 && r < 0.75) L.set(x, 0, z, 'dry_grass');
-    else if (r < 0.2) L.set(x, 0, z, 'daisies');
+  const wallZone = (x: number, z: number) => !(x >= 37 && x <= 48 && z <= 8);
+  plateaus(L, 27, 5, 49, 23, 0, 3, { scale: 20, fade: 3, ramps: 0.05, dry: 0.12, daisies: 0.06, seed: 61, mask: wallZone });
+  for (const [x, z] of [[31, 12], [44, 17], [36, 19]] as [number, number][]) tree(L, x, surfaceAt(L, x, z), z, 2, 2);
+  // земляные ступени (скриншот 15): на первом крае плато в 1 блок, обращённом к дороге (−Z), — лестница шириной 2
+  stairs: for (let z = 6; z <= 20; z++) for (let x = 30; x <= 46; x++) {
+    const up = surfaceAt(L, x, z), up2 = surfaceAt(L, x + 1, z);
+    if (up !== 1 || up2 !== 1 || surfaceAt(L, x, z - 1) !== 0 || surfaceAt(L, x + 1, z - 1) !== 0) continue;
+    if (L.nameAt(x, 0, z) !== 'grass' || L.nameAt(x + 1, 0, z) !== 'grass') continue;
+    for (const dx of [0, 1]) { L.set(x + dx, 0, z - 1, 'path_stairs', 1); L.set(x + dx, 0, z, 'path'); }
+    break stairs;
   }
+  labels.push({ text: 'плато: широкие площадки, пандусы, скала на перепадах', x: 38, z: 24.4, size: 0.7 });
   // крепостная стена со свечами: свет только запечённый
   rampart(L, 39, 6, 46, 6, 0, 3);
   // зубцы — на x = 39, 42, 45; свечи — между ними
