@@ -128,6 +128,10 @@ if (vTop > 0.5) {
 const AO_SHADE = [0.5, 0.68, 0.84, 1];
 /** Бахрома: свисает на 8/16 и отстоит от грани на 1/16 (не мерцает с текстурой бока) */
 const FRINGE_H = 0.5, FRINGE_OUT = 1 / 16;
+/** Рваный край: на сколько верх блока может зайти на соседа, м (маска рисует 0–8 px из 16) */
+const BLEED_D = 0.5, BLEED_LIFT = 0.004;
+/** Общая верхняя грань с соседом по стороне d в долях клетки (без сдвига) */
+const BLEED_EDGE: [number, number, number, number][] = [[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0]];
 /** Концы верхнего края блока в долях клетки для каждой стороны (0 +X, 1 +Z, 2 −X, 3 −Z), уже со сдвигом наружу */
 const FRINGE_EDGE: [number, number, number, number][] = [
   [1 + FRINGE_OUT, 0, 1 + FRINGE_OUT, 1], [1, 1 + FRINGE_OUT, 0, 1 + FRINGE_OUT],
@@ -199,7 +203,8 @@ export class LevelRenderer {
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
       // мелкая трава: только лицевая сторона (пучки выпускаются в обе стороны) — иначе обратная сторона переворачивает
       // нормаль «вверх» и темнеет; тени не отбрасывает
-      detail: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5 })),
+      // polygonOffset — рваный край лежит прямо на верхе соседа и не должен мерцать с ним
+      detail: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 })),
       // светится сам (грибы, стекло фонаря): без освещения, ярче 1 — подхватывает bloom
       glow: withXray(new THREE.MeshBasicMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, toneMapped: false, color: new THREE.Color(1.5, 1.4, 1.2) })),
     };
@@ -370,6 +375,23 @@ export class LevelRenderer {
             }
           }
         }
+      }
+
+      // рваный край (как дороги в Minecraft Dungeons): верх этого блока заходит на верх соседа другой природной земли
+      if (def.bleed && !L.defAt(x, y + 1, z).full) for (let d = 0; d < 4; d++) {
+        const nx = x + DIRS[d][0], nz = z + DIRS[d][2];
+        const nDef = L.defAt(nx, y, nz);
+        if (!nDef.natural || L.idAt(nx, y, nz) === id || L.defAt(nx, y + 1, nz).full) continue;
+        const tex = def.bleed[Math.floor(hash(x, y, z, 80 + d) * def.bleed.length)];
+        const flip = hash(x, y, z, 84 + d) < 0.5;
+        const [ax, az, bx, bz] = BLEED_EDGE[d], ox = DIRS[d][0] * BLEED_D, oz = DIRS[d][2] * BLEED_D;
+        const yy = y + 1 + BLEED_LIFT;
+        const P = (u: number, w: number) => [x + u - 0.5, yy, z + w - 0.5];
+        const u0 = flip ? 1 : 0, u1 = flip ? 0 : 1;
+        const c = 1 - (nDef.jitter ?? 0) * hash(nx, y, nz, 9);
+        // a → b по грани, внутрь соседа; обход против часовой сверху — нормаль вверх (материал односторонний)
+        quad(buckets.detail, [P(ax, az), P(bx, bz), P(bx + ox, bz + oz), P(ax + ox, az + oz)],
+          [[u0, 0], [u1, 0], [u1, BLEED_D], [u0, BLEED_D]], [0, 1, 0], tex, c);
       }
     }
 

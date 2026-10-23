@@ -12,6 +12,14 @@ export const PG_HALF = 24;
 /** Надписи на полу витрины: [подпись, x, z] */
 export interface PgLabel { text: string; x: number; z: number; size?: number }
 
+/** Плавный шум 0..1 с шагом 3 м для края дорог (детерминированный) */
+function wobble(x: number, z: number): number {
+  const h = (i: number, j: number) => { let v = Math.imul(i, 374761393) + Math.imul(j, 668265263); v = Math.imul(v ^ (v >>> 13), 1274126177); return ((v ^ (v >>> 16)) >>> 0) / 4294967296; };
+  const gx = Math.floor(x / 3), gz = Math.floor(z / 3), fx = x / 3 - gx, fz = z / 3 - gz;
+  const sm = (t: number) => t * t * (3 - 2 * t), u = sm(fx), v = sm(fz);
+  return (h(gx, gz) * (1 - u) + h(gx + 1, gz) * u) * (1 - v) + (h(gx, gz + 1) * (1 - u) + h(gx + 1, gz + 1) * u) * v;
+}
+
 export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   const L = new Level('Плейграунд');
   const labels: PgLabel[] = [];
@@ -21,12 +29,28 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   const H = PG_HALF;
 
   // ---------- арена ----------
-  // пол — трава, у нулевой точки площадка из плит; разметка 5 м — тропинки (видно расстояния, но это кусочек мира, а не серая сетка)
+  // пол — трава, у нулевой точки площадка из плит; разметка 10 м — дороги (видно расстояния, но это кусочек мира, а не серая сетка)
   for (let x = -H; x <= H; x++) for (let z = -H; z <= H; z++) {
     const plaza = Math.max(Math.abs(x), Math.abs(z)) <= 2;
-    const mark = (x % 10 === 0 && Math.abs(z) <= H - 1) || (z % 10 === 0 && Math.abs(x) <= H - 1);
+    // дороги 3 м по отметкам через 10 м (как в Minecraft Dungeons — широкие, с рваным краем травы)
+    const on10 = (v: number) => [0, 1, 9].includes(((v % 10) + 10) % 10);
+    const mark = (on10(x) && Math.abs(z) <= H - 1) || (on10(z) && Math.abs(x) <= H - 1);
     L.set(x, -1, z, plaza ? 'tiles' : mark ? 'path' : 'grass');
   }
+  // край дороги не по линейке: по плавному шуму клетки у края дороги зарастают травой, а трава у края вытоптана в дорогу —
+  // заливы и мысы в метр-два; внутри клетки край рвёт ещё маска мешера (bleed)
+  const isPath = (x: number, z: number) => L.nameAt(x, -1, z) === 'path';
+  const flips: [number, number, string][] = [];
+  for (let x = -H + 1; x <= H - 1; x++) for (let z = -H + 1; z <= H - 1; z++) {
+    const me = L.nameAt(x, -1, z);
+    if (me !== 'path' && me !== 'grass') continue;
+    const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => isPath(x + dx, z + dz) !== (me === 'path')).length;
+    if (!near) continue;
+    const n = wobble(x, z);
+    if (me === 'path' && n < 0.3) flips.push([x, z, 'grass']);
+    else if (me === 'grass' && n > 0.68) flips.push([x, z, 'path']);
+  }
+  for (const [x, z, name] of flips) L.set(x, -1, z, name);
   // стены по периметру: дальние (−X, −Z) 3 блока, со стороны камеры (+X, +Z) — 1 блок; на юге проём к витрине
   const W = H + 1;
   for (let i = -W; i <= W; i++) {

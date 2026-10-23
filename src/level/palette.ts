@@ -46,6 +46,11 @@ export interface BlockDef {
   fringe?: string;
   /** Мелкие пучки на открытом верху, гуще пятнами — текстуры (выбор по хэшу) */
   tufts?: string[];
+  /**
+   * Рваный край: верх этого блока «заходит» на верх соседа другой природной земли (трава ↔ дорожка) —
+   * текстуры-маски, выбор по хэшу; так граница не идёт по линейке клеток
+   */
+  bleed?: string[];
   /** Природная земля: цвет плавно гуляет крупными пятнами по миру (светлее-желтее / темнее), а не по блокам */
   natural?: boolean;
 }
@@ -76,9 +81,9 @@ export const BLOCKS: BlockDef[] = [
   B('air', 'Воздух', 'служебные', [], { collide: 0 }),
 
   // --- земля ---
-  solid('grass', 'Трава', 'земля', { top: 'grassTop', side: 'grassSide', bottom: 'dirt' }, { jitter: 0.02, natural: true, fringe: 'grassFringe', tufts: ['grassTuft', 'grassTuft', 'grassTuft', 'flowerTuft'] }),
+  solid('grass', 'Трава', 'земля', { top: 'grassTop', side: 'grassSide', bottom: 'dirt' }, { jitter: 0.02, natural: true, bleed: ['grassEdge0', 'grassEdge1', 'grassEdge2', 'grassEdge3'], fringe: 'grassFringe', tufts: ['grassTuft', 'grassTuft', 'grassTuft', 'flowerTuft'] }),
   solid('dirt', 'Земля', 'земля', 'dirt', { jitter: 0.02, natural: true }),
-  solid('path', 'Тропинка', 'земля', 'path', { jitter: 0.02, natural: true }),
+  solid('path', 'Тропинка', 'земля', 'path', { jitter: 0.02, natural: true, bleed: ['pathEdge0', 'pathEdge1', 'pathEdge2', 'pathEdge3'] }),
   solid('gravel', 'Гравий', 'земля', 'gravel', { jitter: 0.03, natural: true }),
   solid('sand', 'Песок', 'земля', 'sand', { jitter: 0.02, natural: true }),
   solid('farm', 'Грядка', 'земля', { top: 'farm', side: 'dirt', bottom: 'dirt' }),
@@ -179,6 +184,7 @@ export function paletteTextures(): string[] {
     for (const p of b.parts) for (const t of Object.values(p.tex)) for (const n of Array.isArray(t) ? t : [t]) s.add(n);
     if (b.fringe) s.add(b.fringe);
     for (const t of b.tufts ?? []) s.add(t);
+    for (const t of b.bleed ?? []) s.add(t);
   }
   return [...s];
 }
