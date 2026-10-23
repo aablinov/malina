@@ -225,42 +225,11 @@ export class FX {
     this.add(obj, dur, tick, dispose);
   }
 
-  /** Дульная вспышка: ореол и звёздочка из двух лучей */
-  muzzle(pos: THREE.Vector3, angle: number, color: THREE.Color, size = 1): void {
-    this.flash(pos, color.clone().multiplyScalar(2), 1.1 * size, 0.07);
-    const g = new THREE.Group();
-    const mat = additive(color.clone().multiplyScalar(1.4));
-    for (const [w, l, rot] of [[0.16, 0.9, 0], [0.5, 0.12, 0]] as const) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w * size, l * size), mat);
-      m.rotation.set(-Math.PI / 2, 0, rot);
-      m.position.z = (l * size) / 2;
-      g.add(m);
-    }
-    g.position.copy(pos);
-    g.rotation.y = angle;
-    this.add(g, 0.06, (k) => { mat.opacity = 1 - k; g.scale.setScalar(1 + k * 0.5); },
-      () => { g.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); }); mat.dispose(); });
-  }
-
-  /** Гильза вылетает вбок из затвора */
-  casing(pos: THREE.Vector3, angle: number, shell = false): void {
-    const side = new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle));
-    this.solid.spawn({
-      pos, vel: side.multiplyScalar(2 + Math.random() * 1.5).add(new THREE.Vector3(0, 2.5 + Math.random(), 0)),
-      life: 1.2, size: shell ? 0.09 : 0.05, color: shell ? '#b8301c' : '#d4a53a', gravity: 14, spin: 18, shrink: false,
-    });
-  }
-
   /** Попадание по жуку: искры и брызги панциря */
   hit(at: THREE.Vector3, dir: THREE.Vector3, color: THREE.Color, power = 1): void {
     const p = at.clone().setY(0.45);
     this.spray(p, dir, [color, new THREE.Color(3, 2.6, 1.6)], Math.round(5 * power), { speed: 6, spread: 0.6, life: 0.25 });
     this.spray(p, dir, ['#3a5a1a', '#5a7a2a', '#1a2a0a'], Math.round(3 * power), { speed: 3, glow: false, gravity: 12, size: 0.08, life: 0.6, spread: 0.9 });
-  }
-
-  /** Искры от удара о землю или стену */
-  ricochet(at: THREE.Vector3, color: THREE.Color): void {
-    this.burst(at, [color], 3, { speed: 2.5, up: 2, size: 0.05, life: 0.25, glow: true, gravity: 6 });
   }
 
   /** Взрыв: огненный шар, дым, обломки, кольцо */

@@ -1,0 +1,99 @@
+import * as THREE from 'three';
+
+/**
+ * Светящийся след клинка (light trail): лента между основанием и кончиком клинка за последние доли секунды.
+ * Точки берутся раз в кадр и сглаживаются сплайном Катмулла — Рома, поэтому быстрый взмах даёт ровную дугу.
+ * Цвет HDR (> 1) — ленту подхватывает bloom. Яркость падает с возрастом точки и к основанию клинка.
+ */
+
+const MAX = 96;
+const SUB = 4;
+
+interface Sample { base: THREE.Vector3; tip: THREE.Vector3; t: number }
+
+const _a = new THREE.Vector3();
+const _b = new THREE.Vector3();
+
+function catmull(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3, k: number, out: THREE.Vector3): THREE.Vector3 {
+  const k2 = k * k, k3 = k2 * k;
+  return out.set(0, 0, 0)
+    .addScaledVector(p0, -0.5 * k3 + k2 - 0.5 * k)
+    .addScaledVector(p1, 1.5 * k3 - 2.5 * k2 + 1)
+    .addScaledVector(p2, -1.5 * k3 + 2 * k2 + 0.5 * k)
+    .addScaledVector(p3, 0.5 * k3 - 0.5 * k2);
+}
+
+export class SwordTrail {
+  /** Сколько живёт точка следа, с */
+  life = 0.16;
+  readonly color = new THREE.Color(2.2, 2.6, 3.2);
+  /** Ширина следа: доля клинка от кончика (1 — весь клинок) */
+  width = 0.85;
+  private readonly samples: Sample[] = [];
+  private readonly mesh: THREE.Mesh;
+  private readonly pos: Float32Array;
+  private readonly col: Float32Array;
+  private readonly geo = new THREE.BufferGeometry();
+
+  constructor(scene: THREE.Scene) {
+    const n = MAX * SUB;
+    this.pos = new Float32Array(n * 2 * 3);
+    this.col = new Float32Array(n * 2 * 3);
+    const idx: number[] = [];
+    for (let i = 0; i < n - 1; i++) {
+      const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+      idx.push(a, b, c, b, d, c);
+    }
+    this.geo.setIndex(idx);
+    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setDrawRange(0, 0);
+    this.mesh = new THREE.Mesh(this.geo, new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, toneMapped: false,
+    }));
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 5;
+    scene.add(this.mesh);
+  }
+
+  /** Добавить положение клинка в момент t (вызывается, пока идёт взмах) */
+  push(base: THREE.Vector3, tip: THREE.Vector3, t: number): void {
+    const b = _a.copy(tip).lerp(base, this.width);
+    this.samples.push({ base: b.clone(), tip: tip.clone(), t });
+    if (this.samples.length > MAX) this.samples.shift();
+  }
+
+  /** Разорвать след: следующий взмах начнёт новую ленту */
+  cut(): void { this.samples.length = 0; }
+
+  get visible(): boolean { return this.mesh.visible; }
+
+  update(now: number): void {
+    while (this.samples.length && now - this.samples[0].t > this.life) this.samples.shift();
+    const S = this.samples;
+    if (S.length < 2) { this.geo.setDrawRange(0, 0); this.mesh.visible = false; return; }
+    this.mesh.visible = true;
+    let v = 0;
+    const put = (base: THREE.Vector3, tip: THREE.Vector3, t: number): void => {
+      const fade = Math.max(0, 1 - (now - t) / this.life);
+      const k = fade * fade;
+      this.pos.set([base.x, base.y, base.z, tip.x, tip.y, tip.z], v * 6);
+      // к основанию след гаснет, у кончика самый яркий
+      this.col.set([this.color.r * k * 0.08, this.color.g * k * 0.08, this.color.b * k * 0.08, this.color.r * k, this.color.g * k, this.color.b * k], v * 6);
+      v++;
+    };
+    for (let i = 0; i < S.length - 1; i++) {
+      const p0 = S[Math.max(0, i - 1)], p1 = S[i], p2 = S[i + 1], p3 = S[Math.min(S.length - 1, i + 2)];
+      for (let s = 0; s < SUB; s++) {
+        const k = s / SUB;
+        put(catmull(p0.base, p1.base, p2.base, p3.base, k, _a), catmull(p0.tip, p1.tip, p2.tip, p3.tip, k, _b), p1.t + (p2.t - p1.t) * k);
+      }
+    }
+    const last = S[S.length - 1];
+    put(last.base, last.tip, last.t);
+    this.geo.attributes.position.needsUpdate = true;
+    this.geo.attributes.color.needsUpdate = true;
+    this.geo.setDrawRange(0, (v - 1) * 6);
+  }
+}

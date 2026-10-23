@@ -72,10 +72,10 @@ export class Overlays {
   }
 
   private pathLines: THREE.LineSegments | null = null;
-  /** Пути врагов по навигационной сетке */
+  /** Пути по навигационной сетке (путь героя по клику) */
   drawPaths(paths: THREE.Vector3[][]): void {
     const pts: THREE.Vector3[] = [];
-    for (const p of paths) for (let i = 0; i + 1 < p.length; i++) pts.push(p[i].clone().setY(0.08), p[i + 1].clone().setY(0.08));
+    for (const p of paths) for (let i = 0; i + 1 < p.length; i++) pts.push(p[i].clone().setY(p[i].y + 0.08), p[i + 1].clone().setY(p[i + 1].y + 0.08));
     if (!this.pathLines) {
       this.pathLines = new THREE.LineSegments(new THREE.BufferGeometry(), lineMat('#ff5ad2'));
       this.pathLines.renderOrder = 10;

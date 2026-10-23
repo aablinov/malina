@@ -72,6 +72,12 @@ export interface Textures {
   /** Служебные блоки плейграунда: серая сетка 1 м (два тона, разметка каждые 5 м) и клетчатые стены */
   devLight: THREE.Texture; devDark: THREE.Texture; devLightLine: THREE.Texture; devDarkLine: THREE.Texture;
   devLightCorner: THREE.Texture; devDarkCorner: THREE.Texture; devWall: THREE.Texture; devCover: THREE.Texture;
+  /** Дом: штукатурка, кирпич, бетон, окно, ржавые перила; мебель */
+  plasterTeal: THREE.Texture; plasterWhite: THREE.Texture; plasterRust: THREE.Texture; brickBrown: THREE.Texture;
+  concrete: THREE.Texture; window: THREE.Texture; rustMetal: THREE.Texture;
+  fabricRed: THREE.Texture; blanket: THREE.Texture; pillow: THREE.Texture; rug: THREE.Texture; lampShade: THREE.Texture;
+  ironDark: THREE.Texture; cabinet: THREE.Texture; bookshelf: THREE.Texture; counterTop: THREE.Texture;
+  stoveTop: THREE.Texture; fridge: THREE.Texture; fridgeTop: THREE.Texture;
   /** Вода: 16 × 16, двигается смещением UV */
   water: THREE.Texture;
   /** Огонь: 3 кадра по 16 × 16 друг над другом */
@@ -295,10 +301,10 @@ export function makeTextures(): Textures {
   T.ash = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#3a3835', '#2e2c2a', '#454240'], 6), 65);
   [T.flowerRed, T.flowerBlue, T.flowerWhite, T.flowerYellow] = T.flowers;
   T.water = canvasTex(16, (g, s, r) => {
-    noiseFill(g, s, r, ['#3a7fd6', '#3576cc', '#4189dd', '#2f6fc0'], 6);
+    noiseFill(g, s, r, ['#2a9fd8', '#2496d0', '#33ade2', '#1f8cc6'], 6);
     for (let i = 0; i < 4; i++) {
       const y = (r() * s) | 0;
-      for (let x = (r() * 6) | 0, n = 4 + ((r() * 6) | 0); n > 0; n--, x++) px(g, x % s, y, jitter('#7fb6f0', r, 8));
+      for (let x = (r() * 6) | 0, n = 4 + ((r() * 6) | 0); n > 0; n--, x++) px(g, x % s, y, jitter('#7fd4f4', r, 8));
     }
   }, 66);
   T.water.wrapS = T.water.wrapT = THREE.RepeatWrapping;
@@ -352,6 +358,105 @@ export function makeTextures(): Textures {
   }, seed);
   T.devWall = devChecker('#b9ab90', '#a7987c', 86);
   T.devCover = devChecker('#8e9fb0', '#7d8ea0', 87);
+
+  // ---------- дом ----------
+  /** Пятна: случайные кляксы из соседних пикселей поверх фона */
+  const blots = (g: Ctx, s: number, r: Rand, pal: readonly string[], n: number, len: number) => {
+    for (let i = 0; i < n; i++) {
+      let x = (r() * s) | 0, y = (r() * s) | 0;
+      const col = pick(pal, r);
+      for (let k = 0; k < len; k++) {
+        px(g, (x + s) % s, (y + s) % s, jitter(col, r, 6));
+        if (r() < 0.5) x += r() < 0.5 ? -1 : 1; else y += r() < 0.5 ? -1 : 1;
+      }
+    }
+  };
+  // штукатурка: вертикальные полоски «вагонки» и облупленные пятна
+  T.plasterTeal = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 4 === 3 ? '#4fb194' : pick(['#62c9a8', '#5cc2a1', '#68cfae'], r), r, 5));
+    blots(g, s, r, ['#2f8d78', '#348f7c', '#28806c'], 4, 9);
+  }, 90);
+  T.plasterWhite = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter((x + (y >> 2)) % 4 === 0 && y % 4 === 0 ? '#bdb5a6' : pick(['#e6e0d3', '#ddd6c8', '#ece7dc'], r), r, 5));
+    blots(g, s, r, ['#c8692c', '#a44a22', '#8a6a52', '#d58a40'], 5, 6);
+  }, 91);
+  T.plasterRust = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#e0782a', '#ea8a34', '#cf6522', '#f29b3e'], 8);
+    blots(g, s, r, ['#f6d8a8', '#e8e0d0', '#a8441a'], 5, 6);
+  }, 92);
+  T.brickBrown = canvasTex(16, (g, s, r) => {
+    stoneyCells(g, s, r, ['#7a5d4c', '#6a5040', '#86685a', '#5e4638'], '#3e302a', 8, 4);
+    blots(g, s, r, ['#4a3a30', '#9a7c68'], 4, 4);
+  }, 93);
+  T.concrete = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#8d847b', '#857c73', '#958c82', '#7c746c'], 5);
+    for (let i = 0; i < 10; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#6a635c');
+  }, 94);
+  // окно: тёмная рама и импост, светлое стекло с диагональными бликами
+  T.window = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const frame = x < 2 || y < 2 || x >= s - 2 || y >= s - 2 || x === 7 || x === 8;
+      const d = (x + y) % 9;
+      px(g, x, y, jitter(frame ? '#2b2421' : d < 2 ? '#f2f6f8' : pick(['#b9c8d0', '#aebec8', '#c4d2d8'], r), r, 4));
+    }
+  }, 95);
+  T.rustMetal = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#b8521e', '#c8622a', '#a34818', '#d07034'], 8);
+    blots(g, s, r, ['#7a3412', '#e08a48'], 4, 4);
+  }, 96);
+  // мебель
+  T.fabricRed = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter((x + y) % 2 ? '#8a3a36' : '#9a4440', r, 5));
+  }, 97);
+  T.blanket = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(((x >> 2) + (y >> 2)) % 2 ? '#3a6aa4' : '#4a7cb8', r, 5));
+  }, 98);
+  T.pillow = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#f0ede6', '#e6e2da', '#f6f4ee'], 4), 99);
+  T.rug = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const e = Math.min(x, y, s - 1 - x, s - 1 - y);
+      const c = e === 0 ? '#5a2018' : e === 2 ? '#e0b860' : (Math.abs(x - 7.5) + Math.abs(y - 7.5)) % 5 < 1 ? '#e0b860' : '#a23a2a';
+      px(g, x, y, jitter(c, r, 5));
+    }
+  }, 100);
+  T.lampShade = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y % 5 === 0 ? '#e0c080' : '#f6e2aa', r, 4));
+  }, 101);
+  T.ironDark = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#2e2c2a', '#383532', '#26241f'], 4), 102);
+  T.cabinet = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const line = x === 0 || x === s - 1 || x === 7 || y === 0 || y === s - 1;
+      px(g, x, y, jitter(line ? '#3c2614' : pick(['#7a5232', '#70492b', '#83593a'], r), r, 5));
+    }
+    px(g, 5, 7, '#d8c070'); px(g, 5, 8, '#d8c070'); px(g, 10, 7, '#d8c070'); px(g, 10, 8, '#d8c070');
+  }, 103);
+  T.bookshelf = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter('#6a4a2c', r, 5));
+    for (const y0 of [1, 9]) {
+      let x = 1;
+      while (x < s - 1) {
+        const w = 1 + ((r() * 2) | 0), h = 5 + ((r() * 2) | 0), col = pick(['#a83a32', '#3a6a9a', '#4a8a3a', '#d0a040', '#7a4a8a', '#e0dccc'], r);
+        for (let k = 0; k < w && x < s - 1; k++, x++) for (let y = y0 + 6 - h; y < y0 + 6; y++) px(g, x, y, jitter(col, r, 8));
+      }
+      for (let x2 = 0; x2 < s; x2++) px(g, x2, y0 + 6, '#3c2614');
+    }
+  }, 104);
+  T.counterTop = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#d8d4cc', '#cfcac0', '#e0dcd4'], 5);
+    for (let i = 0; i < 8; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#9a958c');
+  }, 105);
+  T.stoveTop = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#2e2e30', '#363638'], 3);
+    for (const [cx, cy] of [[4, 4], [11, 4], [4, 11], [11, 11]]) for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) {
+      const d = Math.hypot(x, y);
+      if (d > 1.4 && d < 2.6) px(g, cx + x, cy + y, jitter('#8a8a8e', r, 6));
+    }
+  }, 106);
+  T.fridge = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x === 0 || x === s - 1 ? '#b8bcc0' : '#eef0f2', r, 3));
+    for (let y = 3; y < 13; y++) px(g, 12, y, '#8a9096');
+  }, 107);
+  T.fridgeTop = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#dfe2e5', '#e8eaec'], 3), 108);
 
   T.square = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;

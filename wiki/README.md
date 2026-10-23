@@ -8,7 +8,9 @@
 | [design-dungeon.md](design-dungeon.md) | Дизайн-документ «Улья»: цикл, генерация этажей, орды, боссы, малина, оружие, броня, передвижение, усиления, этапы |
 | [design-level-blocks.md](design-level-blocks.md) | Блоки уровней и редактор: воксельная сетка, карты в JSON, формы в OBJ, палитра, рендер, столкновения с высотой |
 | [adr-001-dungeon-roguelite.md](adr-001-dungeon-roguelite.md) | Решение: основной режим — кооперативный рогалик-зачистка подземелий |
-| [adr-002-realistic-weapons-tactical-movement.md](adr-002-realistic-weapons-tactical-movement.md) | Решение: реальное оружие, тактическое передвижение, броня, плейграунд |
+| [adr-002-realistic-weapons-tactical-movement.md](adr-002-realistic-weapons-tactical-movement.md) | ~~Решение: реальное оружие, тактическое передвижение, броня~~ — заменено ADR-004 |
 | [adr-003-visual-style.md](adr-003-visual-style.md) | Решение: графика в стиле Minecraft Dungeons, без гиперреализма |
+| [adr-004-mystic-coop-melee.md](adr-004-mystic-coop-melee.md) | Решение: назад к мистической кооп-зачистке — мечи, топоры, магия, прыжок; без огнестрела и врагов-шутеров |
+| [style-guide.md](style-guide.md) | Стиль: 9 референсов (`style/`) и правила — добрый детский воксельный мир, свет, вода, эффекты |
 
 Главный источник — проект Claude: при изменениях документы обновляются там, а эта папка — их снимок в репозитории.

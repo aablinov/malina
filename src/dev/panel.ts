@@ -1,4 +1,4 @@
-import { ARACHNIDS, BEETLES, GRENADE, GUNS, HERO, JAILERS, resetTuning, RICOCHET, SPREAD, tuningJSON } from '../tuning';
+import { HERO, resetTuning, SWORD, tuningJSON } from '../tuning';
 
 /**
  * F1 — панель параметров. Ползунки правят объекты из tuning.ts напрямую, изменения применяются сразу.
@@ -6,37 +6,20 @@ import { ARACHNIDS, BEETLES, GRENADE, GUNS, HERO, JAILERS, resetTuning, RICOCHET
 
 const LABELS: Record<string, string> = {
   hp: 'Здоровье', radius: 'Радиус, м',
-  walk: 'Ходьба, м/с', run: 'Бег, м/с', aim: 'Прицел, м/с', crouch: 'Присед, м/с', crouchAim: 'Присед + прицел, м/с',
-  backMul: 'Ход спиной ×', accel: 'Разгон, м/с²', decel: 'Торможение, м/с²',
-  rollDist: 'Перекат, м', rollTime: 'Перекат, с', rollIframes: 'Неуязвимость, с',
-  stamina: 'Выносливость', runDrain: 'Бег тратит /с', rollCost: 'Перекат тратит', regen: 'Восстановление /с',
-  regenDelay: 'Пауза восстановления, с', exhaust: 'Усталость, с',
-  step: 'Шаг, м', runStep: 'Шаг бега, м', crouchStep: 'Шаг в приседе, м', stepLift: 'Подъём стопы, м',
-  stanceDrop: 'Таз в стойке ниже на, м', crouchDrop: 'Таз в приседе ниже на, м', lean: 'Наклон корпуса, °', runLean: 'Наклон на бегу, °',
-  sway: 'Покачивание, °', twist: 'Поворот корпуса до, °', turnRate: 'Скорость поворота', switchTime: 'Смена ствола, с', aimCamShift: 'Сдвиг камеры в прицеле',
-  move: 'Движение ×', chance: 'Шанс рикошета', dmgMul: 'Урон после рикошета ×',
-  dmg: 'Урон', pellets: 'Дробин', rate: 'Темп, выстр/с', mag: 'Магазин', reloadTac: 'Перезарядка такт., с', reloadFull: 'Перезарядка полн., с',
-  range: 'Дальность, м', spread: 'Разброс, °', bloomShot: 'Раскачка за выстрел', bloomDeg: 'Полная раскачка, °', bloomDecay: 'Спад раскачки, с',
-  kick: 'Подброс ствола', shoulderKick: 'Отдача в плечи, °', knock: 'Отбрасывание',
-  dmgScale: 'Урон по жукам ×', biteMul: 'Укус жука ×',
-  scale: 'Размер ×', reaction: 'Реакция на прицел, с', dodgeChance: 'Шанс уклона', dodgeCd: 'Пауза уклонов, с', dodgeDist: 'Уклон, м', dodgeTime: 'Уклон, с',
-  meleeRange: 'Удар: дистанция, м', meleeDmg: 'Удар: урон', meleeWindup: 'Удар: замах, с', meleeCd: 'Удар: пауза, с',
-  keepMin: 'Держит от, м', keepMax: 'Держит до, м', webRange: 'Паутина: дальность', webCd: 'Паутина: пауза, с', webSpeed: 'Паутина: скорость',
-  webDmg: 'Паутина: урон', webSlow: 'Замедление ×', webSlowTime: 'Замедление, с', poisonDps: 'Яд, урон/с', poisonTime: 'Яд, с',
-  aimErr: 'Ошибка прицела, °', burst: 'Очередь, выстрелов', burstPause: 'Пауза очередей, с', peekTime: 'Выглядывает, с', hideTime: 'Прячется, с',
-  preferMin: 'Дистанция от, м', preferMax: 'Дистанция до, м', flameDps: 'Огонь: урон/с', burnDps: 'Горение: урон/с', burnTime: 'Горение, с',
-  grenades: 'Гранат с собой', grenadeCd: 'Пауза бросков, с', grenadeMin: 'Бросает от, м', grenadeMax: 'Бросает до, м', cook: 'Держит перед броском, с',
-  fuse: 'Фитиль, с', coverMul: 'За укрытием урон ×',
-  tankHp: 'Баллоны: прочность', blastR: 'Взрыв: радиус, м', blastDmg: 'Взрыв: урон',
-  pounceMul: 'Прыжок: длин тела', pounceDmg: 'Прыжок: урон', pounceWindup: 'Прыжок: замах, с', pounceCd: 'Прыжок: пауза, с', pounceTime: 'Прыжок: полёт, с',
+  walk: 'Ходьба, м/с', attackMove: 'В ударе ×', accel: 'Разгон, м/с²', decel: 'Торможение, м/с²', turnRate: 'Скорость поворота',
+  gravity: 'Гравитация, м/с²', airControl: 'Управление в воздухе', arrive: 'Клик: пришёл ближе, м',
+  rollDist: 'Перекат, м', rollTime: 'Перекат, с', rollIframes: 'Неуязвимость, с', rollCd: 'Перекат: перезарядка, с',
+  step: 'Шаг, м',
+  comboWindow: 'Окно комбо, с', chainFrom: 'Следующий удар с доли', finisherCd: 'Пауза после добивающего, с', hitStop: 'Заминка при попадании, с', shockR: 'Волна добивающего, м',
+  dmg: 'Урон', time: 'Длительность, с', windup: 'Замах, доля', strike: 'Удар, доля', range: 'Дальность, м', arc: 'Дуга, °', lunge: 'Выпад, м', knock: 'Отбрасывание',
 };
 
-const INT_KEYS = new Set(['hp', 'stamina', 'pellets', 'mag', 'grenades', 'burst']);
+const INT_KEYS = new Set(['hp', 'dmg']);
 
 function rangeFor(key: string, v: number): [number, number, number] {
   if (INT_KEYS.has(key)) return [1, Math.max(10, Math.ceil(v * 3)), 1];
-  if (key === 'chance' || key === 'dmgMul' || key === 'bloomShot' || key === 'aimCamShift' || key === 'dodgeChance' || key === 'webSlow' || key === 'coverMul') return [0, 1, 0.01];
-  if (key.endsWith('Mul') || key === 'aim' || key === 'crouch' || key === 'move') return [0, Math.max(2, v * 2), 0.01];
+  if (key === 'attackMove' || key === 'airControl' || key === 'chainFrom' || key === 'windup' || key === 'strike') return [0, 1, 0.01];
+  if (key === 'arc') return [10, 360, 1];
   const max = v <= 0 ? 1 : v < 1 ? 1 : v * 3;
   const step = max <= 1 ? 0.01 : max <= 10 ? 0.05 : max <= 50 ? 0.1 : 1;
   return [0, +max.toFixed(2), step];
@@ -48,8 +31,6 @@ export class Panel {
   readonly el: HTMLDivElement;
   private readonly body: HTMLDivElement;
   private readonly extra: HTMLDivElement;
-  private gunKey: keyof typeof GUNS = 'ak74';
-  private gunTitle = '';
   private inputs: { obj: NumObj; key: string; input: HTMLInputElement; out: HTMLElement }[] = [];
 
   constructor(parent: HTMLElement) {
@@ -77,27 +58,13 @@ export class Panel {
   /** Блок с кнопками и переключателями, который заполняет плейграунд */
   get controls(): HTMLDivElement { return this.extra; }
 
-  setGun(key: keyof typeof GUNS, title: string): void {
-    if (key === this.gunKey && title === this.gunTitle) return;
-    this.gunKey = key; this.gunTitle = title;
-    if (this.open) this.rebuild();
-  }
-
   rebuild(): void {
     this.inputs = [];
     this.body.innerHTML = '';
     this.section('Герой', HERO as unknown as NumObj);
-    this.section(`Ствол: ${this.gunTitle}`, GUNS[this.gunKey] as unknown as NumObj);
-    this.section('Множители разброса', SPREAD as unknown as NumObj);
-    this.section('Рикошеты', RICOCHET as unknown as NumObj);
-    this.section('Жуки', BEETLES as unknown as NumObj);
-    this.section('Арахнид: Воин', ARACHNIDS.warrior as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'dodgeTime', 'meleeRange', 'meleeDmg', 'meleeWindup', 'meleeCd']);
-    this.section('Арахнид: Ткач', ARACHNIDS.spinner as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'keepMin', 'keepMax', 'webRange', 'webCd', 'webSpeed', 'webDmg', 'webSlow', 'webSlowTime', 'poisonDps', 'poisonTime']);
-    this.section('Тюремщик: стрелок', JAILERS.rifle as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'burst', 'burstPause', 'peekTime', 'hideTime', 'preferMin', 'preferMax', 'dmgMul']);
-    this.section('Тюремщик: двустволка', JAILERS.shotgun as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'preferMax', 'dmgMul', 'grenades', 'grenadeCd', 'grenadeMin', 'grenadeMax', 'cook']);
-    this.section('Граната РГД-5', GRENADE as unknown as NumObj);
-    this.section('Тюремщик: огнемётчик', JAILERS.flamer as unknown as NumObj, ['hp', 'aimErr', 'reaction', 'flameDps', 'burnDps', 'burnTime', 'tankHp', 'blastR', 'blastDmg']);
-    this.section('Арахнид: Прыгун', ARACHNIDS.leaper as unknown as NumObj, ['hp', 'speed', 'scale', 'reaction', 'dodgeChance', 'dodgeCd', 'dodgeDist', 'meleeDmg', 'pounceMul', 'pounceDmg', 'pounceWindup', 'pounceCd', 'pounceTime']);
+    this.section('Меч: комбо', SWORD as unknown as NumObj);
+    const names = ['Удар 1: слева', 'Удар 2: справа', 'Удар 3: сверху (добивающий)'];
+    SWORD.swings.forEach((s, i) => this.section(names[i], s as unknown as NumObj));
   }
 
   /** Обновить числа, если их поменяли не ползунком */
@@ -110,7 +77,7 @@ export class Panel {
 
   private section(title: string, obj: NumObj, only?: string[]): void {
     const sec = document.createElement('details');
-    sec.open = title.startsWith('Ствол') || title === 'Герой';
+    sec.open = title === 'Герой' || title === 'Меч: комбо';
     sec.innerHTML = `<summary>${title}</summary>`;
     for (const key of only ?? Object.keys(obj)) {
       const v = obj[key];
