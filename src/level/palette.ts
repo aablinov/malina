@@ -59,7 +59,8 @@ const B = (name: string, title: string, category: string, parts: Part[], o: Opts
 
 /** Полный куб из одной текстуры (или top/side/bottom) */
 const solid = (name: string, title: string, cat: string, tex: string | string[] | Record<string, string | string[]>, o: Opts = {}): BlockDef =>
-  B(name, title, cat, [cube(typeof tex === 'string' || Array.isArray(tex) ? same(tex) : tex)], { full: true, connects: true, jitter: 0.08, ...o });
+  // камень — почти без разброса между блоками (ровные стены Minecraft Dungeons), остальное — 0,08
+  B(name, title, cat, [cube(typeof tex === 'string' || Array.isArray(tex) ? same(tex) : tex)], { full: true, connects: true, jitter: cat === 'камень' ? 0.03 : 0.08, ...o });
 /** Набор куб + ступени + полублок + стенка из одного камня */
 function stoneSet(name: string, title: string, cat: string, tex: string | string[], wall = true): BlockDef[] {
   const out = [
@@ -93,7 +94,7 @@ export const BLOCKS: BlockDef[] = [
   ...stoneSet('bricks', 'Каменный кирпич', 'камень', 'stoneBricks'),
   solid('bricks_mossy', 'Кирпич мшистый', 'камень', 'stoneBricksMossy'),
   solid('bricks_cracked', 'Кирпич треснутый', 'камень', 'stoneBricksCracked'),
-  solid('bricks_old', 'Кирпич руинный', 'камень', ['stoneBricksOld', 'stoneBricksOld', 'stoneBricksMossy', 'stoneBricksCracked']),
+  solid('bricks_old', 'Кирпич руинный', 'камень', ['stoneBricksOld', 'stoneBricksOld', 'stoneBricksOld', 'stoneBricksOldMossy']),
   ...stoneSet('tiles', 'Плиты мостовой', 'камень', 'tiles', false),
   B('bricks_low', 'Кирпич: низкое укрытие', 'камень', [cube(same('stoneBricks'), 'low')], { collide: 0.875, connects: true }),
   B('cobble_low', 'Булыжник: низкое укрытие', 'камень', [cube(same('cobble'), 'low')], { collide: 0.875, connects: true }),
@@ -113,7 +114,7 @@ export const BLOCKS: BlockDef[] = [
   solid('hay', 'Сено', 'дерево', { top: 'hayTop', side: 'hay', bottom: 'hayTop' }),
 
   // --- растения ---
-  B('leaves', 'Листва', 'растения', [{ obj: 'cube', layer: 'cutout', tex: same('leavesCut') }], { jitter: 0.2 }),
+  B('leaves', 'Листва', 'растения', [{ obj: 'cube', layer: 'cutout', tex: same('leavesCut') }], { jitter: 0.12 }),
   B('berry_bush', 'Куст с ягодами', 'растения', [{ obj: 'cube', layer: 'cutout', tex: same('berryBush') }], { jitter: 0.1 }),
   B('tall_grass', 'Трава высокая', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'tallGrass' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.3 }),
   B('fern', 'Папоротник', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'fern' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.2 }),
