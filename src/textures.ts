@@ -61,6 +61,12 @@ function noiseFill(g: Ctx, s: number, r: Rand, pal: readonly string[], amt = 8):
 const GRASS_BASE = '#6d994e', GRASS_LIGHT = '#7ba558', GRASS_DARK = '#608b46';
 const DIRT_BASE = '#9a6942', DIRT_DARK = '#8a5c39';
 const PATH_BASE = '#c99153', PATH_PRINT = '#d6a466';
+/** Мир: двор (скриншот 10) — калибровка по пикселям, wiki/style-world.md */
+const HAY_BASE = '#cda652', HAY_BAND = '#c25a26', HAY_RIM = '#dcbd6c';
+const YARD_BASE = '#c39552', YARD_DASH = '#a7794a', WALL_STONE = '#a1a8b0';
+/** Мир: скалы, вода, мост (скриншоты 11, 12) */
+const CLIFF = '#9aa2ab', CLIFF_DARK = '#7b8996', BRIDGE_WOOD = '#c49458', BRIDGE_POST = '#8d6639', RIVER = '#2f586c', FALLS = '#1f88ab';
+const CRATE_WOOD = '#9a6a4c', CRATE_BAND = '#46414a', CRATE_PAINT = '#e2a936', CHEST_WOOD = '#8f5b35', CART_WOOD = '#a2694a';
 /** Камень: булыжник, кирпич, сланцевый кирпич руин, плиты, мох */
 const STONE_BASE = '#88929d', BRICK_BASE = '#86919c', SLATE_BASE = '#6a8592', TILE_BASE = '#a0a2a2', MOSS = '#6f9a4c';
 const DIRT = [DIRT_BASE, DIRT_BASE, DIRT_DARK];
@@ -119,10 +125,10 @@ function softBricks(g: Ctx, s: number, r: Rand, base: string, cellW: number, row
   }
 }
 /** Булыжник: светлая основа и скруглённые камни, сверху-слева чуть светлее, снизу-справа шов чуть темнее */
-function softCobble(g: Ctx, s: number, r: Rand, base: string): void {
-  softFill(g, s, r, mix(base, '#000000', 0.1), 2, []);
-  for (let i = 0; i < 11; i++) {
-    const cx = r() * s, cy = r() * s, w = 2.2 + r() * 1.6, h = 1.8 + r() * 1.4;
+function softCobble(g: Ctx, s: number, r: Rand, base: string, n = 11, size: [number, number] = [2.2, 1.8], grout = 0.1): void {
+  softFill(g, s, r, mix(base, '#000000', grout), 2, []);
+  for (let i = 0; i < n; i++) {
+    const cx = r() * s, cy = r() * s, w = size[0] + r() * size[0] * 0.7, h = size[1] + r() * size[1] * 0.75;
     const t = (r() - 0.5) * 2, col = t > 0 ? mix(base, '#ffffff', t * 0.08) : mix(base, '#000000', -t * 0.06);
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
       const dx0 = x + 0.5 - cx, dy0 = y + 0.5 - cy;
@@ -180,6 +186,12 @@ export interface Textures {
   mushroomRed: THREE.Texture; mushroomGlow: THREE.Texture; mushroomStem: THREE.Texture; lanternGlass: THREE.Texture; roots: THREE.Texture;
   // трава поверх блоков: бахрома по краю уступа и мелкие пучки (mesher.ts)
   grassFringe: THREE.Texture; grassTuft: THREE.Texture; flowerTuft: THREE.Texture;
+  // мир (скриншоты 10–15, wiki/style-world.md): двор
+  yardFloor: THREE.Texture; wallStone: THREE.Texture; crateBand: THREE.Texture; crateBandTop: THREE.Texture;
+  chestWood: THREE.Texture; chestTrim: THREE.Texture; cartWood: THREE.Texture;
+  // скалы, вода, мост (скриншоты 11, 12); river и waterfall — свои текстуры с повтором, не в атласе
+  cliff: THREE.Texture; cliffDark: THREE.Texture; cliffGrassSide: THREE.Texture; foam: THREE.Texture;
+  bridgePlank: THREE.Texture; bridgePost: THREE.Texture; river: THREE.Texture; waterfall: THREE.Texture;
   // рваный край между травой и дорожкой (mesher.ts, bleed): 4 варианта маски у каждой
   grassEdge0: THREE.Texture; grassEdge1: THREE.Texture; grassEdge2: THREE.Texture; grassEdge3: THREE.Texture;
   pathEdge0: THREE.Texture; pathEdge1: THREE.Texture; pathEdge2: THREE.Texture; pathEdge3: THREE.Texture;
@@ -376,11 +388,15 @@ export function makeTextures(): Textures {
       }
     }
   }, 62, { alpha: true });
+  // тюк сена как на скриншоте 10: ровный жёлтый, по боку две оранжево-красные обвязки, верх со светлой каймой
   T.hay = canvasTex(16, (g, s, r) => {
-    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y % 3 === 2 ? '#b8912e' : pick(['#e8c35a', '#dbb34a', '#f0cf6c'], r), r, 8));
+    softFill(g, s, r, HAY_BASE, 2, [{ col: '#d9b863', n: 3, rad: [2, 3.5], k: 0.5 }, { col: '#b8933f', n: 2, rad: [1.5, 2.5], k: 0.4 }]);
+    for (const y0 of [3, 11]) for (let x = 0; x < s; x++) { px(g, x, y0, jitter(HAY_BAND, r, 3)); px(g, x, y0 + 1, jitter(mix(HAY_BAND, '#000000', 0.12), r, 3)); }
   }, 63);
   T.hayTop = canvasTex(16, (g, s, r) => {
-    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter((x + y) % 4 === 0 ? '#b8912e' : pick(['#e8c35a', '#dbb34a', '#f0cf6c'], r), r, 8));
+    softFill(g, s, r, HAY_BASE, 2, [{ col: '#d9b863', n: 3, rad: [2, 3.5], k: 0.5 }]);
+    for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, jitter(HAY_RIM, r, 2)); px(g, k, i, jitter(HAY_RIM, r, 2)); }
+    for (const x0 of [3, 11]) for (let y = 0; y < s; y++) px(g, x0, y, jitter(HAY_BAND, r, 3));
   }, 64);
   // листва кроны: с дырками по краям, чтобы кубы кроны не читались как кубы
   T.leavesCut = canvasTex(16, (g, s, r) => softLeaves(g, s, r, LEAF, true), 68, { alpha: true });
@@ -632,6 +648,80 @@ export function makeTextures(): Textures {
   T.roots = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 5 === 0 ? '#2e2016' : pick(['#5a3e28', '#4e3522', '#664830'], r), r, 6));
   }, 129);
+
+  // ---------- мир: двор (скриншот 10) ----------
+  // пол двора: утоптанная земля с тёмными штрихами «ёлочкой»
+  T.yardFloor = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, YARD_BASE, 2, [{ col: '#cda265', n: 2, rad: [3, 5], k: 0.5 }]);
+    for (let row = 0; row < 4; row++) for (let x0 = (row % 2) * 3 - 3; x0 < s; x0 += 6) {
+      const len = 3 + ((r() * 2) | 0);
+      for (let k = 0; k < len; k++) { const x = x0 + k, y = row * 4 + 1 + (k > 1 ? 1 : 0); if (x >= 0 && x < s) px(g, x, y, jitter(YARD_DASH, r, 3)); }
+    }
+  }, 160);
+  // камень ограды: крупные скруглённые камни, едва заметные
+  T.wallStone = canvasTex(16, (g, s, r) => softCobble(g, s, r, WALL_STONE, 5, [3.6, 3.0], 0.06), 161);
+  // ящики склада: дощатые, тёмные железные полосы, пятна жёлтой краски
+  const crate = (top: boolean) => (g: Ctx, s: number, r: Rand) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 4 === 3 ? mix(CRATE_WOOD, '#000000', 0.14) : CRATE_WOOD, r, 3));
+    overlayBlobs(g, s, r, CRATE_PAINT, 3, [1.4, 2.4], 0.9);
+    for (let i = 0; i < s; i++) for (const k of [0, 1, s - 2, s - 1]) { px(g, i, k, jitter(CRATE_BAND, r, 2)); if (top) px(g, k, i, jitter(CRATE_BAND, r, 2)); }
+    if (!top) for (let y = 0; y < s; y++) for (const k of [6, 7]) px(g, k, y, jitter(CRATE_BAND, r, 2));
+  };
+  T.crateBand = canvasTex(16, crate(false), 162);
+  T.crateBandTop = canvasTex(16, crate(true), 163);
+  T.chestWood = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y % 5 === 4 ? mix(CHEST_WOOD, '#000000', 0.15) : CHEST_WOOD, r, 3));
+  }, 164);
+  T.chestTrim = canvasTex(16, (g, s, r) => softFill(g, s, r, '#e2b247', 2, [{ col: '#f2cd6a', n: 2, rad: [2, 3], k: 0.7 }]), 165);
+  T.cartWood = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y % 4 === 3 ? mix(CART_WOOD, '#000000', 0.16) : CART_WOOD, r, 3));
+  }, 166);
+
+  // ---------- мир: скалы, вода, мост (скриншоты 11, 12) ----------
+  // скала: ровный светлый камень с едва заметными вертикальными пластами
+  const strata = (base: string, r: Rand, g: Ctx, s: number) => {
+    softFill(g, s, r, base, 2, [{ col: mix(base, '#ffffff', 0.08), n: 2, rad: [3, 5], k: 0.6 }]);
+    let x = 0;
+    while (x < s) { const w = 2 + ((r() * 4) | 0); if (r() < 0.55) for (let y = 0; y < s; y++) px(g, x, y, jitter(mix(base, '#000000', 0.06), r, 2)); x += w; }
+    const yb = 4 + ((r() * 8) | 0);
+    for (let xx = 0; xx < s; xx++) px(g, xx, yb, jitter(mix(base, '#ffffff', 0.07), r, 2));
+  };
+  T.cliff = canvasTex(16, (g, s, r) => strata(CLIFF, r, g, s), 170);
+  T.cliffDark = canvasTex(16, (g, s, r) => strata(CLIFF_DARK, r, g, s), 171);
+  T.cliffGrassSide = canvasTex(16, (g, s, r) => {
+    strata(CLIFF, r, g, s);
+    for (let x = 0; x < s; x++) {
+      const d = 3 + ((r() * 4) | 0);
+      for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? GRASS_DARK : GRASS_BASE, r, 3));
+    }
+  }, 172);
+  T.foam = canvasTex(16, (g, s, r) => softFill(g, s, r, '#e9edf0', 2, [{ col: '#cfd8df', n: 3, rad: [2, 4], k: 0.7 }, { col: '#ffffff', n: 2, rad: [2, 3], k: 0.6 }]), 173);
+  // настил моста: светлые доски по 4 px со щелями; столб — темнее, продольные волокна
+  T.bridgePlank = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) {
+      const tone = mix(BRIDGE_WOOD, ['#ffffff', '#000000'][(y >> 2) % 2], 0.04 + r() * 0.04);
+      for (let x = 0; x < s; x++) px(g, x, y, jitter(y % 4 === 3 ? mix(BRIDGE_WOOD, '#000000', 0.18) : tone, r, 3));
+    }
+    for (let i = 0; i < 4; i++) { const x = (r() * s) | 0, y = (i * 4 + 1) | 0; px(g, x, y, mix(BRIDGE_WOOD, '#000000', 0.12)); }
+  }, 174);
+  T.bridgePost = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 5 === 2 ? mix(BRIDGE_POST, '#000000', 0.1) : BRIDGE_POST, r, 3));
+  }, 175);
+  // вода реки: глубокая бирюза, светлые штрихи вдоль течения (их ещё гонит шейдер)
+  T.river = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, RIVER, 2, [{ col: mix(RIVER, '#ffffff', 0.12), n: 3, rad: [2, 4], k: 0.6 }, { col: mix(RIVER, '#000000', 0.1), n: 2, rad: [2, 3], k: 0.5 }]);
+  }, 176);
+  T.river.wrapS = T.river.wrapT = THREE.RepeatWrapping;
+  // водопад: вертикальные струи разной яркости, белые разрывы; текстура бежит вниз (mesher.update)
+  T.waterfall = canvasTex(16, (g, s, r) => {
+    for (let x = 0; x < s; x++) {
+      const base = pick([FALLS, FALLS, FALLS, mix(FALLS, '#ffffff', 0.12), mix(FALLS, '#000000', 0.08)], r);
+      for (let y = 0; y < s; y++) px(g, x, y, jitter(base, r, 2));
+      // редкие светлые струи — длинные, без пёстрых точек
+      if (r() < 0.35) { const y0 = (r() * s) | 0, len = 5 + ((r() * 6) | 0); for (let y = y0; y < y0 + len; y++) px(g, x, y % s, jitter(mix(FALLS, '#ffffff', 0.45), r, 3)); }
+    }
+  }, 177);
+  T.waterfall.wrapS = T.waterfall.wrapT = THREE.RepeatWrapping;
 
   T.square = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;

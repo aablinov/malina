@@ -18,7 +18,7 @@ import { getShape } from './shapes';
 
 interface LightSpot { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
 
-const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow', 'detail'];
+const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow', 'detail', 'river', 'falls'];
 
 /**
  * «Рентген»: блоки между камерой и героем (в цилиндре радиуса uXrayR вокруг луча камера → герой,
@@ -76,7 +76,8 @@ ${caps ? 'if (!gl_FrontFacing) gl_FragColor = vec4(0.11, 0.1, 0.09, 1.0);' : ''}
 const WATER_UNIFORMS = { uTime: { value: 0 } };
 /** Время анимации воды (для тестов) */
 export const liquidTime = (): number => WATER_UNIFORMS.uTime.value;
-function liquid(m: THREE.Material, foam: string, spark: [number, number, number], caustic: [number, number, number]): THREE.Material {
+/** foamK — доля береговой пены: в узком русле реки берег у каждого угла, полная пена закрыла бы воду */
+function liquid(m: THREE.Material, foam: string, spark: [number, number, number], caustic: [number, number, number], foamK = 0.7): THREE.Material {
   const f = new THREE.Color(foam);
   const v3 = (c: [number, number, number] | THREE.Color) => Array.isArray(c) ? `vec3(${c.map((x) => x.toFixed(3)).join(',')})` : `vec3(${c.r.toFixed(3)},${c.g.toFixed(3)},${c.b.toFixed(3)})`;
   m.onBeforeCompile = (sh) => {
@@ -84,8 +85,9 @@ function liquid(m: THREE.Material, foam: string, spark: [number, number, number]
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
 attribute float shore;
+attribute vec2 flow;
 uniform float uTime;
-varying vec3 vWater; varying float vShore; varying float vTop;
+varying vec3 vWater; varying float vShore; varying float vTop; varying vec2 vFlow;
 float waterWave(vec2 p, float t) {
   return sin(p.x * 1.1 + t * 1.4) * 0.035 + sin(p.y * 1.4 - t * 1.1 + p.x * 0.5) * 0.03 + sin((p.x + p.y) * 2.3 + t * 2.2) * 0.012;
 }`)
@@ -93,16 +95,17 @@ float waterWave(vec2 p, float t) {
 vec3 wp0 = (modelMatrix * vec4(transformed, 1.0)).xyz;
 vTop = step(0.8, fract(wp0.y + 0.001));
 transformed.y += vTop * (waterWave(wp0.xz, uTime) - 0.05);
-vWater = wp0; vShore = shore;`);
+vWater = wp0; vShore = shore; vFlow = flow;`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 uniform float uTime;
-varying vec3 vWater; varying float vShore; varying float vTop;
+varying vec3 vWater; varying float vShore; varying float vTop; varying vec2 vFlow;
 float wHash(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }`)
       .replace('#include <opaque_fragment>', `#include <opaque_fragment>
 if (vTop > 0.5) {
   float t = uTime;
-  vec2 p = vWater.xz;
+  // течение (река): всё, что нарисовано по поверхности, уносит по направлению потока
+  vec2 p = vWater.xz - vFlow * t;
   // наклон волны: склоны к солнцу светлее
   float sx = cos(p.x * 1.1 + t * 1.4) * 0.0385 + cos(p.y * 1.4 - t * 1.1 + p.x * 0.5) * 0.015;
   float sz = cos(p.y * 1.4 - t * 1.1 + p.x * 0.5) * 0.042;
@@ -118,7 +121,16 @@ if (vTop > 0.5) {
   // пена у берега: рваный пиксельный край, дышит
   float fn = wHash(floor(p * 8.0) + floor(t * 2.0) * 0.37);
   float foam = smoothstep(0.68, 0.9, vShore + (fn - 0.5) * 0.22 + sin(t * 2.0 + p.x * 3.0 + p.y * 2.0) * 0.07);
-  col = mix(col, ${v3(f)}, foam * 0.7);
+  col = mix(col, ${v3(f)}, foam * ${foamK.toFixed(2)});
+  // река: светлые штрихи вдоль течения, рвутся и бегут
+  float fl = length(vFlow);
+  if (fl > 0.0) {
+    vec2 fd = vFlow / fl, fn2 = vec2(-fd.y, fd.x);
+    float lane = floor(dot(vWater.xz, fn2) * 5.0);
+    float run = fract(dot(p, fd) * 0.6 + wHash(vec2(lane, 3.1)));
+    float streak = step(0.8, wHash(vec2(lane, 7.7))) * smoothstep(0.0, 0.1, run) * smoothstep(0.45, 0.25, run);
+    col = mix(col, ${v3(f)}, streak * 0.3);
+  }
   gl_FragColor = vec4(col, max(gl_FragColor.a, foam * 0.95));
 }`);
   };
@@ -162,7 +174,7 @@ function hash(x: number, y: number, z: number, s = 0): number {
 }
 
 class Bucket {
-  pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = [];
+  pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = []; flow: number[] = [];
   get empty(): boolean { return this.pos.length === 0; }
   geometry(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
@@ -171,6 +183,7 @@ class Bucket {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute('shore', new THREE.Float32BufferAttribute(this.shore, 1));
+    g.setAttribute('flow', new THREE.Float32BufferAttribute(this.flow, 2));
     return g;
   }
 }
@@ -187,6 +200,7 @@ export class LevelRenderer {
   private readonly waterTex: THREE.Texture;
   private readonly acidTex: THREE.Texture;
   private readonly fireTex: THREE.Texture;
+  private readonly fallsTex: THREE.Texture;
   /** Свободный декор поверх блоков (src/level/decor.ts) */
   readonly decor: DecorRenderer;
 
@@ -195,10 +209,15 @@ export class LevelRenderer {
     this.waterTex = T.water;
     this.acidTex = T.acid;
     this.fireTex = T.fire;
+    this.fallsTex = T.waterfall;
     this.mats = {
       opaque: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true }), true),
       cutout: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide })),
       water: liquid(new THREE.MeshLambertMaterial({ map: T.water, vertexColors: true, transparent: true, opacity: 0.82 }), '#e8fbff', [1.7, 1.9, 2.1], [0.12, 0.3, 0.36]),
+      // река: глубже и темнее пруда, бирюза; течение — атрибут flow
+      river: liquid(new THREE.MeshLambertMaterial({ map: T.river, vertexColors: true, transparent: true, opacity: 0.96 }), '#e4f4f6', [1.2, 1.4, 1.5], [0.04, 0.1, 0.13], 0.22),
+      // водопад: непрозрачные струи, текстура бежит вниз
+      falls: withXray(new THREE.MeshLambertMaterial({ map: T.waterfall, vertexColors: true, emissive: new THREE.Color('#0d3a4a'), emissiveIntensity: 0.6 })),
       acid: liquid(new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }), '#d8ffb0', [1.4, 2.4, 0.8], [0.2, 0.4, 0.1]),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
       // мелкая трава: только лицевая сторона (пучки выпускаются в обе стороны) — иначе обратная сторона переворачивает
@@ -249,7 +268,7 @@ export class LevelRenderer {
     if (!chunk) return;
     const [cx, cy, cz] = key.split(',').map(Number);
     const L = this.level;
-    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket(), glow: new Bucket(), detail: new Bucket() };
+    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket(), glow: new Bucket(), detail: new Bucket(), river: new Bucket(), falls: new Bucket() };
     const spots: LightSpot[] = [];
     const isFull = (x: number, y: number, z: number) => L.defAt(x, y, z).full;
     /** Четырёхугольник в слой: 4 точки мира, uv в долях тайла атласа, нормаль, яркость */
@@ -263,6 +282,7 @@ export class LevelRenderer {
         const [tr, tg, tb] = macroTint(p[k][0], p[k][2]);
         b.col.push(c * tr, c * tg, c * tb);
         b.shore.push(0);
+        b.flow.push(0, 0);
       }
     };
     /** Плотность пучков: плавный шум с шагом 5 м — трава растёт пятнами */
@@ -295,7 +315,8 @@ export class LevelRenderer {
         } else placements.push(yaw);
         const bucket = buckets[part.layer ?? 'opaque'];
         const atlasUV = (part.layer ?? 'opaque') === 'opaque' || part.layer === 'cutout' || part.layer === 'glow';
-        const isLiquid = part.layer === 'water' || part.layer === 'acid';
+        const isLiquid = part.layer === 'water' || part.layer === 'acid' || part.layer === 'river';
+        const flowX = def.flow ? DIRS[rot][0] * def.flow : 0, flowZ = def.flow ? DIRS[rot][2] * def.flow : 0;
         for (const r of placements) {
           const shape = getShape(part.obj, r);
           for (const t of shape.tris) {
@@ -341,6 +362,7 @@ export class LevelRenderer {
                 if (L.idAt(x + sx, y, z) !== id || L.idAt(x, y, z + sz) !== id || L.idAt(x + sx, y, z + sz) !== id) shore = 1;
               }
               bucket.shore.push(shore);
+              bucket.flow.push(flowX, flowZ);
             }
           }
         }
@@ -381,7 +403,8 @@ export class LevelRenderer {
       if (def.bleed && !L.defAt(x, y + 1, z).full) for (let d = 0; d < 4; d++) {
         const nx = x + DIRS[d][0], nz = z + DIRS[d][2];
         const nDef = L.defAt(nx, y, nz);
-        if (!nDef.natural || L.idAt(nx, y, nz) === id || L.defAt(nx, y + 1, nz).full) continue;
+        // своё семейство (трава ↔ скала с травой) не перекрываем — та же текстура
+        if (!nDef.natural || L.idAt(nx, y, nz) === id || nDef.bleed?.[0] === def.bleed[0] || L.defAt(nx, y + 1, nz).full) continue;
         const tex = def.bleed[Math.floor(hash(x, y, z, 80 + d) * def.bleed.length)];
         const flip = hash(x, y, z, 84 + d) < 0.5;
         const [ax, az, bx, bz] = BLEED_EDGE[d], ox = DIRS[d][0] * BLEED_D, oz = DIRS[d][2] * BLEED_D;
@@ -434,6 +457,7 @@ export class LevelRenderer {
     WATER_UNIFORMS.uTime.value = t;
     this.waterTex.offset.set(Math.sin(t * 0.4) * 0.06, t * 0.02);
     this.acidTex.offset.set(t * 0.015, Math.sin(t * 0.3) * 0.05);
+    this.fallsTex.offset.y = t * 1.6;
     this.fireTex.offset.y = (2 - (Math.floor(t * 9) % 3)) / 3;
     const all: LightSpot[] = [];
     for (const l of this.lights.values()) all.push(...l);

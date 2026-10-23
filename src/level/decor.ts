@@ -63,6 +63,25 @@ export const DECOR: DecorDef[] = [
     { solid: [{ w: 1, d: 0.75, h: 0.6 }] }),
   D('crates_tilted', 'Стопка ящиков', 'двор', 'floor', [p('crates_tilted', { side: 'crate', top: 'crate', bottom: 'crate' })],
     { solid: [{ w: 2, d: 1.1, h: 1.9 }] }),
+
+  // --- мир: двор (скриншот 10, wiki/style-world.md) ---
+  D('crate_banded', 'Ящик с полосами', 'склад', 'floor', [p('crate_banded', { side: 'crateBand', top: 'crateBandTop', bottom: 'crateBandTop' })], { solid: [{ w: 0.95, d: 0.95, h: 0.95 }] }),
+  D('crates_banded_stack', 'Стопка ящиков с полосами', 'склад', 'floor', [p('crates_banded_stack', { side: 'crateBand', top: 'crateBandTop', bottom: 'crateBandTop' })], { solid: [{ w: 2, d: 1.05, h: 1.9 }] }),
+  D('crate_small', 'Ящичек', 'склад', 'floor', [p('crate_small', { side: 'crate', top: 'crate', bottom: 'crate', rim: 'planksDark' })], { solid: [{ w: 0.65, d: 0.65, h: 0.6 }] }),
+  D('chest', 'Сундук', 'склад', 'floor', [p('chest', { side: 'chestWood', top: 'chestWood', bottom: 'chestWood', lid: 'chestWood', trim: 'chestTrim' })], { solid: [{ w: 0.9, d: 0.65, h: 0.75 }] }),
+  D('cart', 'Телега', 'склад', 'floor', [p('cart', { side: 'cartWood', top: 'cartWood', bottom: 'cartWood', wheel: 'planksDark', iron: 'ironDark' })], { solid: [{ w: 1.1, d: 1.35, h: 0.9, z: -0.05 }] }),
+  D('cart_loaded', 'Телега с грузом', 'склад', 'floor', [p('cart_loaded', { side: 'cartWood', top: 'cartWood', bottom: 'cartWood', wheel: 'planksDark', iron: 'ironDark', hay: 'hay', hayTop: 'hayTop', box: 'crateBand' })], { solid: [{ w: 1.1, d: 1.35, h: 1.3, z: -0.05 }] }),
+  D('bench', 'Скамья', 'склад', 'floor', [p('bench', { side: 'planks', top: 'planks', bottom: 'planks' })], { solid: [{ w: 1.3, d: 0.4, h: 0.55 }] }),
+  D('lantern_post_double', 'Фонарь двойной', 'фонари', 'floor', [p('lantern_post_double', { post: 'planksDark', iron: 'ironDark' }), p('lantern_post_double_glass', { side: 'lanternGlass' }, 'glow')],
+    { solid: [{ w: 0.35, d: 0.35, h: 2.4 }], light: { color: '#ffc870', intensity: 7, dist: 9, at: [0, 1.85, 0] } }),
+  D('lantern_wall', 'Фонарь настенный', 'фонари', 'wall', [p('lantern_wall', { iron: 'ironDark' }), p('lantern_wall_glass', { side: 'lanternGlass' }, 'glow')],
+    { light: { color: '#ffc870', intensity: 5, dist: 7, at: [0, -0.45, 0.4] } }),
+  D('lantern_short', 'Фонарь низкий', 'фонари', 'floor', [p('lantern_short', { post: 'planksDark', iron: 'ironDark' }), p('lantern_short_glass', { side: 'lanternGlass' }, 'glow')],
+    { solid: [{ w: 0.3, d: 0.3, h: 1.4 }], light: { color: '#ffc870', intensity: 4, dist: 6, at: [0, 1.2, 0] } }),
+  // --- мир: вода (скриншот 11) ---
+  D('waterfall_splash', 'Брызги водопада', 'вода', 'floor', [p('waterfall_splash', { side: 'foam', top: 'foam', bottom: 'foam' })]),
+  D('waterfall_foam', 'Пена у камней', 'вода', 'floor', [p('waterfall_foam', { side: 'foam', top: 'foam', bottom: 'foam' })]),
+  D('foam_patch', 'Пена на воде', 'вода', 'floor', [p('foam_patch', { side: 'foam', top: 'foam', bottom: 'foam' })]),
 ];
 
 export const DECOR_BY_NAME: Record<string, DecorDef> = Object.fromEntries(DECOR.map((d) => [d.name, d]));
@@ -81,6 +100,8 @@ export function decorTextures(): string[] {
 }
 
 export const DECOR_CATEGORIES: string[] = [...new Set(DECOR.map((d) => d.category))];
+/** Категории набора «мир» — в зоне «мир» плейграунда, а не в витрине декора */
+export const WORLD_DECOR_CATEGORIES = ['склад', 'фонари', 'вода', 'свечи'];
 
 /** Поворот декора [рыск, наклон, крен] в градусах → углы Эйлера three (порядок YXZ); рыск как у блоков: 90° переводит +X в +Z */
 export function decorEuler(rot: readonly number[] | undefined): [number, number, number] {
