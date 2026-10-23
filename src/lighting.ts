@@ -41,8 +41,9 @@ class SolidAOPass extends GTAOPass {
 /**
  * Плотность пикселей буфера постобработки. На ретине (DPR 2) полноэкранный HDR-буфер — главная цена кадра:
  * замер 23.10.2026 (GPU, 2048 × 1536): DPR 2 — 20,8 мс, DPR 1,5 — 6,3 мс с AO и bloom. MSAA на этом буфере ещё дороже (35 мс).
+ * Взяли 1,25 — запас по кадрам важнее последней доли резкости.
  */
-const POST_MAX_DPR = 1.5;
+const POST_MAX_DPR = 1.25;
 
 const FULLSCREEN_VERT = /* glsl */`
 varying vec2 vUv;
