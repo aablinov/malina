@@ -15,6 +15,9 @@ import { mapByName, ROOMS } from '../level/maps';
 import { buildFloor } from '../level/dungeon.ts';
 import type { PgLabel } from '../level/playground-map.ts';
 import { HERO, SWORD, snapshotTuning } from '../tuning';
+import { applyWeapon, onWeaponChange, pickWeapon } from '../weapons';
+import { Weather } from '../weather';
+import { aimLight, lightData, makeLight, worldOf } from '../world';
 import { Dummy } from './dummies';
 import { Overlays } from './overlay';
 import { DEV_TOOLS, openEditor } from '../devflag';
@@ -54,6 +57,9 @@ export function runPlayground(): void {
    * ступени на площадку, витрина блоков. Механики живут в общих модулях (knight.ts, trail.ts), здесь — сцена и отладка.
    */
 
+  // оружие: ?weapon=<id> или активное из редактора (src/weapons.ts); его числа — стартовые для «Сброса» в F1
+  const weapon = pickWeapon();
+  applyWeapon(weapon);
   snapshotTuning();
   document.body.classList.add('dev-playground');
   document.title = 'Малина — плейграунд';
@@ -107,6 +113,23 @@ export function runPlayground(): void {
   // Арена и витрина — карта assets/maps/playground.json (генератор src/level/playground-map.ts, `npm run map:playground`,
   // правка — редактор ?dev=editor).
   const level = Level.fromJSON(pickMap());
+  // настройки мира из редактора (meta.world): солнце, небо, дымка, постобработка, погода; поставленный свет — сущности 'light'
+  const weather = new Weather(scene);
+  if (level.meta.world) {
+    const ws = worldOf(level);
+    look.applyWorld(ws);
+    weather.set(ws.weather.kind, ws.weather.intensity, ws.weather.wind);
+    if (!ws.post.enabled) postFX = false;
+  }
+  for (const e of level.entities) {
+    if (e.kind !== 'light') continue;
+    const d = lightData(e.data);
+    const l = makeLight(d);
+    l.position.set(e.x, e.y, e.z);
+    aimLight(l, e.rot ?? 0, d.pitch);
+    if (d.shadows) { l.castShadow = true; l.shadow.mapSize.set(512, 512); l.shadow.bias = -0.002; }
+    scene.add(l);
+  }
   const view = new LevelRenderer(scene, level, T);
   const terrain = terrainOf(level);
   const pathfinder = new Pathfinder(level, terrain);
@@ -197,6 +220,13 @@ export function runPlayground(): void {
   const fxRand = rng(7);
   const hero = new Knight(scene, T);
   hero.place(0, 4, Math.PI);
+  // точка появления карты из редактора (?map=…): клетка и взгляд (meta.spawnYaw, ° — 0 к +X, 90 к +Z)
+  if (level.spawn && new URLSearchParams(window.location.search).has('map')) {
+    const a = THREE.MathUtils.degToRad((level.meta.spawnYaw as number | undefined) ?? 0);
+    hero.place(level.spawn[0], level.spawn[2], Math.atan2(Math.cos(a), Math.sin(a)), level.spawn[1]);
+  }
+  hero.setWeapon(weapon);
+  onWeaponChange((w) => { applyWeapon(w); hero.setWeapon(w); });
   hero.onStep = () => { if (!scripted && hero.grounded) sfx.step(); };
   hero.onSwing = (step) => { if (!scripted) sfx.swing(step === 2 ? 0.7 : step === 1 ? 1.15 : 1, step === 2); };
   hero.onLand = (v) => {
@@ -685,6 +715,7 @@ export function runPlayground(): void {
     camera.position.copy(camTarget).addScaledVector(CAM_DIR, camDist).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh));
     camera.lookAt(camTarget.x, camTarget.y + 0.6, camTarget.z);
     look.follow(camTarget, camDist);
+    weather.update(real, camTarget);
     updateMotes(simTime);
 
     overlays.update();

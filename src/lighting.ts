@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { sunOffset, tintVec, type WorldSettings } from './world';
 
 /**
  * Свет и постобработка «как в Unreal» — узнаваемая картинка Minecraft Dungeons (wiki/style-lighting.md,
@@ -110,7 +111,10 @@ export class Lighting {
   /** Откуда светит солнце относительно точки, за которой следит камера: низко и сбоку — длинные тени */
   readonly sunOffset = new THREE.Vector3(-20, 26, 12);
   private mood: Mood = DAY;
+  private day: Mood = DAY;
   private unrealOn = true;
+  /** Настройки мира карты (src/world.ts): день, дымка в метрах, постобработка; null — как задумано в этом файле */
+  private world: WorldSettings | null = null;
 
   constructor(private readonly renderer: THREE.WebGLRenderer, private readonly scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
     this.sun.castShadow = true;
@@ -139,16 +143,37 @@ export class Lighting {
   set unreal(on: boolean) {
     this.unrealOn = on;
     this.ao.enabled = this.grade.enabled = on;
-    this.scene.fog = on ? this.fog : null;
+    this.scene.fog = on && (this.world?.fog.enabled ?? true) ? this.fog : null;
     // солнце без цветокоррекции — прежнее, белее и выше
-    this.sunOffset.set(on ? -20 : -14, on ? 26 : 30, on ? 12 : 9);
+    if (this.world && on) sunOffset(this.world, 35, this.sunOffset);
+    else this.sunOffset.set(on ? -20 : -14, on ? 26 : 30, on ? 12 : 9);
     this.apply();
   }
 
   setNight(night: boolean): void {
-    this.mood = night ? NIGHT : DAY;
+    this.mood = night ? NIGHT : this.day;
     this.apply();
     this.unreal = this.unrealOn;
+  }
+
+  /** Настройки мира карты: день берёт солнце, небо, дымку и цветокоррекцию из них; ночь (L) остаётся своей */
+  applyWorld(ws: WorldSettings): void {
+    const night = this.mood === NIGHT;
+    this.world = ws;
+    const p = ws.post;
+    this.day = {
+      sky: ws.sky.color, haze: ws.fog.color, hemiSky: ws.sky.hemiSky, hemiGround: ws.sky.hemiGround, hemi: ws.sky.hemi, ambient: ws.sky.ambient,
+      sun: ws.sun.color, sunI: ws.sun.intensity, bloom: p.bloom, exposure: p.exposure,
+      shadow: tintVec(p.shadowTint, p.tintAmount).toArray(), high: tintVec(p.highTint, p.tintAmount).toArray(), sat: p.saturation,
+    };
+    this.bloom.radius = p.bloomRadius;
+    this.bloom.threshold = p.bloomThreshold;
+    this.ao.blendIntensity = p.ao;
+    this.ao.updateGtaoMaterial({ radius: p.aoRadius });
+    this.grade.uniforms.uContrast.value = p.contrast;
+    this.grade.uniforms.uVignette.value = p.vignette;
+    this.sun.castShadow = ws.sun.shadows;
+    this.setNight(night);
   }
 
   private apply(): void {
@@ -158,7 +183,7 @@ export class Lighting {
     this.hemi.groundColor.set(m.hemiGround);
     this.hemi.intensity = m.hemi;
     this.ambient.intensity = m.ambient;
-    this.sun.color.set(u ? m.sun : m === DAY ? '#fff0d2' : m.sun);
+    this.sun.color.set(u ? m.sun : m !== NIGHT ? '#fff0d2' : m.sun);
     this.sun.intensity = m.sunI;
     this.bloom.strength = m.bloom;
     this.fog.color.set(m.haze);
@@ -177,8 +202,10 @@ export class Lighting {
   follow(target: THREE.Vector3, camDist: number): void {
     this.sun.position.copy(target).add(this.sunOffset);
     this.sun.target.position.copy(target);
-    this.fog.near = camDist * 0.9;
-    this.fog.far = camDist * 4.2;
+    // дымка из настроек мира задана для камеры игры (24 м до героя) — дальше камера, дальше и дымка
+    const k = camDist / 24;
+    this.fog.near = this.world ? this.world.fog.near * k : camDist * 0.9;
+    this.fog.far = this.world ? this.world.fog.far * k : camDist * 4.2;
   }
 
   render(): void { this.composer.render(); }
