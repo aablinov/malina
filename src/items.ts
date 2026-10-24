@@ -53,6 +53,27 @@ export interface RangedStats {
   knock: number;
 }
 
+/** Как броня выглядит на герое (Knight.setArmor): цвета и детали */
+export interface ArmorLook {
+  /** Нагрудник и рукава */
+  body: string;
+  /** Пояс, ворот, кант */
+  trim: string;
+  /** Наплечники */
+  pauldron?: string;
+  /** Головной убор: капюшон, шлем, шапка, волчья голова */
+  head?: { kind: 'hood' | 'helmet' | 'cap' | 'wolf'; color: string; accent?: string };
+  /** Подол ниже пояса (роба) */
+  skirt?: string;
+  /** Цвет плаща */
+  cape?: string;
+  /** Светящийся камень на груди */
+  glow?: string;
+}
+
+/** Как лук выглядит в руке при выстреле (Knight.setBow) */
+export interface BowLook { kind: 'bow' | 'crossbow'; wood: string; string: string; glow?: string; size?: number }
+
 export interface ArtifactStats {
   kind: ArtifactKind;
   /** Перезарядка, с */
@@ -77,9 +98,9 @@ export interface ItemDef {
   description: string;
   /** Ближний бой: id оружия в src/weapons.ts */
   weapon?: string;
-  ranged?: RangedStats;
-  /** Броня: здоровье при силе 1 и особые свойства */
-  armor?: { health: number; perks: Perk[] };
+  ranged?: RangedStats & { look: BowLook };
+  /** Броня: здоровье при силе 1, особые свойства и вид на герое */
+  armor?: { health: number; perks: Perk[]; look: ArmorLook };
   artifact?: ArtifactStats;
   /** Особые свойства оружия (строки как в MCD: «Широкие удары») */
   traits?: string[];
@@ -98,17 +119,17 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'hammer', slot: 'melee', weapon: 'hammer', title: 'Великий молот', rarity: 'rare', icon: 'hammer', description: 'Каждый удар отзывается гулом в камне.', traits: ['Огромная ударная волна'] },
   { id: 'scythe', slot: 'melee', weapon: 'scythe', title: 'Коса жнеца', rarity: 'unique', icon: 'scythe', description: 'Говорят, коса сама выбирает, кого жать.', traits: ['Очень широкие взмахи', 'Круговой вихрь'] },
   // дальний бой
-  { id: 'bow', slot: 'ranged', title: 'Лук', rarity: 'common', icon: 'bow', description: 'Простой лук из гибкого тиса.', ranged: { dmg: 8, cd: 0.55, speed: 26, range: 20, knock: 0.3 } },
-  { id: 'longbow', slot: 'ranged', title: 'Длинный лук', rarity: 'rare', icon: 'longbow', description: 'Стрелы летят дальше и бьют сильнее, но тетиву тянуть дольше.', ranged: { dmg: 14, cd: 0.85, speed: 34, range: 28, knock: 0.5 } },
-  { id: 'crossbow', slot: 'ranged', title: 'Арбалет', rarity: 'common', icon: 'crossbow', description: 'Тяжёлый болт сбивает с ног.', ranged: { dmg: 12, cd: 0.95, speed: 30, range: 22, knock: 1.2 } },
-  { id: 'twinbow', slot: 'ranged', title: 'Звёздный лук', rarity: 'unique', icon: 'starbow', description: 'Каждый выстрел — веер из трёх светящихся стрел.', ranged: { dmg: 7, cd: 0.6, speed: 30, range: 22, shots: 3, knock: 0.3 } },
+  { id: 'bow', slot: 'ranged', title: 'Лук', rarity: 'common', icon: 'bow', description: 'Простой лук из гибкого тиса.', ranged: { dmg: 8, cd: 0.55, speed: 26, range: 20, knock: 0.3, look: { kind: 'bow', wood: '#8a5a32', string: '#e8e2d0' } } },
+  { id: 'longbow', slot: 'ranged', title: 'Длинный лук', rarity: 'rare', icon: 'longbow', description: 'Стрелы летят дальше и бьют сильнее, но тетиву тянуть дольше.', ranged: { dmg: 14, cd: 0.85, speed: 34, range: 28, knock: 0.5, look: { kind: 'bow', wood: '#4f7a3a', string: '#e8e2d0', size: 1.25 } } },
+  { id: 'crossbow', slot: 'ranged', title: 'Арбалет', rarity: 'common', icon: 'crossbow', description: 'Тяжёлый болт сбивает с ног.', ranged: { dmg: 12, cd: 0.95, speed: 30, range: 22, knock: 1.2, look: { kind: 'crossbow', wood: '#6a4024', string: '#d8d2c0' } } },
+  { id: 'twinbow', slot: 'ranged', title: 'Звёздный лук', rarity: 'unique', icon: 'starbow', description: 'Каждый выстрел — веер из трёх светящихся стрел.', ranged: { dmg: 7, cd: 0.6, speed: 30, range: 22, shots: 3, knock: 0.3, look: { kind: 'bow', wood: '#2f8fd0', string: '#ffffff', glow: '#5ad8ff' } } },
   // броня
-  { id: 'tunic', slot: 'armor', title: 'Куртка странника', rarity: 'common', icon: 'tunic', description: 'Тёплая, удобная и с карманом для малины.', armor: { health: 20, perks: [{ kind: 'potion', value: 25 }] } },
-  { id: 'soulrobe', slot: 'armor', title: 'Роба душ', rarity: 'common', icon: 'soulrobe', description: 'В особом свете души, вплетённые в ткань, мерцают силой.', armor: { health: 30, perks: [{ kind: 'souls', value: 50 }, { kind: 'artifactDmg', value: 50 }] } },
-  { id: 'wolf', slot: 'armor', title: 'Волчья броня', rarity: 'common', icon: 'wolf', description: 'Шкура старого вожака всё ещё помнит лес.', armor: { health: 35, perks: [{ kind: 'potion', value: 50 }] } },
-  { id: 'mercenary', slot: 'armor', title: 'Доспех наёмника', rarity: 'common', icon: 'mercenary', description: 'Плотная кожа с заклёпками, проверенная в сотне стычек.', armor: { health: 40, perks: [{ kind: 'meleeDmg', value: 15 }] } },
-  { id: 'scale', slot: 'armor', title: 'Чешуйчатый доспех', rarity: 'rare', icon: 'scale', description: 'Тысяча пластин звенит на каждом шагу.', armor: { health: 50, perks: [{ kind: 'meleeDmg', value: 20 }, { kind: 'roll', value: 25 }] } },
-  { id: 'champion', slot: 'armor', title: 'Доспех чемпиона', rarity: 'unique', icon: 'champion', description: 'Сияющие латы того, кто выстоял на арене сто дней.', armor: { health: 65, perks: [{ kind: 'cooldown', value: 25 }, { kind: 'arrows', value: 10 }, { kind: 'meleeDmg', value: 10 }] } },
+  { id: 'tunic', slot: 'armor', title: 'Куртка странника', rarity: 'common', icon: 'tunic', description: 'Тёплая, удобная и с карманом для малины.', armor: { health: 20, perks: [{ kind: 'potion', value: 25 }], look: { body: '#5e8f46', trim: '#7a5230' } } },
+  { id: 'soulrobe', slot: 'armor', title: 'Роба душ', rarity: 'common', icon: 'soulrobe', description: 'В особом свете души, вплетённые в ткань, мерцают силой.', armor: { health: 30, perks: [{ kind: 'souls', value: 50 }, { kind: 'artifactDmg', value: 50 }], look: { body: '#4a4f8a', trim: '#6b72b8', skirt: '#454a82', head: { kind: 'hood', color: '#3d4278' }, cape: '#2e3160', glow: '#7ae0ff' } } },
+  { id: 'wolf', slot: 'armor', title: 'Волчья броня', rarity: 'common', icon: 'wolf', description: 'Шкура старого вожака всё ещё помнит лес.', armor: { health: 35, perks: [{ kind: 'potion', value: 50 }], look: { body: '#9a9ea6', trim: '#5e6269', pauldron: '#c9ccd2', head: { kind: 'wolf', color: '#9a9ea6', accent: '#c9ccd2' }, cape: '#6f747c' } } },
+  { id: 'mercenary', slot: 'armor', title: 'Доспех наёмника', rarity: 'common', icon: 'mercenary', description: 'Плотная кожа с заклёпками, проверенная в сотне стычек.', armor: { health: 40, perks: [{ kind: 'meleeDmg', value: 15 }], look: { body: '#8a5a32', trim: '#c03a3a', pauldron: '#6a4024', head: { kind: 'cap', color: '#6a4024' }, cape: '#a8302e' } } },
+  { id: 'scale', slot: 'armor', title: 'Чешуйчатый доспех', rarity: 'rare', icon: 'scale', description: 'Тысяча пластин звенит на каждом шагу.', armor: { health: 50, perks: [{ kind: 'meleeDmg', value: 20 }, { kind: 'roll', value: 25 }], look: { body: '#5f8f7a', trim: '#2f4a3e', pauldron: '#8fc0a6', skirt: '#456b5a', head: { kind: 'helmet', color: '#5f8f7a', accent: '#8fc0a6' } } } },
+  { id: 'champion', slot: 'armor', title: 'Доспех чемпиона', rarity: 'unique', icon: 'champion', description: 'Сияющие латы того, кто выстоял на арене сто дней.', armor: { health: 65, perks: [{ kind: 'cooldown', value: 25 }, { kind: 'arrows', value: 10 }, { kind: 'meleeDmg', value: 10 }], look: { body: '#d6dbe2', trim: '#f2b632', pauldron: '#e8ecf2', head: { kind: 'helmet', color: '#d6dbe2', accent: '#f2b632' }, cape: '#c42a3a', glow: '#ff3a5a' } } },
   // артефакты
   { id: 'firework', slot: 'artifact', title: 'Огненная стрела', rarity: 'common', icon: 'firework', description: 'Ракета летит к курсору и взрывается снопом искр.', artifact: A('firework', 9, 30, { radius: 3 }) },
   { id: 'totem', slot: 'artifact', title: 'Тотем исцеления', rarity: 'common', icon: 'totem', description: 'Ставит тотем, который лечит всех рядом.', artifact: A('totem', 22, 6, { radius: 3.5, duration: 8 }) },
@@ -256,6 +277,15 @@ export function spentPoints(it: Item): number {
   return n;
 }
 
+/** Цены торговцев (src/hud/shop.ts): случайный предмет, перековка, конкретный товар */
+export const PRICE = {
+  gear: (power: number): number => 40 + power * 12,
+  artifact: (power: number): number => 55 + power * 14,
+  arrows: 20,
+  reforge: (power: number): number => 30 + power * 15,
+  offer: (it: { def: string; power: number }): number => Math.round((50 + it.power * 15) * ({ common: 1, rare: 1.6, unique: 3 } as const)[itemDef(it.def).rarity]),
+};
+
 /** Малина за разбор */
 export const salvageValue = (it: Item): number => Math.round((8 + it.power * 5) * RARITY[itemDef(it.def).rarity].salvage);
 
@@ -313,7 +343,7 @@ export class Profile {
 
   /** Стартовый набор: экипировка новичка и сундук трофеев, чтобы было что примерить и зачаровать */
   static starter(): ProfileData {
-    const p = new Profile({ version: 1, level: 1, xp: 0, points: 3, berries: 0, souls: 0, arrows: 40, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null] } }, false);
+    const p = new Profile({ version: 1, level: 1, xp: 0, points: 3, berries: 250, souls: 0, arrows: 40, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null] } }, false);
     const eq = (def: string, power: number): string => p.add(def, power, false).uid;
     p.data.equip = { melee: eq('sword', 1), armor: eq('tunic', 1), ranged: eq('bow', 1), artifacts: [eq('firework', 1), eq('totem', 1), null] };
     for (const [def, power] of [
@@ -359,11 +389,29 @@ export class Profile {
   }
 
   /** Случайный трофей около силы героя: обычные чаще, уникальные редко. В инвентарь — через add, когда подобрали */
-  rollLoot(r: Rand = this.rand): { def: string; power: number } {
+  rollLoot(r: Rand = this.rand, slots?: ItemSlot[]): { def: string; power: number } {
     const x = r();
     const rarity: Rarity = x < 0.06 ? 'unique' : x < 0.32 ? 'rare' : 'common';
-    const pool = ITEMS.filter((d) => d.rarity === rarity);
+    const of = (rr: Rarity): ItemDef[] => ITEMS.filter((d) => d.rarity === rr && (!slots || slots.includes(d.slot)));
+    const pool = of(rarity).length ? of(rarity) : of('common');
     return { def: pool[Math.floor(r() * pool.length)].id, power: Math.max(1, this.power + Math.floor(r() * 3) - 1) };
+  }
+
+  /** Купить за малину: false — не хватает */
+  pay(price: number): boolean {
+    if (this.data.berries < price) return false;
+    this.data.berries -= price;
+    this.save();
+    return true;
+  }
+
+  /** Перековка у кузнеца: +1 к силе предмета */
+  reforge(uid: string, price: number): boolean {
+    const it = this.get(uid);
+    if (!it || !this.pay(price)) return false;
+    it.power++;
+    this.save();
+    return true;
   }
 
   equipped(slot: 'melee' | 'ranged' | 'armor'): Item | null { return this.get(this.data.equip[slot]); }

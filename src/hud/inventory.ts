@@ -441,7 +441,7 @@ const enchantSum = (it: Item, id: string): number => it.enchants.reduce((a, s) =
 
 /**
  * Герой в инвентаре: свой рендер на холсте, медленно поворачивается, тянуть мышью — крутить.
- * Тот же Knight, что в игре, с надетым оружием; броня пока видна только цветом плаща.
+ * Тот же Knight, что в игре, с надетым оружием и бронёй.
  */
 class Preview {
   private readonly renderer: THREE.WebGLRenderer;
@@ -452,6 +452,7 @@ class Preview {
   private yaw = 0.5;
   private drag: number | null = null;
   private weapon = '';
+  private armor = '-';
   private last = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, T: Textures) {
@@ -483,6 +484,8 @@ class Preview {
     const m = p.equipped('melee');
     const w = m ? getWeapon(itemDef(m.def).weapon ?? '') : undefined;
     if (w && w.id !== this.weapon) { this.weapon = w.id; this.knight.setWeapon(w); }
+    const a = p.equipped('armor');
+    if ((a?.def ?? '') !== this.armor) { this.armor = a?.def ?? ''; this.knight.setArmor(a ? itemDef(a.def).armor?.look ?? null : null); }
   }
 
   start(): void {

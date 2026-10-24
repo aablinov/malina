@@ -1,12 +1,14 @@
 import { iconImg, iconURL } from '../icons';
 import { itemDef, MAX_SOULS, xpToNext, type Profile } from '../items';
+import { AutoMap, type MapMarker, type MapView } from './automap';
 import './hud.css';
 
 /**
  * HUD как в Minecraft Dungeons (wiki/design-inventory.md): снизу по центру тёмная панель —
  * очки зачарования, инвентарь (I), три артефакта (1, 2, 3) с полосой душ под ними, большое сердце здоровья
  * с жизнями, зелье (E), карта (M), перекат (Space), стрелы в шестиугольнике (ПКМ), справа малина; под правой
- * половиной — полоса опыта с уровнем. Слева сверху — действующие эффекты, справа сверху — задание.
+ * половиной — полоса опыта с уровнем. Слева сверху — действующие эффекты, справа сверху — задание и мини-карта.
+ * Карта (src/hud/automap.ts): мини-карта в углу, Tab — прозрачная поверх игры (как в Diablo II), M — полная (как в MCD).
  * Только отображение: числа приходят из профиля (src/items.ts) и из сцены (HudState) каждый кадр.
  */
 
@@ -31,6 +33,9 @@ export class Hud {
   readonly el: HTMLDivElement;
   private readonly cache = new Map<string, string>();
   private mapEl: HTMLDivElement;
+  private automap: AutoMap | null = null;
+  /** Карта поверх игры (Tab) */
+  overlay = false;
   private bannerT = 0;
   onInventory?: () => void;
   onMap?: () => void;
@@ -73,7 +78,16 @@ export class Hud {
         </div>
         <div class="hud-berries" title="Малина">${iconImg('berry')}<b data-id="berries">0</b></div>
       </div>
-      <div class="hud-mapwrap" data-id="map"></div>`;
+      <div class="hud-minibox" data-act="map" title="Карта (M) · Tab — поверх игры"><canvas data-id="mini"></canvas></div>
+      <canvas class="hud-over" data-id="over"></canvas>
+      <div class="hud-mapwrap" data-id="map">
+        <div class="hud-mapframe">
+          <h2 data-id="mapTitle"></h2>
+          <button class="hud-mapx" data-act="map" title="Закрыть (M)">✕</button>
+          <canvas data-id="full"></canvas>
+          <div class="hud-mapstats" data-id="mapStats"></div>
+        </div>
+      </div>`;
     parent.appendChild(el);
     this.el = el;
     this.mapEl = this.q('map') as HTMLDivElement;
@@ -114,19 +128,49 @@ export class Hud {
 
   get mapOpen(): boolean { return this.mapEl.classList.contains('open'); }
 
-  /** Карта уровня (M): холст сверху и точка героя */
-  toggleMap(canvas?: HTMLCanvasElement): void {
-    if (canvas && !this.mapEl.firstChild) {
-      this.mapEl.innerHTML = '<div class="hud-maptitle">Карта</div><div class="hud-mapbox"><i class="hud-mapme"></i></div><div class="hud-maphint">M — закрыть</div>';
-      this.mapEl.querySelector('.hud-mapbox')?.prepend(canvas);
-    }
-    this.mapEl.classList.toggle('open');
+  /** Подключить карту уровня и её название (заголовок полной карты) */
+  setMap(m: AutoMap, title: string): void { this.automap = m; this.set('mapTitle', title); }
+
+  /** Полная карта (M) */
+  toggleMap(): void { if (this.automap) this.mapEl.classList.toggle('open'); }
+
+  /** Карта поверх игры (Tab) */
+  toggleOverlay(): void { this.overlay = !this.overlay; }
+
+  /** Холст под размер на экране (с учётом плотности пикселей); false — не виден */
+  private fitCanvas(id: string): CanvasRenderingContext2D | null {
+    const c = this.q(id) as HTMLCanvasElement;
+    const w = c.clientWidth, h = c.clientHeight;
+    if (!w || !h) return null;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    const g = c.getContext('2d');
+    if (!g) return null;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, c.width, c.height);
+    return g;
   }
 
-  /** Точка героя на карте: доли 0..1 по ширине и высоте холста, взгляд, рад */
-  mapHero(u: number, v: number): void {
-    const me = this.mapEl.querySelector<HTMLElement>('.hud-mapme');
-    if (me) { me.style.left = `${u * 100}%`; me.style.top = `${v * 100}%`; }
+  /** Нарисовать карты: мини, поверх игры, полную; chests — [открыто, всего] */
+  drawMaps(hero: MapView, markers: MapMarker[], chests: [number, number]): void {
+    const m = this.automap;
+    if (!m) return;
+    const mini = this.fitCanvas('mini');
+    if (mini) m.draw(mini, hero.x, hero.z, mini.canvas.width / 2, mini.canvas.height / 2, mini.canvas.width / 44, hero, markers, 0.95);
+    const over = this.q('over');
+    over.style.display = this.overlay && !this.mapOpen ? '' : 'none';
+    if (this.overlay && !this.mapOpen) {
+      const g = this.fitCanvas('over');
+      if (g) m.draw(g, hero.x, hero.z, g.canvas.width / 2, g.canvas.height / 2, g.canvas.height / 34, hero, markers, 0.85, true);
+    }
+    if (this.mapOpen) {
+      const g = this.fitCanvas('full');
+      if (g) {
+        const f = m.fit(g.canvas.width, g.canvas.height);
+        m.draw(g, f.ox, f.oz, g.canvas.width / 2, g.canvas.height / 2, f.k, hero, markers);
+      }
+      this.set('mapStats', `<div>${iconImg('chest')}Сундуков открыто <b>${chests[0]} / ${chests[1]}</b></div><div>${iconImg('map')}Исследовано <b>${Math.round(m.explored * 100)} %</b></div>`);
+    }
   }
 
   update(s: HudState, dt: number): void {

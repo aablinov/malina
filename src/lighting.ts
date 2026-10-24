@@ -22,13 +22,18 @@ import { sunOffset, tintVec, type WorldSettings } from './world';
  * `unreal = false` оставляет только солнце, небо и bloom — как было до этого слоя (сравнить: клавиша U).
  */
 
-/** Лёгкое затенение без вырезных и прозрачных сеток: трава и листья — плоскости, иначе они дают пятна */
+/**
+ * Лёгкое затенение без вырезных и прозрачных сеток: трава и листья — плоскости, иначе они дают пятна.
+ * Спрайты (вспышки заклинаний и взрывов, лут на полу) и точки тоже прячем: в проходе нормалей они рисовались
+ * непрозрачными квадратами, и AO давал вокруг них чёрные квадраты.
+ */
 class SolidAOPass extends GTAOPass {
   // в типах three метода нет, в самом GTAOPass он есть и вызывается перед проходом нормалей
   overrideVisibility(): void {
     (GTAOPass.prototype as unknown as { overrideVisibility(this: GTAOPass): void }).overrideVisibility.call(this);
     this.scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if ((o as THREE.Sprite).isSprite || (o as THREE.Points).isPoints) { o.visible = false; return; }
       if (!(o as THREE.Mesh).isMesh || !m || Array.isArray(m)) return;
       if (m.alphaTest > 0 || m.transparent || (m as THREE.MeshBasicMaterial).isMeshBasicMaterial) o.visible = false;
     });

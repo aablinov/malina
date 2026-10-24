@@ -5,6 +5,7 @@ import { pixelTex, type Textures } from './textures';
 import { SwordTrail } from './trail';
 import { HERO, SWORD } from './tuning';
 import { buildWeaponModel, disposeWeaponModel, type WeaponDef } from './weapons';
+import type { ArmorLook, BowLook } from './items';
 
 /**
  * Герой: блочный персонаж в духе Minecraft Dungeons (крупная голова, короткие руки и ноги, плащ) со стандартным мечом.
@@ -151,6 +152,14 @@ export class Knight {
   private bladeBase = 0.22;
   private bladeTip = 0.24 + BLADE;
   private readonly flashMats: THREE.MeshLambertMaterial[] = [];
+  /** Надетая броня — детали поверх тела (setArmor) */
+  private armorMeshes: THREE.Object3D[] = [];
+  private capeMat!: THREE.MeshLambertMaterial;
+  private capeMap!: THREE.Texture;
+  /** Лук в левой руке: виден, пока стреляет (shootPose) */
+  private readonly bow = new THREE.Group();
+  private bowT = 0;
+  private bowYaw = 0;
 
   constructor(scene: THREE.Scene, T: Textures) {
     // вспыхивают при уроне только материалы без своего свечения
@@ -234,9 +243,91 @@ export class Knight {
     this.sword.add(box(0.025, 0.17, BLADE - 0.08, M.edge, 0, 0, 0.18 + BLADE / 2));
     this.sword.add(box(0.05, 0.08, 0.08, M.steel, 0, 0, 0.24 + BLADE)); // кончик
 
+    this.capeMat = M.cape;
+    this.capeMap = M.cape.map as THREE.Texture;
+
+    // лук в левой кисти: дуги вдоль Z кисти (при поднятой руке — вертикально), тетива ближе к плечу
+    this.bow.position.set(0, -ARM + 0.08, 0);
+    this.bow.visible = false;
+    this.arms[1].add(this.bow);
+
     this.trail = new SwordTrail(scene);
     this.animate(0);
   }
+
+  /** Надеть броню: нагрудник, наплечники, головной убор, подол, цвет плаща; null — без брони */
+  setArmor(look: ArmorLook | null): void {
+    for (const o of this.armorMeshes) {
+      o.parent?.remove(o);
+      o.traverse((c) => { if (c instanceof THREE.Mesh) { c.geometry.dispose(); const m = c.material as THREE.Material; const i = this.flashMats.indexOf(m as THREE.MeshLambertMaterial); if (i >= 0) this.flashMats.splice(i, 1); m.dispose(); } });
+    }
+    this.armorMeshes = [];
+    this.capeMat.map = look?.cape ? pixelTex(look.cape, 9, 77) : this.capeMap;
+    this.capeMat.needsUpdate = true;
+    if (!look) return;
+    const mat = (c: string, n = 7): THREE.MeshLambertMaterial => { const m = new THREE.MeshLambertMaterial({ map: pixelTex(c, n, 90) }); this.flashMats.push(m); return m; };
+    const add = (parent: THREE.Object3D, ...ms: THREE.Mesh[]): void => { for (const m of ms) { parent.add(m); this.armorMeshes.push(m); } };
+    const body = mat(look.body), trim = mat(look.trim, 5);
+    // нагрудник поверх туники, пояс и ворот
+    add(this.torso, box(0.6, 0.5, 0.38, body, 0, BODY - 0.26, 0), box(0.62, 0.09, 0.4, trim, 0, BODY - 0.5, 0), box(0.42, 0.07, 0.06, trim, 0, BODY - 0.04, 0.19));
+    if (look.glow) add(this.torso, box(0.13, 0.13, 0.04, new THREE.MeshBasicMaterial({ color: new THREE.Color(look.glow).multiplyScalar(2.6), toneMapped: false }), 0, BODY - 0.27, 0.2));
+    // рукава и наплечники
+    for (const arm of this.arms) {
+      add(arm, box(0.235, 0.3, 0.235, body, 0, -0.1, 0));
+      if (look.pauldron) { const p = mat(look.pauldron); add(arm, box(0.31, 0.13, 0.31, p, 0, 0.08, 0), box(0.32, 0.04, 0.32, trim, 0, 0.02, 0)); }
+    }
+    if (look.skirt) add(this.hips, box(0.6, 0.4, 0.38, mat(look.skirt), 0, -0.16, 0));
+    const h = look.head;
+    if (h) {
+      const c = mat(h.color), W = HEAD + 0.1;
+      // капюшон, шлем, волчья голова: верх, бока и затылок, лицо открыто
+      if (h.kind === 'cap') add(this.head, box(HEAD + 0.06, 0.16, HEAD + 0.06, c, 0, HEAD - 0.02, 0), box(HEAD + 0.06, 0.04, 0.14, c, 0, HEAD - 0.09, HEAD / 2 + 0.06));
+      else {
+        add(this.head,
+          box(W, 0.12, W, c, 0, HEAD + 0.03, 0),
+          box(0.06, HEAD - 0.06, W, c, W / 2 - 0.03, HEAD / 2 + 0.03, 0), box(0.06, HEAD - 0.06, W, c, -W / 2 + 0.03, HEAD / 2 + 0.03, 0),
+          box(W, HEAD - 0.06, 0.06, c, 0, HEAD / 2 + 0.03, -W / 2 + 0.03));
+        if (h.kind === 'hood') add(this.head, box(0.22, 0.2, 0.18, c, 0, HEAD - 0.06, -W / 2 - 0.06));
+        if (h.kind === 'helmet') {
+          const a = mat(h.accent ?? h.color, 5);
+          add(this.head, box(0.07, 0.22, 0.05, c, 0, HEAD * 0.52, W / 2 - 0.01), box(0.09, 0.12, W * 0.85, a, 0, HEAD + 0.14, 0), box(W, 0.05, 0.05, a, 0, HEAD - 0.06, W / 2 - 0.02));
+        }
+        if (h.kind === 'wolf') {
+          const a = mat(h.accent ?? h.color, 5), eye = new THREE.MeshBasicMaterial({ color: '#1c1a2e' });
+          add(this.head, box(0.12, 0.16, 0.08, c, -0.2, HEAD + 0.15, 0.05), box(0.12, 0.16, 0.08, c, 0.2, HEAD + 0.15, 0.05),
+            box(0.3, 0.15, 0.22, a, 0, HEAD + 0.05, W / 2 + 0.05), box(0.05, 0.05, 0.02, eye, -0.09, HEAD + 0.1, W / 2 + 0.165), box(0.05, 0.05, 0.02, eye, 0.09, HEAD + 0.1, W / 2 + 0.165));
+        }
+      }
+    }
+  }
+
+  /** Лук (дальнее оружие) — модель в левой руке; null — нет лука */
+  setBow(look: BowLook | null): void {
+    for (const c of [...this.bow.children]) { this.bow.remove(c); disposeWeaponModel(c); }
+    if (!look) return;
+    const k = look.size ?? 1;
+    const wood = new THREE.MeshLambertMaterial({ map: pixelTex(look.wood, 7, 91) });
+    const str = new THREE.MeshBasicMaterial({ color: look.string });
+    const glow = look.glow ? new THREE.MeshBasicMaterial({ color: new THREE.Color(look.glow).multiplyScalar(2.4), toneMapped: false }) : null;
+    if (look.kind === 'crossbow') {
+      // ложе вперёд по руке (−Y кисти), плечи дуги — поперёк, тетива чуть ближе
+      this.bow.add(box(0.08, 0.62, 0.09, wood, 0, -0.2, 0));
+      this.bow.add(box(0.66, 0.07, 0.07, new THREE.MeshLambertMaterial({ color: '#5a5f6a' }), 0, -0.46, 0));
+      this.bow.add(box(0.62, 0.015, 0.015, str, 0, -0.36, 0));
+      this.bow.add(box(0.03, 0.4, 0.03, new THREE.MeshLambertMaterial({ color: '#c6d0dc' }), 0, -0.3, 0.06));
+      return;
+    }
+    // дуга из коробок: плечи изогнуты вперёд (−Y кисти), тетива — прямая
+    const L = 0.46 * k;
+    for (let i = -3; i <= 3; i++) {
+      const z = (i / 3.5) * L, y = -0.13 * (1 - (i / 3.5) ** 2) * k;
+      this.bow.add(box(0.06, 0.07, L / 3.2, i === 0 ? new THREE.MeshLambertMaterial({ color: '#3d2616' }) : (glow && Math.abs(i) === 3 ? glow : wood), 0, y, z));
+    }
+    this.bow.add(box(0.015, 0.015, L * 1.85, str, 0, 0.02, 0));
+  }
+
+  /** Выстрел: на sec секунд герой разворачивается к yaw, левая рука с луком вперёд, правая натягивает тетиву */
+  shootPose(yaw: number, sec = 0.45): void { this.bowT = sec; this.bowYaw = yaw; this.yaw = yaw; }
 
   // ---------- состояние ----------
 
@@ -244,6 +335,10 @@ export class Knight {
   get attacking(): boolean { return this.combo >= 0; }
   get invulnerable(): boolean { return this.god || (this.rolling && HERO.rollTime - this.rollT < HERO.rollIframes); }
   get object(): THREE.Object3D { return this.root; }
+  /** Деталей брони на теле (для тестов) */
+  get armorParts(): number { return this.armorMeshes.length; }
+  /** Лук в руке виден (стреляет) */
+  get bowShown(): boolean { return this.bow.visible; }
 
   get state(): KnightState {
     if (this.down) return 'без сил';
@@ -297,6 +392,7 @@ export class Knight {
     this.simTime += dt;
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.rollCdT = Math.max(0, this.rollCdT - dt);
+    this.bowT = Math.max(0, this.bowT - dt);
     if (this.down) {
       this.downT += dt;
       this.vel.set(0, 0, 0);
@@ -341,7 +437,7 @@ export class Knight {
       this.vel.add(diff);
       this.pos.addScaledVector(this.vel, dt);
       // поворот: в ударе — к курсору, иначе — по ходу
-      const faceTo = this.attacking ? aimYaw : moveDir ? Math.atan2(moveDir.x, moveDir.z) : this.yaw;
+      const faceTo = this.attacking ? aimYaw : this.bowT > 0 ? this.bowYaw : moveDir ? Math.atan2(moveDir.x, moveDir.z) : this.yaw;
       this.yaw = wrap(this.yaw + wrap(faceTo - this.yaw) * damp(this.attacking ? H.turnRate * 1.6 : H.turnRate, dt));
     }
 
@@ -510,9 +606,12 @@ export class Knight {
       if (air) { pose.ax -= 0.5; pose.az += 0.35; pose.lx = -0.6; }
       if (this.rolling) { pose.ax = -1.4; pose.lx = -1.4; }
     }
+    const aiming = this.bowT > 0 && this.combo < 0 && !this.rolling && !this.down;
+    if (aiming) { pose.lx = -1.55; pose.ly = 0.25; pose.ax = -1.5; pose.ay = -0.55; pose.az = 0; pose.twist = 0.25; }
+    this.bow.visible = aiming && this.bow.children.length > 0;
     const R = this.arms[0], L = this.arms[1];
     R.rotation.set(pose.ax, pose.ay, pose.az);
-    L.rotation.set(pose.lx, pose.ly, air && this.combo < 0 ? -0.35 : -0.08);
+    L.rotation.set(pose.lx, pose.ly, aiming ? 0 : air && this.combo < 0 ? -0.35 : -0.08);
     this.sword.rotation.x = pose.w;
     this.torso.rotation.y = pose.twist;
     this.torso.rotation.x = pose.lean + (walking ? 0.06 : 0);
