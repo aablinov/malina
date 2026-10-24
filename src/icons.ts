@@ -4,12 +4,17 @@
  * с image-rendering: pixelated. Внешних картинок нет (как и у текстур).
  */
 
-type Draw = (p: Pen) => void;
+import { ICONS as DARK_ARCANE_ICONS } from './magic/dark-arcane-icons';
+import { ICONS as EARTH_ICONS } from './magic/earth-icons';
+import { ICONS as FIRE_ICE_ICONS } from './magic/fire-ice-icons';
+import { ICONS as STORM_LIGHT_ICONS } from './magic/storm-light-icons';
+
+export type Draw = (p: Pen) => void;
 
 const N = 16;
 const OUTLINE = '#120e18';
 
-class Pen {
+export class Pen {
   readonly px = new Map<number, string>();
   /** Пиксель */
   p(x: number, y: number, c: string): void { if (x >= 0 && y >= 0 && x < N && y < N) this.px.set(y * N + x, c); }
@@ -52,6 +57,7 @@ function blade(p: Pen, x0: number, y0: number, x1: number, y1: number, hi: strin
 }
 
 const ICONS: Record<string, Draw> = {
+  ...FIRE_ICE_ICONS, ...STORM_LIGHT_ICONS, ...DARK_ARCANE_ICONS, ...EARTH_ICONS,
   // ---------- ближний бой ----------
   sword(p) {
     blade(p, 7, 8, 14, 1, STEEL[0], STEEL[2]);

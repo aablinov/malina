@@ -14,7 +14,7 @@
 .trade-head h1 { margin: 0.2em 0 0.3em; font: 400 2.2em/1 var(--mcd-px); color: var(--mcd-gold); text-transform: uppercase; text-shadow: 0.1em 0.1em 0 #000; }
 .trade-head p { margin: 0 0 1.4em; font-weight: 500; color: #d6d1de; max-width: 48em; }
 .trade-body { display: grid; grid-template-columns: 1.6fr 1fr; gap: 3em; min-height: 0; }
-.trade-offers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6em; align-content: start; }
+.trade-offers { display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); gap: 1.4em; align-content: start; }
 .trade-card {
   display: flex; flex-direction: column; align-items: center; gap: 0.6em; padding: 1.2em 1em 1.3em;
   background: linear-gradient(#2c2a31, #1b1a1f); border: 0.2em solid #4b4953; box-shadow: 0 0 0 0.15em #050407;

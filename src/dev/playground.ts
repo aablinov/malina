@@ -793,7 +793,7 @@ export function runPlayground(): void {
     if (fpsAcc > 0.5) { fpsVal = fpsN / fpsAcc; frameMs = (fpsAcc / fpsN) * 1000; fpsAcc = 0; fpsN = 0; }
 
     // стоп-кадр удара заклинания: время почти стоит (src/fx.ts hitstop)
-    const stop = fx.hitstop > 0 ? 0.04 : 1;
+    const stop = fx.hitstop > 0 ? 0.04 : fx.slowmo > 0 ? 0.33 : 1;
     fx.updateReal(real);
     // инвентарь открыт — игра на паузе, как в одиночной MCD
     if (!paused && !inventory.open && !shop.open) acc += real * timeScale * stop;
@@ -814,7 +814,7 @@ export function runPlayground(): void {
       camTarget.y += ((hero.grounded ? want.y : camTarget.y) - camTarget.y) * Math.min(1, real * 3);
     }
     const sh = fx.shake * 0.2;
-    camera.position.copy(camTarget).addScaledVector(CAM_DIR, camDist).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh));
+    camera.position.copy(camTarget).addScaledVector(CAM_DIR, camDist * (1 + fx.zoom)).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh));
     camera.lookAt(camTarget.x, camTarget.y + 0.6, camTarget.z);
     look.follow(camTarget, camDist);
     weather.update(real, camTarget);

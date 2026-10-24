@@ -10,7 +10,7 @@ import { additive, additiveSprite } from './loot-look';
  * Текстуры белые, рисуются кодом один раз; цвет — в материале.
  */
 
-export type SigilSchool = 'spark' | 'fireball' | 'icerain' | 'heal' | 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns';
+export type SigilSchool = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane' | 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns';
 
 type Draw = (g: CanvasRenderingContext2D, c: number, r: number, w: number) => void;
 
@@ -130,6 +130,76 @@ const DRAW: Record<string, Draw> = {
       if (i % 3 === 0) { g.beginPath(); g.arc(x, y, r * 0.025, 0, TAU); g.fill(); }
     }
   },
+  pentagram(g, c, r, w) {
+    g.lineWidth = w * 1.6; g.beginPath();
+    for (let i = 0; i <= 5; i++) { const a = -Math.PI / 2 + ((i * 2) / 5) * TAU; g[i ? 'lineTo' : 'moveTo'](c + Math.cos(a) * r, c + Math.sin(a) * r); }
+    g.stroke();
+    g.lineWidth = w; circle(g, c, c, r);
+    for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i / 5) * TAU; circle(g, c + Math.cos(a) * r, c + Math.sin(a) * r, r * 0.07); }
+  },
+  rays(g, c, r, w) {
+    // солнце: 16 лучей-клиньев, длинные и короткие через один
+    g.lineWidth = w; circle(g, c, c, r * 0.55);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU, l = i % 2 ? 0.8 : 1, b = 0.06;
+      g.lineWidth = w * 1.2; g.beginPath();
+      g.moveTo(c + Math.cos(a - b) * r * 0.6, c + Math.sin(a - b) * r * 0.6); g.lineTo(c + Math.cos(a) * r * l, c + Math.sin(a) * r * l); g.lineTo(c + Math.cos(a + b) * r * 0.6, c + Math.sin(a + b) * r * 0.6);
+      g.stroke();
+    }
+  },
+  spiral(g, c, r, w) {
+    // три рукава спирали — воронка душ
+    g.lineWidth = w * 1.4;
+    for (let k = 0; k < 3; k++) {
+      g.beginPath();
+      for (let i = 0; i <= 60; i++) { const t = i / 60, a = k * (TAU / 3) + t * TAU * 1.1, rr = r * (0.12 + t * 0.88); g[i ? 'lineTo' : 'moveTo'](c + Math.cos(a) * rr, c + Math.sin(a) * rr); }
+      g.stroke();
+    }
+    g.lineWidth = w; circle(g, c, c, r);
+  },
+  eye(g, c, r, w) {
+    g.lineWidth = w * 1.6; g.beginPath();
+    g.moveTo(c - r, c); g.quadraticCurveTo(c, c - r * 0.9, c + r, c); g.quadraticCurveTo(c, c + r * 0.9, c - r, c); g.stroke();
+    g.lineWidth = w; circle(g, c, c, r * 0.32);
+    g.beginPath(); g.arc(c, c, r * 0.14, 0, TAU); g.fill();
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; g.beginPath(); g.moveTo(c + Math.cos(a) * r * 0.42, c + Math.sin(a) * r * 0.42); g.lineTo(c + Math.cos(a) * r * 0.55, c + Math.sin(a) * r * 0.55); g.stroke(); }
+  },
+  stones(g, c, r, w) {
+    // кольцо из угловатых камней-блоков
+    g.lineWidth = w * 0.8; circle(g, c, c, r * 0.86);
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * TAU, x = c + Math.cos(a) * r * 0.86, y = c + Math.sin(a) * r * 0.86, h = r * (i % 2 ? 0.06 : 0.09);
+      g.save(); g.translate(x, y); g.rotate(a + (i % 3) * 0.3);
+      g.lineWidth = w * 1.4; g.strokeRect(-h, -h, h * 2, h * 2);
+      if (i % 2 === 0) g.fillRect(-h * 0.4, -h * 0.4, h * 0.8, h * 0.8);
+      g.restore();
+    }
+  },
+  cracks(g, c, r, w) {
+    // трещины от центра с изломами
+    g.lineCap = 'round';
+    let seed = 11;
+    const rr = (): number => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    for (let i = 0; i < 9; i++) {
+      let a = (i / 9) * TAU, x = c, y = c;
+      g.lineWidth = w * 1.5; g.beginPath(); g.moveTo(x, y);
+      for (let j = 1; j <= 5; j++) { a += (rr() - 0.5) * 0.7; const l = r / 5; x += Math.cos(a) * l; y += Math.sin(a) * l; g.lineTo(x, y); }
+      g.stroke();
+    }
+    g.lineWidth = w; circle(g, c, c, r * 0.2);
+  },
+  blades(g, c, r, w) {
+    // венец из мечей остриём наружу
+    g.lineWidth = w * 0.8; circle(g, c, c, r * 0.6);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU;
+      g.save(); g.translate(c, c); g.rotate(a);
+      g.lineWidth = w * 1.3;
+      g.beginPath(); g.moveTo(-r * 0.04, -r * 0.62); g.lineTo(-r * 0.04, -r * 0.92); g.lineTo(0, -r); g.lineTo(r * 0.04, -r * 0.92); g.lineTo(r * 0.04, -r * 0.62); g.stroke();
+      g.beginPath(); g.moveTo(-r * 0.1, -r * 0.62); g.lineTo(r * 0.1, -r * 0.62); g.stroke();
+      g.restore();
+    }
+  },
   thorns(g, c, r, w) {
     // лоза волной по кругу и шипы наружу и внутрь
     g.lineWidth = w * 1.6; g.beginPath();
@@ -231,6 +301,35 @@ const STYLE: Record<SigilSchool, Layer[]> = {
     { key: 'snowflake', r: 0.64, speed: -0.6, at: 0.25 },
     { key: 'diamonds', r: 1.16, speed: 0.3, at: 0.5, alt: true },
     { key: 'runes', r: 0.42, speed: 1, at: 0.75 },
+  ],
+  // школы заклинаний с боссов (src/magic/)
+  star: [
+    { key: 'ticks', r: 1, speed: 0.25, at: 0 },
+    { key: 'rays', r: 0.8, speed: -0.35, at: 0.25, alt: true },
+    { key: 'pentagram', r: 0.62, speed: 0.6, at: 0.5 },
+    { key: 'dots', r: 1.18, speed: -0.25, at: 0.75, alt: true },
+    { key: 'runes', r: 0.36, speed: 1.2, at: 0.75 },
+  ],
+  void: [
+    { key: 'ticks', r: 1, speed: -0.3, at: 0 },
+    { key: 'spiral', r: 0.82, speed: 0.9, at: 0.25, alt: true },
+    { key: 'runes', r: 0.6, speed: -0.6, at: 0.5 },
+    { key: 'eye', r: 0.34, speed: 0.2, at: 0.75, alt: true },
+    { key: 'dots', r: 1.18, speed: 0.3, at: 0.75 },
+  ],
+  earth: [
+    { key: 'ticks', r: 1, speed: 0.15, at: 0 },
+    { key: 'cracks', r: 0.8, speed: 0, at: 0, alt: true },
+    { key: 'stones', r: 1.16, speed: -0.2, at: 0.25 },
+    { key: 'hexagon', r: 0.55, speed: 0.35, at: 0.5, alt: true },
+    { key: 'leaves', r: 0.36, speed: -0.6, at: 0.75 },
+  ],
+  arcane: [
+    { key: 'ticks', r: 1, speed: 0.4, at: 0 },
+    { key: 'blades', r: 1.18, speed: -0.5, at: 0.25, alt: true },
+    { key: 'pentagram', r: 0.7, speed: 0.7, at: 0.25 },
+    { key: 'square', r: 0.45, speed: -1, at: 0.5, rot: Math.PI / 4, alt: true },
+    { key: 'runes', r: 0.86, speed: 0.5, at: 0.75 },
   ],
   // ауры (src/auras.ts): тусклый круг под героем — слои ступеней 0–1, вспышка раскрывает все
   pact: [

@@ -7,6 +7,7 @@ import type { ArtifactKind, ArtifactStats } from './items';
 import type { Knight } from './knight';
 import type { Terrain } from './level/collide.ts';
 import { additiveSprite, glowTex, lightBeam } from './loot-look';
+import { BOSS_SPELLS, type Tier } from './magic/registry';
 import type { Target } from './target';
 
 /**
@@ -15,8 +16,15 @@ import type { Target } from './target';
  * Числа (урон, перезарядка) — в src/items.ts, слоты и души — в src/gear.ts.
  */
 
+/** Стартовые заклинания — здесь; заклинания с боссов — в src/magic/ (реестр BOSS_SPELLS) */
 export type SpellKind = Extract<ArtifactKind, 'spark' | 'fireball' | 'icerain' | 'heal'>;
-export const isSpell = (k: ArtifactKind): k is SpellKind => k === 'spark' || k === 'fireball' || k === 'icerain' || k === 'heal';
+const STARTERS = new Set<string>(['spark', 'fireball', 'icerain', 'heal']);
+export const isSpell = (k: ArtifactKind): boolean => STARTERS.has(k) || k in BOSS_SPELLS;
+
+/** Школа: цвета, узор круга (src/sigils.ts) и звук заряда (src/spell-audio.ts). Стартовые названы по своему заклинанию */
+export type School = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane';
+/** Школа заклинания */
+export const schoolOf = (k: ArtifactKind): School => (STARTERS.has(k) ? (k as School) : BOSS_SPELLS[k]?.school ?? 'arcane');
 
 export interface SpellHooks {
   scene: THREE.Scene;
@@ -35,11 +43,17 @@ export const chargeMult = (k: number): number => 1 + 1.5 * k;
 
 const C = (r: number, g: number, b: number): THREE.Color => new THREE.Color(r, g, b);
 /** Цвета стихий: яркость больше 1 светится через bloom */
-const SCHOOL: Record<SpellKind, { a: THREE.Color; b: THREE.Color; css: string }> = {
+export interface SchoolLook { a: THREE.Color; b: THREE.Color; css: string }
+const SCHOOL: Record<School, SchoolLook> = {
   spark: { a: C(1, 2, 4), b: C(2.2, 3, 4), css: '#b8dcff' },
   fireball: { a: C(4, 1.5, 0.35), b: C(4, 3, 1), css: '#ffb060' },
   icerain: { a: C(1.4, 2.8, 4), b: C(2.8, 3.6, 4), css: '#c8f0ff' },
   heal: { a: C(0.9, 3.6, 1.1), b: C(3.8, 3.2, 1.2), css: '#d0ffb0' },
+  // свет и звёзды — золото и белый; тьма и души — фиолетовый и бирюза; земля и природа — янтарь и зелень; аркана — пурпур и розовый
+  star: { a: C(4, 3.2, 1.2), b: C(3.8, 3.8, 3.4), css: '#fff0b0' },
+  void: { a: C(2, 0.8, 4), b: C(0.6, 3, 3.4), css: '#b890ff' },
+  earth: { a: C(3.6, 2.2, 0.7), b: C(1.4, 3.2, 0.8), css: '#ffd890' },
+  arcane: { a: C(3.4, 0.9, 4), b: C(4, 1.6, 2.6), css: '#ff9ae8' },
 };
 const PINK = C(3.8, 1, 1.8);
 
@@ -95,19 +109,44 @@ const icicleMat = new THREE.MeshBasicMaterial({ color: C(1.5, 2.6, 3.4), transpa
 const _v = new THREE.Vector3();
 const rand = (a: number, b: number): number => a + Math.random() * (b - a);
 
-interface Charging { slot: number; kind: SpellKind; max: number; t: number; full: boolean; sound: ChargeSound; sigil: Sigil; orb: THREE.Sprite }
+interface Charging { slot: number; kind: ArtifactKind; school: School; max: number; t: number; full: boolean; sound: ChargeSound; sigil: Sigil; orb: THREE.Sprite }
 interface Job { t: number; fn: () => void }
+
+/** Временное усиление героя от заклинания (облик титана): множители урона, получаемого урона, скорости и размер */
+export interface HeroBuff { id: string; t: number; melee?: number; taken?: number; speed?: number; scale?: number }
 
 export class Spells {
   private charge: Charging | null = null;
   private readonly jobs: Job[] = [];
   /** Покадровые процессы (полёт шара, дождь, угли): false — закончился */
   private readonly procs: ((dt: number) => boolean)[] = [];
-  private time = 0;
+  /** Время заклинаний, с (растёт в update) */
+  time = 0;
   /** Удары заклинаний (для тестов): сколько раз сработала фаза удара */
   impacts = 0;
+  /** Куда смотрит курсор сейчас — для заклинаний, которые ведут лучом */
+  readonly aim = new THREE.Vector3();
+  /** Усиления героя; снаряжение (src/gear.ts) домножает статы, пока они идут */
+  readonly buffs: HeroBuff[] = [];
+  /** Поменялись усиления — пересчитать статы */
+  onBuffs?: () => void;
+  /** Текстуры следов на полу */
+  readonly tex = { scorch: (): THREE.Texture => scorchTex(), frost: (): THREE.Texture => frostTex(), glow: (): THREE.Texture => glowTex() };
 
-  constructor(private readonly h: SpellHooks) {}
+  constructor(readonly h: SpellHooks) {}
+
+  /** Цвета школы */
+  color(s: School): SchoolLook { return SCHOOL[s]; }
+
+  /** Покадровый процесс: вызывается каждый кадр, пока возвращает true */
+  proc(fn: (dt: number) => boolean): void { this.procs.push(fn); }
+
+  /** Усиление героя на dur секунд (повторное с тем же id — продлевает) */
+  buff(b: Omit<HeroBuff, 't'>, dur: number): void {
+    const was = this.buffs.find((x) => x.id === b.id);
+    if (was) was.t = Math.max(was.t, dur); else this.buffs.push({ ...b, t: dur });
+    this.onBuffs?.();
+  }
 
   /** Какой слот сейчас заряжается и насколько (0..1) */
   get charging(): { slot: number; k: number } | null { return this.charge ? { slot: this.charge.slot, k: this.k(this.charge) } : null; }
@@ -115,34 +154,35 @@ export class Spells {
   private k(c: Charging): number { return Math.min(1, c.t / c.max); }
 
   /** Рука героя: чуть впереди и на уровне плеча */
-  private hand(): THREE.Vector3 {
+  hand(): THREE.Vector3 {
     const hero = this.h.hero;
     return new THREE.Vector3(hero.pos.x + Math.sin(hero.yaw) * 0.5, hero.pos.y + 1.15, hero.pos.z + Math.cos(hero.yaw) * 0.5);
   }
 
   /** Развернуть героя к точке и вытянуть руку */
-  private face(at: THREE.Vector3, sec = 0.35): void {
+  face(at: THREE.Vector3, sec = 0.35): void {
     const hero = this.h.hero;
     const dx = at.x - hero.pos.x, dz = at.z - hero.pos.z;
     hero.shootPose(dx * dx + dz * dz > 0.01 ? Math.atan2(dx, dz) : hero.yaw, sec);
   }
 
-  private later(t: number, fn: () => void): void { this.jobs.push({ t: this.time + t, fn }); }
+  /** Сделать fn через t секунд игрового времени */
+  later(t: number, fn: () => void): void { this.jobs.push({ t: this.time + t, fn }); }
 
   // ---------- заряд ----------
 
   /** Начать заряжать (клавиша зажата) */
-  start(slot: number, kind: SpellKind, a: ArtifactStats): void {
+  start(slot: number, kind: ArtifactKind, a: ArtifactStats): void {
     this.cancel();
-    const s = SCHOOL[kind];
+    const school = schoolOf(kind), s = SCHOOL[school];
     // круг каста под ногами: слои раскрываются ступенями по заряду (src/sigils.ts)
-    const sigil = new Sigil(kind, 2.2, s.a, s.b, 0.32);
+    const sigil = new Sigil(school, 2.2, s.a, s.b, 0.32);
     sigil.group.position.copy(this.h.hero.pos);
     this.h.scene.add(sigil.group);
     const orb = new THREE.Sprite(additiveSprite(glowTex(), s.b.clone().multiplyScalar(0.6)));
     orb.scale.setScalar(0.3);
     this.h.scene.add(orb);
-    this.charge = { slot, kind, max: a.charge ?? 1, t: 0, full: false, sound: new ChargeSound(kind), sigil, orb };
+    this.charge = { slot, kind, school, max: a.charge ?? 1, t: 0, full: false, sound: new ChargeSound(school), sigil, orb };
   }
 
   /** Отпустить клавишу: заряд 0..1 и слот; визуал заряда убирается */
@@ -168,7 +208,7 @@ export class Spells {
   private updateCharge(dt: number, aim: THREE.Vector3): void {
     const c = this.charge;
     if (!c) return;
-    const hero = this.h.hero, fx = this.h.fx, s = SCHOOL[c.kind];
+    const hero = this.h.hero, fx = this.h.fx, s = SCHOOL[c.school];
     c.t += dt;
     const k = this.k(c);
     c.sound.set(k);
@@ -221,19 +261,42 @@ export class Spells {
   // ---------- каст ----------
 
   /** Сотворить заклинание к точке at; k — заряд 0..1; power — урон или лечение с учётом силы предмета */
-  cast(kind: SpellKind, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
+  cast(kind: ArtifactKind, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
     const p = power * chargeMult(k);
     switch (kind) {
       case 'spark': this.spark(a, p, at, k); break;
       case 'fireball': this.fireball(a, p, at, k); break;
       case 'icerain': this.icerain(a, p, at, k); break;
       case 'heal': this.heal(p, k); break;
+      default: BOSS_SPELLS[kind]?.cast(this, a, p, at, k);
     }
   }
 
+  /**
+   * Пафос по редкости (wiki/design-spells.md, раздел 5) — вызывать в миг удара заклинания с босса:
+   * обычное — ничего сверх impact; редкое — стоп-кадр и тряска всегда; легендарное — плюс миг замедления и широкая ударная волна;
+   * мифическое — плюс мир темнеет и выцветает, камера подаётся назад, крупное название на экране.
+   * Для мифического удобно вызвать pomp('mythic', …) в начале замаха: затемнение держится darken секунд.
+   */
+  pomp(tier: Tier, at: THREE.Vector3, school: School, title = '', darken = 0.6): void {
+    const fx = this.h.fx, s = SCHOOL[school];
+    if (tier === 'common') return;
+    fx.hitstop = Math.max(fx.hitstop, tier === 'rare' ? 0.07 : 0.09);
+    fx.shake = Math.max(fx.shake, tier === 'rare' ? 0.6 : 0.9);
+    if (tier === 'rare') return;
+    fx.slowmo = Math.max(fx.slowmo, tier === 'mythic' ? 0.5 : 0.35);
+    fx.shock(at.clone().setY(at.y + 0.06), tier === 'mythic' ? 14 : 10, s.a, 0.7, 0.08);
+    fx.shock(at.clone().setY(at.y + 0.06), tier === 'mythic' ? 9 : 6, s.b, 0.55, 0.12);
+    if (tier !== 'mythic') return;
+    fx.darken(darken);
+    fx.zoom = Math.max(fx.zoom, 0.35);
+    if (title) fx.title(title, s.css);
+    spellSfx.mythic();
+  }
+
   /** Общий миг удара: тишина перед ним, засветка, свет, тряска, стоп-кадр на полном заряде */
-  private impact(kind: SpellKind, at: THREE.Vector3, k: number, light: number, shake: number): void {
-    const fx = this.h.fx, s = SCHOOL[kind];
+  impact(school: School, at: THREE.Vector3, k: number, light: number, shake: number): void {
+    const fx = this.h.fx, s = SCHOOL[school];
     duck(0.18, 0.25 + k * 0.2, 0.6);
     fx.screenFlash(s.css, 0.1 + k * 0.18, 0.14 + k * 0.1);
     fx.light(at.clone().setY(at.y + 1.6), s.css, light * (1 + k), 10 + k * 6, 0.45 + k * 0.25);
@@ -243,15 +306,39 @@ export class Spells {
   }
 
   /** Короткий замах для каста без зарядки (тап, клик по слоту): вспышка в руке и свист */
-  private windup(kind: SpellKind, k: number): void {
-    const s = SCHOOL[kind], hand = this.hand();
+  windup(school: School, k: number): void {
+    const s = SCHOOL[school], hand = this.hand();
     this.h.fx.flash(hand, s.b.clone().multiplyScalar(0.8), 1 + k * 0.6, 0.2);
     this.h.fx.burst(hand, [s.a, s.b], 8, { speed: 1.5, up: 1, size: 0.06, life: 0.3, glow: true, gravity: 0 });
-    spellSfx.release(kind, k);
+    spellSfx.release(school, k);
+  }
+
+  /**
+   * Круг каста на земле в точке c радиусом R: раскрывается за unfold секунд, держится hold, потом расходится.
+   * Возвращает сам круг (можно двигать group.position)
+   */
+  groundSigil(school: School, c: THREE.Vector3, R: number, unfold: number, hold: number, glow = 0.3): Sigil {
+    const s = SCHOOL[school], sigil = new Sigil(school, R, s.a, s.b, glow);
+    sigil.group.position.copy(c);
+    this.h.scene.add(sigil.group);
+    let t = 0;
+    this.proc((dt) => {
+      t += dt;
+      sigil.update(dt, Math.min(1, t / Math.max(0.01, unfold)), t > unfold);
+      if (t < unfold + hold) return true;
+      sigil.burst(this.h.fx, 0.6);
+      return false;
+    });
+    return sigil;
+  }
+
+  /** Живые цели в круге радиуса r вокруг p */
+  within(p: THREE.Vector3, r: number): Target[] {
+    return this.h.targets().filter((t) => t.alive && Math.hypot(t.pos.x - p.x, t.pos.z - p.z) - t.radius <= r);
   }
 
   /** Ближайшая живая цель к точке в радиусе r (кроме уже задетых) */
-  private nearest(p: THREE.Vector3, r: number, skip: Set<Target> = new Set()): Target | null {
+  nearest(p: THREE.Vector3, r: number, skip: Set<Target> = new Set()): Target | null {
     let best: Target | null = null, bd = Infinity;
     for (const t of this.h.targets()) {
       if (!t.alive || skip.has(t)) continue;
@@ -262,7 +349,7 @@ export class Spells {
   }
 
   /** Точка на земле не дальше max от героя */
-  private ground(at: THREE.Vector3, max: number): THREE.Vector3 {
+  ground(at: THREE.Vector3, max: number): THREE.Vector3 {
     const hero = this.h.hero;
     const d = new THREE.Vector3(at.x - hero.pos.x, 0, at.z - hero.pos.z);
     if (d.length() > max) d.setLength(max);
@@ -275,7 +362,7 @@ export class Spells {
   // ---------- искра ----------
 
   /** Ломаная молния из светящихся брусков: ядро и мягкий ореол, мерцает и тает; branches — отростки */
-  private bolt(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color, width: number, branches: number, dur = 0.32): void {
+  bolt(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color, width: number, branches: number, dur = 0.32): void {
     const g = new THREE.Group();
     const core = new THREE.MeshBasicMaterial({ color: C(3.6, 3.8, 4).lerp(color, 0.25), toneMapped: false, transparent: true });
     const halo = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(0.5), toneMapped: false, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -602,6 +689,11 @@ export class Spells {
 
   update(dt: number, aim: THREE.Vector3): void {
     this.time += dt;
+    this.aim.copy(aim);
+    if (this.buffs.length) {
+      for (const b of this.buffs) b.t -= dt;
+      if (this.buffs.some((b) => b.t <= 0)) { this.buffs.splice(0, this.buffs.length, ...this.buffs.filter((b) => b.t > 0)); this.onBuffs?.(); }
+    }
     if (this.charge && this.h.hero.down) this.cancel();
     this.updateCharge(dt, aim);
     for (let i = this.jobs.length - 1; i >= 0; i--) if (this.jobs[i].t <= this.time) { const j = this.jobs[i]; this.jobs.splice(i, 1); j.fn(); }

@@ -386,7 +386,7 @@ export class Inventory {
         icerain: `Сосульки: ${v} урона волной, ${a.duration} с в радиусе ${a.radius} м`,
         heal: `Лечит ${v} здоровья (заряд — до ${Math.round(v * 2.5)})`,
       };
-      line(d.icon, what[a.kind]);
+      line(d.icon, what[a.kind] ?? (a.info ?? '').replace('{v}', String(v)).replace('{r}', String(a.radius ?? '')).replace('{d}', String(a.duration ?? '')));
       if (a.charge) line('e-clock', `Держи клавишу — заряд за ${fmt(a.charge)} с`);
       if (a.souls) line('soul', `Тратит ${a.souls} душ`);
       line('e-clock', `Перезарядка ${fmt(a.cd * p.stats().artifactCdMult)} с`);
