@@ -718,6 +718,45 @@ test('заклинания: четыре стартовых, заряд силь
   expect(r.hitstop).toBeGreaterThan(0);
 });
 
+test('заклинания с боссов: все 20 творятся с полным зарядом, бьют и не роняют игру', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const ids = ['meteor', 'flameserpent', 'ashcrown', 'icetomb', 'frostridge', 'absolutezero', 'thunderspear', 'thunderleap', 'stormcloud', 'starfall',
+      'starbeam', 'judgement', 'deadchoir', 'gravitywell', 'skullscythe', 'fallenguards', 'rift', 'raspberrybush', 'titanform', 'bladephalanx'];
+    const p = m.profile, sp = m.gear.spells;
+    m.hero.god = true;
+    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const res: Record<string, { cast: boolean; hits: number }> = {};
+    for (const id of ids) {
+      m.resetTargets(); m.hero.revive();
+      m.hero.place(d.pos.x + 3.5, d.pos.z, -Math.PI / 2); m.step(0.1);
+      p.data.souls = 100;
+      const it = p.add(id, 1, false);
+      p.equip(it.uid, 0);
+      m.gear.artT[0][0] = 0;
+      const h0 = d.hits;
+      const cast = m.artifact(0, d.pos.x, d.pos.z, 1);
+      m.step(id === 'titanform' ? 0.5 : 4);
+      res[id] = { cast, hits: d.hits - h0 };
+    }
+    m.step(12);
+    return { res, impacts: sp.impacts, buffs: sp.buffs.length, scale: m.hero.object.scale.x };
+  });
+  expect(errors).toEqual([]);
+  for (const [id, v] of Object.entries(r.res)) {
+    expect(v.cast, id).toBe(true);
+    // всё, кроме облика титана (это усиление), задевает чучело
+    if (id !== 'titanform') expect(v.hits, id).toBeGreaterThan(0);
+  }
+  expect(r.impacts).toBeGreaterThanOrEqual(20);
+  // усиления кончились, герой снова обычного роста
+  expect(r.buffs).toBe(0);
+  expect(r.scale).toBeCloseTo(1, 2);
+});
+
 test('ауры: пять в инвентаре, гнездо R, эффекты, вспышка ×3 по шкале', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
@@ -870,15 +909,30 @@ test('кузнец и торговец: лавки с именами, F — ок
     const a0 = m.profile.data.arrows;
     m.shop.buy(1);
     const arrows = m.profile.data.arrows - a0;
+    // обычное заклинание — четвёртый товар торговца; после покупки на прилавке другое
+    const cards = document.querySelectorAll('.trade.open .trade-card').length;
+    const spellOn = document.querySelectorAll('.trade.open .trade-card h3')[3]?.textContent;
+    m.profile.data.berries = 500;
+    const spellBought = m.shop.buy(3);
+    const spellGot = m.profile.data.items[m.profile.data.items.length - 1].def;
+    const shopSpells = ['ashcrown', 'frostridge', 'stormcloud', 'skullscythe', 'raspberrybush'];
+    // в случайный товар и в бесплатный набор обычные заклинания не попадают
+    let lootSpell = false;
+    for (let i = 0; i < 300; i++) if (shopSpells.includes(m.profile.rollLoot().def)) lootSpell = true;
     m.profile.data.berries = 0;
     const poor = m.shop.buy(0);
     m.shop.hide();
-    return { labels, opened, spent: b0 - m.berries, items: m.profile.data.items.length - n0, bought, gotSlot: got.def, forged, power: sword.power - p0, arrows, poor };
+    return { labels, opened, spent: b0 - m.berries, items: m.profile.data.items.length - n0, bought, gotSlot: got.def, forged, power: sword.power - p0, arrows, poor, cards, spellOn, spellBought, spellGot, shopSpells, lootSpell };
   });
   expect(r.labels).toEqual(['Кузнец', 'Торговец']);
   expect(r.opened).toBe(true);
   expect(r.bought).toBe(true);
-  expect(r.items).toBe(1);
+  expect(r.items).toBe(2);
+  expect(r.cards).toBe(4);
+  expect(r.spellOn).toBe('Заклинание');
+  expect(r.spellBought).toBe(true);
+  expect(r.shopSpells).toContain(r.spellGot);
+  expect(r.lootSpell).toBe(false);
   expect(['sword', 'axe', 'mace', 'spear', 'claymore', 'dagger', 'hammer', 'scythe']).toContain(r.gotSlot);
   expect(r.forged).toBe(true);
   expect(r.power).toBe(1);

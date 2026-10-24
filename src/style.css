@@ -95,6 +95,11 @@ body { font-family: 'Rubik', system-ui, sans-serif; color: var(--ink); user-sele
 .dmg.healbig { color: #b8ff8a; font-size: 26px; text-shadow: 0 0 16px #4aff6a, 2px 2px 0 #0a3a10, -1px -1px 0 #0a3a10, 1px -1px 0 #0a3a10, -1px 1px 0 #0a3a10; }
 /* засветка экрана при ударе заклинания (src/fx.ts screenFlash) */
 .fx-flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; z-index: 5; }
+/* мифическое заклинание: мир темнеет и выцветает (src/fx.ts darken), название крупно по центру (title) */
+.fx-dark { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 4; background: radial-gradient(ellipse at center, rgba(8, 4, 18, 0.32) 0%, rgba(8, 4, 18, 0.78) 100%); backdrop-filter: saturate(0.3) brightness(0.55) contrast(1.15); }
+.fx-title { position: fixed; left: 0; right: 0; top: 30%; text-align: center; white-space: nowrap; pointer-events: none; z-index: 6; opacity: 0; font: 400 clamp(18px, 3.4vw, 46px)/1 'Press Start 2P', 'Courier New', monospace; color: #fff; letter-spacing: 0.08em; text-shadow: 0 0 14px var(--c), 3px 3px 0 #000; }
+.fx-title.show { animation: fx-title 1.8s ease-out forwards; }
+@keyframes fx-title { 0% { opacity: 0; transform: scale(1.4); letter-spacing: 0.2em; } 12% { opacity: 1; transform: scale(1); letter-spacing: 0.08em; } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(0.96); } }
 .dmg.bleed { color: #ff2a3a; font-size: 12px; }
 
 /* Над грядками */

@@ -1,21 +1,21 @@
 import { iconImg, iconURL } from '../icons';
-import { itemDef, PRICE, RARITY, type Item, type ItemSlot, type Profile } from '../items';
+import { itemDef, PRICE, RARITY, SHOP_SPELLS, type Item, type ItemSlot, type Profile } from '../items';
 import { MERCHANT_TITLE, type MerchantKind } from '../merchants';
 import { rng } from '../textures';
 import './shop.css';
 
 /**
- * Окно торговли как у торговцев Minecraft Dungeons (wiki/design-inventory.md, «Торговцы»): слева три предложения
- * карточками — что продают и почём, справа — купленное (надеть сразу или оставить в инвентаре), у кузнеца ещё
+ * Окно торговли как у торговцев Minecraft Dungeons (wiki/design-inventory.md, «Торговцы»): слева предложения
+ * карточками (у торговца четвёртое — обычное заклинание, wiki/design-spells.md) — что продают и почём, справа — купленное (надеть сразу или оставить в инвентаре), у кузнеца ещё
  * перековка надетого (+1 к силе). Случайный товар — «?» до покупки, особый товар торговца виден заранее.
- * Клавиши: 1 / 2 / 3 — купить, Enter — надеть купленное, Esc — закрыть. Игра на паузе.
+ * Клавиши: 1 / 2 / 3 / 4 — купить, Enter — надеть купленное, Esc — закрыть. Игра на паузе.
  */
 
 interface Offer { id: string; title: string; icon: string; price: number; slots?: ItemSlot[]; arrows?: number; item?: { def: string; power: number } }
 
 const DESC: Record<MerchantKind, string> = {
   smith: 'Выкует случайное оружие или броню по твоей силе и перекуёт надетое — +1 к силе за малину.',
-  merchant: 'Продаёт артефакты наугад, стрелы связками и один особый товар, который видно заранее.',
+  merchant: 'Продаёт артефакты наугад, стрелы связками, особый товар, который видно заранее, и обычные заклинания.',
 };
 const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask', aura: 'a-bastion' };
 
@@ -25,6 +25,8 @@ export class Shop {
   private offers: Offer[] = [];
   /** Особый товар торговца (меняется после покупки) */
   private special: { def: string; power: number } | null = null;
+  /** Заклинание на прилавке торговца: сначала то, которого у героя ещё нет; меняется после покупки */
+  private spell: string | null = null;
   private bought: Item | null = null;
   private readonly rand = rng(Date.now() % 100000 || 7);
   onClose?: () => void;
@@ -65,7 +67,7 @@ export class Shop {
   key(e: KeyboardEvent): boolean {
     if (!this.open) return false;
     if (e.code === 'Escape' || e.code === 'KeyF') this.hide();
-    else if (/^Digit[123]$/.test(e.code)) this.buy(Number(e.code.slice(5)) - 1);
+    else if (/^Digit[1234]$/.test(e.code)) this.buy(Number(e.code.slice(5)) - 1);
     else if (e.code === 'Enter') this.equipBought();
     else return false;
     return true;
@@ -79,11 +81,21 @@ export class Shop {
       { id: 'armor', title: 'Броня', icon: 'helmet', price: PRICE.gear(pw), slots: ['armor'] },
     ];
     this.special ??= this.profile.rollLoot(this.rand);
+    this.spell ??= this.pickSpell();
     return [
       { id: 'artifact', title: 'Артефакт', icon: 'flask', price: PRICE.artifact(pw), slots: ['artifact'] },
       { id: 'arrows', title: 'Связка стрел', icon: 'arrows', price: PRICE.arrows, arrows: 24 },
       { id: 'special', title: 'Особый товар', icon: itemDef(this.special.def).icon, price: PRICE.offer(this.special), item: this.special },
+      { id: 'spell', title: 'Заклинание', icon: itemDef(this.spell).icon, price: PRICE.spell(pw), item: { def: this.spell, power: pw } },
     ];
+  }
+
+  /** Обычное заклинание на прилавок: из тех, которых у героя нет, иначе любое */
+  private pickSpell(): string {
+    const all = SHOP_SPELLS(), have = new Set(this.profile.data.items.map((i) => i.def));
+    const fresh = all.filter((d) => !have.has(d) && d !== this.spell);
+    const pool = fresh.length ? fresh : all.filter((d) => d !== this.spell);
+    return pool[Math.floor(this.rand() * pool.length)] ?? all[0];
   }
 
   /** Купить предложение i: false — не хватает малины */
@@ -96,7 +108,8 @@ export class Shop {
       const got = o.item ?? this.profile.rollLoot(this.rand, o.slots);
       this.bought = this.profile.add(got.def, got.power);
       this.profile.save();
-      if (o.item) this.special = null;
+      if (o.id === 'special') this.special = null;
+      if (o.id === 'spell') this.spell = this.pickSpell();
     }
     this.onSound?.(true);
     this.onChange?.();
@@ -163,14 +176,14 @@ export class Shop {
       }).join('');
       side += `<div class="trade-forgebox"><h3>Перековка надетого</h3>${rows}</div>`;
     } else if (!this.bought) {
-      side += `<div class="trade-tip">Особый товар меняется после покупки. Стрел в колчане: <b>${D.arrows}</b></div>`;
+      side += `<div class="trade-tip">Особый товар и заклинание меняются после покупки. Обычные заклинания продаёт только торговец, редкие и сильнее — падают с боссов. Стрел в колчане: <b>${D.arrows}</b></div>`;
     }
 
     this.el.innerHTML = `
       <div class="inv-top"><span title="Малина">${iconImg('berry')}<b>${D.berries}</b></span><span title="Очки зачарования">${iconImg('spiral')}<b>${D.points}</b></span></div>
       <button class="inv-x" data-act="close" title="Закрыть (Esc)">✕</button>
       <div class="trade-head"><h1>${MERCHANT_TITLE[this.kind]}</h1><p>${DESC[this.kind]}</p></div>
-      <div class="trade-body"><section class="trade-offers">${cards}</section><section class="trade-side">${side}</section></div>
-      <div class="inv-actions"><button data-act="close">Назад <kbd>Esc</kbd></button><span class="inv-hint">1 / 2 / 3 — купить · Enter — надеть покупку</span></div>`;
+      <div class="trade-body"><section class="trade-offers" style="--n:${this.offers.length}">${cards}</section><section class="trade-side">${side}</section></div>
+      <div class="inv-actions"><button data-act="close">Назад <kbd>Esc</kbd></button><span class="inv-hint">${this.offers.map((_, i) => i + 1).join(' / ')} — купить · Enter — надеть покупку</span></div>`;
   }
 }

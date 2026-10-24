@@ -7,12 +7,15 @@ import { audioCore } from './audio';
  * - Заряд — ступенями: каждая ступень добавляет ноту аккорда и звонкую ноту выше, пульс учащается, как сердце.
  */
 
-export type SpellSound = 'spark' | 'fireball' | 'icerain' | 'heal';
+/** Школа звука — совпадает со школой заклинания (src/spells.ts School) */
+export type SpellSound = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane';
 
 /** Мажорная пентатоника: ступень i → полутоны от корня */
 const PENTA = [0, 2, 4, 7, 9];
-const semi = (root: number, s: number): number => root * Math.pow(2, s / 12);
-const deg = (root: number, i: number): number => semi(root, 12 * Math.floor(i / 5) + PENTA[((i % 5) + 5) % 5]);
+/** Нота на s полутонов выше корня */
+export const semi = (root: number, s: number): number => root * Math.pow(2, s / 12);
+/** i-я ступень мажорной пентатоники от корня (5 ступеней на октаву) */
+export const deg = (root: number, i: number): number => semi(root, 12 * Math.floor(i / 5) + PENTA[((i % 5) + 5) % 5]);
 const rnd = (a: number, b: number): number => a + Math.random() * (b - a);
 
 /** Палитра стихии: корень, аккорд заряда (полутоны), тембр и яркость */
@@ -21,6 +24,10 @@ const PAL: Record<SpellSound, { root: number; chord: number[]; wave: OscillatorT
   fireball: { root: 110, chord: [0, 7, 12, 19], wave: 'sawtooth', lp: 900 },
   icerain: { root: 523.25, chord: [0, 4, 7, 12], wave: 'sine', lp: 7000 },
   heal: { root: 261.63, chord: [0, 4, 7, 11], wave: 'triangle', lp: 3000 },
+  star: { root: 392, chord: [0, 4, 7, 14], wave: 'sine', lp: 6000 },
+  void: { root: 130.81, chord: [0, 3, 7, 10], wave: 'triangle', lp: 1400 },
+  earth: { root: 98, chord: [0, 7, 12, 16], wave: 'triangle', lp: 1100 },
+  arcane: { root: 349.23, chord: [0, 4, 8, 12], wave: 'triangle', lp: 4000 },
 };
 
 let shaper: Float32Array | null = null;
@@ -37,7 +44,7 @@ interface VoiceOpts {
 }
 
 /** Нота: один-два осциллятора, фильтр с огибающей, громкость с атакой и затуханием */
-function voice({ type = 'triangle', f, f1, dur, vol, attack = 0.005, delay = 0, detune = 0, lp, lp1, q = 0.7, verb = 0.25 }: VoiceOpts): void {
+export function voice({ type = 'triangle', f, f1, dur, vol, attack = 0.005, delay = 0, detune = 0, lp, lp1, q = 0.7, verb = 0.25 }: VoiceOpts): void {
   const a = audioCore();
   if (!a) return;
   const { ctx } = a, t = ctx.currentTime + delay;
@@ -65,7 +72,7 @@ function voice({ type = 'triangle', f, f1, dur, vol, attack = 0.005, delay = 0, 
 interface HissOpts { dur: number; vol: number; f: number; f1?: number; q?: number; type?: BiquadFilterType; attack?: number; delay?: number; verb?: number }
 
 /** Шум через фильтр с огибающей: свист, рёв, треск, гром */
-function hiss({ dur, vol, f, f1, q = 0.8, type = 'bandpass', attack = 0.003, delay = 0, verb = 0.2 }: HissOpts): void {
+export function hiss({ dur, vol, f, f1, q = 0.8, type = 'bandpass', attack = 0.003, delay = 0, verb = 0.2 }: HissOpts): void {
   const a = audioCore();
   if (!a) return;
   const { ctx } = a, t = ctx.currentTime + delay;
@@ -84,7 +91,7 @@ function hiss({ dur, vol, f, f1, q = 0.8, type = 'bandpass', attack = 0.003, del
 }
 
 /** Удар в низ: синус с падением высоты через насыщение — гармоники делают его слышным и «толстым» */
-function boom(f0: number, f1: number, dur: number, vol: number, delay = 0, verb = 0.25): void {
+export function boom(f0: number, f1: number, dur: number, vol: number, delay = 0, verb = 0.25): void {
   const a = audioCore();
   if (!a) return;
   const { ctx } = a, t = ctx.currentTime + delay;
@@ -100,14 +107,14 @@ function boom(f0: number, f1: number, dur: number, vol: number, delay = 0, verb 
 }
 
 /** Звонкая нота-колокольчик: основной тон и обертоны */
-function bell(f: number, dur: number, vol: number, delay = 0, verb = 0.5): void {
+export function bell(f: number, dur: number, vol: number, delay = 0, verb = 0.5): void {
   voice({ type: 'sine', f, dur, vol, delay, verb, attack: 0.003 });
   voice({ type: 'sine', f: f * 2.01, dur: dur * 0.6, vol: vol * 0.35, delay, verb, attack: 0.003 });
   voice({ type: 'triangle', f: f * 3, dur: dur * 0.25, vol: vol * 0.15, delay, verb });
 }
 
 /** Щипок, как арфа */
-const pluck = (f: number, vol: number, delay = 0, dur = 0.7): void => voice({ type: 'triangle', f, dur, vol, delay, lp: f * 6, lp1: f * 1.5, verb: 0.45, attack: 0.002 });
+export const pluck = (f: number, vol: number, delay = 0, dur = 0.7): void => voice({ type: 'triangle', f, dur, vol, delay, lp: f * 6, lp1: f * 1.5, verb: 0.45, attack: 0.002 });
 
 // ---------- заряд ----------
 
@@ -245,6 +252,13 @@ export const spellSfx = {
     voice({ type: 'triangle', f: semi(PAL[kind].root < 200 ? PAL[kind].root * 4 : PAL[kind].root * 2, 7), f1: semi(PAL[kind].root, 12), dur: 0.25, vol: 0.05, verb: 0.3 });
   },
 
+  /** Мифическое заклинание: мир затих — хор (тёплые голоса с медленной атакой) и удар колокола */
+  mythic() {
+    [0, 7, 12, 16, 19].forEach((s, i) => voice({ type: 'triangle', f: semi(196, s), dur: 2.6, vol: 0.05, attack: 0.4, detune: 14, lp: 2400, delay: i * 0.03, verb: 0.8 }));
+    boom(70, 30, 1.6, 0.6, 0, 0.6);
+    bell(semi(392, 12), 2.4, 0.08, 0.05, 0.8);
+    hiss({ dur: 1.2, vol: 0.1, f: 300, f1: 5000, q: 0.5, attack: 0.6, verb: 0.6 });
+  },
   /** Искры собираются в руке: потрескивание и подъём */
   sparkGather() {
     for (let i = 0; i < 6; i++) hiss({ dur: 0.025, vol: 0.06, f: rnd(4000, 8000), q: 2, delay: i * 0.022, verb: 0.1 });

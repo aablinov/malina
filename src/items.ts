@@ -22,7 +22,13 @@ export const RARITY: Record<Rarity, { title: string; color: string; salvage: num
 
 // ---------- каталог ----------
 
-export type ArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning' | 'spark' | 'fireball' | 'icerain' | 'heal';
+/** Заклинания с боссов (src/magic/, wiki/design-spells.md, раздел 3) */
+export type BossSpellKind =
+  | 'meteor' | 'flameserpent' | 'ashcrown' | 'icetomb' | 'frostridge' | 'absolutezero'
+  | 'thunderspear' | 'thunderleap' | 'stormcloud' | 'starfall' | 'starbeam' | 'judgement'
+  | 'deadchoir' | 'gravitywell' | 'skullscythe' | 'fallenguards'
+  | 'rift' | 'raspberrybush' | 'titanform' | 'bladephalanx';
+export type ArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning' | 'spark' | 'fireball' | 'icerain' | 'heal' | BossSpellKind;
 export type PerkKind = 'souls' | 'artifactDmg' | 'cooldown' | 'meleeDmg' | 'rangedDmg' | 'speed' | 'potion' | 'roll' | 'arrows';
 
 export interface Perk { kind: PerkKind; value: number }
@@ -88,6 +94,8 @@ export interface ArtifactStats {
   souls?: number;
   /** Заклинание: время полного заряда, с (держать клавишу — сильнее) */
   charge?: number;
+  /** Строка свойств в карточке: {v} — сила с учётом предмета, {r} — радиус, {d} — длительность */
+  info?: string;
 }
 
 /** Ауры (wiki/design-spells.md, раздел 4): действуют всегда, по шкале — вспышка ×3 */
@@ -115,8 +123,11 @@ export interface ItemDef {
   armor?: { health: number; perks: Perk[]; look: ArmorLook };
   artifact?: ArtifactStats;
   aura?: AuraStats;
-  /** Заклинание (wiki/design-spells.md): стартовое или с босса; в сундуки и к торговцам не попадает */
-  spell?: 'starter' | 'boss';
+  /**
+   * Заклинание (wiki/design-spells.md): стартовое; 'shop' — обычное, продаёт торговец за малину; 'boss' — редкое и выше, только с боссов.
+   * В сундуки и в случайный товар не попадает
+   */
+  spell?: 'starter' | 'shop' | 'boss';
   /** Особые свойства оружия (строки как в MCD: «Широкие удары») */
   traits?: string[];
 }
@@ -162,12 +173,37 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'rage', slot: 'aura', spell: 'boss', title: 'Ярость', rarity: 'unique', icon: 'a-rage', description: 'Оружие тлеет, удары бьют сильнее и чаще бывают сокрушительными.', aura: { kind: 'rage', value: 15, radius: 8 } },
   { id: 'clarity', slot: 'aura', spell: 'boss', title: 'Ясность', rarity: 'unique', icon: 'a-clarity', description: 'Голубые огоньки ускоряют мысль: заклинания и артефакты перезаряжаются быстрее, души липнут к рукам.', aura: { kind: 'clarity', value: 25, radius: 8 } },
   { id: 'thorns', slot: 'aura', spell: 'boss', title: 'Терновый венец', rarity: 'unique', icon: 'a-thorns', description: 'Колючие лозы под ногами хлещут каждого, кто бьёт героя вблизи.', aura: { kind: 'thorns', value: 30, radius: 8 } },
+  // заклинания — src/magic/; редкость: обычное → common (продаёт торговец), редкое → rare, легендарное и мифическое → unique (с боссов)
+  { id: 'meteor', slot: 'artifact', spell: 'boss', title: 'Небесный молот', rarity: 'rare', icon: 'meteor', description: 'С неба падает пылающий камень: кратер, оглушение и горящая земля.', artifact: A('meteor', 14, 70, { radius: 3.5, charge: 1.2, info: 'Метеор: {v} урона в радиусе {r} м' }) },
+  { id: 'flameserpent', slot: 'artifact', spell: 'boss', title: 'Пламенный змей', rarity: 'unique', icon: 'flameserpent', description: 'Огненный змей ползёт по земле, петляет между врагами и оставляет горящую колею.', artifact: A('flameserpent', 18, 22, { radius: 1.6, duration: 3.5, charge: 1.2, info: 'Змей: {v} урона за касание, {d} с' }) },
+  { id: 'ashcrown', slot: 'artifact', spell: 'shop', title: 'Пепельная корона', rarity: 'common', icon: 'ashcrown', description: 'Кольцо огня волной расходится от героя и отбрасывает всех.', artifact: A('ashcrown', 8, 24, { radius: 5, charge: 0.8, info: 'Волна огня: {v} урона до {r} м' }) },
+  { id: 'icetomb', slot: 'artifact', spell: 'boss', title: 'Ледяная гробница', rarity: 'rare', icon: 'icetomb', description: 'Враг вмерзает в кристалл, а через миг кристалл разлетается веером осколков.', artifact: A('icetomb', 14, 60, { radius: 3.5, duration: 2, charge: 1, info: 'Гробница: {v} урона, осколки до {r} м' }) },
+  { id: 'frostridge', slot: 'artifact', spell: 'shop', title: 'Морозный гребень', rarity: 'common', icon: 'frostridge', description: 'Веер ледяных шипов вырастает из земли и подбрасывает врагов.', artifact: A('frostridge', 7, 26, { radius: 7, charge: 0.9, info: 'Шипы: {v} урона, веер на {r} м' }) },
+  { id: 'absolutezero', slot: 'artifact', spell: 'boss', title: 'Абсолютный ноль', rarity: 'unique', icon: 'absolutezero', description: 'Купол стужи: внутри время почти стоит, враги покрываются льдом и замирают.', artifact: A('absolutezero', 30, 40, { radius: 8, duration: 4, charge: 1.6, info: 'Купол: {v} урона волнами, {d} с в радиусе {r} м' }) },
+  { id: 'thunderspear', slot: 'artifact', spell: 'boss', title: 'Копьё громовержца', rarity: 'rare', icon: 'thunderspear', description: 'Копьё молнии растёт в руке и пронзает всю линию.', artifact: A('thunderspear', 9, 55, { radius: 18, charge: 1.2, info: 'Копьё: {v} урона по линии {r} м' }) },
+  { id: 'thunderleap', slot: 'artifact', spell: 'boss', title: 'Громовой прыжок', rarity: 'unique', icon: 'thunderleap', description: 'Герой взлетает и бьёт в землю: цепные молнии во все стороны.', artifact: A('thunderleap', 14, 45, { radius: 4.5, charge: 1, info: 'Удар: {v} урона в радиусе {r} м и молнии' }) },
+  { id: 'stormcloud', slot: 'artifact', spell: 'shop', title: 'Грозовая туча', rarity: 'common', icon: 'stormcloud', description: 'Над героем висит туча и сама бьёт ближайших врагов.', artifact: A('stormcloud', 16, 16, { radius: 7, duration: 8, charge: 0.8, info: 'Туча: {v} урона за молнию, {d} с' }) },
+  { id: 'starfall', slot: 'artifact', spell: 'boss', title: 'Звездопад', rarity: 'unique', icon: 'starfall', description: 'Звёзды падают с неба по всей зоне, а герой парит в столбе света.', artifact: A('starfall', 22, 18, { radius: 6, duration: 5, charge: 1.2, info: 'Звёзды: {v} урона каждая, {d} с в радиусе {r} м' }) },
+  { id: 'starbeam', slot: 'artifact', spell: 'boss', title: 'Луч павшей звезды', rarity: 'unique', icon: 'starbeam', description: 'Огромный луч из рук: герой медленно ведёт им за курсором.', artifact: A('starbeam', 30, 30, { radius: 16, duration: 3, charge: 1.6, info: 'Луч: {v} урона за касание, {d} с, длина {r} м' }) },
+  { id: 'judgement', slot: 'artifact', spell: 'boss', title: 'Небесный суд', rarity: 'unique', icon: 'judgement', description: 'Столп света бьёт врагов, лечит союзников и поднимает павших.', artifact: A('judgement', 24, 60, { radius: 4, charge: 1.3, info: 'Суд: {v} урона и лечения в радиусе {r} м' }) },
+  { id: 'deadchoir', slot: 'artifact', spell: 'boss', title: 'Хор мёртвых', rarity: 'rare', icon: 'deadchoir', description: 'Призрачные руки тянутся из земли, держат врагов и утаскивают вниз.', artifact: A('deadchoir', 14, 14, { radius: 4, duration: 3, charge: 1, info: 'Руки: {v} урона волнами, {d} с в радиусе {r} м' }) },
+  { id: 'gravitywell', slot: 'artifact', spell: 'boss', title: 'Гравитационный колодец', rarity: 'unique', icon: 'gravitywell', description: 'Чёрная сфера стягивает врагов, а потом схлопывается и выбрасывает их.', artifact: A('gravitywell', 20, 70, { radius: 6, duration: 2, charge: 1.2, info: 'Колодец: тянет {d} с, взрыв {v} урона' }) },
+  { id: 'skullscythe', slot: 'artifact', spell: 'shop', title: 'Коса-череп', rarity: 'common', icon: 'skullscythe', description: 'Летящий череп: врагу — урон, герою — немного жизни.', artifact: A('skullscythe', 5, 30, { radius: 14, charge: 0.7, info: 'Череп: {v} урона, дальность {r} м' }) },
+  { id: 'fallenguards', slot: 'artifact', spell: 'boss', title: 'Павшие стражи', rarity: 'rare', icon: 'fallenguards', description: 'Три призрачных рыцаря выходят из порталов и сражаются рядом.', artifact: A('fallenguards', 30, 12, { duration: 15, souls: 50, charge: 1.2, info: 'Стражи: {v} урона за удар, {d} с' }) },
+  { id: 'rift', slot: 'artifact', spell: 'boss', title: 'Разлом', rarity: 'rare', icon: 'rift', description: 'Трещина бежит вперёд, из неё вырастают каменные шипы.', artifact: A('rift', 10, 40, { radius: 10, charge: 1, info: 'Разлом: {v} урона по линии {r} м' }) },
+  { id: 'raspberrybush', slot: 'artifact', spell: 'shop', title: 'Малиновый куст', rarity: 'common', icon: 'raspberrybush', description: 'Колючий куст держит врагов, а потом лопается ягодами, которые лечат.', artifact: A('raspberrybush', 12, 20, { radius: 3, duration: 4, charge: 0.9, info: 'Куст: {v} урона колючками, лечит ягодами' }) },
+  { id: 'titanform', slot: 'artifact', spell: 'boss', title: 'Облик титана', rarity: 'unique', icon: 'titanform', description: 'Герой становится огромным каменным великаном: удары трясут землю.', artifact: A('titanform', 40, 60, { duration: 10, charge: 1.5, info: 'Титан: +{v}% урона, −50% получаемого, {d} с' }) },
+  { id: 'bladephalanx', slot: 'artifact', spell: 'boss', title: 'Фаланга клинков', rarity: 'rare', icon: 'bladephalanx', description: 'Над головой веером раскрываются семь призрачных мечей и летят по очереди.', artifact: A('bladephalanx', 10, 20, { radius: 14, charge: 1, info: 'Клинки: 7 × {v} урона' }) },
   { id: 'harvester', slot: 'artifact', title: 'Жнец душ', rarity: 'unique', icon: 'harvester', description: 'Высвобождает собранные души взрывом вокруг героя.', artifact: A('harvester', 3, 45, { radius: 4, souls: 40 }) },
 ];
 
 /** Стартовые заклинания (wiki/design-spells.md, раздел 2) */
 export const STARTER_SPELLS = ['fireball', 'spark', 'heal', 'icerain'] as const;
 export const AURAS = ['pact', 'bastion', 'rage', 'clarity', 'thorns'] as const;
+/** Заклинания, которые продаёт торговец (обычные) */
+export const SHOP_SPELLS = (): string[] => ITEMS.filter((d) => d.spell === 'shop').map((d) => d.id);
+/** Заклинания с боссов — пока боссов нет, лежат в инвентаре с начала */
+const BOSS_SPELL_IDS = (): string[] => ITEMS.filter((d) => d.spell === 'boss' && d.slot === 'artifact').map((d) => d.id);
 
 export const itemDef = (id: string): ItemDef => {
   const d = ITEMS.find((x) => x.id === id);
@@ -315,6 +351,8 @@ export const PRICE = {
   artifact: (power: number): number => 55 + power * 14,
   arrows: 20,
   reforge: (power: number): number => 30 + power * 15,
+  /** Обычное заклинание у торговца */
+  spell: (power: number): number => 110 + power * 12,
   offer: (it: { def: string; power: number }): number => Math.round((50 + it.power * 15) * ({ common: 1, rare: 1.6, unique: 3 } as const)[itemDef(it.def).rarity]),
 };
 
@@ -380,15 +418,15 @@ export class Profile {
   private addStarterSpells(): void {
     const have = new Set(this.data.items.map((i) => i.def));
     const add = STARTER_SPELLS.filter((d) => !have.has(d));
-    // пока боссов нет — пять аур кладём в инвентарь, чтобы их можно было примерить
-    const auras = AURAS.filter((d) => !have.has(d));
-    if (!add.length && !auras.length) return;
+    // пока боссов нет — ауры и заклинания с боссов кладём в инвентарь, чтобы их можно было примерить
+    const extra = [...AURAS, ...BOSS_SPELL_IDS()].filter((d) => !have.has(d));
+    if (!add.length && !extra.length) return;
     for (const d of add) {
       const it = this.add(d, 1);
       const free = this.data.equip.artifacts.indexOf(null);
       if (free >= 0) this.data.equip.artifacts[free] = it.uid;
     }
-    for (const d of auras) this.add(d, 1);
+    for (const d of extra) this.add(d, 1);
     if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* закрытое хранилище */ }
   }
 
@@ -399,6 +437,7 @@ export class Profile {
     p.data.equip = { melee: eq('sword', 1), armor: eq('tunic', 1), ranged: eq('bow', 1), artifacts: [eq('fireball', 1), eq('spark', 1), eq('heal', 1)], aura: null };
     for (const [def, power] of [
       ['icerain', 1], ['firework', 1], ['totem', 1], ['pact', 1], ['bastion', 1], ['rage', 1], ['clarity', 1], ['thorns', 1],
+      ...BOSS_SPELL_IDS().map((id): [string, number] => [id, 1]),
       ['claymore', 3], ['axe', 2], ['dagger', 2], ['hammer', 3], ['scythe', 4], ['mace', 1], ['spear', 2],
       ['crossbow', 2], ['longbow', 3], ['twinbow', 4],
       ['soulrobe', 2], ['wolf', 2], ['mercenary', 1], ['scale', 3], ['champion', 4],

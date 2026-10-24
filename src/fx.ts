@@ -139,6 +139,15 @@ export class FX {
   shake = 0;
   /** Стоп-кадр, с реального времени: пока > 0, цикл игры почти останавливает симуляцию */
   hitstop = 0;
+  /** Замедление, с реального времени: пока > 0, игра идёт втрое медленнее (легендарные и мифические удары) */
+  slowmo = 0;
+  /** Камера подаётся назад: доля дистанции, тает сама */
+  zoom = 0;
+  private readonly darkEl: HTMLDivElement;
+  private darkT = 0;
+  private darkDur = 0;
+  private readonly titleEl: HTMLDivElement;
+  private titleT = 0;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -158,6 +167,12 @@ export class FX {
     this.flashEl = document.createElement('div');
     this.flashEl.className = 'fx-flash';
     document.body.appendChild(this.flashEl);
+    this.darkEl = document.createElement('div');
+    this.darkEl.className = 'fx-dark';
+    document.body.appendChild(this.darkEl);
+    this.titleEl = document.createElement('div');
+    this.titleEl.className = 'fx-title';
+    document.body.appendChild(this.titleEl);
   }
 
   // ---------- детали каста (wiki/design-spells.md, раздел 5) ----------
@@ -167,6 +182,17 @@ export class FX {
     if (strength < this.flashPeak * (1 - this.flashT / this.flashDur)) return;
     this.flashEl.style.background = `radial-gradient(ellipse at center, ${color} 0%, ${color} 35%, transparent 100%)`;
     this.flashT = 0; this.flashDur = dur; this.flashPeak = strength;
+  }
+
+  /** Мир темнеет и выцветает на dur секунд (мифическое заклинание): быстро наползает, держится, тает */
+  darken(dur = 0.6): void { this.darkT = 0; this.darkDur = dur; }
+
+  /** Крупное название заклинания по центру экрана */
+  title(text: string, color: string): void {
+    this.titleEl.textContent = text;
+    this.titleEl.style.setProperty('--c', color);
+    this.titleEl.classList.remove('show'); void this.titleEl.offsetWidth; this.titleEl.classList.add('show');
+    this.titleT = 1.8;
   }
 
   /** Вспышка настоящего света в точке: освещает пол и стены вокруг, гаснет за dur. follow — каждый кадр двигать за снарядом */
@@ -364,6 +390,14 @@ export class FX {
   /** Засветка и стоп-кадр живут в реальном времени, а не в игровом */
   updateReal(real: number): void {
     this.hitstop = Math.max(0, this.hitstop - real);
+    this.slowmo = Math.max(0, this.slowmo - real);
+    this.zoom = Math.max(0, this.zoom - real * 0.25);
+    if (this.darkT < this.darkDur + 0.5) {
+      this.darkT += real;
+      const t = this.darkT, d = this.darkDur;
+      this.darkEl.style.opacity = String(t < 0.12 ? t / 0.12 : t < d ? 1 : Math.max(0, 1 - (t - d) / 0.5));
+    }
+    if (this.titleT > 0) { this.titleT -= real; if (this.titleT <= 0) this.titleEl.classList.remove('show'); }
     if (this.flashT < this.flashDur) {
       this.flashT += real;
       const k = Math.min(1, this.flashT / this.flashDur);

@@ -62,6 +62,7 @@ export class Gear {
   readonly auras: Auras;
   /** Здоровье на прошлом кадре: упало — героя ударили (для «Бастиона» и шипов) */
   private lastHp = 0;
+  private buffSpeed = 1;
   private weaponId = '';
   private armorId = '-';
   private bowId = '-';
@@ -82,6 +83,7 @@ export class Gear {
       scene: h.scene, fx: h.fx, hero: h.hero, terrain: h.terrain, targets: () => h.targets(), damage,
       aoe: (c, r, dmg, knock, blast) => this.aoe(c, r, dmg, knock, blast),
     });
+    this.spells.onBuffs = () => this.apply();
     this.auras = new Auras({ scene: h.scene, fx: h.fx, hero: h.hero, targets: () => h.targets(), damage, changed: () => this.apply(), banner: h.banner });
     profile.onChange(() => this.apply());
     this.apply();
@@ -100,6 +102,11 @@ export class Gear {
     this.stats.artifactCdMult *= au.cdMult;
     this.stats.soulsMult *= au.soulsMult;
     hero.dmgTakenMul = au.damageTaken;
+    // усиления от заклинаний (облик титана): урон, получаемый урон, скорость, размер героя
+    let bm = 1, bt = 1, bs = 1, sc = 1;
+    for (const b of this.spells.buffs) { bm *= b.melee ?? 1; bt *= b.taken ?? 1; bs *= b.speed ?? 1; sc = Math.max(sc, b.scale ?? 1); }
+    this.stats.meleeMult *= bm; hero.dmgTakenMul *= bt; this.buffSpeed = bs;
+    hero.object.scale.setScalar(sc);
     const m = this.profile.equipped('melee');
     const w = this.weaponOverride ?? (m ? getWeapon(itemDef(m.def).weapon ?? '') : undefined);
     if (w && w.id !== this.weaponId) { this.weaponId = w.id; applyWeapon(w); hero.setWeapon(w); }
@@ -115,7 +122,7 @@ export class Gear {
     if (ak !== this.armorId) { this.armorId = ak; hero.setArmor(a ? itemDef(a.def).armor?.look ?? null : null); }
     if (rk !== this.bowId) { this.bowId = rk; hero.setBow(r ? itemDef(r.def).ranged?.look ?? null : null); }
     // пока заряжаешь заклинание — идёшь вдвое медленнее
-    hero.speedMul = this.stats.speedMult * (this.speedT > 0 ? this.speedK : 1) * (this.spells?.charging ? 0.5 : 1);
+    hero.speedMul = this.stats.speedMult * this.buffSpeed * (this.speedT > 0 ? this.speedK : 1) * (this.spells?.charging ? 0.5 : 1);
     hero.rollCdMul = this.stats.rollCdMult;
   }
 
@@ -305,7 +312,7 @@ export class Gear {
         this.h.sound('horn');
         break;
       case 'lightning': this.lightning(me, R, power); break;
-      case 'spark': case 'fireball': case 'icerain': case 'heal': this.spells.cast(a.kind, a, power, at, Math.max(0, Math.min(1, charge))); break;
+      default: if (isSpell(a.kind)) this.spells.cast(a.kind, a, power, at, Math.max(0, Math.min(1, charge))); break;
       case 'harvester':
         this.aoe(me, R, power, 1.6, true);
         this.magicBoom(me, R, new THREE.Color(0.8, 2.6, 3.4), new THREE.Color(2.2, 1.2, 3.4));
