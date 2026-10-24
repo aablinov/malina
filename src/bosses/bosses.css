@@ -1,0 +1,19 @@
+/* Полоса стража сверху (wiki/design-bosses.md): имя, подпись, здоровье со «следом» */
+.boss-bar {
+  position: fixed; left: 50%; top: 1.4em; width: min(46em, 70vw); transform: translate(-50%, -1em); opacity: 0;
+  transition: opacity 0.4s, transform 0.4s; pointer-events: none; z-index: 6; text-align: center;
+}
+.boss-bar.show { opacity: 1; transform: translate(-50%, 0); }
+.boss-bar b {
+  display: block; font: 400 1.05em/1 var(--mcd-px); color: #fff; letter-spacing: 0.06em;
+  text-shadow: 0.12em 0.12em 0 #000, -0.06em -0.06em 0 #000, 0.06em -0.06em 0 #000, -0.06em 0.06em 0 #000;
+}
+.boss-bar i { display: block; margin: 0.45em 0 0.5em; font: 700 0.72em/1 var(--mcd-text); font-style: normal; color: #ff7aa8; letter-spacing: 0.14em; text-transform: uppercase; text-shadow: 0.1em 0.1em 0 #000; }
+.boss-track { position: relative; height: 0.9em; background: #141217; border: 0.18em solid #141217; box-shadow: 0 0 0 0.12em #6a4a5a, 0 0.3em 0.8em rgba(0, 0, 0, 0.5); }
+.boss-trail, .boss-fill { position: absolute; left: 0; top: 0; bottom: 0; transform-origin: left; }
+.boss-trail { right: 0; background: #ffd25a; }
+.boss-fill { right: 0; background: linear-gradient(#ff5c8a, #c8124a 60%, #8a0a34); box-shadow: inset 0 0.15em 0 rgba(255, 255, 255, 0.35); }
+.boss-bar.heart .boss-fill { background: linear-gradient(#ffd0e0, #ff4f8f 60%, #c8124a); }
+.boss-berry { position: absolute; left: -1.5em; top: 50%; width: 1.3em; height: 1.3em; transform: translateY(-50%) rotate(45deg); background: radial-gradient(#ff9cc0, #c8124a 70%); border: 0.15em solid #141217; box-shadow: 0 0 0.6em #ff4f8f; }
+.boss-bar.heart .boss-berry { animation: boss-beat 0.4s infinite alternate; }
+@keyframes boss-beat { to { box-shadow: 0 0 1.4em #ffb0d0; transform: translateY(-50%) rotate(45deg) scale(1.2); } }

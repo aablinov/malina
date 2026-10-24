@@ -13,7 +13,11 @@ import { ceilingAt, collideTop, decorSolids, obstaclesOf, raycastVoxels, terrain
 import { Pathfinder } from '../level/pathfind.ts';
 import { mapByName, ROOMS } from '../level/maps';
 import { buildFloor } from '../level/dungeon.ts';
-import type { PgLabel } from '../level/playground-map.ts';
+import { BOSS_ARENA, type PgLabel } from '../level/playground-map.ts';
+import { Arena } from '../bosses/arena';
+import { BossBar } from '../bosses/boss-bar';
+import { CrimsonDragon } from '../bosses/crimson-dragon';
+import { Grimoire } from '../bosses/grimoire';
 import { HERO, SWORD, snapshotTuning } from '../tuning';
 import { onWeaponChange, pickWeapon } from '../weapons';
 import { itemDef, Profile } from '../items';
@@ -227,7 +231,8 @@ export function runPlayground(): void {
       solidsCache = [...p, ...decorSolids(level), ...merchants.map((m) => m.solid)];
       solidsKey = [p, level.decorVersion];
     }
-    return solidsCache;
+    // решётки арены стража — пока подняты
+    return arena?.solids.length ? solidsCache.concat(arena.solids) : solidsCache;
   };
   /** Нажали F — использовать ближайший предмет */
   let interactReq = false;
@@ -280,8 +285,42 @@ export function runPlayground(): void {
   hero.onRoll = () => { if (!scripted) sfx.roll(); };
   hero.onStrike = (s) => strike(s);
 
-  /** Все цели для удара: чучела, бочки, ящики */
-  const targets = (): Target[] => [...dummies, ...props.targets];
+  // ---------- Страж: Багровый дракон на арене за северной стеной (src/bosses/, wiki/design-bosses.md) ----------
+  const bossBar = new BossBar(document.body);
+  const dragon = new URLSearchParams(window.location.search).has('map') ? null : new CrimsonDragon({
+    scene, fx, hero, terrain,
+    obstacles: () => obstacles,
+    hurtHero: (dmg, from, knock) => hurtHero(dmg, from, knock),
+    quiet: () => scripted,
+  }, new THREE.Vector3(0, 0, (BOSS_ARENA.z0 + BOSS_ARENA.z1) / 2 + 1), 0, BOSS_ARENA);
+  const arena = dragon ? new Arena(scene, fx, {
+    trigger: BOSS_ARENA.trigger,
+    gates: [{ x: 0, z: BOSS_ARENA.gateZ, w: 3 }],
+    exit: { x: 0, z: BOSS_ARENA.gateZ + 2.5, yaw: Math.PI },
+  }, dragon, bossBar, () => scripted) : null;
+  const grimoires: Grimoire[] = [];
+  if (arena) arena.onWin = (at) => {
+    // сердце лопнуло — поднимается гримуар «Небесный молот»
+    grimoires.push(new Grimoire(scene, fx, at, 'meteor', profile.power + 1, () => scripted));
+    hud.banner('Страж повержен<small>Подойди к гримуару — заклинание «Небесный молот»</small>', 3);
+  };
+  /** Удар по герою от стража: урон, цифра, отброс */
+  function hurtHero(dmg: number, from: THREE.Vector3, knock: number): void {
+    const hp0 = hero.hp;
+    if (!hero.hurt(dmg)) return;
+    const lost = hp0 - hero.hp;
+    if (lost >= 1) fx.text(hero.pos.clone().setY(hero.pos.y + 1.2), `−${Math.round(lost)}`, 'bad');
+    if (knock > 0) {
+      const d = new THREE.Vector3(hero.pos.x - from.x, 0, hero.pos.z - from.z);
+      if (d.lengthSq() < 1e-4) d.set(0, 0, 1);
+      hero.vel.addScaledVector(d.normalize(), knock);
+      fx.shake = Math.max(fx.shake, 0.3);
+    }
+    if (!scripted) sfx.hit();
+  }
+
+  /** Все цели для удара: чучела, бочки, ящики, страж */
+  const targets = (): Target[] => dragon && dragon.alive && dragon.awake ? [...dummies, ...props.targets, dragon] : [...dummies, ...props.targets];
   let lastStrike: { s: Strike; t: number } | null = null;
 
   /** Удар меча: цели в дуге перед героем (и в волне добивающего), без стены между */
@@ -628,6 +667,8 @@ export function runPlayground(): void {
   function resetTargets(): void {
     for (const d of dummies) d.reset();
     props.reset();
+    arena?.reset();
+    for (const g of grimoires.splice(0)) g.dispose();
     toast('Чучела и склад на местах');
   }
 
@@ -777,6 +818,19 @@ export function runPlayground(): void {
     if (hero.down) { if (downT === 0) gear.onDown(); downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
+    if (arena && dragon) {
+      arena.update(dt, hero);
+      dragon.update(dt);
+      for (let i = grimoires.length - 1; i >= 0; i--) {
+        const g = grimoires[i];
+        if (g.update(dt, hero.pos)) {
+          profile.add(g.item, g.power);
+          profile.save();
+          hud.banner(`${itemDef(g.item).title}<small>Заклинание стража — надень в гнездо 1/2/3 (I)</small>`, 3);
+        }
+        if (g.done) { g.dispose(); grimoires.splice(i, 1); }
+      }
+    }
     fx.update(dt, window.innerWidth, window.innerHeight);
   }
 
@@ -855,6 +909,8 @@ export function runPlayground(): void {
     get berries() { return profile.data.berries; },
     /** Снаряжение и прокачка: профиль (src/items.ts), бой (src/gear.ts), HUD и инвентарь (src/hud/) */
     profile, gear, hud, inventory, shop, merchants, automap,
+    /** Страж и его арена (src/bosses/): boss.state, arena.state, гримуары после победы */
+    boss: dragon, arena, grimoires, bossBar,
     /** Эффекты: стоп-кадр, засветка, свет заклинаний */
     fx,
     /** Подойти к торговцу и нажать F */

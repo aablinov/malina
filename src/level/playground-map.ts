@@ -249,8 +249,53 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   // ---------- зона «мир» за восточной стеной: наборы по скриншотам Minecraft Dungeons ----------
   buildWorldZone(L, labels, (name, x, y, z, rot = 0, on) => { dec(name, x, y, z, rot, on); });
 
+  buildBossArena(L, labels, W);
+
   L.spawn = [0, 0, 0];
   L.meta = { labels };
   L.dirty.clear();
   return { level: L, labels };
+}
+
+/** Арена стража за северной стеной (wiki/design-bosses.md, раздел 5): проход x −1…1, коридор, руины x −15…15, z −58…−31 */
+export const BOSS_ARENA = { x0: -15, x1: 15, z0: -58, z1: -31, gateZ: -30, trigger: { x0: -3, x1: 3, z0: -34, z1: -31 } };
+
+function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
+  const A = BOSS_ARENA;
+  const hash = (x: number, z: number, s = 0) => (((x * 73856093) ^ (z * 19349663) ^ (s * 83492791)) >>> 0) % 1000 / 1000;
+  // проход в северной стене плейграунда и коридор к арене
+  for (let x = -1; x <= 1; x++) for (let y = 0; y < 3; y++) L.set(x, y, -W, 'air');
+  for (let z = A.gateZ; z <= -W; z++) {
+    for (let x = -1; x <= 1; x++) L.set(x, -1, z, 'tiles');
+    for (let y = 0; y < 3; y++) { L.set(-2, y, z, y === 2 ? 'bricks' : 'bricks_old'); L.set(2, y, z, y === 2 ? 'bricks' : 'bricks_old'); }
+  }
+  // пол руин: плиты, булыжник и гравий пятнами, у центра — выжженный круг из камня
+  for (let x = A.x0; x <= A.x1; x++) for (let z = A.z0; z <= A.z1; z++) {
+    const cx = x, cz = z - (A.z0 + A.z1) / 2, r = Math.hypot(cx, cz), n = hash(x, z);
+    L.set(x, -1, z, r < 4.5 ? (n < 0.3 ? 'bricks_cracked' : 'stone') : n < 0.45 ? 'tiles' : n < 0.78 ? 'cobble' : n < 0.92 ? 'gravel' : 'bricks_cracked');
+    L.set(x, -2, z, 'stone');
+  }
+  // стены: дальние (−X, −Z) — скала 3 блока, ближние к камере (+X, южная) — 1 блок; в южной — ворота x −1…1
+  for (let z = A.z0 - 1; z <= A.z1 + 1; z++) {
+    for (let y = 0; y < 3; y++) L.set(A.x0 - 1, y, z, 'cliff_dark');
+    L.set(A.x1 + 1, 0, z, 'cliff');
+  }
+  for (let x = A.x0 - 1; x <= A.x1 + 1; x++) {
+    for (let y = 0; y < 3; y++) L.set(x, y, A.z0 - 1, 'cliff_dark');
+    if (Math.abs(x) > 1) L.set(x, 0, A.gateZ, 'bricks_old');
+    L.set(x, -1, A.gateZ, 'tiles');
+  }
+  // обломки колонн по углам: по ним дракон не ходит, за ними можно переждать дыхание
+  for (const [x, z, h] of [[-10, -38, 3], [10, -37, 2], [-9, -52, 2], [11, -51, 3], [-13, -45, 1], [13, -44, 1]] as [number, number, number][]) {
+    for (let y = 0; y < h; y++) L.set(x, y, z, y === h - 1 && h > 1 ? 'bricks_cracked' : 'bricks_old');
+    if (h > 1) L.set(x + 1, 0, z, 'bricks_cracked');
+  }
+  // огни: костры у дальних стен, факелы, тлеющие огоньки на камне
+  for (const [x, z] of [[-14, -57], [0, -57], [14, -57], [-14, -40], [-14, -50]] as [number, number][]) L.set(x, 0, z, 'campfire');
+  for (const x of [-8, 8]) L.set(x, 1, A.z0 - 1, 'torch');
+  for (let i = 0; i < 14; i++) {
+    const x = Math.round(A.x0 + 1 + hash(i, 7, 3) * (A.x1 - A.x0 - 2)), z = Math.round(A.z0 + 1 + hash(i, 9, 5) * (A.z1 - A.z0 - 4));
+    if (L.nameAt(x, 0, z) === 'air' && Math.hypot(x, z + 44) > 5) L.set(x, 0, z, i % 3 ? 'dry_grass' : 'fire');
+  }
+  labels.push({ text: 'арена стража: Багровый дракон ↑', x: 0, z: -22.6, size: 0.8 });
 }
