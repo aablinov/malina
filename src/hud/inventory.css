@@ -1,0 +1,208 @@
+/* Инвентарь в духе Minecraft Dungeons (wiki/design-inventory.md) */
+.inv {
+  position: fixed; inset: 0; z-index: 20; display: none; color: var(--mcd-ink); user-select: none;
+  font: 700 clamp(10px, min(0.84vw, 1.5vh), 22px) / 1.25 var(--mcd-text);
+  grid-template-columns: 1.12fr 0.92fr 1.08fr; grid-template-rows: 4.2em minmax(0, 1fr) 4.4em; column-gap: 2.4em;
+  padding: 0 3em; box-sizing: border-box;
+  background: radial-gradient(120% 90% at 50% -10%, #6a2633 0%, #44243a 45%, #26222f 100%);
+}
+.inv.open { display: grid; }
+.inv-bg { position: absolute; inset: 0; z-index: -1; opacity: 0.5; background-size: cover; image-rendering: pixelated; pointer-events: none; }
+.inv button { font: inherit; color: inherit; cursor: pointer; }
+.inv kbd {
+  display: inline-grid; place-items: center; min-width: 1.6em; height: 1.4em; padding: 0 0.35em; margin-left: 0.35em; box-sizing: border-box;
+  font: 400 0.6em/1 var(--mcd-px); color: #fff; background: #2b2930; border: 0.12em solid #8a8792; border-radius: 0.3em; vertical-align: middle;
+}
+
+.inv-top { grid-column: 1 / -1; display: flex; gap: 2.2em; align-items: center; font: 400 1.25em/1 var(--mcd-px); text-shadow: 0 0.12em 0 #000; }
+.inv-top span { display: flex; align-items: center; gap: 0.45em; }
+.inv-top img { width: 1.7em; height: 1.7em; }
+.inv-x { position: absolute; right: 2.4em; top: 1.2em; width: 2.6em; height: 2.6em; background: transparent; border: 0.18em solid #cfcad8; font-size: 1.1em !important; }
+.inv-x:hover { background: rgba(255, 255, 255, 0.1); }
+
+/* ---------- герой ---------- */
+.inv-hero { position: relative; min-height: 0; }
+.inv-model { position: absolute; left: 18%; right: 18%; top: 14%; bottom: 20%; width: 64%; height: 66%; cursor: grab; }
+.inv-eq { position: absolute; width: 23%; aspect-ratio: 1; }
+.inv-eq.art { width: 19%; }
+.inv-eq .it { width: 100%; height: 100%; }
+.inv-eq.drop .it { outline: 0.25em dashed var(--mcd-gold); outline-offset: 0.15em; animation: inv-drop 0.6s infinite alternate; }
+@keyframes inv-drop { to { outline-color: #fff; } }
+.it-ghost { width: 55%; height: 55%; opacity: 0.8; }
+.inv-level, .inv-power { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; text-shadow: 0 0.1em 0 #000; }
+.inv-level { left: 1%; top: 41%; width: 8.4em; height: 8.4em; }
+.inv-level svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.inv-level .ring-bg { fill: #1b1920; stroke: #3c3944; stroke-width: 6; }
+.inv-level .ring { fill: none; stroke: var(--mcd-xp); stroke-width: 6; stroke-linecap: butt; filter: drop-shadow(0 0 3px #a35cff); }
+.inv-level-ico { position: absolute; top: -0.9em; width: 2em; height: 2em; }
+.inv-level span, .inv-power span { position: relative; font: 400 0.55em/1 var(--mcd-px); color: #e6e1ee; margin-bottom: 0.4em; }
+.inv-level b, .inv-power b { position: relative; font: 400 1.9em/1 var(--mcd-px); }
+.inv-power { right: 0; top: 45%; flex-direction: row; gap: 0.6em; align-items: center; }
+.inv-power-ico { width: 3.4em; height: 3.2em; display: grid; place-items: center; background: #050407; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); position: relative; }
+.inv-power-ico::before { content: ''; position: absolute; inset: 0.22em; background: linear-gradient(#55525c, #2b2930); clip-path: inherit; }
+.inv-power-ico img { position: relative; width: 2.1em; height: 2.1em; }
+.inv-power > div:last-child { display: flex; flex-direction: column; align-items: flex-start; }
+.inv-power span { margin-bottom: 0.45em; }
+
+/* ---------- плитка предмета ---------- */
+.it {
+  --r: #8c8a93;
+  position: relative; aspect-ratio: 1; box-sizing: border-box; cursor: pointer;
+  background: radial-gradient(120% 120% at 0 0, color-mix(in srgb, var(--r) 38%, transparent), transparent 60%), linear-gradient(160deg, #2c2a31, #18171c);
+  border: 0.24em solid color-mix(in srgb, var(--r) 72%, #000); box-shadow: 0 0 0 0.14em #050407, inset 0 0 0 0.12em rgba(0, 0, 0, 0.6);
+}
+.it::before {
+  /* клетчатый уголок цвета редкости */
+  content: ''; position: absolute; left: 0.25em; top: 0.25em; width: 1.6em; height: 1.6em; opacity: 0.55;
+  background: conic-gradient(var(--r) 25%, transparent 0 50%, var(--r) 0 75%, transparent 0) 0 0 / 0.8em 0.8em;
+  -webkit-mask: linear-gradient(135deg, #000 40%, transparent 41%); mask: linear-gradient(135deg, #000 40%, transparent 41%);
+}
+.it.r-common { --r: #8c8a93; }
+.it.r-rare { --r: #3fd67a; }
+.it.r-unique { --r: #f59a23; }
+.it:hover { filter: brightness(1.15); }
+.it.sel { box-shadow: 0 0 0 0.14em #050407, 0 0 0 0.38em #fff; z-index: 1; }
+.it.on { background-color: #2c2a31; }
+.it-ico { position: absolute; left: 50%; top: 46%; width: 64%; height: 64%; transform: translate(-50%, -50%); filter: drop-shadow(0 0.15em 0 rgba(0, 0, 0, 0.5)); }
+.it-pw { position: absolute; right: 0.4em; bottom: 0.35em; display: flex; align-items: center; gap: 0.25em; font: 400 0.68em/1 var(--mcd-px); text-shadow: 0.12em 0.12em 0 #000; }
+.it-pw img { width: 1.25em; height: 1.25em; }
+.it-sp { position: absolute; left: 0.3em; top: 0.3em; display: flex; align-items: center; gap: 0.15em; font: 400 0.62em/1 var(--mcd-px); text-shadow: 0.12em 0.12em 0 #000; z-index: 1; }
+.it-sp img { width: 1.6em; height: 1.6em; }
+.it.ench::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+  background: linear-gradient(115deg, transparent 30%, rgba(170, 110, 255, 0.45) 45%, transparent 60%) 0 0 / 300% 100%;
+  animation: inv-glint 3s linear infinite;
+}
+.it.ench { box-shadow: 0 0 0 0.14em #050407, 0 0 0.8em rgba(163, 92, 255, 0.55); }
+.it.ench.sel { box-shadow: 0 0 0 0.14em #050407, 0 0 0 0.38em #fff, 0 0 1em rgba(163, 92, 255, 0.6); }
+@keyframes inv-glint { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.it-cmp { position: absolute; right: 0.45em; bottom: 1.55em; width: 0; height: 0; border-left: 0.42em solid transparent; border-right: 0.42em solid transparent; }
+.it-cmp.up { border-bottom: 0.55em solid #3fd67a; }
+.it-cmp.down { border-top: 0.55em solid #e8364a; }
+.it-new { position: absolute; right: -0.24em; top: -0.24em; width: 0; height: 0; border-top: 1.3em solid var(--mcd-gold); border-left: 1.3em solid transparent; }
+.it.empty {
+  cursor: default; filter: none; --r: #3a3840;
+  background: linear-gradient(45deg, transparent calc(50% - 0.06em), #2e2c34 50%, transparent calc(50% + 0.06em)), linear-gradient(-45deg, transparent calc(50% - 0.06em), #2e2c34 50%, transparent calc(50% + 0.06em)), #1a181e;
+  border-color: #2a2830; display: grid; place-items: center;
+}
+.it.empty::before { display: none; }
+.inv-hero .it.empty { background: #1a181e; }
+
+/* ---------- вкладки и сетка ---------- */
+.inv-mid { display: flex; flex-direction: column; min-height: 0; }
+.inv-tablabel { text-align: center; font-size: 1.1em; min-height: 1.4em; margin-bottom: 0.3em; text-shadow: 0 0.1em 0 #000; }
+.inv-tabs { display: flex; align-items: center; justify-content: center; gap: 0.35em; margin-bottom: 0.9em; }
+.inv-tabs kbd { cursor: pointer; margin: 0 0.3em; }
+.inv-tab { width: 2.4em; height: 2.4em; padding: 0.3em; background: transparent; border: 0; border-bottom: 0.18em solid transparent; opacity: 0.55; }
+.inv-tab img { width: 100%; height: 100%; }
+.inv-tab:hover { opacity: 0.85; }
+.inv-tab.on { opacity: 1; border-bottom-color: #fff; }
+.inv-gridwrap { flex: 1; min-height: 0; overflow-y: auto; padding: 0.5em 1.2em 0.5em 0.5em; scrollbar-width: thin; scrollbar-color: #8a8792 #1a181e; }
+.inv-gridwrap::-webkit-scrollbar { width: 0.55em; }
+.inv-gridwrap::-webkit-scrollbar-track { background: #1a181e; }
+.inv-gridwrap::-webkit-scrollbar-thumb { background: #8a8792; }
+.inv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.85em; }
+
+/* ---------- карточка ---------- */
+.inv-detail { position: relative; min-height: 0; overflow-y: auto; padding: 0.3em 0.4em 1em 0; scrollbar-width: none; display: flex; flex-direction: column; }
+.inv-detail.flash { animation: inv-flash 0.6s; }
+@keyframes inv-flash { 30% { filter: brightness(1.6) drop-shadow(0 0 1em #a35cff); } }
+.d-empty { margin: auto; opacity: 0.6; }
+.d-head { display: flex; align-items: center; gap: 0.8em; margin-top: 1.2em; }
+.d-pw { display: flex; align-items: center; gap: 0.25em; font: 400 1.2em/1 var(--mcd-px); text-shadow: 0.1em 0.1em 0 #000; }
+.d-pw img { width: 1.1em; height: 1.1em; }
+.d-rar { font: 400 0.6em/1 var(--mcd-px); text-transform: uppercase; color: #141217; background: var(--c); padding: 0.35em 0.5em; border: 0.15em solid color-mix(in srgb, var(--c) 60%, #000); }
+.d-on { font: 400 0.55em/1 var(--mcd-px); color: #3fd67a; }
+.d-title { font: 400 1.75em/1.2 var(--mcd-px); margin: 0.45em 0 0.7em; text-transform: uppercase; letter-spacing: 0.02em; text-shadow: 0.1em 0.1em 0 #000; max-width: 70%; }
+.d-art { position: absolute; right: 0; top: 0; width: 8.5em; height: 8.5em; filter: drop-shadow(0 0.4em 0.6em rgba(0, 0, 0, 0.6)); animation: inv-bob 3s ease-in-out infinite; }
+@keyframes inv-bob { 50% { transform: translateY(-0.35em) rotate(-3deg); } }
+.d-stats { list-style: none; margin: 0 0 0.9em; padding: 0; display: flex; flex-direction: column; gap: 0.55em; max-width: 72%; }
+.d-stats li { display: flex; align-items: center; gap: 0.7em; font-weight: 500; }
+.d-stats li img { width: 1.3em; height: 1.3em; padding: 0.25em; background: #1b1920; border: 0.12em solid #5a5763; transform: rotate(45deg) scale(0.85); flex: none; }
+.d-stats li img { image-rendering: pixelated; }
+.d-desc { margin: 0 0 1em; font-weight: 500; color: #d6d1de; max-width: 92%; }
+.d-bars { display: flex; gap: 1.2em; margin: 0.2em 0 1.2em; }
+.d-bar { flex: 1; }
+.d-bar span { font: 400 0.52em/1 var(--mcd-px); }
+.d-bar div { position: relative; height: 0.32em; margin-top: 0.45em; background: #0f0e12; border: 0.1em solid #3a3840; }
+.d-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: #f2f0f6; }
+.d-bar u { position: absolute; top: -0.25em; bottom: -0.25em; width: 0.2em; background: #e8364a; }
+.d-unequip { align-self: flex-start; margin-bottom: 0.6em; background: transparent; border: 0.15em solid #cfcad8; padding: 0.35em 0.8em; }
+.d-enchtitle { text-align: center; margin-top: auto; font-size: 1.1em; padding-top: 0.6em; text-shadow: 0 0.1em 0 #000; }
+.d-ench { display: flex; justify-content: center; gap: 1.6em; margin-top: 0.8em; min-height: 8.2em; }
+
+/* ромбы зачарований */
+.gem { position: relative; width: 6em; height: 6em; cursor: pointer; }
+.gem::before {
+  content: ''; position: absolute; inset: 0.9em; transform: rotate(45deg);
+  background: linear-gradient(135deg, #77757e, #3a3840); box-shadow: 0 0 0 0.18em #0b0a0d, inset 0 0 0 0.45em #2a282e, inset 0 0 0 0.75em #55525c;
+}
+.gem.locked { cursor: default; opacity: 0.7; }
+.gem.locked i { position: absolute; inset: 2.3em; transform: rotate(45deg); background: #2a282e; box-shadow: inset 0 0 0 0.25em #44414b; }
+.gem.cluster::before { display: none; }
+.gem .m { position: absolute; width: 2em; height: 2em; transform: rotate(45deg); background: radial-gradient(color-mix(in srgb, var(--c) 65%, #fff), var(--c)); box-shadow: 0 0 0 0.15em #0b0a0d; display: grid; place-items: center; }
+.gem .m img, .gem.chosen i img { width: 75%; height: 75%; transform: rotate(-45deg); }
+.gem .m.pw { box-shadow: 0 0 0 0.15em #0b0a0d, 0 0 0.7em #c27aff; }
+.gem .m0 { left: 0.5em; top: 2.1em; }
+.gem .m1 { left: 3.5em; top: 2.1em; }
+.gem .m2 { left: 2em; top: 3.6em; }
+.gem-sp { position: absolute; left: 2.05em; top: 0.35em; width: 1.9em; height: 1.9em; }
+.gem-sp img { width: 100%; height: 100%; }
+.gem em { position: absolute; left: 50%; top: 8.2em; transform: translateX(-50%); white-space: nowrap; font: 700 0.75em/1 var(--mcd-text); font-style: normal; color: #c08aff; }
+.gem.chosen i { position: absolute; inset: 1.35em; transform: rotate(45deg); background: radial-gradient(color-mix(in srgb, var(--c) 60%, #fff), var(--c)); box-shadow: 0 0 0 0.18em #0b0a0d; display: grid; place-items: center; z-index: 1; }
+.gem.chosen b { position: absolute; left: 0; right: 0; top: 6.3em; text-align: center; font: 400 0.7em/1 var(--mcd-px); color: var(--mcd-gold); text-shadow: 0.1em 0.1em 0 #000; }
+.gem:not(.locked):hover, .gem.open { filter: brightness(1.25) drop-shadow(0 0 0.5em #a35cff); }
+
+.d-enchpanel { display: grid; grid-template-columns: 1fr 1.25fr; gap: 1em; margin-bottom: 0.8em; }
+.eo-list { display: flex; flex-direction: column; gap: 0.5em; }
+.eo { display: flex; align-items: center; gap: 0.7em; padding: 0.45em 0.5em; cursor: pointer; background: rgba(0, 0, 0, 0.25); border: 0.15em solid transparent; }
+.eo:hover { background: rgba(255, 255, 255, 0.06); }
+.eo.on { border-color: #fff; background: rgba(255, 255, 255, 0.08); }
+.eo.locked { opacity: 0.4; }
+.eo b { display: block; font-size: 0.95em; }
+.eo b small { font: 400 0.55em/1 var(--mcd-px); color: #c27aff; }
+.eo-gem { width: 2.2em; height: 2.2em; flex: none; transform: rotate(45deg) scale(0.85); background: radial-gradient(color-mix(in srgb, var(--c) 65%, #fff), var(--c)); box-shadow: 0 0 0 0.15em #0b0a0d; display: grid; place-items: center; }
+.eo-gem.pw { box-shadow: 0 0 0 0.15em #0b0a0d, 0 0 0.6em #c27aff; }
+.eo-gem img { width: 75%; height: 75%; transform: rotate(-45deg); }
+.eo-tiers { display: flex; gap: 0.25em; margin-top: 0.3em; }
+.eo-tiers u { text-decoration: none; font: 400 0.5em/1 var(--mcd-px); padding: 0.3em 0.35em; background: #1b1920; color: #77757e; }
+.eo-tiers u.got { background: var(--mcd-xp); color: #fff; }
+.eo-info h3 { margin: 0 0 0.5em; font: 400 0.95em/1.2 var(--mcd-px); text-shadow: 0.1em 0.1em 0 #000; }
+.eo-info ul { list-style: none; margin: 0 0 0.8em; padding: 0; display: flex; flex-direction: column; gap: 0.4em; }
+.eo-info li { font-weight: 500; font-size: 0.92em; color: #8a8792; display: flex; align-items: center; gap: 0.4em; }
+.eo-info li b { font: 400 0.6em/1 var(--mcd-px); width: 2.4em; }
+.eo-info li i { margin-left: auto; display: flex; align-items: center; font: 400 0.6em/1 var(--mcd-px); font-style: normal; }
+.eo-info li i img { width: 1.6em; height: 1.6em; }
+.eo-info li.got { color: #e6e1ee; }
+.eo-info li.next { color: #fff; }
+.eo-info li.next b { color: var(--mcd-gold); }
+.eo-warn { font-size: 0.8em; font-weight: 500; color: #ff9a8a; margin: 0.5em 0 0; }
+
+.d-btns { display: flex; gap: 0.8em; flex-wrap: wrap; }
+.d-btns button, .d-unequip {
+  display: inline-flex; align-items: center; gap: 0.3em; font: 400 0.62em/1 var(--mcd-px) !important; text-transform: uppercase;
+  padding: 0.85em 1.1em; background: transparent; border: 0.2em solid #e6e1ee; color: #fff;
+}
+.d-btns button img { width: 1.5em; height: 1.5em; }
+.d-btns button.ok { background: #3a9a4a; border-color: #b8f0c0; box-shadow: inset 0 -0.3em 0 #2a7a38; }
+.d-btns button:disabled { opacity: 0.4; cursor: default; }
+.d-btns button:not(:disabled):hover { filter: brightness(1.2); }
+.d-btns kbd { font-size: 0.9em; }
+
+.d-salvage { margin: 0 0 1em; padding: 1.2em 1.4em; background: linear-gradient(#1d2a22, #141c17); border: 0.2em solid #3a5a44; box-shadow: 0 0 0 0.15em #050407; }
+.d-salvage h3 { margin: 0 0 0.8em; font: 400 0.95em/1 var(--mcd-px); color: var(--mcd-gold); text-shadow: 0.1em 0.1em 0 #000; }
+.d-pay { display: flex; align-items: center; gap: 0.5em; margin-bottom: 1.2em; font: 400 1em/1 var(--mcd-px); }
+.d-pay img { width: 1.8em; height: 1.8em; }
+.d-pay b + img { margin-left: 1em; }
+
+/* ---------- низ ---------- */
+.inv-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 2.2em; justify-content: flex-end; border-top: 0.12em solid rgba(255, 255, 255, 0.08); }
+.inv-actions button { background: transparent; border: 0; font-size: 1.15em; padding: 0.4em 0; text-shadow: 0 0.1em 0 #000; }
+.inv-actions button:hover:not(:disabled) { color: var(--mcd-gold); }
+.inv-actions button:disabled { opacity: 0.35; cursor: default; }
+.inv-actions button:nth-child(1) kbd { background: #b8323a; border-color: #ff8a8a; }
+.inv-actions button:nth-child(2) kbd { background: #3a9a4a; border-color: #b8f0c0; }
+.inv-actions button:nth-child(3) kbd { background: #2f6fd0; border-color: #a8c8ff; }
+.inv-hint { margin-right: auto; font-weight: 500; font-size: 0.85em; opacity: 0.6; }
+/* панели зачарования и разбора — под крупной картинкой предмета */
+.d-salvage, .d-enchpanel { margin-top: 2.4em; position: relative; z-index: 1; }

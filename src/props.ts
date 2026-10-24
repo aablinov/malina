@@ -16,7 +16,8 @@ import { pixelTex } from './textures';
  * Предметы — препятствия для движения (через solids), бочки и деревянные ящики — ещё и цели для ударов.
  */
 
-export type LootKind = 'berry' | 'med';
+/** Малина, лечение; стрелы и предметы снаряжения — их вид и данные даёт сцена (PropsHooks.chestExtra) */
+export type LootKind = 'berry' | 'med' | 'arrows' | 'item';
 
 export const PROPS = {
   barrelHp: 20,
@@ -314,11 +315,15 @@ export interface Pickup {
   /** Пока не подобрать: только вылетел */
   lock: number;
   t: number;
+  /** Что именно (предмет снаряжения) — для сцены */
+  data?: unknown;
 }
 
 const LOOT_LOOK: Record<LootKind, { color: string; glow: [number, number, number]; size: [number, number, number] }> = {
   berry: { color: '#c4284f', glow: [3.2, 0.5, 1], size: [0.2, 0.2, 0.2] },
   med: { color: '#eeeeee', glow: [3, 0.6, 0.6], size: [0.3, 0.2, 0.24] },
+  arrows: { color: '#a8774a', glow: [2.4, 2.4, 2.6], size: [0.1, 0.1, 0.5] },
+  item: { color: '#8a5cff', glow: [2.4, 1.2, 3.4], size: [0.3, 0.3, 0.3] },
 };
 
 export function lootMesh(kind: LootKind): THREE.Group {
@@ -343,7 +348,9 @@ export interface PropsHooks {
   /** Взрыв бочки: урон всем вокруг (и предметам — через Props.blast) */
   explode(at: THREE.Vector3, r: number, dmg: number): void;
   /** Подобран лут */
-  give(kind: LootKind, amount: number, at: THREE.Vector3): void;
+  give(kind: LootKind, amount: number, at: THREE.Vector3, data?: unknown): void;
+  /** Сверх малины и лечения сундук выбрасывает это (стрелы, предмет); mesh — вид на полу */
+  chestExtra?(): { kind: LootKind; amount: number; data?: unknown; mesh?: THREE.Group }[];
   sound(k: 'open' | 'pickup' | 'break' | 'heal' | 'ignite'): void;
 }
 
@@ -452,15 +459,16 @@ export class Props {
       if (!s.open()) return;
       this.hooks.sound('open');
       // лут вываливается веером из-под крышки
-      LOOT_TABLE.forEach(([kind, amount], i) => {
-        const a = s.yaw + (i / (LOOT_TABLE.length - 1) - 0.5) * 2.6 + (this.rand() - 0.5) * 0.3;
+      const loot = [...LOOT_TABLE.map(([kind, amount]) => ({ kind, amount, data: undefined as unknown, mesh: undefined as THREE.Group | undefined })), ...(this.hooks.chestExtra?.() ?? [])];
+      loot.forEach(({ kind, amount, data, mesh: m }, i) => {
+        const a = s.yaw + (i / (loot.length - 1) - 0.5) * 2.6 + (this.rand() - 0.5) * 0.3;
         const sp = 2.2 + this.rand() * 1.8;
         const vel = new THREE.Vector3(Math.sin(a) * sp, 3.6 + this.rand() * 1.6, Math.cos(a) * sp);
-        const mesh = lootMesh(kind);
+        const mesh = m ?? lootMesh(kind);
         const pos = s.mouth.add(new THREE.Vector3((this.rand() - 0.5) * 0.4, 0, (this.rand() - 0.5) * 0.3));
         mesh.position.copy(pos);
         this.scene.add(mesh);
-        this.pickups.push({ kind, amount, pos, vel, mesh, lock: 0.7 + i * 0.03, t: this.rand() * 6 });
+        this.pickups.push({ kind, amount, pos, vel, mesh, lock: 0.7 + i * 0.03, t: this.rand() * 6, data });
       });
       this.fx.burst(s.mouth, [new THREE.Color(3, 2.4, 0.6)], 14, { speed: 2, up: 3, size: 0.06, life: 0.6, glow: true, gravity: 5 });
     } else {
@@ -536,7 +544,7 @@ export class Props {
         if (d < 0.6) {
           this.scene.remove(p.mesh);
           this.pickups.splice(i, 1);
-          this.hooks.give(p.kind, p.amount, p.pos);
+          this.hooks.give(p.kind, p.amount, p.pos, p.data);
           this.hooks.sound('pickup');
           continue;
         }

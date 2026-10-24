@@ -15,7 +15,12 @@ import { mapByName, ROOMS } from '../level/maps';
 import { buildFloor } from '../level/dungeon.ts';
 import type { PgLabel } from '../level/playground-map.ts';
 import { HERO, SWORD, snapshotTuning } from '../tuning';
-import { applyWeapon, onWeaponChange, pickWeapon } from '../weapons';
+import { onWeaponChange, pickWeapon } from '../weapons';
+import { itemDef, Profile } from '../items';
+import { arrowsLootMesh, Gear, itemLootMesh } from '../gear';
+import { Hud } from '../hud/hud';
+import { Inventory } from '../hud/inventory';
+import { levelMap } from '../hud/map';
 import { Weather } from '../weather';
 import { aimLight, lightData, makeLight, worldOf } from '../world';
 import { Dummy } from './dummies';
@@ -57,10 +62,10 @@ export function runPlayground(): void {
    * ступени на площадку, витрина блоков. Механики живут в общих модулях (knight.ts, trail.ts), здесь — сцена и отладка.
    */
 
-  // оружие: ?weapon=<id> или активное из редактора (src/weapons.ts); его числа — стартовые для «Сброса» в F1
-  const weapon = pickWeapon();
-  applyWeapon(weapon);
-  snapshotTuning();
+  // оружие — надетое в инвентаре (src/items.ts); ?weapon=<id> — поверх него, для отладки (src/weapons.ts).
+  // Числа надетого — стартовые для «Сброса» в F1
+  const urlWeapon = new URLSearchParams(window.location.search).has('weapon') ? pickWeapon() : null;
+  const profile = new Profile();
   document.body.classList.add('dev-playground');
   document.title = 'Малина — плейграунд';
 
@@ -186,7 +191,12 @@ export function runPlayground(): void {
   // ---------- Склад: интерактивные предметы ----------
   const props = new Props(scene, fx, rng(99), {
     explode: (at, r, dmg) => explode(at, r, dmg),
-    give: (kind, amount, at) => giveLoot(kind, amount, at),
+    give: (kind, amount, at, data) => giveLoot(kind, amount, at, data),
+    // сундук: ещё связка стрел и случайный предмет снаряжения (луч цвета редкости, как в MCD)
+    chestExtra: () => {
+      const it = profile.rollLoot();
+      return [{ kind: 'arrows', amount: gear.stats.arrowBundle, mesh: arrowsLootMesh() }, { kind: 'item', amount: 1, data: it, mesh: itemLootMesh(it) }];
+    },
     sound: (k) => { if (scripted) return; ({ open: sfx.breakOpen, pickup: sfx.pickup, break: sfx.burst, heal: sfx.ready, ignite: sfx.flame } as const)[k](); },
   }, {
     barrels: [[-11, 11], [-10.25, 11.6], [-10.9, 10.15], [-6, 12.2], [-3.4, 18]],
@@ -205,15 +215,22 @@ export function runPlayground(): void {
     }
     return solidsCache;
   };
-  let berries = 0;
-  /** Нажали E — использовать ближайший предмет */
+  /** Нажали F — использовать ближайший предмет */
   let interactReq = false;
 
-  function giveLoot(kind: LootKind, amount: number, at: THREE.Vector3): void {
+  function giveLoot(kind: LootKind, amount: number, at: THREE.Vector3, data?: unknown): void {
     let text = '';
-    if (kind === 'berry') { berries += amount; text = `+${amount} малины`; }
-    else { hero.hp = Math.min(hero.maxHp, hero.hp + amount); text = `+${amount} здоровья`; }
-    fx.text(at.clone().setY(0.4), text, kind === 'berry' ? 'berry' : 'heal');
+    if (kind === 'berry') { profile.addBerries(amount); text = `+${amount} малины`; }
+    else if (kind === 'arrows') { profile.addArrows(amount); text = `+${amount} стрел`; }
+    else if (kind === 'item') {
+      const d = data as { def: string; power: number };
+      profile.add(d.def, d.power);
+      profile.save();
+      const def = itemDef(d.def);
+      hud.banner(`${def.title}<small>Новый предмет — открой инвентарь (I)</small>`, 2.6);
+      text = def.title;
+    } else { hero.hp = Math.min(hero.maxHp, hero.hp + amount); text = `+${amount} здоровья`; }
+    fx.text(at.clone().setY(0.4), text, kind === 'berry' || kind === 'item' ? 'berry' : 'heal');
   }
 
   // ---------- Герой ----------
@@ -225,8 +242,21 @@ export function runPlayground(): void {
     const a = THREE.MathUtils.degToRad((level.meta.spawnYaw as number | undefined) ?? 0);
     hero.place(level.spawn[0], level.spawn[2], Math.atan2(Math.cos(a), Math.sin(a)), level.spawn[1]);
   }
-  hero.setWeapon(weapon);
-  onWeaponChange((w) => { applyWeapon(w); hero.setWeapon(w); });
+  // снаряжение: оружие, броня, лук, артефакты, зелье, души и опыт (src/gear.ts)
+  const gear: Gear = new Gear({
+    scene, fx, hero, terrain,
+    targets: () => targets(),
+    blast: (at, r, dmg) => props.blast(at, r, dmg),
+    sound: (k) => {
+      if (scripted) return;
+      ({ shoot: sfx.dash, potion: sfx.ready, level: sfx.harvest, boom: sfx.blast, horn: sfx.shout, zap: sfx.zap, totem: sfx.plant, dash: sfx.dash, souls: sfx.wave, empty: sfx.empty, hit: sfx.hit } as const)[k]();
+    },
+    toast: (t) => toast(t),
+    banner: (h) => hud.banner(h),
+  }, profile);
+  if (urlWeapon) { gear.weaponOverride = urlWeapon; gear.apply(); }
+  snapshotTuning();
+  onWeaponChange((w) => gear.refreshWeapon(w));
   hero.onStep = () => { if (!scripted && hero.grounded) sfx.step(); };
   hero.onSwing = (step) => { if (!scripted) sfx.swing(step === 2 ? 0.7 : step === 1 ? 1.15 : 1, step === 2); };
   hero.onLand = (v) => {
@@ -251,21 +281,37 @@ export function runPlayground(): void {
       if (!t.alive || Math.abs(t.pos.y - hero.pos.y) > 1.6) continue;
       const dx = t.pos.x - s.from.x, dz = t.pos.z - s.from.z, d = Math.hypot(dx, dz);
       const inArc = d - t.radius <= s.range && (d < 0.7 || Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - s.yaw), Math.cos(Math.atan2(dx, dz) - s.yaw))) <= s.half + Math.atan(t.radius / Math.max(d, 0.3)));
-      const inWave = finisher && Math.hypot(t.pos.x - impact.x, t.pos.z - impact.z) - t.radius <= SWORD.shockR;
+      const inWave = finisher && Math.hypot(t.pos.x - impact.x, t.pos.z - impact.z) - t.radius <= SWORD.shockR * gear.stats.waveMult;
       if (!inArc && !inWave) continue;
       if (terrain.blocked(s.from.x, s.from.z, t.pos.x, t.pos.z, hero.pos.y + 0.5)) continue;
       hit.add(t);
     }
+    let smite = false;
     for (const t of hit) {
       const dir = new THREE.Vector3(t.pos.x - s.from.x, 0, t.pos.z - s.from.z).normalize();
       const point = t.pos.clone().setY(1.1).addScaledVector(dir, -t.radius);
-      t.hit(s.dmg, dir, point, s.knock);
-      fx.text(point, String(s.dmg), finisher ? 'crit' : '');
+      // сила оружия и зачарования (src/gear.ts): острота, крит, огонь, отбрасывание
+      const d = gear.meleeDamage(s.dmg);
+      t.hit(d.dmg, dir, point, s.knock * gear.stats.knockMult);
+      fx.text(point, d.crit ? `${d.dmg}!` : String(d.dmg), finisher || d.crit ? 'crit' : '');
       fx.burst(point, finisher ? [new THREE.Color(3.4, 2.6, 1.1), '#e8c35a'] : [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 7, { speed: 3.5, up: 2.5, size: 0.08, life: 0.4, glow: true, gravity: 8 });
+      if (d.fire) fx.burst(point, [new THREE.Color(3.4, 1.4, 0.3), new THREE.Color(3.4, 2.4, 0.6)], 6, { speed: 1.5, up: 2.5, size: 0.07, life: 0.5, glow: true, gravity: -1 });
+      gear.onHit(d.dmg, true);
+      smite ||= !finisher && gear.stats.smiteChance > 0 && Math.random() < gear.stats.smiteChance;
+    }
+    if (smite) {
+      // «Сокрушение»: обычный удар тоже даёт волну
+      const r = SWORD.shockR * 0.7;
+      fx.shock(impact.clone().setY(impact.y + 0.05), r, new THREE.Color(2.4, 1.4, 3.4), 0.35, 0.15);
+      for (const t of targets()) if (t.alive && !hit.has(t) && Math.hypot(t.pos.x - impact.x, t.pos.z - impact.z) - t.radius <= r) {
+        const v = Math.round(s.dmg * gear.stats.meleeMult * 0.5);
+        t.hit(v, new THREE.Vector3(t.pos.x - impact.x, 0, t.pos.z - impact.z).normalize(), t.pos.clone().setY(1), 1);
+        fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
+      }
     }
     if (finisher) {
       // ударная волна: кольцо по земле, пыль и тряска
-      fx.shock(impact.clone().setY(impact.y + 0.05), SWORD.shockR, new THREE.Color(3.2, 2.4, 1.0), 0.4, 0.18);
+      fx.shock(impact.clone().setY(impact.y + 0.05), SWORD.shockR * gear.stats.waveMult, new THREE.Color(3.2, 2.4, 1.0), 0.4, 0.18);
       fx.burst(impact.clone().setY(impact.y + 0.1), ['#d8cfa8', '#b9ad88', '#9a8f70'], 14, { speed: 3.2, up: 2.2, size: 0.12, life: 0.5, gravity: 6 });
       fx.shake = Math.max(fx.shake, 0.55);
       if (!scripted) sfx.quake();
@@ -318,6 +364,8 @@ export function runPlayground(): void {
   const mousePx = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   let mouseSeen = false;
   let lmb = false;
+  /** ПКМ держат — стрелять из лука */
+  let rmb = false;
   const edges = { roll: false };
   const input = emptyInput();
   /** Ввод из теста (Playwright): клавиатура и мышь игнорируются */
@@ -340,13 +388,20 @@ export function runPlayground(): void {
     if (['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10'].includes(e.code)) e.preventDefault();
     initAudio();
     if (e.repeat) return;
+    // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
+    if (inventory.open) { inventory.key(e); return; }
     if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
     keys.add(e.code);
     switch (e.code) {
       case 'Space': edges.roll = true; break;
-      case 'Digit1': case 'Digit2': case 'Digit3': castSpell(Number(e.code.slice(5)) - 1); break;
-      case 'KeyE': interactReq = true; break;
-      case 'KeyM': toggleMute(); break;
+      case 'Digit1': case 'Digit2': case 'Digit3': gear.useArtifact(Number(e.code.slice(5)) - 1, aimPoint()); break;
+      case 'KeyE': gear.potion(); break;
+      case 'KeyF': interactReq = true; break;
+      case 'KeyI': case 'Tab': openInventory(); break;
+      case 'KeyM': toggleMap(); break;
+      case 'Escape': if (hud.mapOpen) toggleMap(); break;
+      case 'KeyH': helpOn = !helpOn; helpT = helpOn ? Infinity : 0; break;
+      case 'F9': toast(toggleMute() ? 'Звук выключен' : 'Звук включён'); break;
       case 'KeyL': night = !night; applyNight(); toast(night ? 'Ночь' : 'День'); refreshControls(); break;
       case 'KeyU': look.unreal = !look.unreal; toast(look.unreal ? 'Свет как в Unreal' : 'Простой свет'); refreshControls(); break;
       case 'KeyB': postFX = !postFX; toast(postFX ? 'Постобработка включена' : 'Постобработка выключена'); refreshControls(); break;
@@ -364,15 +419,15 @@ export function runPlayground(): void {
     }
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
-  window.addEventListener('blur', () => { keys.clear(); lmb = false; });
+  window.addEventListener('blur', () => { keys.clear(); lmb = false; rmb = false; });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('mousemove', (e) => {
     mouseNdc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
     mousePx.x = e.clientX; mousePx.y = e.clientY;
     mouseSeen = true;
   });
-  canvas.addEventListener('mousedown', (e) => { initAudio(); if (e.button === 0) lmb = true; });
-  window.addEventListener('mouseup', (e) => { if (e.button === 0) lmb = false; });
+  canvas.addEventListener('mousedown', (e) => { initAudio(); if (e.button === 0) lmb = true; if (e.button === 2) rmb = true; });
+  window.addEventListener('mouseup', (e) => { if (e.button === 0) lmb = false; if (e.button === 2) rmb = false; });
   canvas.addEventListener('wheel', (e) => { camDist = THREE.MathUtils.clamp(camDist + Math.sign(e.deltaY) * 2, 12, 60); }, { passive: true });
 
   // экран вверх = мир (−1, −1)
@@ -545,16 +600,8 @@ export function runPlayground(): void {
     if (!scripted || keyMove) input.aim.copy(pointer.ground);
   }
 
-  // ---------- Заклинания: слоты 1/2/3 с перезарядкой (пока пустые) ----------
-  interface Spell { name: string; cd: number; t: number; cast(): void }
-  const spells: (Spell | null)[] = [null, null, null];
-  function castSpell(i: number): void {
-    const sp = spells[i];
-    if (!sp) { toast(`Слот ${i + 1}: заклинаний пока нет`); return; }
-    if (sp.t > 0) return;
-    sp.cast();
-    sp.t = sp.cd;
-  }
+  /** Куда целятся артефакты и лук: цель под курсором, иначе точка на земле */
+  function aimPoint(): THREE.Vector3 { return pointer.hover?.alive ? pointer.hover.pos.clone() : pointer.ground.clone(); }
 
   function resetTargets(): void {
     for (const d of dummies) d.reset();
@@ -579,25 +626,33 @@ export function runPlayground(): void {
     button(row, 'Герой в центр', () => hero.place(0, 4, Math.PI));
   }
 
-  // ---------- HUD ----------
-  const hud = document.createElement('div');
-  hud.className = 'pg-hud';
-  hud.innerHTML = `
+  // ---------- HUD и инвентарь как в Minecraft Dungeons (src/hud/) ----------
+  const hud = new Hud(document.body, profile);
+  hud.setGoal('Исследуй плейграунд', 'Плейграунд Малины');
+  const inventory = new Inventory(document.body, profile, T);
+  inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
+  function openInventory(): void { if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
+  hud.onInventory = openInventory;
+  hud.onPotion = () => gear.potion();
+  hud.onArtifact = (i) => gear.useArtifact(i, aimPoint());
+  const map = levelMap(level);
+  function toggleMap(): void { if (map) hud.toggleMap(map.canvas); }
+  hud.onMap = toggleMap;
+  /** Подсказка по управлению: первые 15 с, потом — по H */
+  let helpOn = true;
+  let helpT = 15;
+
+  const dev = document.createElement('div');
+  dev.className = 'pg-hud';
+  dev.innerHTML = `
     <div class="pg-tele" id="pgTele"></div>
     <div class="pg-fps" id="pgFps"></div>
     <div class="pg-toast" id="pgToast"></div>
-    <div class="pg-bar">
-      <div class="pg-spells">${[1, 2, 3].map((n) => `<div class="pg-slot pg-spell" title="Заклинание ${n}"><div class="pg-cd" id="pgSpellCd${n}"></div><kbd>${n}</kbd></div>`).join('')}</div>
-      <div class="pg-slot" title="Меч"><span class="pg-sword"></span><div class="pg-combo" id="pgCombo"><i></i><i></i><i></i></div><kbd>ЛКМ</kbd></div>
-      <div class="pg-heart"><div class="pg-heart-fill" id="pgHp"></div><b id="pgHpN">100</b></div>
-      <div class="pg-slot" title="Перекат"><span class="pg-roll"></span><div class="pg-cd" id="pgRollCd"></div><kbd>Space</kbd></div>
-      <div class="pg-berry"><i></i><b id="pgBerry">0</b></div>
-    </div>
     <div class="pg-prompt" id="pgPrompt"></div>
-    <div class="pg-help">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо из трёх) · Shift + ЛКМ — бить на месте · WASD — ходьба · Space — перекат · 1/2/3 — заклинания · E — использовать · L — день/ночь<br>
-    F1 параметры · F2 коллайдеры и путь · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · B bloom · U свет Unreal · N сброс чучел и склада · F10 редактор</div>
+    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — артефакты · E — зелье · F — использовать · I — инвентарь · M — карта<br>
+    F1 параметры · F2 коллайдеры · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · F9 звук · B bloom · U свет · L день/ночь · N сброс · F10 редактор · H — скрыть подсказку</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
-  document.body.appendChild(hud);
+  document.body.appendChild(dev);
 
   let toastT = 0;
   function toast(s: string): void { const t = $('pgToast'); t.textContent = s; t.classList.add('show'); toastT = 1.4; }
@@ -606,17 +661,15 @@ export function runPlayground(): void {
   function setHTML(id: string, v: string): void { if (cache[id] !== v) { cache[id] = v; $(id).innerHTML = v; } }
 
   function updateHUD(dt: number, fps: number, frameMs: number): void {
-    setHTML('pgBerry', String(berries));
     const near = hero.down ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
     const promptEl = $('pgPrompt');
-    promptEl.style.display = near ? '' : 'none';
-    if (near) setHTML('pgPrompt', `<kbd>E</kbd>${near.prompt}`);
-    $('pgHp').style.height = `${(hero.hp / hero.maxHp) * 100}%`;
-    setHTML('pgHpN', String(Math.ceil(hero.hp)));
-    $('pgRollCd').style.height = `${(hero.rollCdT / HERO.rollCd) * 100}%`;
-    spells.forEach((sp, i) => { $(`pgSpellCd${i + 1}`).style.height = sp ? `${(sp.t / sp.cd) * 100}%` : '0%'; });
-    const pips = $('pgCombo').children;
-    for (let i = 0; i < 3; i++) pips[i].classList.toggle('on', hero.combo >= i);
+    promptEl.style.display = near && !inventory.open ? '' : 'none';
+    if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
+    hud.update(gear.hudState(), dt);
+    hud.el.classList.toggle('show-hp', showTelemetry);
+    if (map && hud.mapOpen) hud.mapHero((hero.pos.x - map.minX + 0.5) / map.w, (hero.pos.z - map.minZ + 0.5) / map.h);
+    helpT -= dt;
+    $('pgHelp').style.opacity = helpOn && helpT > 0 ? String(Math.min(0.9, helpT)) : '0';
 
     const tele = $('pgTele');
     tele.style.display = showTelemetry ? '' : 'none';
@@ -638,7 +691,7 @@ export function runPlayground(): void {
     if (toastT <= 0) $('pgToast').classList.remove('show');
 
     const ret = $('pgRet');
-    const show = mouseSeen && !scripted;
+    const show = mouseSeen && !scripted && !inventory.open && !hud.mapOpen;
     ret.style.display = show ? '' : 'none';
     if (show) {
       ret.style.transform = `translate(${mousePx.x}px,${mousePx.y}px)`;
@@ -656,7 +709,7 @@ export function runPlayground(): void {
     simTime += dt;
     readInput();
     orders(dt);
-    for (const sp of spells) if (sp) sp.t = Math.max(0, sp.t - dt);
+    gear.update(dt, rmb && !scripted, aimPoint());
     markerT -= dt;
     marker.visible = markerT > 0;
     (marker.material as THREE.MeshBasicMaterial).opacity = Math.max(0, markerT * 2);
@@ -677,7 +730,7 @@ export function runPlayground(): void {
     const healed = props.update(dt, hero);
     if (healed > 0) hero.hp = Math.min(hero.maxHp, hero.hp + healed);
     clearEdges();
-    if (hero.down) { downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
+    if (hero.down) { if (downT === 0) gear.onDown(); downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
     for (const d of dummies) d.update(dt);
     fx.update(dt, window.innerWidth, window.innerHeight);
   }
@@ -694,7 +747,8 @@ export function runPlayground(): void {
     fpsAcc += real; fpsN++;
     if (fpsAcc > 0.5) { fpsVal = fpsN / fpsAcc; frameMs = (fpsAcc / fpsN) * 1000; fpsAcc = 0; fpsN = 0; }
 
-    if (!paused) acc += real * timeScale;
+    // инвентарь открыт — игра на паузе, как в одиночной MCD
+    if (!paused && !inventory.open) acc += real * timeScale;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     let n = 0;
     while (acc >= STEP && n < 6) { tick(STEP); acc -= STEP; n++; }
@@ -749,7 +803,14 @@ export function runPlayground(): void {
     view,
     /** Препятствия героя: склад и декор */
     get solids() { return solids(); },
-    get berries() { return berries; },
+    get berries() { return profile.data.berries; },
+    /** Снаряжение и прокачка: профиль (src/items.ts), бой (src/gear.ts), HUD и инвентарь (src/hud/) */
+    profile, gear, hud, inventory,
+    /** ПКМ: выстрел к точке */
+    shoot(x: number, z: number) { return gear.shoot(new THREE.Vector3(x, hero.pos.y, z)); },
+    /** Клавиши 1/2/3: артефакт к точке */
+    artifact(i: number, x: number, z: number) { return gear.useArtifact(i, new THREE.Vector3(x, hero.pos.y, z)); },
+    potion() { return gear.potion(); },
     /** Нажать E */
     interact() { interactReq = true; },
     /** Ввод из теста: клавиатура и мышь перестают влиять на героя */
