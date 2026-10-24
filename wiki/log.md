@@ -99,3 +99,7 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-10-24] код | Редактор в духе Unreal Engine
 Новое окно: меню и панель инструментов, префабы с категориями, поиском и превью, вьюпорты 1/2/4 вида, аутлайнер, детали, настройки мира. Выделение кликом и рамкой, гизмо переноса и поворота по осям, отмена правок свойств. Настройки мира (`meta.world`, `src/world.ts`), погода (`src/weather.ts`), поставленный свет и взгляд точки появления — в карте и в игре. Вкладка «Оружие»: реестр `src/weapons.ts`, превью, характеристики, баланс, `Knight.setWeapon`.
 Страницы: [design-editor.md](design-editor.md), [design-level-blocks.md](design-level-blocks.md), [design-level-decor.md](design-level-decor.md), [style-lighting.md](style-lighting.md).
+
+## [2026-10-24] вики | Как запускать тесты
+Рецепт прогона Playwright: `mise exec` для node и установленный Google Chrome через `PW_CHROMIUM`; `npx playwright install` в песочнице агента виснет без сети. Рецепт продублирован в корневых `AGENTS.md` и `CLAUDE.md`, README и бриф ссылаются на него.
+Страницы: [dev-testing.md](dev-testing.md), [project-brief.md](project-brief.md).

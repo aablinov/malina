@@ -31,7 +31,7 @@
   - `npm run dev` — разработка на localhost:5173;
   - `npm run typecheck` — проверка типов;
   - `npm run build` — tsc + сборка `dist/index.html`;
-  - `npm test` — Playwright-тесты плейграунда (нужен собранный `dist`; на новой машине сначала `npx playwright install chromium`).
+  - `npm test` — Playwright-тесты плейграунда (нужен собранный `dist`); как запускать — [dev-testing.md](dev-testing.md): node через `mise exec`, браузер — Google Chrome через `PW_CHROMIUM`.
 - **Текстуры, иконки и звуки** генерируются кодом (canvas и Web Audio), внешних ассетов нет.
 
 ## Где лежит и как работаем
@@ -44,7 +44,7 @@
 - **Плейграунд:** отдельный артефакт «Плейграунд Малины» (https://claude.ai/artifact/GTimWfP8VdvEQuHVA8rkK4), собирается `VITE_PLAYGROUND=only npx vite build --outDir /tmp/pgonly`.
   - Для публикации из `dist/index.html` убрать `doctype`/`html`/`head`/`body`/`meta`/`title`.
   - В начало добавить `<title>Малина</title><style>:root{color-scheme:dark}</style>`.
-- **Тесты:** Playwright с Chromium (`playwright.config.ts`, `tests/`).
+- **Тесты:** Playwright (`playwright.config.ts`, `tests/`), запуск — [dev-testing.md](dev-testing.md).
   - Аргументы запуска: `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`; свой Chromium — через `PW_CHROMIUM`.
   - Отладочный хук плейграунда `window.__malina` (`mode: 'playground'`): `hero`, `input`, `dummies`, `beetles`, `obstacles`, `GUNS`, `HERO`, `script(on)` — ввод из теста вместо клавиатуры, `step(sec)` — прогнать симуляцию (фиксированный шаг 1/60), `press('crouch' | 'roll' | 'reload' | 'primary' | 'pistol')`, `setAim(x, z)`, `setCam(dist, dir?)`, `equip(id)`, `spawnBeetle(kind)`, `resetTargets()`.
   - Хук старой игры (ферма): `G`, `player`, `camera`, `combat`, `startGame`, `equip`, `step`.

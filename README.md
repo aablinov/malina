@@ -17,7 +17,11 @@
 
 Все настраиваемые числа — в `src/tuning.ts` (`HERO`, `SWORD`).
 
-Тесты (Playwright, нужен собранный `dist`): `npm run build && npx playwright install chromium && npm test`.
+Тесты (Playwright, нужен собранный `dist`) — на установленном Google Chrome, node через mise (подробно — `wiki/dev-testing.md`):
+```
+mise exec -- npm run build
+PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise exec -- npx playwright test
+```
 
 ## Уровни и редактор
 Мир собирается из блоков: **карта** — `assets/maps/*.json`, **формы блоков** — `assets/blocks/*.obj`, **палитра** (из какой формы и каких текстур состоит блок, как сталкивается) — `src/level/palette.ts`.

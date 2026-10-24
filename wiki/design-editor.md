@@ -1,6 +1,6 @@
 # Редактор уровней в духе Unreal Engine
 
-Версия 1.0 от 24.10.2026. Заменяет описание редактора в [design-level-blocks.md](design-level-blocks.md) (раздел 9) и дополняет [design-level-decor.md](design-level-decor.md) (раздел 6), [style-world.md](style-world.md) (ландшафт), [style-lighting.md](style-lighting.md) (настройки мира).
+Версия 1.0 от 24.10.2026. Заменяет описание редактора в [design-level-blocks.md](design-level-blocks.md) (раздел 9) и дополняет [design-level-decor.md](design-level-decor.md) (раздел 6), [style-world.md](style-world.md) (ландшафт), [style-lighting.md](style-lighting.md) (настройки мира). Как проверять — [dev-testing.md](dev-testing.md).
 
 Открыть: `?dev=editor` (или F10 в плейграунде). Код — `src/dev/editor.ts` и `src/dev/editor/`.
 
