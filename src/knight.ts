@@ -4,6 +4,7 @@ import { STEP, type Terrain } from './level/collide.ts';
 import { pixelTex, type Textures } from './textures';
 import { SwordTrail } from './trail';
 import { HERO, SWORD } from './tuning';
+import { buildWeaponModel, disposeWeaponModel, type WeaponDef } from './weapons';
 
 /**
  * Герой: блочный персонаж в духе Minecraft Dungeons (крупная голова, короткие руки и ноги, плащ) со стандартным мечом.
@@ -143,6 +144,9 @@ export class Knight {
   private readonly arms: THREE.Group[] = [];
   private readonly capeG = new THREE.Group();
   private readonly sword = new THREE.Group();
+  /** След клинка по Z кисти: от основания до кончика */
+  private bladeBase = 0.22;
+  private bladeTip = 0.24 + BLADE;
   private readonly flashMats: THREE.MeshLambertMaterial[] = [];
 
   constructor(scene: THREE.Scene, T: Textures) {
@@ -265,11 +269,20 @@ export class Knight {
     this.cancelSwing();
   }
 
+  /** Сменить модель оружия в руке (числа удара — applyWeapon из weapons.ts) */
+  setWeapon(def: WeaponDef): void {
+    for (const c of [...this.sword.children]) { this.sword.remove(c); disposeWeaponModel(c); }
+    const g = buildWeaponModel(def);
+    for (const c of [...g.children]) this.sword.add(c);
+    this.bladeBase = g.userData.bladeBase as number;
+    this.bladeTip = g.userData.bladeTip as number;
+  }
+
   /** Основание и кончик клинка в мире */
   blade(base = new THREE.Vector3(), tip = new THREE.Vector3()): { base: THREE.Vector3; tip: THREE.Vector3 } {
     this.root.updateMatrixWorld(true);
-    base.set(0, 0, 0.22).applyMatrix4(this.sword.matrixWorld);
-    tip.set(0, 0, 0.24 + BLADE).applyMatrix4(this.sword.matrixWorld);
+    base.set(0, 0, this.bladeBase).applyMatrix4(this.sword.matrixWorld);
+    tip.set(0, 0, this.bladeTip).applyMatrix4(this.sword.matrixWorld);
     return { base, tip };
   }
 
