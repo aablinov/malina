@@ -119,6 +119,8 @@ export class Knight {
   rollCdT = 0;
   /** Множители снаряжения (src/gear.ts): скорость ходьбы и перезарядка переката */
   speedMul = 1;
+  /** Множитель получаемого урона (аура «Бастион») */
+  dmgTakenMul = 1;
   rollCdMul = 1;
   private readonly rollDir = new THREE.Vector3();
   private hurtT = 0;
@@ -350,7 +352,7 @@ export class Knight {
 
   hurt(d: number): boolean {
     if (this.down || this.invulnerable) return false;
-    this.hp = Math.max(0, this.hp - d);
+    this.hp = Math.max(0, this.hp - d * this.dmgTakenMul);
     this.hurtT = 0.15;
     if (this.hp <= 0) { this.down = true; this.downT = 0; this.cancelSwing(); }
     return true;

@@ -199,14 +199,21 @@ export function runPlayground(): void {
       const it = profile.rollLoot();
       return [{ kind: 'arrows', amount: gear.stats.arrowBundle, mesh: arrowsLootMesh() }, { kind: 'item', amount: 1, data: it, mesh: itemLootMesh(it) }];
     },
-    sound: (k) => { if (scripted) return; ({ open: sfx.breakOpen, pickup: sfx.pickup, break: sfx.burst, heal: sfx.ready, ignite: sfx.flame } as const)[k](); },
+    sound: (k, v = 0) => {
+      if (scripted) return;
+      ({
+        charge: () => sfx.chestCharge(), burst: () => sfx.chestOpen(), pop: () => sfx.lootPop(v), land: () => sfx.lootLand(),
+        itemLand: () => sfx.itemLand(v), berry: () => sfx.berry(v), item: () => sfx.treasure(v),
+        pickup: () => sfx.pickup(), break: () => sfx.crateBreak(), heal: () => sfx.ready(), ignite: () => sfx.flame(),
+      } as const)[k]();
+    },
   }, {
     barrels: [[-11, 11], [-10.25, 11.6], [-10.9, 10.15], [-6, 12.2], [-3.4, 18]],
     crates: [[-8.6, 14, 0], [-7.6, 14, 0], [-6.6, 14, 0], [-4.2, 15.2, 15], [-12.8, 15.6, 0], [-12.8, 16.6, 0]],
     supplies: [[-9.6, 17.6, 145], [-5.4, 19, 160]],
     terminals: [[-2.6, 10.6, 50]],
   });
-  floorLabel('склад: бочки, сундуки (E), источник здоровья (E), ящики', -7.5, 21.3, 0.9);
+  floorLabel('склад: бочки, сундуки (F), источник здоровья (F), ящики', -7.5, 21.3, 0.9);
   // лавки кузнеца и торговца — на плейграунде, в северо-западном углу (src/merchants.ts)
   const merchants: Merchant[] = new URLSearchParams(window.location.search).has('map') ? [] : [
     new Merchant(scene, overlayEl, T, 'smith', -17, -13, 0),
@@ -237,7 +244,7 @@ export function runPlayground(): void {
       hud.banner(`${def.title}<small>Новый предмет — открой инвентарь (I)</small>`, 2.6);
       text = def.title;
     } else { hero.hp = Math.min(hero.maxHp, hero.hp + amount); text = `+${amount} здоровья`; }
-    fx.text(at.clone().setY(0.4), text, kind === 'berry' || kind === 'item' ? 'berry' : 'heal');
+    fx.text(at.clone().setY(0.4), text, kind === 'berry' ? 'berry' : kind === 'item' ? 'loot' : 'heal');
   }
 
   // ---------- Герой ----------
@@ -303,7 +310,7 @@ export function runPlayground(): void {
       fx.text(point, d.crit ? `${d.dmg}!` : String(d.dmg), finisher || d.crit ? 'crit' : '');
       fx.burst(point, finisher ? [new THREE.Color(3.4, 2.6, 1.1), '#e8c35a'] : [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 7, { speed: 3.5, up: 2.5, size: 0.08, life: 0.4, glow: true, gravity: 8 });
       if (d.fire) fx.burst(point, [new THREE.Color(3.4, 1.4, 0.3), new THREE.Color(3.4, 2.4, 0.6)], 6, { speed: 1.5, up: 2.5, size: 0.07, life: 0.5, glow: true, gravity: -1 });
-      gear.onHit(d.dmg, true);
+      gear.onHit(d.dmg, true, t.pos);
       smite ||= !finisher && gear.stats.smiteChance > 0 && Math.random() < gear.stats.smiteChance;
     }
     if (smite) {
@@ -335,7 +342,8 @@ export function runPlayground(): void {
     const k = (p: THREE.Vector3) => { const d = Math.hypot(p.x - at.x, p.z - at.z); return d >= r ? 0 : 1 - (d / r) * 0.6; };
     const dir = (p: THREE.Vector3) => new THREE.Vector3(p.x - at.x, 0, p.z - at.z).normalize();
     const kh = k(hero.pos);
-    if (kh > 0 && hero.hurt(dmg * kh)) fx.text(hero.pos.clone().setY(hero.pos.y + 1), `−${Math.round(dmg * kh)}`, 'bad');
+    const hp0 = hero.hp;
+    if (kh > 0 && hero.hurt(dmg * kh)) fx.text(hero.pos.clone().setY(hero.pos.y + 1), `−${Math.round(hp0 - hero.hp)}`, 'bad');
     for (const d of dummies) if (k(d.pos) > 0) d.hit(dmg * k(d.pos), dir(d.pos), d.pos, 1);
     props.blast(at, r, dmg);
   }
@@ -402,8 +410,9 @@ export function runPlayground(): void {
     keys.add(e.code);
     switch (e.code) {
       case 'Space': edges.roll = true; break;
-      case 'Digit1': case 'Digit2': case 'Digit3': gear.useArtifact(Number(e.code.slice(5)) - 1, aimPoint()); break;
+      case 'Digit1': case 'Digit2': case 'Digit3': gear.pressArtifact(Number(e.code.slice(5)) - 1, aimPoint()); break;
       case 'KeyE': gear.potion(); break;
+      case 'KeyR': gear.flareAura(); break;
       case 'KeyF': interactReq = true; break;
       case 'KeyI': openInventory(); break;
       case 'KeyM': hud.toggleMap(); break;
@@ -427,8 +436,12 @@ export function runPlayground(): void {
       default: break;
     }
   });
-  window.addEventListener('keyup', (e) => keys.delete(e.code));
-  window.addEventListener('blur', () => { keys.clear(); lmb = false; rmb = false; });
+  window.addEventListener('keyup', (e) => {
+    keys.delete(e.code);
+    // заклинание заряжалось, пока клавиша была зажата, — отпустили, значит каст
+    if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') gear.releaseArtifact(Number(e.code.slice(5)) - 1, aimPoint());
+  });
+  window.addEventListener('blur', () => { keys.clear(); lmb = false; rmb = false; gear.cancelCast(); });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('mousemove', (e) => {
     mouseNdc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
@@ -640,10 +653,11 @@ export function runPlayground(): void {
   hud.setGoal('Исследуй плейграунд', 'Плейграунд Малины');
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
-  function openInventory(): void { if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
+  function openInventory(): void { gear.cancelCast(); if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
   hud.onInventory = openInventory;
   hud.onPotion = () => gear.potion();
   hud.onArtifact = (i) => gear.useArtifact(i, aimPoint());
+  hud.onAura = () => gear.flareAura();
   // карта с туманом войны: мини в углу, Tab — поверх игры, M — полная (src/hud/automap.ts)
   const automap = new AutoMap(level);
   hud.setMap(automap, new URLSearchParams(window.location.search).has('map') ? level.name : 'Плейграунд');
@@ -664,12 +678,13 @@ export function runPlayground(): void {
     <div class="pg-fps" id="pgFps"></div>
     <div class="pg-toast" id="pgToast"></div>
     <div class="pg-prompt" id="pgPrompt"></div>
-    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — артефакты · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры<br>
+    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — заклинания и артефакты (держи — заряд) · R — вспышка ауры · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры<br>
     F1 параметры · F2 коллайдеры · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · F9 звук · B bloom · U свет · L день/ночь · N сброс · F10 редактор · H — скрыть подсказку</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(dev);
 
   let toastT = 0;
+  let lastNearChest: unknown = null;
   function toast(s: string): void { const t = $('pgToast'); t.textContent = s; t.classList.add('show'); toastT = 1.4; }
 
   const cache: Record<string, string> = {};
@@ -678,6 +693,10 @@ export function runPlayground(): void {
   function updateHUD(dt: number, fps: number, frameMs: number): void {
     const trader = hero.down ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
     const near = hero.down || trader ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
+    // подошёл к сундуку — он тихо звенит
+    const nearChest = near?.kind === 'supply' ? near.target : null;
+    if (nearChest && nearChest !== lastNearChest && !scripted) sfx.twinkle();
+    lastNearChest = nearChest;
     const promptEl = $('pgPrompt');
     promptEl.style.display = (near || trader) && !inventory.open && !shop.open ? '' : 'none';
     if (trader) setHTML('pgPrompt', `<kbd>F</kbd>Торговать: ${MERCHANT_TITLE[trader.kind].toLowerCase()}`);
@@ -773,8 +792,11 @@ export function runPlayground(): void {
     fpsAcc += real; fpsN++;
     if (fpsAcc > 0.5) { fpsVal = fpsN / fpsAcc; frameMs = (fpsAcc / fpsN) * 1000; fpsAcc = 0; fpsN = 0; }
 
+    // стоп-кадр удара заклинания: время почти стоит (src/fx.ts hitstop)
+    const stop = fx.hitstop > 0 ? 0.04 : 1;
+    fx.updateReal(real);
     // инвентарь открыт — игра на паузе, как в одиночной MCD
-    if (!paused && !inventory.open && !shop.open) acc += real * timeScale;
+    if (!paused && !inventory.open && !shop.open) acc += real * timeScale * stop;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     let n = 0;
     while (acc >= STEP && n < 6) { tick(STEP); acc -= STEP; n++; }
@@ -833,13 +855,24 @@ export function runPlayground(): void {
     get berries() { return profile.data.berries; },
     /** Снаряжение и прокачка: профиль (src/items.ts), бой (src/gear.ts), HUD и инвентарь (src/hud/) */
     profile, gear, hud, inventory, shop, merchants, automap,
+    /** Эффекты: стоп-кадр, засветка, свет заклинаний */
+    fx,
     /** Подойти к торговцу и нажать F */
     trade(kind: 'smith' | 'merchant') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
     /** ПКМ: выстрел к точке */
     shoot(x: number, z: number) { return gear.shoot(new THREE.Vector3(x, hero.pos.y, z)); },
-    /** Клавиши 1/2/3: артефакт к точке */
-    artifact(i: number, x: number, z: number) { return gear.useArtifact(i, new THREE.Vector3(x, hero.pos.y, z)); },
+    /** Клавиши 1/2/3: артефакт к точке; charge 0..1 — заклинание с зарядом, без удержания */
+    artifact(i: number, x: number, z: number, charge = 0) { return gear.useArtifact(i, new THREE.Vector3(x, hero.pos.y, z), charge); },
+    /** Зажать клавишу 1/2/3 и отпустить через sec секунд симуляции */
+    hold(i: number, x: number, z: number, sec: number) {
+      const at = new THREE.Vector3(x, hero.pos.y, z);
+      if (!gear.pressArtifact(i, at)) return false;
+      const n = Math.round(sec / STEP); for (let j = 0; j < n; j++) tick(STEP);
+      return gear.releaseArtifact(i, at);
+    },
     potion() { return gear.potion(); },
+    /** Клавиша R: вспышка ауры */
+    flare() { return gear.flareAura(); },
     /** Нажать E */
     interact() { interactReq = true; },
     /** Ввод из теста: клавиатура и мышь перестают влиять на героя */

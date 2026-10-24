@@ -87,9 +87,14 @@ body { font-family: 'Rubik', system-ui, sans-serif; color: var(--ink); user-sele
   text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; will-change: transform;
 }
 .dmg.crit { color: #ff5a3c; font-size: 20px; }
-.dmg.berry { color: #ff7a9a; font-size: 14px; }
+.dmg.berry { color: #ff8fb0; font-size: 20px; text-shadow: 0 0 12px #ff2a6a, 2px 2px 0 #5a0020, -1px -1px 0 #5a0020, 1px -1px 0 #5a0020, -1px 1px 0 #5a0020; }
+.dmg.loot { color: #ffe27a; font-size: 18px; text-shadow: 0 0 14px #ffb020, 2px 2px 0 #3a2400, -1px -1px 0 #3a2400, 1px -1px 0 #3a2400, -1px 1px 0 #3a2400; }
 .dmg.bad { color: #ff4a4a; font-size: 12px; }
 .dmg.heal { color: #ffe066; font-size: 14px; }
+.dmg.spell { color: #fff; font-size: 24px; text-shadow: 0 0 14px #7ad8ff, 2px 2px 0 #10283a, -1px -1px 0 #10283a, 1px -1px 0 #10283a, -1px 1px 0 #10283a; }
+.dmg.healbig { color: #b8ff8a; font-size: 26px; text-shadow: 0 0 16px #4aff6a, 2px 2px 0 #0a3a10, -1px -1px 0 #0a3a10, 1px -1px 0 #0a3a10, -1px 1px 0 #0a3a10; }
+/* засветка экрана при ударе заклинания (src/fx.ts screenFlash) */
+.fx-flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; z-index: 5; }
 .dmg.bleed { color: #ff2a3a; font-size: 12px; }
 
 /* Над грядками */

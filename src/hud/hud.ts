@@ -25,6 +25,8 @@ export interface HudState {
   /** Артефакт сейчас действует (тотем стоит, сапоги бегут) */
   active: boolean[];
   buffs: HudBuff[];
+  /** Аура: шкала 0..1, осталось вспышки, с; null — гнездо пустое */
+  aura?: { icon: string; title: string; meter: number; flare: number; color: string } | null;
 }
 
 const cdText = (t: number): string => (t <= 0 ? '' : t < 1 ? t.toFixed(1) : String(Math.ceil(t)));
@@ -37,10 +39,13 @@ export class Hud {
   /** Карта поверх игры (Tab) */
   overlay = false;
   private bannerT = 0;
+  /** Сколько малины было на прошлом кадре — чтобы счётчик подпрыгнул, когда прибавилось */
+  private berriesShown = Infinity;
   onInventory?: () => void;
   onMap?: () => void;
   onArtifact?: (i: number) => void;
   onPotion?: () => void;
+  onAura?: () => void;
 
   constructor(parent: HTMLElement, private readonly profile: Profile) {
     const el = document.createElement('div');
@@ -56,7 +61,7 @@ export class Hud {
         <div class="hud-points" title="Очки зачарования">${iconImg('spiral')}<b data-id="points">0</b></div>
         ${slot('hud-inv', 'I', iconImg('chest')).replace('class="hud-slot', 'data-act="inv" title="Инвентарь (I)" class="hud-slot')}
         <div class="hud-arts">
-          <div class="hud-artrow">${[0, 1, 2].map((i) => slot(`hud-art`, String(i + 1), '<img class="px hud-ico" alt="" draggable="false"><span class="hud-plus">+</span>').replace('class="hud-slot', `data-act="art${i}" class="hud-slot`)).join('')}</div>
+          <div class="hud-artrow">${[0, 1, 2].map((i) => slot(`hud-art`, String(i + 1), '<img class="px hud-ico" alt="" draggable="false"><span class="hud-plus">+</span>').replace('class="hud-slot', `data-act="art${i}" class="hud-slot`)).join('')}${slot('hud-aura', 'R', '<div class="hud-aurafill"></div><img class="px hud-ico" alt="" draggable="false"><span class="hud-plus">+</span>').replace('class="hud-slot', 'data-act="aura" class="hud-slot')}</div>
           <div class="hud-souls" title="Души">${iconImg('soul')}<div class="hud-track"><div class="hud-fill" data-id="souls"></div></div></div>
         </div>
         <div class="hud-heart" title="Здоровье">
@@ -98,6 +103,7 @@ export class Hud {
       if (a === 'inv') this.onInventory?.();
       else if (a === 'map') this.onMap?.();
       else if (a === 'potion') this.onPotion?.();
+      else if (a === 'aura') this.onAura?.();
       else if (a.startsWith('art')) this.onArtifact?.(Number(a.slice(3)));
     });
   }
@@ -177,6 +183,12 @@ export class Hud {
     const p = this.profile.data;
     this.set('points', String(p.points));
     this.set('berries', String(p.berries));
+    // малины прибавилось — счётчик подпрыгивает
+    if (p.berries > this.berriesShown) {
+      const el = this.q('berries').parentElement as HTMLElement;
+      el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+    }
+    this.berriesShown = p.berries;
     this.set('arrows', String(p.arrows));
     this.set('lives', String(s.lives));
     this.set('lv', `LV ${p.level}`);
@@ -200,6 +212,20 @@ export class Hud {
       el.classList.toggle('active', !!s.active[i]);
       el.classList.toggle('souls', !!it && !!itemDef(it.def).artifact?.souls && p.souls < (itemDef(it.def).artifact?.souls ?? 0));
     });
+    // аура: шкала поднимается снизу цветом ауры; полная — светится и ждёт R; во время вспышки убывает
+    const au = s.aura ?? null, ael = this.el.querySelector<HTMLElement>('.hud-aura');
+    if (ael) {
+      const img = ael.querySelector<HTMLImageElement>('.hud-ico');
+      const icon = au?.icon ?? '';
+      if (img && img.dataset.icon !== icon) { img.dataset.icon = icon; img.src = icon ? iconURL(icon) : ''; }
+      ael.classList.toggle('empty', !au);
+      ael.title = au ? `${au.title} (R) — шкала ${Math.floor(au.meter * 100)} %` : 'Пустое гнездо ауры (R)';
+      const fill = ael.querySelector<HTMLElement>('.hud-aurafill');
+      const k = au ? (au.flare > 0 ? au.flare / 5 : au.meter) : 0;
+      if (fill) { fill.style.height = `${k * 100}%`; fill.style.setProperty('--c', au?.color ?? '#555'); }
+      ael.classList.toggle('ready', !!au && au.flare <= 0 && au.meter >= 1);
+      ael.classList.toggle('flaring', !!au && au.flare > 0);
+    }
     this.cooldown(this.el.querySelector('.hud-potion') as HTMLElement, s.potion[0], s.potion[1]);
     this.cooldown(this.el.querySelector('.hud-roll') as HTMLElement, s.roll[0], s.roll[1], false);
 

@@ -5,11 +5,13 @@ import type { Target } from './target';
 import type { Rand } from './textures';
 import { distToObstacle } from './nav';
 import { pixelTex } from './textures';
+import { additive, additiveSprite, glowTex, groundGlow, lightBeam, rainbow, raysTex, starTex, type LootData } from './loot-look';
 
 /**
  * Интерактивные предметы карты:
  * - красные бочки с горючим: от ударов загораются и через секунду взрываются, задевая соседние бочки (цепная реакция);
- * - ящики с припасами: подойти и нажать E — крышка откидывается, лут вываливается на пол, его подбирают проходя;
+ * - волшебные сундуки: подойти и нажать F — сундук трясётся, крышка распахивается со вспышкой, лут вылетает фонтаном,
+ *   его подбирают проходя (малина и трофеи сами тянутся к герою);
  * - терминал здоровья: E — лечит, пока стоишь рядом, запас заряда восстанавливается;
  * - деревянные ящики: разбиваются мечом и взрывами.
  *
@@ -46,9 +48,11 @@ const MAT = {
   barrelRing: new THREE.MeshLambertMaterial({ color: '#5a1410' }),
   hazard: new THREE.MeshLambertMaterial({ color: '#e3bd1c' }),
   dark: new THREE.MeshLambertMaterial({ color: '#202226' }),
-  supply: new THREE.MeshLambertMaterial({ map: pixelTex('#4f5b33', 7, 62) }),
-  supplyLid: new THREE.MeshLambertMaterial({ map: pixelTex('#5b6a3a', 7, 63) }),
-  strap: new THREE.MeshLambertMaterial({ color: '#2a2d22' }),
+  chest: new THREE.MeshLambertMaterial({ map: pixelTex('#3c2c98', 12, 62), emissive: '#2a1670', emissiveIntensity: 0.55 }),
+  chestTop: new THREE.MeshLambertMaterial({ map: pixelTex('#4b38b8', 12, 63), emissive: '#2a1670', emissiveIntensity: 0.55 }),
+  chestInside: new THREE.MeshLambertMaterial({ color: '#2a1a66', emissive: '#5a2aa0', emissiveIntensity: 0.6 }),
+  gold: new THREE.MeshLambertMaterial({ map: pixelTex('#f4bd2e', 14, 67), emissive: '#7a4a00', emissiveIntensity: 0.6 }),
+  goldDark: new THREE.MeshLambertMaterial({ map: pixelTex('#d99a1c', 12, 68), emissive: '#5a3400', emissiveIntensity: 0.5 }),
   wood: new THREE.MeshLambertMaterial({ map: pixelTex('#9a6a3a', 10, 64) }),
   woodDark: new THREE.MeshLambertMaterial({ map: pixelTex('#6e4824', 8, 65) }),
   terminal: new THREE.MeshLambertMaterial({ map: pixelTex('#3a3f48', 6, 66) }),
@@ -179,19 +183,37 @@ export class BreakCrate implements Target {
   }
 }
 
-// ---------- ящик с припасами ----------
+// ---------- сундук ----------
 
+/** Сколько сундук копит силу (трясётся, втягивает искры) до взрыва света */
+const CHEST_CHARGE = 0.6;
+/** Пауза между предметами, вылетающими фонтаном */
+const CHEST_POP_GAP = 0.08;
+
+/**
+ * Волшебный сундук: тёмно-синий с золотом, по углам и на крышке — камни, переливающиеся радугой, из-под крышки сочится свет.
+ * Открытие: сундук трясётся и втягивает искры (CHEST_CHARGE), потом крышка распахивается, бьёт столб света,
+ * разлетаются конфетти и кольца, лут вылетает фонтаном по одному (Props.update).
+ */
 export class SupplyCrate {
   readonly pos: THREE.Vector3;
   readonly group = new THREE.Group();
   readonly solid: Obstacle;
   opened = false;
-  /** Анимация крышки 0..1 */
-  private openK = 0;
+  /** Время с начала открытия; −1 — закрыт */
+  openT = -1;
+  /** Вспыхнул (крышка распахнулась) — лут летит */
+  burst = false;
+  private readonly body = new THREE.Group();
   private readonly lid = new THREE.Group();
-  private readonly beacon: THREE.Mesh;
-  private readonly beaconMat: THREE.MeshBasicMaterial;
-  private t = 0;
+  private lidAng = 0;
+  private lidVel = 0;
+  private readonly gems: THREE.MeshBasicMaterial[] = [];
+  private readonly seamMat: THREE.MeshBasicMaterial;
+  private readonly seam: THREE.Mesh;
+  private readonly innerMat: THREE.MeshBasicMaterial;
+  private readonly halo: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private t = Math.random() * 10;
   readonly yaw: number;
 
   constructor(scene: THREE.Scene, x: number, z: number, yawDeg = 0) {
@@ -199,20 +221,50 @@ export class SupplyCrate {
     this.yaw = THREE.MathUtils.degToRad(yawDeg);
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.yaw;
-    this.group.add(box(1.3, 0.62, 0.8, MAT.supply, 0, 0.31, 0));
-    for (const x0 of [-0.42, 0.42]) this.group.add(box(0.1, 0.64, 0.82, MAT.strap, x0, 0.31, 0));
-    this.group.add(box(0.12, 0.12, 0.06, MAT.dark, -0.62, 0.42, 0), box(0.12, 0.12, 0.06, MAT.dark, 0.62, 0.42, 0)); // ручки
-    // крышка на петлях по заднему краю
-    this.lid.position.set(0, 0.62, -0.4);
-    this.lid.add(box(1.34, 0.12, 0.84, MAT.supplyLid, 0, 0.06, 0.42));
-    this.lid.add(box(0.1, 0.13, 0.86, MAT.strap, -0.42, 0.06, 0.42), box(0.1, 0.13, 0.86, MAT.strap, 0.42, 0.06, 0.42));
-    this.lid.add(box(0.2, 0.06, 0.06, MAT.dark, 0, 0.0, 0.85)); // замок
-    this.group.add(this.lid);
-    // маячок: светится, пока ящик не открыт
-    this.beaconMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.4, 0.5), toneMapped: false });
-    this.beacon = box(0.12, 0.08, 0.12, this.beaconMat, 0, 0.12, 0.42);
-    this.beacon.castShadow = false;
-    this.lid.add(this.beacon);
+    this.group.add(this.body);
+    const B = this.body;
+    const gem = (w: number, h: number, d: number, px: number, py: number, pz: number, parent: THREE.Object3D = B): void => {
+      const m = new THREE.MeshBasicMaterial({ color: '#fff', toneMapped: false });
+      this.gems.push(m);
+      const g = box(w, h, d, m, px, py, pz);
+      g.castShadow = false;
+      parent.add(g);
+    };
+    // корпус и золотая оковка
+    B.add(box(1.22, 0.54, 0.74, MAT.chest, 0, 0.3, 0));
+    B.add(box(1.3, 0.08, 0.82, MAT.gold, 0, 0.04, 0), box(1.3, 0.06, 0.82, MAT.gold, 0, 0.57, 0));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) B.add(box(0.09, 0.6, 0.09, MAT.gold, sx * 0.62, 0.3, sz * 0.38));
+    for (const x0 of [-0.36, 0.36]) B.add(box(0.1, 0.58, 0.79, MAT.goldDark, x0, 0.3, 0));
+    // замок с малиновым камнем и камни по бокам
+    B.add(box(0.26, 0.3, 0.05, MAT.gold, 0, 0.42, 0.4));
+    gem(0.12, 0.12, 0.04, 0, 0.42, 0.43);
+    for (const sx of [-1, 1]) gem(0.04, 0.14, 0.14, sx * 0.62, 0.3, 0);
+    // камни по нижним углам
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) gem(0.13, 0.13, 0.13, sx * 0.63, 0.07, sz * 0.39);
+    // щель под крышкой: из неё сочится свет
+    this.seamMat = new THREE.MeshBasicMaterial({ color: '#fff', toneMapped: false });
+    this.seam = box(1.2, 0.03, 0.72, this.seamMat, 0, 0.6, 0);
+    this.seam.castShadow = false;
+    B.add(this.seam, box(1.12, 0.02, 0.64, MAT.chestInside, 0, 0.58, 0));
+    // свет изнутри — виден, когда крышка открыта
+    this.innerMat = additive(glowTex(), new THREE.Color(3, 2.2, 2.6), 0);
+    const inner = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.1), this.innerMat);
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.y = 0.62;
+    B.add(inner);
+    // крышка на петлях по заднему краю: ступенькой, с золотыми полосами, камнями по углам и сверху
+    this.lid.position.set(0, 0.6, -0.41);
+    this.lid.add(box(1.32, 0.15, 0.84, MAT.chest, 0, 0.075, 0.42), box(1.12, 0.09, 0.62, MAT.chestTop, 0, 0.19, 0.42));
+    for (const x0 of [-0.36, 0.36]) this.lid.add(box(0.11, 0.26, 0.86, MAT.goldDark, x0, 0.11, 0.42));
+    this.lid.add(box(1.34, 0.05, 0.06, MAT.gold, 0, 0.03, 0.84), box(1.34, 0.05, 0.06, MAT.gold, 0, 0.03, 0.0));
+    this.lid.add(box(0.2, 0.16, 0.06, MAT.gold, 0, -0.02, 0.86)); // накладка замка
+    for (const sx of [-1, 1]) for (const sz of [0.02, 0.82]) gem(0.13, 0.13, 0.13, sx * 0.63, 0.12, sz, this.lid);
+    for (const sx of [-1, 1]) gem(0.13, 0.05, 0.13, sx * 0.18, 0.25, 0.42, this.lid);
+    B.add(this.lid);
+    // ореол на земле
+    this.halo = groundGlow(new THREE.Color('#fff'), 3.2, 0.8);
+    this.halo.position.y = 0.03;
+    this.group.add(this.halo);
     scene.add(this.group);
     this.solid = obstacle(x, z, 1.3, 0.8, 0.7, yawDeg);
   }
@@ -221,21 +273,74 @@ export class SupplyCrate {
   open(): boolean {
     if (this.opened) return false;
     this.opened = true;
+    this.openT = 0;
     return true;
   }
 
-  /** Точка над ящиком, откуда вылетает лут */
+  /** Точка над сундуком, откуда вылетает лут */
   get mouth(): THREE.Vector3 { return this.pos.clone().setY(0.8); }
 
-  update(dt: number): void {
+  /** true — именно в этот кадр крышка распахнулась */
+  update(dt: number, fx: FX, rand: Rand): boolean {
     this.t += dt;
-    if (this.opened) this.openK = Math.min(1, this.openK + dt / 0.35);
-    // крышка откидывается назад с перелётом
-    const k = this.openK;
-    const over = k < 1 ? Math.sin(k * Math.PI) * 0.15 : 0;
-    this.lid.rotation.x = -(k * 1.95 + over);
-    this.beaconMat.color.setRGB(3, 2.4, 0.5).multiplyScalar(this.opened ? 0 : 0.6 + 0.4 * Math.sin(this.t * 4));
-    this.beacon.visible = !this.opened;
+    const t = this.t;
+    let fired = false;
+    if (this.openT >= 0) {
+      this.openT += dt;
+      if (!this.burst && this.openT >= CHEST_CHARGE) { this.burst = true; fired = true; this.lidVel = -16; }
+    }
+    const charge = this.openT < 0 ? 0 : Math.min(1, this.openT / CHEST_CHARGE);
+    const after = this.burst ? this.openT - CHEST_CHARGE : -1;
+    // тряска и подпрыгивание
+    const B = this.body;
+    if (!this.burst) {
+      const a = charge * charge;
+      B.position.set((rand() - 0.5) * 0.08 * a, a * 0.06, (rand() - 0.5) * 0.06 * a);
+      B.rotation.z = (rand() - 0.5) * 0.12 * a;
+      B.scale.set(1 + a * 0.05, 1 - a * 0.08, 1 + a * 0.05);
+      // крышка подскакивает — видно свет внутри
+      this.lidAng = -Math.max(0, Math.sin(t * 38)) * 0.12 * a;
+    } else {
+      const j = Math.max(0, 1 - after / 0.45);
+      B.position.set(0, Math.abs(Math.sin(after * 14)) * 0.18 * j, 0);
+      B.rotation.z = 0;
+      const sq = Math.sin(after * 18) * 0.1 * j;
+      B.scale.set(1 - sq * 0.5, 1 + sq, 1 - sq * 0.5);
+      // крышка — пружина с перелётом
+      this.lidVel += ((-1.95 - this.lidAng) * 140 - this.lidVel * 9) * dt;
+      this.lidAng += this.lidVel * dt;
+    }
+    this.lid.rotation.x = this.lidAng;
+    // камни переливаются радугой; при открытии — быстрее и ярче, потом гаснут
+    const spent = after < 0 ? 0 : Math.min(1, after / 3);
+    const speed = 0.12 + charge * 0.6 * (1 - spent);
+    const bright = (2.2 + Math.sin(t * 3) * 0.5 + charge * 2) * (1 - spent * 0.75);
+    this.gems.forEach((m, i) => m.color.copy(rainbow(t * speed + i * 0.09, bright)));
+    this.seam.visible = !this.burst;
+    const seamK = this.burst ? 0 : (1.2 + Math.sin(t * 2.5) * 0.4) * (1 + charge * 3);
+    this.seamMat.color.copy(rainbow(t * 0.1 + 0.9, seamK)).lerp(new THREE.Color(seamK, seamK, seamK), charge);
+    this.innerMat.opacity = after < 0 ? charge * 0.4 : Math.max(0.25, 1.2 - after * 0.5);
+    this.innerMat.color.copy(rainbow(t * 0.2, 1.8)).lerp(new THREE.Color(3, 2.6, 2.6), 0.6);
+    this.halo.material.color.copy(rainbow(t * 0.08 + 0.6, (0.55 + Math.sin(t * 2) * 0.15 + charge * 1.2) * (1 - spent * 0.7)));
+    this.halo.scale.setScalar(1 + charge * 0.4 + Math.sin(t * 2) * 0.05);
+    // искры: закрытый — поднимаются вокруг, копит силу — втягиваются в щель
+    const c = this.pos.clone().setY(0.62);
+    if (!this.opened) {
+      if (rand() < dt * 9) {
+        const a = rand() * Math.PI * 2, r = 0.5 + rand() * 0.5;
+        fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, -0.5 + rand() * 0.6, Math.sin(a) * r)), vel: new THREE.Vector3(0, 0.6 + rand() * 0.6, 0), life: 1.1, size: 0.06, color: rainbow(rand(), 3), gravity: -0.3, spin: 3 });
+      }
+    } else if (!this.burst) {
+      for (let i = 0; i < 4; i++) {
+        const a = rand() * Math.PI * 2, r = 1.4 + rand() * 0.8, life = 0.3;
+        const from = c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand() * 1.2, Math.sin(a) * r));
+        fx.particle({ pos: from, vel: c.clone().sub(from).divideScalar(life), life, size: 0.07, color: rainbow(rand(), 3.4), gravity: 0, shrink: false });
+      }
+    } else if (after < 2.5 && rand() < dt * 25 * (1 - after / 2.5)) {
+      // открытый ещё долго искрится изнутри
+      fx.particle({ pos: c.clone().add(new THREE.Vector3((rand() - 0.5) * 0.9, 0, (rand() - 0.5) * 0.5)), vel: new THREE.Vector3((rand() - 0.5) * 0.6, 1.5 + rand() * 2, (rand() - 0.5) * 0.6), life: 0.9, size: 0.06, color: rainbow(rand(), 3), gravity: 0.5 });
+    }
+    return fired;
   }
 }
 
@@ -315,18 +420,106 @@ export interface Pickup {
   /** Пока не подобрать: только вылетел */
   lock: number;
   t: number;
+  /** Уже коснулся земли (вспышка и звук приземления — один раз) */
+  landed?: boolean;
   /** Что именно (предмет снаряжения) — для сцены */
   data?: unknown;
 }
 
-const LOOT_LOOK: Record<LootKind, { color: string; glow: [number, number, number]; size: [number, number, number] }> = {
-  berry: { color: '#c4284f', glow: [3.2, 0.5, 1], size: [0.2, 0.2, 0.2] },
+const LOOT_LOOK: Record<Exclude<LootKind, 'berry'>, { color: string; glow: [number, number, number]; size: [number, number, number] }> = {
   med: { color: '#eeeeee', glow: [3, 0.6, 0.6], size: [0.3, 0.2, 0.24] },
   arrows: { color: '#a8774a', glow: [2.4, 2.4, 2.6], size: [0.1, 0.1, 0.5] },
   item: { color: '#8a5cff', glow: [2.4, 1.2, 3.4], size: [0.3, 0.3, 0.3] },
 };
 
+/** Цвет свечения малины */
+export const BERRY_GLOW = new THREE.Color(3.4, 0.45, 1.1);
+
+let berryGeo: THREE.BufferGeometry | null = null;
+let berryMat: THREE.MeshLambertMaterial | null = null;
+
+/** Малина из косточек-кубиков: конус из колец, сверху зелёная чашечка с хвостиком. Одна сетка на все ягоды */
+function berryGeometry(): THREE.BufferGeometry {
+  if (berryGeo) return berryGeo;
+  const pos: number[] = [], nor: number[] = [], col: number[] = [], idx: number[] = [];
+  const c = new THREE.Color();
+  const cube = (w: number, h: number, d: number, x: number, y: number, z: number, ry: number, hex: string): void => {
+    const g = new THREE.BoxGeometry(w, h, d);
+    g.rotateY(ry);
+    g.translate(x, y, z);
+    const base = pos.length / 3;
+    const p = g.attributes.position.array, n = g.attributes.normal.array;
+    c.set(hex);
+    for (let i = 0; i < p.length; i += 3) {
+      pos.push(p[i], p[i + 1], p[i + 2]); nor.push(n[i], n[i + 1], n[i + 2]);
+      // верх граней светлее — косточки блестят
+      const k = n[i + 1] > 0.5 ? 1.25 : n[i + 1] < -0.5 ? 0.7 : 1;
+      col.push(c.r * k, c.g * k, c.b * k);
+    }
+    for (const j of g.index!.array) idx.push(base + j);
+    g.dispose();
+  };
+  const tones = ['#e8245a', '#ff4a7e', '#c8124a', '#ff6a94'];
+  // кольца снизу вверх: высота, радиус, сколько косточек
+  const rings: [number, number, number][] = [[-0.15, 0.08, 5], [-0.07, 0.15, 8], [0.02, 0.18, 9], [0.11, 0.17, 9], [0.19, 0.12, 7]];
+  rings.forEach(([y, r, n], ri) => {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + ri * 0.35;
+      cube(0.11, 0.1, 0.11, Math.cos(a) * r, y, Math.sin(a) * r, -a, tones[(i + ri) % tones.length]);
+    }
+  });
+  cube(0.26, 0.34, 0.26, 0, 0.03, 0, 0, '#a80e3c'); // сердцевина
+  cube(0.07, 0.05, 0.07, 0.05, 0.13, 0.17, 0, '#ffc2d4'); // блик
+  // чашечка: четыре листика крестом и хвостик
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    cube(0.2, 0.035, 0.07, Math.cos(a) * 0.09, 0.245, Math.sin(a) * 0.09, -a, i % 2 ? '#4fbf3a' : '#3c9a2e');
+  }
+  cube(0.05, 0.11, 0.05, 0, 0.3, 0, 0, '#3a7d26');
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  return berryGeo = g;
+}
+
+/** Малина на полу: крупная ягода, ореол, блик-звёздочка и розовое пятно света на земле */
+function berryMesh(): THREE.Group {
+  const g = new THREE.Group();
+  berryMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#ff1a5e', emissiveIntensity: 0.35 });
+  const body = new THREE.Mesh(berryGeometry(), berryMat);
+  body.castShadow = true;
+  g.add(body);
+  const halo = new THREE.Sprite(additiveSprite(glowTex(), BERRY_GLOW.clone().multiplyScalar(0.5), 0.9));
+  halo.scale.setScalar(1.1);
+  g.add(halo);
+  const glint = new THREE.Sprite(additiveSprite(starTex(), new THREE.Color(3, 2.6, 2.8)));
+  glint.position.set(0.12, 0.16, 0.12);
+  g.add(glint);
+  const floor = groundGlow(BERRY_GLOW.clone().multiplyScalar(0.35), 1.1);
+  g.add(floor);
+  const phase = Math.random() * 6;
+  const ud: LootData = {
+    glow: BERRY_GLOW,
+    tick: (t, grounded) => {
+      halo.material.opacity = 0.7 + Math.sin(t * 4 + phase) * 0.25;
+      halo.scale.setScalar(1 + Math.sin(t * 4 + phase) * 0.12);
+      // блик вспыхивает раз в пару секунд
+      const k = ((t + phase) % 2.2) / 2.2;
+      glint.scale.setScalar(k < 0.15 ? Math.sin((k / 0.15) * Math.PI) * 0.45 : 0);
+      glint.material.rotation = t * 3;
+      // пятно света лежит на земле, пока ягода парит
+      floor.visible = grounded;
+      floor.position.y = 0.02 - g.position.y;
+    },
+  };
+  g.userData = ud;
+  return g;
+}
+
 export function lootMesh(kind: LootKind): THREE.Group {
+  if (kind === 'berry') return berryMesh();
   const L = LOOT_LOOK[kind];
   const g = new THREE.Group();
   const body = box(L.size[0], L.size[1], L.size[2], new THREE.MeshLambertMaterial({ color: L.color, emissive: L.color, emissiveIntensity: 0.25 }));
@@ -334,8 +527,6 @@ export function lootMesh(kind: LootKind): THREE.Group {
   const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(...L.glow), toneMapped: false });
   if (kind === 'med') {
     g.add(box(0.16, 0.04, 0.05, glow, 0, L.size[1] / 2 + 0.01, 0), box(0.05, 0.04, 0.16, glow, 0, L.size[1] / 2 + 0.01, 0));
-  } else if (kind === 'berry') {
-    g.add(box(0.06, 0.08, 0.06, new THREE.MeshLambertMaterial({ color: '#3e8a33' }), 0, 0.13, 0));
   } else {
     g.add(box(L.size[0] + 0.02, 0.04, L.size[2] + 0.02, glow, 0, L.size[1] / 2 - 0.03, 0));
   }
@@ -350,9 +541,19 @@ export interface PropsHooks {
   /** Подобран лут */
   give(kind: LootKind, amount: number, at: THREE.Vector3, data?: unknown): void;
   /** Сверх малины и лечения сундук выбрасывает это (стрелы, предмет); mesh — вид на полу */
-  chestExtra?(): { kind: LootKind; amount: number; data?: unknown; mesh?: THREE.Group }[];
-  sound(k: 'open' | 'pickup' | 'break' | 'heal' | 'ignite'): void;
+  chestExtra?(): ChestLoot[];
+  /** Звук; v — номер предмета в фонтане, серия малины или редкость трофея */
+  sound(k: PropSound, v?: number): void;
 }
+
+/**
+ * charge — сундук копит силу, burst — распахнулся, pop — вылетел предмет (v — номер), land — лут стукнулся о землю,
+ * itemLand — трофей приземлился (v — редкость), berry — подобрана малина (v — серия подряд), item — подобран трофей (v — редкость)
+ */
+export type PropSound = 'charge' | 'burst' | 'pop' | 'land' | 'itemLand' | 'berry' | 'item' | 'pickup' | 'break' | 'heal' | 'ignite';
+
+/** Что лежит в сундуке; mesh — свой вид на полу (иначе lootMesh) */
+export interface ChestLoot { kind: LootKind; amount: number; data?: unknown; mesh?: THREE.Group }
 
 export interface Interactable {
   kind: 'supply' | 'terminal';
@@ -380,6 +581,12 @@ export class Props {
   version = 0;
   private solidsCache: Obstacle[] = [];
   private solidsVer = -1;
+  /** Лут сундуков, ещё не вылетевший: сундук → очередь */
+  private readonly chestLoot = new Map<SupplyCrate, { items: ChestLoot[]; next: number }>();
+  /** Серия малины: сколько подобрано подряд (звук всё выше) */
+  private berryCombo = 0;
+  private lastBerry = -10;
+  private clock = 0;
 
   constructor(
     private readonly scene: THREE.Scene, private readonly fx: FX, private readonly rand: Rand,
@@ -401,6 +608,7 @@ export class Props {
     for (const t of this.terminals) this.scene.remove(t.group);
     for (const p of this.pickups) this.scene.remove(p.mesh);
     this.pickups.length = 0;
+    this.chestLoot.clear();
     this.spawn();
   }
 
@@ -439,7 +647,7 @@ export class Props {
     for (const s of this.supplies) {
       if (s.opened) continue;
       const d = distToObstacle(pos.x, pos.z, s.solid);
-      if (d < bd) { bd = d; best = { kind: 'supply', prompt: 'Открыть ящик с припасами', target: s }; }
+      if (d < bd) { bd = d; best = { kind: 'supply', prompt: 'Открыть сундук', target: s }; }
     }
     for (const t of this.terminals) {
       const d = distToObstacle(pos.x, pos.z, t.solid);
@@ -457,20 +665,9 @@ export class Props {
     if (it.kind === 'supply') {
       const s = it.target as SupplyCrate;
       if (!s.open()) return;
-      this.hooks.sound('open');
-      // лут вываливается веером из-под крышки
-      const loot = [...LOOT_TABLE.map(([kind, amount]) => ({ kind, amount, data: undefined as unknown, mesh: undefined as THREE.Group | undefined })), ...(this.hooks.chestExtra?.() ?? [])];
-      loot.forEach(({ kind, amount, data, mesh: m }, i) => {
-        const a = s.yaw + (i / (loot.length - 1) - 0.5) * 2.6 + (this.rand() - 0.5) * 0.3;
-        const sp = 2.2 + this.rand() * 1.8;
-        const vel = new THREE.Vector3(Math.sin(a) * sp, 3.6 + this.rand() * 1.6, Math.cos(a) * sp);
-        const mesh = m ?? lootMesh(kind);
-        const pos = s.mouth.add(new THREE.Vector3((this.rand() - 0.5) * 0.4, 0, (this.rand() - 0.5) * 0.3));
-        mesh.position.copy(pos);
-        this.scene.add(mesh);
-        this.pickups.push({ kind, amount, pos, vel, mesh, lock: 0.7 + i * 0.03, t: this.rand() * 6, data });
-      });
-      this.fx.burst(s.mouth, [new THREE.Color(3, 2.4, 0.6)], 14, { speed: 2, up: 3, size: 0.06, life: 0.6, glow: true, gravity: 5 });
+      this.hooks.sound('charge');
+      // что выпадет — решено сразу, вылетит, когда крышка распахнётся (Props.update)
+      this.chestLoot.set(s, { items: [...LOOT_TABLE.map(([kind, amount]): ChestLoot => ({ kind, amount })), ...(this.hooks.chestExtra?.() ?? [])], next: 0 });
     } else {
       const t = it.target as HealthTerminal;
       if (t.charge >= 5 && heroHp < heroMax) { t.active = true; this.hooks.sound('heal'); }
@@ -499,15 +696,21 @@ export class Props {
         this.hooks.sound('break');
         // иногда в ящике малина
         if (this.rand() < 0.35) {
-          const mesh = lootMesh('berry');
-          const pos = c.pos.clone().setY(0.5);
-          mesh.position.copy(pos);
-          this.scene.add(mesh);
-          this.pickups.push({ kind: 'berry', amount: 3, pos, vel: new THREE.Vector3((this.rand() - 0.5) * 2, 3, (this.rand() - 0.5) * 2), mesh, lock: 0.5, t: 0 });
+          this.drop('berry', 3, c.pos.clone().setY(0.5), new THREE.Vector3((this.rand() - 0.5) * 2, 4, (this.rand() - 0.5) * 2), 0.5);
+          this.fx.flash(c.pos.clone().setY(0.6), BERRY_GLOW, 1.6, 0.3);
         }
       }
     }
-    for (const s of this.supplies) s.update(dt);
+    this.clock += dt;
+    for (const s of this.supplies) {
+      if (s.update(dt, this.fx, this.rand)) this.chestBurst(s);
+      // лут вылетает фонтаном по одному
+      const q = this.chestLoot.get(s);
+      if (q && s.burst) {
+        while (q.next < q.items.length && s.openT - CHEST_CHARGE >= q.next * CHEST_POP_GAP) this.chestPop(s, q.items[q.next], q.next++, q.items.length);
+        if (q.next >= q.items.length) this.chestLoot.delete(s);
+      }
+    }
     // терминал лечит, пока герой рядом
     let healed = 0;
     for (const t of this.terminals) {
@@ -523,29 +726,46 @@ export class Props {
       }
       t.update(dt);
     }
-    // лут: летит, падает, крутится; подбирается проходя мимо, вблизи притягивается
+    // лут: летит, падает, крутится; подбирается проходя мимо, вблизи притягивается (малина — издалека)
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       const p = this.pickups[i];
+      const ud = p.mesh.userData as LootData;
       p.t += dt;
       p.lock -= dt;
       p.vel.y -= 12 * dt;
       p.pos.addScaledVector(p.vel, dt);
       if (p.pos.y < 0.14) {
         p.pos.y = 0.14;
+        if (!p.landed && p.vel.y < -1) { p.landed = true; this.land(p); }
         if (Math.abs(p.vel.y) > 1.5) { p.vel.y = -p.vel.y * 0.3; p.vel.x *= 0.5; p.vel.z *= 0.5; }
         else { p.vel.y = 0; const k = Math.exp(-6 * dt); p.vel.x *= k; p.vel.z *= k; }
       }
+      // низко над полом лут не лежит на сундуках и бочках — соскальзывает в сторону
+      if (p.pos.y < 1) for (const o of this.solids) {
+        if (distToObstacle(p.pos.x, p.pos.z, o) > 0.2) continue;
+        const dx = p.pos.x - o.x, dz = p.pos.z - o.z, l = Math.hypot(dx, dz) || 1;
+        p.pos.x += (dx / l) * 4 * dt; p.pos.z += (dz / l) * 4 * dt;
+      }
       const grounded = p.pos.y <= 0.15 && p.vel.lengthSq() < 0.3;
+      // в полёте — светящийся хвост, на земле — искры вокруг
+      if (ud.glow) {
+        if (!grounded) this.fx.particle({ pos: p.pos.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.35, size: 0.07, color: ud.glow, gravity: 0 });
+        else if (this.rand() < dt * (ud.rarity !== undefined ? 10 + ud.rarity * 6 : 3)) {
+          const a = this.rand() * Math.PI * 2, r = 0.2 + this.rand() * 0.3;
+          this.fx.particle({ pos: p.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, this.rand() * 0.3, Math.sin(a) * r)), vel: new THREE.Vector3(0, 0.7 + this.rand() * 0.6, 0), life: 0.9, size: 0.05, color: this.rand() < 0.3 ? new THREE.Color(3, 3, 3) : ud.glow, gravity: -0.4, spin: 3 });
+        }
+      }
       const d = Math.hypot(hero.pos.x - p.pos.x, hero.pos.z - p.pos.z);
-      if (p.lock <= 0 && !hero.down && d < 1.7) {
-        // притягивается к герою
-        const pull = hero.pos.clone().setY(0.6).sub(p.pos).setLength(Math.min(8, 3 + (1.7 - d) * 6) * dt);
+      const reach = p.kind === 'berry' ? 2.4 : 1.7;
+      if (p.lock <= 0 && !hero.down && d < reach) {
+        // притягивается к герою, всё быстрее
+        const pull = hero.pos.clone().setY(0.6).sub(p.pos).setLength(Math.min(10, 3 + (reach - d) * 6) * dt);
         p.pos.add(pull);
         if (d < 0.6) {
           this.scene.remove(p.mesh);
           this.pickups.splice(i, 1);
           this.hooks.give(p.kind, p.amount, p.pos, p.data);
-          this.hooks.sound('pickup');
+          this.collect(p);
           continue;
         }
       }
@@ -554,7 +774,118 @@ export class Props {
       p.mesh.rotation.y += dt * (grounded ? 1.8 : 6);
       if (!grounded) p.mesh.rotation.x += dt * 5;
       else p.mesh.rotation.x *= Math.exp(-8 * dt);
+      ud.tick?.(p.t, grounded);
     }
     return healed;
+  }
+
+  /** Бросить предмет на пол */
+  private drop(kind: LootKind, amount: number, pos: THREE.Vector3, vel: THREE.Vector3, lock: number, mesh = lootMesh(kind), data?: unknown): Pickup {
+    mesh.position.copy(pos);
+    this.scene.add(mesh);
+    const p: Pickup = { kind, amount, pos, vel, mesh, lock, t: this.rand() * 6, data };
+    this.pickups.push(p);
+    return p;
+  }
+
+  /** Крышка распахнулась: вспышка, столб света, звезда из лучей, кольца и конфетти */
+  private chestBurst(s: SupplyCrate): void {
+    const fx = this.fx, c = s.mouth, r = this.rand;
+    this.hooks.sound('burst');
+    fx.flash(c, new THREE.Color(9, 7, 8), 6, 0.4);
+    fx.shock(s.pos, 4.5, rainbow(0.9, 3), 0.55, 0.2);
+    fx.shock(s.pos, 3, rainbow(0.15, 3), 0.75, 0.15);
+    fx.shock(s.pos, 6, rainbow(0.55, 3), 1, 0.1);
+    fx.burst(c, Array.from({ length: 8 }, (_, i) => rainbow(i / 8, 3.2)), 80, { speed: 4.5, up: 7, size: 0.09, life: 1.5, glow: true, gravity: 6, drag: 0.6 });
+    fx.burst(c, ['#ff4a7e', '#ffd23a', '#4ad8ff', '#8a5cff', '#5aff7a', '#ffffff'], 40, { speed: 3.5, up: 6, size: 0.1, life: 2, gravity: 5, drag: 1.2 });
+    fx.shake = Math.max(fx.shake, 0.5);
+    // столб света из сундука: выстреливает вверх и тает
+    const beam = lightBeam(new THREE.Color(3, 2.5, 2.2), 7, 2.2);
+    beam.group.position.copy(s.pos).setY(0.5);
+    fx.custom(beam.group, 1.8, (k) => {
+      beam.group.scale.set(1 - k * 0.6, Math.min(1, k * 8), 1 - k * 0.6);
+      for (const m of beam.mats) m.opacity = Math.pow(1 - k, 1.5);
+    });
+    // звезда из лучей над сундуком
+    const rays = new THREE.Sprite(additiveSprite(raysTex(), new THREE.Color(3, 2.6, 2)));
+    rays.position.copy(c).setY(1.2);
+    fx.custom(rays, 1.2, (k) => {
+      rays.scale.setScalar(1.5 + k * 4);
+      rays.material.rotation = k * 2;
+      rays.material.opacity = 1 - k;
+      rays.material.color.copy(rainbow(k * 0.8, 3));
+    });
+    // искорки-звёздочки вспыхивают вокруг
+    for (let i = 0; i < 14; i++) {
+      const st = new THREE.Sprite(additiveSprite(starTex(), rainbow(r(), 3.5)));
+      st.position.copy(c).add(new THREE.Vector3((r() - 0.5) * 3.5, r() * 2.5, (r() - 0.5) * 3.5));
+      const delay = r() * 0.6;
+      fx.custom(st, 1.4, (k) => {
+        const q = (k * 1.4 - delay) / 0.5;
+        st.scale.setScalar(q > 0 && q < 1 ? Math.sin(q * Math.PI) * 0.7 : 0);
+        st.material.rotation = k * 4;
+      });
+    }
+  }
+
+  /** Один предмет вылетает из сундука высокой дугой */
+  private chestPop(s: SupplyCrate, l: ChestLoot, i: number, total: number): void {
+    const a = s.yaw + (i / Math.max(1, total - 1) - 0.5) * 3.2 + (this.rand() - 0.5) * 0.3;
+    const sp = 2.2 + this.rand() * 1.4;
+    const vel = new THREE.Vector3(Math.sin(a) * sp, 5.5 + this.rand() * 2, Math.cos(a) * sp);
+    const pos = s.mouth.add(new THREE.Vector3((this.rand() - 0.5) * 0.3, 0, (this.rand() - 0.5) * 0.2));
+    // трофей даётся не сразу — пусть столб света успеет вырасти
+    const p = this.drop(l.kind, l.amount, pos, vel, l.kind === 'item' ? 1.8 : 1, l.mesh ?? lootMesh(l.kind), l.data);
+    const glow = (p.mesh.userData as LootData).glow ?? new THREE.Color(3, 2.6, 1.6);
+    this.fx.flash(pos, glow, 1.4, 0.2);
+    this.fx.burst(pos, [glow, new THREE.Color(3, 3, 3)], 8, { speed: 1.5, up: 2, size: 0.06, life: 0.4, glow: true, gravity: 2 });
+    this.hooks.sound('pop', i);
+  }
+
+  /** Первое касание земли: трофей — кольцо и звон, остальное — стук и облачко */
+  private land(p: Pickup): void {
+    const ud = p.mesh.userData as LootData;
+    const at = p.pos.clone().setY(0.1);
+    if (ud.rarity !== undefined && ud.glow) {
+      this.fx.shock(at, 1.6 + ud.rarity * 0.6, ud.glow, 0.5, 0.25);
+      this.fx.flash(at.clone().setY(0.5), ud.glow, 2.4 + ud.rarity, 0.3);
+      this.fx.burst(at, [ud.glow, new THREE.Color(3, 3, 3)], 16 + ud.rarity * 10, { speed: 2.5, up: 3, size: 0.07, life: 0.7, glow: true, gravity: 4 });
+      this.hooks.sound('itemLand', ud.rarity);
+    } else {
+      if (ud.glow) this.fx.burst(at, [ud.glow], 5, { speed: 1.2, up: 1, size: 0.05, life: 0.3, glow: true, gravity: 3 });
+      this.hooks.sound('land');
+    }
+  }
+
+  /** Подобран: вспышка, брызги и звук — малина сочно лопается, трофей взрывается радугой */
+  private collect(p: Pickup): void {
+    const ud = p.mesh.userData as LootData;
+    const at = p.pos.clone();
+    const fx = this.fx;
+    if (p.kind === 'berry') {
+      this.berryCombo = this.clock - this.lastBerry < 0.9 ? this.berryCombo + 1 : 0;
+      this.lastBerry = this.clock;
+      fx.flash(at, BERRY_GLOW, 2.4, 0.25);
+      fx.shock(at.clone().setY(0.1), 1.3, BERRY_GLOW, 0.35, 0.3);
+      fx.burst(at, [BERRY_GLOW, new THREE.Color(3.4, 2.4, 2.8), new THREE.Color(3.2, 1.2, 1.8)], 22, { speed: 2.8, up: 3.5, size: 0.08, life: 0.6, glow: true, gravity: 5 });
+      fx.burst(at, ['#e8245a', '#ff4a7e', '#a80e3c'], 10, { speed: 2.2, up: 3, size: 0.09, life: 0.6, gravity: 10 });
+      const st = new THREE.Sprite(additiveSprite(starTex(), new THREE.Color(3.4, 2, 2.6)));
+      st.position.copy(at).setY(at.y + 0.3);
+      fx.custom(st, 0.4, (k) => { st.scale.setScalar(Math.sin(k * Math.PI) * 1.4); st.material.rotation = k * 3; });
+      this.hooks.sound('berry', this.berryCombo);
+    } else if (p.kind === 'item' && ud.glow) {
+      const r = ud.rarity ?? 0;
+      fx.flash(at, ud.glow, 4 + r, 0.4);
+      fx.shock(at.clone().setY(0.1), 2.5 + r, ud.glow, 0.5, 0.2);
+      fx.burst(at, [ud.glow, new THREE.Color(3.2, 2.8, 1), new THREE.Color(3, 3, 3), ...Array.from({ length: r * 3 }, (_, i) => rainbow(i / 6, 3))], 40 + r * 20, { speed: 3.5, up: 5, size: 0.08, life: 1, glow: true, gravity: 4 });
+      const rays = new THREE.Sprite(additiveSprite(raysTex(), ud.glow));
+      rays.position.copy(at).setY(at.y + 0.5);
+      fx.custom(rays, 0.8, (k) => { rays.scale.setScalar(1 + k * 3); rays.material.rotation = k * 2; rays.material.opacity = 1 - k; });
+      this.hooks.sound('item', r);
+    } else {
+      fx.flash(at, ud.glow ?? new THREE.Color(3, 2.6, 1.6), 1.4, 0.2);
+      fx.burst(at, [new THREE.Color(3, 2.6, 1.6), new THREE.Color(3, 3, 3)], 10, { speed: 2, up: 2.5, size: 0.06, life: 0.4, glow: true, gravity: 4 });
+      this.hooks.sound('pickup');
+    }
   }
 }

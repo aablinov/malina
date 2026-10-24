@@ -9,10 +9,10 @@ import { rng, type Rand } from './textures';
  * Здесь только данные и правила — без DOM и three: HUD и инвентарь (src/hud/) и сцена (src/dev/gear.ts) читают отсюда.
  */
 
-export type ItemSlot = 'melee' | 'ranged' | 'armor' | 'artifact';
+export type ItemSlot = 'melee' | 'ranged' | 'armor' | 'artifact' | 'aura';
 export type Rarity = 'common' | 'rare' | 'unique';
 
-export const SLOT_TITLE: Record<ItemSlot, string> = { melee: 'Ближний бой', ranged: 'Дальний бой', armor: 'Броня', artifact: 'Артефакты' };
+export const SLOT_TITLE: Record<ItemSlot, string> = { melee: 'Ближний бой', ranged: 'Дальний бой', armor: 'Броня', artifact: 'Артефакты', aura: 'Ауры' };
 /** Редкость: подпись и цвет рамки, как в Minecraft Dungeons */
 export const RARITY: Record<Rarity, { title: string; color: string; salvage: number; slots: number }> = {
   common: { title: 'Обычное', color: '#a7abb3', salvage: 1, slots: 1 },
@@ -22,7 +22,7 @@ export const RARITY: Record<Rarity, { title: string; color: string; salvage: num
 
 // ---------- каталог ----------
 
-export type ArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning';
+export type ArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning' | 'spark' | 'fireball' | 'icerain' | 'heal';
 export type PerkKind = 'souls' | 'artifactDmg' | 'cooldown' | 'meleeDmg' | 'rangedDmg' | 'speed' | 'potion' | 'roll' | 'arrows';
 
 export interface Perk { kind: PerkKind; value: number }
@@ -86,6 +86,18 @@ export interface ArtifactStats {
   duration?: number;
   /** Сколько душ тратит */
   souls?: number;
+  /** Заклинание: время полного заряда, с (держать клавишу — сильнее) */
+  charge?: number;
+}
+
+/** Ауры (wiki/design-spells.md, раздел 4): действуют всегда, по шкале — вспышка ×3 */
+export type AuraKind = 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns';
+export interface AuraStats {
+  kind: AuraKind;
+  /** Сила эффекта, % при силе предмета 1 */
+  value: number;
+  /** Радиус: союзники в нём получают эффект, м */
+  radius: number;
 }
 
 export interface ItemDef {
@@ -102,6 +114,9 @@ export interface ItemDef {
   /** Броня: здоровье при силе 1, особые свойства и вид на герое */
   armor?: { health: number; perks: Perk[]; look: ArmorLook };
   artifact?: ArtifactStats;
+  aura?: AuraStats;
+  /** Заклинание (wiki/design-spells.md): стартовое или с босса; в сундуки и к торговцам не попадает */
+  spell?: 'starter' | 'boss';
   /** Особые свойства оружия (строки как в MCD: «Широкие удары») */
   traits?: string[];
 }
@@ -136,8 +151,23 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'boots', slot: 'artifact', title: 'Сапоги скорости', rarity: 'common', icon: 'boots', description: 'Короткий рывок скорости.', artifact: A('boots', 4, 1.6, { duration: 2 }) },
   { id: 'horn', slot: 'artifact', title: 'Рог ветра', rarity: 'rare', icon: 'horn', description: 'Порыв ветра отбрасывает всех вокруг.', artifact: A('horn', 8, 6, { radius: 5 }) },
   { id: 'lightning', slot: 'artifact', title: 'Молниевый куб', rarity: 'rare', icon: 'lightning', description: 'Молния бьёт по трём ближайшим врагам.', artifact: A('lightning', 12, 28, { radius: 9 }) },
+  // заклинания — src/spells.ts
+  { id: 'spark', slot: 'artifact', spell: 'starter', title: 'Искра', rarity: 'common', icon: 'spark', description: 'Молния с неба бьёт в цель и перескакивает на соседей. Держи клавишу — перескоков больше.', artifact: A('spark', 4, 18, { radius: 12, charge: 0.9 }) },
+  { id: 'fireball', slot: 'artifact', spell: 'starter', title: 'Огненный шар', rarity: 'common', icon: 'fireball', description: 'Шар пламени летит к курсору и взрывается. Держи клавишу — шар растёт.', artifact: A('fireball', 6, 26, { radius: 2.2, charge: 1.1 }) },
+  { id: 'icerain', slot: 'artifact', spell: 'starter', title: 'Ледяной дождь', rarity: 'common', icon: 'icerain', description: 'Сосульки падают с неба на место у курсора. Держи клавишу — зона шире.', artifact: A('icerain', 10, 7, { radius: 3, duration: 2, charge: 1 }) },
+  { id: 'heal', slot: 'artifact', spell: 'starter', title: 'Слабое лечение', rarity: 'common', icon: 'heal', description: 'Листья и лепестки малины затягивают раны. Держи клавишу — лечит сильнее.', artifact: A('heal', 12, 22, { radius: 4, charge: 0.8 }) },
+  // ауры — src/auras.ts; как заклинания, падают только с боссов
+  { id: 'pact', slot: 'aura', spell: 'boss', title: 'Кровавый пакт', rarity: 'unique', icon: 'a-pact', description: 'Каждый удар возвращает герою часть отнятой жизни: красные нити тянутся от ран врага.', aura: { kind: 'pact', value: 8, radius: 8 } },
+  { id: 'bastion', slot: 'aura', spell: 'boss', title: 'Бастион', rarity: 'unique', icon: 'a-bastion', description: 'Вокруг кружат щиты-руны и принимают часть ударов на себя.', aura: { kind: 'bastion', value: 20, radius: 8 } },
+  { id: 'rage', slot: 'aura', spell: 'boss', title: 'Ярость', rarity: 'unique', icon: 'a-rage', description: 'Оружие тлеет, удары бьют сильнее и чаще бывают сокрушительными.', aura: { kind: 'rage', value: 15, radius: 8 } },
+  { id: 'clarity', slot: 'aura', spell: 'boss', title: 'Ясность', rarity: 'unique', icon: 'a-clarity', description: 'Голубые огоньки ускоряют мысль: заклинания и артефакты перезаряжаются быстрее, души липнут к рукам.', aura: { kind: 'clarity', value: 25, radius: 8 } },
+  { id: 'thorns', slot: 'aura', spell: 'boss', title: 'Терновый венец', rarity: 'unique', icon: 'a-thorns', description: 'Колючие лозы под ногами хлещут каждого, кто бьёт героя вблизи.', aura: { kind: 'thorns', value: 30, radius: 8 } },
   { id: 'harvester', slot: 'artifact', title: 'Жнец душ', rarity: 'unique', icon: 'harvester', description: 'Высвобождает собранные души взрывом вокруг героя.', artifact: A('harvester', 3, 45, { radius: 4, souls: 40 }) },
 ];
+
+/** Стартовые заклинания (wiki/design-spells.md, раздел 2) */
+export const STARTER_SPELLS = ['fireball', 'spark', 'heal', 'icerain'] as const;
+export const AURAS = ['pact', 'bastion', 'rage', 'clarity', 'thorns'] as const;
 
 export const itemDef = (id: string): ItemDef => {
   const d = ITEMS.find((x) => x.id === id);
@@ -155,7 +185,7 @@ export type EnchantId =
 export interface EnchantDef {
   id: EnchantId;
   title: string;
-  slot: Exclude<ItemSlot, 'artifact'>;
+  slot: Exclude<ItemSlot, 'artifact' | 'aura'>;
   /** Мощное: дороже на 1 очко за ступень, выпадает только на уникальных */
   powerful?: boolean;
   /** Значение на ступенях I, II, III */
@@ -223,6 +253,8 @@ export interface Equipment {
   ranged: string | null;
   armor: string | null;
   artifacts: [string | null, string | null, string | null];
+  /** Четвёртое гнездо — аура */
+  aura: string | null;
 }
 
 export interface ProfileData {
@@ -252,7 +284,7 @@ const hash = (s: string): number => { let h = 2166136261; for (let i = 0; i < s.
 
 /** Гнёзда зачарований: по редкости, в каждом три разных варианта; на уникальном один вариант — мощный */
 export function rollEnchantSlots(def: ItemDef, r: Rand): EnchantSlot[] {
-  if (def.slot === 'artifact') return [];
+  if (def.slot === 'artifact' || def.slot === 'aura') return [];
   const pool = ENCHANTS.filter((e) => e.slot === def.slot);
   const normal = pool.filter((e) => !e.powerful), strong = pool.filter((e) => e.powerful);
   const out: EnchantSlot[] = [];
@@ -337,16 +369,36 @@ export class Profile {
   private rand: Rand;
 
   constructor(data?: ProfileData, private readonly persist = true) {
-    this.data = data ?? Profile.load() ?? Profile.starter();
+    const loaded = data ? null : Profile.load();
+    this.data = data ?? loaded ?? Profile.starter();
     this.rand = rng(hash(String(this.data.seq)) || 1);
+    this.data.equip.aura ??= null;
+    if (loaded) this.addStarterSpells();
+  }
+
+  /** Сохранения до заклинаний: стартовые четыре — в инвентарь, свободные гнёзда занять ими */
+  private addStarterSpells(): void {
+    const have = new Set(this.data.items.map((i) => i.def));
+    const add = STARTER_SPELLS.filter((d) => !have.has(d));
+    // пока боссов нет — пять аур кладём в инвентарь, чтобы их можно было примерить
+    const auras = AURAS.filter((d) => !have.has(d));
+    if (!add.length && !auras.length) return;
+    for (const d of add) {
+      const it = this.add(d, 1);
+      const free = this.data.equip.artifacts.indexOf(null);
+      if (free >= 0) this.data.equip.artifacts[free] = it.uid;
+    }
+    for (const d of auras) this.add(d, 1);
+    if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* закрытое хранилище */ }
   }
 
   /** Стартовый набор: экипировка новичка и сундук трофеев, чтобы было что примерить и зачаровать */
   static starter(): ProfileData {
-    const p = new Profile({ version: 1, level: 1, xp: 0, points: 3, berries: 250, souls: 0, arrows: 40, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null] } }, false);
+    const p = new Profile({ version: 1, level: 1, xp: 0, points: 3, berries: 250, souls: 0, arrows: 40, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null], aura: null } }, false);
     const eq = (def: string, power: number): string => p.add(def, power, false).uid;
-    p.data.equip = { melee: eq('sword', 1), armor: eq('tunic', 1), ranged: eq('bow', 1), artifacts: [eq('firework', 1), eq('totem', 1), null] };
+    p.data.equip = { melee: eq('sword', 1), armor: eq('tunic', 1), ranged: eq('bow', 1), artifacts: [eq('fireball', 1), eq('spark', 1), eq('heal', 1)], aura: null };
     for (const [def, power] of [
+      ['icerain', 1], ['firework', 1], ['totem', 1], ['pact', 1], ['bastion', 1], ['rage', 1], ['clarity', 1], ['thorns', 1],
       ['claymore', 3], ['axe', 2], ['dagger', 2], ['hammer', 3], ['scythe', 4], ['mace', 1], ['spear', 2],
       ['crossbow', 2], ['longbow', 3], ['twinbow', 4],
       ['soulrobe', 2], ['wolf', 2], ['mercenary', 1], ['scale', 3], ['champion', 4],
@@ -392,7 +444,8 @@ export class Profile {
   rollLoot(r: Rand = this.rand, slots?: ItemSlot[]): { def: string; power: number } {
     const x = r();
     const rarity: Rarity = x < 0.06 ? 'unique' : x < 0.32 ? 'rare' : 'common';
-    const of = (rr: Rarity): ItemDef[] => ITEMS.filter((d) => d.rarity === rr && (!slots || slots.includes(d.slot)));
+    // заклинания выпадают только из боссов — не из сундуков и не у торговцев
+    const of = (rr: Rarity): ItemDef[] => ITEMS.filter((d) => d.rarity === rr && !d.spell && (!slots || slots.includes(d.slot)));
     const pool = of(rarity).length ? of(rarity) : of('common');
     return { def: pool[Math.floor(r() * pool.length)].id, power: Math.max(1, this.power + Math.floor(r() * 3) - 1) };
   }
@@ -419,7 +472,7 @@ export class Profile {
 
   isEquipped(uid: string): boolean {
     const e = this.data.equip;
-    return e.melee === uid || e.ranged === uid || e.armor === uid || e.artifacts.includes(uid);
+    return e.melee === uid || e.ranged === uid || e.armor === uid || e.artifacts.includes(uid) || e.aura === uid;
   }
 
   /** Надеть; артефакт — в гнездо at или в первое свободное (нет свободного — вместо первого) */
@@ -433,7 +486,8 @@ export class Profile {
       if (i < 0) i = 0;
       if (was >= 0) e.artifacts[was] = e.artifacts[i];
       e.artifacts[i] = uid;
-    } else e[slot] = uid;
+    } else if (slot === 'aura') e.aura = uid;
+    else e[slot] = uid;
     it.isNew = false;
     this.save();
     return true;
@@ -441,6 +495,10 @@ export class Profile {
 
   /** Снять артефакт из гнезда (оружие и броню снять нельзя — только заменить) */
   unequipArtifact(i: number): void { this.data.equip.artifacts[i] = null; this.save(); }
+
+  /** Надетая аура */
+  aura(): Item | null { return this.get(this.data.equip.aura); }
+  unequipAura(): void { this.data.equip.aura = null; this.save(); }
 
   /** Разобрать: малина и потраченные очки назад. Надетое не разбирается */
   salvage(uid: string): { berries: number; points: number } | null {

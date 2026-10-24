@@ -2,9 +2,12 @@ import * as THREE from 'three';
 import type { FX } from './fx';
 import { iconCanvas } from './icons';
 import { itemDef, powerMult, RARITY, type GearStats, type Profile } from './items';
+import { additive, additiveSprite, glowTex, groundGlow, lightBeam, raysTex, type LootData } from './loot-look';
 import type { Knight } from './knight';
 import type { Terrain } from './level/collide.ts';
 import type { Target } from './target';
+import { AURA_COLOR, AURA_METER, Auras } from './auras';
+import { isSpell, Spells } from './spells';
 import { HERO } from './tuning';
 import { applyWeapon, getWeapon, type WeaponDef } from './weapons';
 import type { HudBuff, HudState } from './hud/hud';
@@ -53,6 +56,12 @@ export class Gear {
   private soulAcc = 0;
   private readonly arrows: Arrow[] = [];
   private readonly totems: Totem[] = [];
+  /** Заклинания: заряд и каст (src/spells.ts) */
+  readonly spells: Spells;
+  /** Аура в четвёртом гнезде (src/auras.ts) */
+  readonly auras: Auras;
+  /** Здоровье на прошлом кадре: упало — героя ударили (для «Бастиона» и шипов) */
+  private lastHp = 0;
   private weaponId = '';
   private armorId = '-';
   private bowId = '-';
@@ -63,6 +72,17 @@ export class Gear {
   arrowsShot = 0;
 
   constructor(private readonly h: GearHooks, readonly profile: Profile) {
+    const damage = (t: Target, v: number, from: THREE.Vector3, knock: number): void => {
+      const dir = new THREE.Vector3(t.pos.x - from.x, 0, t.pos.z - from.z).normalize();
+      t.hit(v, dir, t.pos.clone().setY(1), knock);
+      h.fx.text(t.pos.clone().setY(1.1), String(v), 'spell');
+      this.onHit(v, false, t.pos);
+    };
+    this.spells = new Spells({
+      scene: h.scene, fx: h.fx, hero: h.hero, terrain: h.terrain, targets: () => h.targets(), damage,
+      aoe: (c, r, dmg, knock, blast) => this.aoe(c, r, dmg, knock, blast),
+    });
+    this.auras = new Auras({ scene: h.scene, fx: h.fx, hero: h.hero, targets: () => h.targets(), damage, changed: () => this.apply(), banner: h.banner });
     profile.onChange(() => this.apply());
     this.apply();
     h.hero.hp = h.hero.maxHp;
@@ -72,6 +92,14 @@ export class Gear {
   apply(): void {
     const hero = this.h.hero;
     this.stats = this.profile.stats();
+    // аура: множители урона, крита, перезарядки и душ; «Бастион» — меньше получаемого урона
+    const au = this.auras;
+    au.set(this.profile.aura());
+    this.stats.meleeMult *= au.dmgMult; this.stats.rangedMult *= au.dmgMult; this.stats.artifactMult *= au.dmgMult;
+    this.stats.critChance += au.critBonus;
+    this.stats.artifactCdMult *= au.cdMult;
+    this.stats.soulsMult *= au.soulsMult;
+    hero.dmgTakenMul = au.damageTaken;
     const m = this.profile.equipped('melee');
     const w = this.weaponOverride ?? (m ? getWeapon(itemDef(m.def).weapon ?? '') : undefined);
     if (w && w.id !== this.weaponId) { this.weaponId = w.id; applyWeapon(w); hero.setWeapon(w); }
@@ -86,7 +114,8 @@ export class Gear {
     const ak = a?.def ?? '', rk = r?.def ?? '';
     if (ak !== this.armorId) { this.armorId = ak; hero.setArmor(a ? itemDef(a.def).armor?.look ?? null : null); }
     if (rk !== this.bowId) { this.bowId = rk; hero.setBow(r ? itemDef(r.def).ranged?.look ?? null : null); }
-    hero.speedMul = this.stats.speedMult * (this.speedT > 0 ? this.speedK : 1);
+    // пока заряжаешь заклинание — идёшь вдвое медленнее
+    hero.speedMul = this.stats.speedMult * (this.speedT > 0 ? this.speedK : 1) * (this.spells?.charging ? 0.5 : 1);
     hero.rollCdMul = this.stats.rollCdMult;
   }
 
@@ -103,9 +132,11 @@ export class Gear {
     return { dmg: Math.round(base * s.meleeMult * (crit ? 3 : 1)) + fire, crit, fire };
   }
 
-  /** Попали по цели (мечом, стрелой, артефактом): души, опыт, вампиризм */
-  onHit(dmg: number, melee: boolean): void {
+  /** Попали по цели (мечом, стрелой, артефактом): души, опыт, вампиризм, шкала ауры; at — где цель */
+  onHit(dmg: number, melee: boolean, at?: THREE.Vector3): void {
     const s = this.stats, hero = this.h.hero;
+    const pact = this.auras.onDealt(dmg, at);
+    if (pact > 0 && !hero.down) hero.hp = Math.min(hero.maxHp, hero.hp + pact);
     this.soulAcc += (melee ? s.soulsPerHit : 1) * s.soulsMult;
     if (this.soulAcc >= 1) { const n = Math.floor(this.soulAcc); this.soulAcc -= n; this.profile.addSouls(n); }
     if (melee && s.leech > 0) hero.hp = Math.min(hero.maxHp, hero.hp + dmg * s.leech);
@@ -198,7 +229,7 @@ export class Gear {
         fx.text(point, String(a.dmg), '');
         fx.burst(point, [new THREE.Color(2, 2.6, 3.4), '#e8e2d0'], 6, { speed: 2.5, up: 2, size: 0.06, life: 0.3, glow: true });
         this.arrowHits++;
-        this.onHit(a.dmg, false);
+        this.onHit(a.dmg, false, t.pos);
         this.h.sound('hit');
         if (a.pierce-- <= 0) { dead = true; break; }
       }
@@ -211,7 +242,42 @@ export class Gear {
   // ---------- артефакты ----------
 
   /** Применить артефакт из гнезда i (0..2) к точке курсора */
-  useArtifact(i: number, at: THREE.Vector3): boolean {
+  /**
+   * Клавиша 1/2/3 нажата: заклинание с зарядом начинает заряжаться (каст — когда отпустят), остальное срабатывает сразу
+   */
+  pressArtifact(i: number, at: THREE.Vector3): boolean {
+    const it = this.profile.artifacts()[i];
+    const a = it ? itemDef(it.def).artifact : undefined;
+    if (!it || !a?.charge || !isSpell(a.kind)) return this.useArtifact(i, at);
+    if (this.artT[i][0] > 0 || this.h.hero.down || this.spells.charging) return false;
+    this.spells.start(i, a.kind, a);
+    this.apply();
+    return true;
+  }
+
+  /** Клавиша отпущена: сотворить заряжаемое заклинание с набранным зарядом */
+  releaseArtifact(i: number, at: THREE.Vector3): boolean {
+    const c = this.spells.charging;
+    if (!c || c.slot !== i) return false;
+    this.spells.release();
+    this.apply();
+    return this.useArtifact(i, at, c.k);
+  }
+
+  /** R: вспышка ауры (шкала полна) */
+  flareAura(): boolean {
+    const au = this.auras;
+    if (!au.kind) { this.h.toast('Гнездо ауры пустое — надень ауру в инвентаре (I)'); return false; }
+    if (au.flareT > 0) return false;
+    if (!au.ready) { this.h.toast(`Шкала ауры: ${Math.floor((au.meter / AURA_METER) * 100)} % — бей врагов, чтобы заполнить`); this.h.sound('empty'); return false; }
+    return au.flare();
+  }
+
+  /** Бросить заряд без каста (окно открылось, фокус ушёл) */
+  cancelCast(): void { if (this.spells.charging) { this.spells.cancel(); this.apply(); } }
+
+  /** Сработать сразу; charge 0..1 — заряд заклинания (клик по слоту и тесты — без удержания) */
+  useArtifact(i: number, at: THREE.Vector3, charge = 0): boolean {
     const it = this.profile.artifacts()[i];
     const hero = this.h.hero;
     if (!it) { this.h.toast(`Гнездо ${i + 1} пустое — надень артефакт в инвентаре (I)`); return false; }
@@ -239,6 +305,7 @@ export class Gear {
         this.h.sound('horn');
         break;
       case 'lightning': this.lightning(me, R, power); break;
+      case 'spark': case 'fireball': case 'icerain': case 'heal': this.spells.cast(a.kind, a, power, at, Math.max(0, Math.min(1, charge))); break;
       case 'harvester':
         this.aoe(me, R, power, 1.6, true);
         this.magicBoom(me, R, new THREE.Color(0.8, 2.6, 3.4), new THREE.Color(2.2, 1.2, 3.4));
@@ -275,7 +342,7 @@ export class Gear {
       const v = Math.round(dmg * (1 - Math.min(1, d / (r + t.radius)) * 0.4));
       t.hit(v, dir, t.pos.clone().setY(1), knock);
       this.h.fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
-      this.onHit(v, false);
+      this.onHit(v, false, t.pos);
       n++;
     }
     if (blast) this.h.blast?.(c, r, dmg);
@@ -340,7 +407,7 @@ export class Gear {
       const v = Math.round(dmg);
       t.hit(v, dir, t.pos.clone().setY(1), 0.8);
       this.h.fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
-      this.onHit(v, false);
+      this.onHit(v, false, t.pos);
     }
     if (!near.length) this.h.toast('Рядом нет целей для молнии');
     this.h.sound('zap');
@@ -356,6 +423,7 @@ export class Gear {
 
   update(dt: number, rmb: boolean, aim: THREE.Vector3): void {
     const hero = this.h.hero;
+    if (hero.hp < this.lastHp - 0.01 && !hero.down) this.auras.onHurt(this.lastHp - hero.hp);
     this.potionT = Math.max(0, this.potionT - dt);
     this.shotT = Math.max(0, this.shotT - dt);
     for (const a of this.artT) a[0] = Math.max(0, a[0] - dt);
@@ -375,8 +443,11 @@ export class Gear {
       }
       if (t.t <= 0) { this.h.scene.remove(t.mesh); disposeGroup(t.mesh); this.totems.splice(i, 1); }
     }
+    this.spells.update(dt, aim);
+    this.auras.update(dt);
     if (rmb) this.shoot(aim);
     this.updateArrows(dt);
+    this.lastHp = hero.hp;
   }
 
   /** Числа для HUD */
@@ -390,6 +461,8 @@ export class Gear {
     if (this.stats.infinity > 0) buffs.push({ icon: 'e-inf', name: 'Бесконечность', color: '#7a5cff' });
     if (this.stats.regen > 0) buffs.push({ icon: 'e-leaf', name: 'Восстановление', color: '#3a9a4a' });
     if (hero.god) buffs.push({ icon: 'champion', name: 'Бессмертие', color: '#c08a2a' });
+    const aura = this.profile.aura(), au = this.auras;
+    if (aura && au.kind && au.flareT > 0) buffs.push({ icon: itemDef(aura.def).icon, name: `${itemDef(aura.def).title} ×3`, t: au.flareT, color: AURA_COLOR[au.kind] });
     return {
       hp: hero.hp, maxHp: hero.maxHp, lives: this.lives,
       potion: [this.potionT, POTION_CD],
@@ -400,6 +473,7 @@ export class Gear {
         return (k === 'boots' && this.speedT > 0) || (k === 'totem' && this.totems.length > 0);
       }),
       buffs,
+      aura: aura && au.kind ? { icon: itemDef(aura.def).icon, title: itemDef(aura.def).title, meter: au.meter / AURA_METER, flare: au.flareT, color: AURA_COLOR[au.kind] } : null,
     };
   }
 }
@@ -414,20 +488,64 @@ function disposeGroup(g: THREE.Object3D): void {
   g.traverse((o) => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); } });
 }
 
-/** Трофей на полу: иконка-спрайт и луч цвета редкости, как в MCD */
+/**
+ * Трофей на полу, как в MCD, только ярче: крупная иконка над крутящейся звездой лучей, столб света цвета редкости
+ * (у уникальных — выше и с золотом), ореол и расходящиеся по земле кольца-«сонар». Искры и вспышки даёт Props по userData.
+ */
 export function itemLootMesh(it: { def: string }): THREE.Group {
   const d = itemDef(it.def);
+  const rarity = (['common', 'rare', 'unique'] as const).indexOf(d.rarity);
   const g = new THREE.Group();
+  const c = new THREE.Color(RARITY[d.rarity].color);
   const tex = new THREE.CanvasTexture(iconCanvas(d.icon));
   tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
-  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
-  spr.scale.set(0.7, 0.7, 0.7);
-  spr.position.y = 0.35;
-  g.add(spr);
-  const c = new THREE.Color(RARITY[d.rarity].color).multiplyScalar(2.2);
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3, 0.12), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
-  beam.position.y = 1.5;
-  g.add(beam);
+  const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  icon.position.y = 0.55;
+  icon.renderOrder = 6;
+  const rays = new THREE.Sprite(additiveSprite(raysTex(), c.clone().multiplyScalar(1.4 + rarity * 0.4), 0.85));
+  rays.position.y = 0.55;
+  rays.renderOrder = 5;
+  const halo = new THREE.Sprite(additiveSprite(glowTex(), c.clone().multiplyScalar(0.9), 0.8));
+  halo.position.y = 0.55;
+  halo.scale.setScalar(1.6);
+  // цвет редкости, но с белой сердцевиной — даже серое «обычное» видно издалека
+  const beam = lightBeam(c.clone().lerp(new THREE.Color('#fff'), 0.25).multiplyScalar(2.4 + rarity * 0.6), 5.5 + rarity * 1.5, 1.4 + rarity * 0.3);
+  // второй, золотой столб у уникальных
+  const gold = rarity === 2 ? lightBeam(new THREE.Color(3, 2.2, 0.6), 4, 1.6) : null;
+  const floor = groundGlow(c.clone().multiplyScalar(1.2), 2 + rarity * 0.4);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), additive(glowTex(), c.clone().multiplyScalar(2.4)));
+  ring.rotation.x = -Math.PI / 2;
+  const ground = new THREE.Group();
+  ground.add(beam.group, floor, ring);
+  if (gold) ground.add(gold.group);
+  g.add(halo, rays, icon, ground);
+  let last = 0, rise = 0;
+  const ud: LootData = {
+    glow: c.clone().multiplyScalar(2.6),
+    rarity,
+    tick: (t, grounded) => {
+      const dt = Math.min(0.1, Math.max(0, t - last));
+      last = t;
+      // столб вырастает, когда трофей лёг; в полёте его нет
+      rise = grounded ? Math.min(1, rise + dt * 2.5) : 0;
+      ground.visible = rise > 0;
+      ground.position.y = 0.02 - g.position.y;
+      ground.rotation.set(-g.rotation.x, 0, 0);
+      beam.group.scale.set(1, rise * (1 - Math.pow(1 - rise, 3)), 1);
+      for (const m of beam.mats) m.opacity = 0.75 + Math.sin(t * 3) * 0.25;
+      if (gold) { gold.group.scale.y = rise; for (const m of gold.mats) m.opacity = 0.5 + Math.sin(t * 2 + 1) * 0.3; gold.group.rotation.y = t * 0.8; }
+      const k = (t % 1.4) / 1.4;
+      ring.scale.setScalar(0.3 + k * (1.6 + rarity * 0.4));
+      ring.material.opacity = (1 - k) * rise;
+      floor.material.opacity = (0.7 + Math.sin(t * 3) * 0.2) * rise;
+      const s = 0.9 + rarity * 0.08 + Math.sin(t * 4) * 0.05;
+      icon.scale.setScalar(s);
+      rays.scale.setScalar(s * (2 + rarity * 0.35) * (0.6 + rise * 0.4));
+      rays.material.rotation = t * (0.8 + rarity * 0.3);
+      halo.material.opacity = 0.6 + Math.sin(t * 4) * 0.2;
+    },
+  };
+  g.userData = ud;
   return g;
 }
 
