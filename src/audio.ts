@@ -1,6 +1,12 @@
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
+/** Вход эха: короткая задержка с затуханием — волшебный «звон» сокровищ */
+let echo: GainNode | null = null;
+/** Шина обычных звуков: её приглушает duck перед ударом заклинания; заклинания (fg) звучат мимо неё */
+let bus: GainNode | null = null;
+/** Вход реверберации */
+let verb: GainNode | null = null;
 let muted = false;
 const VOL = 0.4;
 
@@ -16,7 +22,24 @@ export function initAudio(): void {
     ctx = new Ctor();
     master = ctx.createGain();
     master.gain.value = muted ? 0 : VOL;
-    master.connect(ctx.destination);
+    // компрессор: громкие удары заклинаний плотнее и не хрипят на перегрузе
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.25;
+    master.connect(comp).connect(ctx.destination);
+    // реверберация (импульс — затухающий шум, рисуется кодом): заклинания звучат в большом зале
+    verb = ctx.createGain();
+    const conv = ctx.createConvolver(), vlp = ctx.createBiquadFilter(), vout = ctx.createGain();
+    const len = Math.round(ctx.sampleRate * 2.6), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.4); }
+    conv.buffer = ir; vlp.type = 'lowpass'; vlp.frequency.value = 5200; vout.gain.value = 0.7;
+    verb.connect(vlp).connect(conv).connect(vout).connect(master);
+    bus = ctx.createGain();
+    bus.connect(master);
+    echo = ctx.createGain();
+    const delay = ctx.createDelay(1), fb = ctx.createGain(), lp = ctx.createBiquadFilter(), wet = ctx.createGain();
+    delay.delayTime.value = 0.14; fb.gain.value = 0.38; lp.type = 'lowpass'; lp.frequency.value = 4200; wet.gain.value = 0.55;
+    echo.connect(delay).connect(lp).connect(fb).connect(delay);
+    lp.connect(wet).connect(master);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -28,10 +51,13 @@ export function toggleMute(): boolean {
   return muted;
 }
 
-interface ToneOptions { type?: OscillatorType; f0?: number; f1?: number; dur?: number; vol?: number; delay?: number }
-interface NoiseOptions { dur?: number; vol?: number; freq?: number; q?: number; delay?: number }
+interface ToneOptions { type?: OscillatorType; f0?: number; f1?: number; dur?: number; vol?: number; delay?: number; echo?: boolean; fg?: boolean; attack?: number }
+interface NoiseOptions { dur?: number; vol?: number; freq?: number; f1?: number; q?: number; delay?: number; fg?: boolean; attack?: number; type?: BiquadFilterType; echo?: boolean }
 
-function tone({ type = 'square', f0 = 440, f1, dur = 0.1, vol = 0.3, delay = 0 }: ToneOptions): void {
+/** Куда идёт звук: заклинания — прямо в master, остальное — через приглушаемую шину */
+const out = (fg?: boolean): AudioNode => (fg ? master : bus ?? master) as AudioNode;
+
+function tone({ type = 'square', f0 = 440, f1, dur = 0.1, vol = 0.3, delay = 0, echo: wet = false, fg, attack = 0.008 }: ToneOptions): void {
   if (!ctx || !master) return;
   const t = ctx.currentTime + delay;
   const o = ctx.createOscillator(), g = ctx.createGain();
@@ -39,24 +65,46 @@ function tone({ type = 'square', f0 = 440, f1, dur = 0.1, vol = 0.3, delay = 0 }
   o.frequency.setValueAtTime(f0, t);
   if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(master);
+  g.gain.exponentialRampToValueAtTime(vol, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, attack + 0.01));
+  o.connect(g).connect(out(fg));
+  if (wet && echo) g.connect(echo);
   o.start(t); o.stop(t + dur + 0.05);
 }
-function noise({ dur = 0.1, vol = 0.3, freq = 1200, q = 1, delay = 0 }: NoiseOptions): void {
+function noise({ dur = 0.1, vol = 0.3, freq = 1200, f1, q = 1, delay = 0, fg, attack = 0, type = 'bandpass', echo: wet = false }: NoiseOptions): void {
   if (!ctx || !master || !noiseBuf) return;
   const t = ctx.currentTime + delay;
-  const s = ctx.createBufferSource(); s.buffer = noiseBuf;
-  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+  const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = dur > 0.45;
+  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+  if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
   const g = ctx.createGain();
-  g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(f).connect(g).connect(master);
+  if (attack > 0) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); } else g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, attack + 0.01));
+  s.connect(f).connect(g).connect(out(fg));
+  if (wet && echo) g.connect(echo);
   s.start(t); s.stop(t + dur + 0.02);
 }
 
-let lastChew = 0;
+/** «Тишина перед ударом»: приглушить обычные звуки на hold секунд (заклинания звучат мимо шины) */
+export function duck(depth = 0.2, hold = 0.25, release = 0.5): void {
+  if (!ctx || !bus) return;
+  const t = ctx.currentTime, g = bus.gain;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(depth, t + 0.04);
+  g.setValueAtTime(depth, t + 0.04 + hold);
+  g.linearRampToValueAtTime(1, t + 0.04 + hold + release);
+}
+
+/** Узлы звука для заклинаний (src/spell-audio.ts): пока звук не включён — null */
+export function audioCore(): { ctx: AudioContext; out: AudioNode; verb: AudioNode; noise: AudioBuffer } | null {
+  return ctx && master && verb && noiseBuf ? { ctx, out: master, verb, noise: noiseBuf } : null;
+}
+
+let lastChew = 0, lastLand = 0;
+/** Пентатоника от до второй октавы: что ни сыграй подряд — звучит радостно */
+const PENTA = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760, 2093, 2349.32, 2637.02];
+const note = (i: number): number => PENTA[Math.max(0, Math.min(PENTA.length - 1, i))];
 export const sfx = {
   hit() { noise({ dur: 0.07, vol: 0.25, freq: 900 }); tone({ type: 'triangle', f0: 200, f1: 90, dur: 0.08, vol: 0.18 }); },
   // ---------- стрельба ----------
@@ -133,4 +181,76 @@ export const sfx = {
   bushDead() { tone({ type: 'sawtooth', f0: 300, f1: 60, dur: 0.5, vol: 0.12 }); noise({ dur: 0.3, vol: 0.2, freq: 400 }); },
   burst() { tone({ type: 'sine', f0: 90, f1: 40, dur: 0.4, vol: 0.4 }); noise({ dur: 0.35, vol: 0.3, freq: 300, q: 0.5 }); },
   empty() { tone({ type: 'square', f0: 140, dur: 0.07, vol: 0.08 }); },
+
+  // ---------- сокровища ----------
+  /** Подошёл к сундуку: тихий перезвон */
+  twinkle() { [7, 9, 11].forEach((n, i) => tone({ type: 'sine', f0: note(n), dur: 0.3, vol: 0.035, delay: i * 0.07, echo: true })); },
+  /** Сундук копит силу: гул вверх и ускоряющийся стук крышки */
+  chestCharge(dur = 0.6) {
+    tone({ type: 'sine', f0: 180, f1: 900, dur, vol: 0.1 });
+    tone({ type: 'triangle', f0: 270, f1: 1350, dur, vol: 0.05 });
+    noise({ dur, vol: 0.05, freq: 6000, q: 0.7 });
+    for (let t = 0, gap = 0.12; t < dur; t += gap, gap = Math.max(0.03, gap * 0.78)) {
+      noise({ dur: 0.035, vol: 0.14, freq: 700 + t * 1600, q: 2, delay: t });
+      tone({ type: 'triangle', f0: 200 + t * 600, dur: 0.03, vol: 0.05, delay: t });
+    }
+  },
+  /** Сундук распахнулся: удар, вихрь, фанфара-арпеджио, аккорд и россыпь колокольчиков */
+  chestOpen() {
+    tone({ type: 'sine', f0: 160, f1: 45, dur: 0.55, vol: 0.45 });
+    noise({ dur: 0.35, vol: 0.3, freq: 600, q: 0.5 });
+    noise({ dur: 0.7, vol: 0.12, freq: 3500, q: 0.6, delay: 0.03 });
+    [0, 2, 3, 5, 7, 8].forEach((n, i) => {
+      tone({ type: 'triangle', f0: note(n), dur: 0.4, vol: 0.13, delay: 0.05 + i * 0.065, echo: true });
+      tone({ type: 'square', f0: note(n), dur: 0.08, vol: 0.025, delay: 0.05 + i * 0.065 });
+    });
+    for (const n of [5, 7, 8]) tone({ type: 'sine', f0: note(n), dur: 1.4, vol: 0.06, delay: 0.45, echo: true });
+    for (let i = 0; i < 12; i++) tone({ type: 'sine', f0: note(7 + ((Math.random() * 6) | 0)) * 2, dur: 0.16, vol: 0.022, delay: 0.5 + i * 0.055 + Math.random() * 0.03, echo: true });
+  },
+  /** Предмет вылетел из сундука: «бульк» вверх, каждый следующий — выше */
+  lootPop(i = 0) {
+    const f = note(i);
+    tone({ type: 'sine', f0: f * 0.5, f1: f * 1.2, dur: 0.1, vol: 0.13 });
+    tone({ type: 'triangle', f0: f, dur: 0.14, vol: 0.05, delay: 0.04, echo: true });
+  },
+  /** Лут стукнулся о землю */
+  lootLand() {
+    const n = performance.now(); if (n - lastLand < 60) return; lastLand = n;
+    tone({ type: 'triangle', f0: 1600 + Math.random() * 500, dur: 0.05, vol: 0.035 });
+    noise({ dur: 0.03, vol: 0.05, freq: 2500, q: 2 });
+  },
+  /** Трофей лёг на землю: долгий волшебный звон — тем выше и богаче, чем реже предмет */
+  itemLand(rarity = 0) {
+    const f = note(5 + rarity * 2);
+    tone({ type: 'sine', f0: f, dur: 1.3, vol: 0.09, echo: true });
+    tone({ type: 'sine', f0: f * 1.5, dur: 1.0, vol: 0.05, delay: 0.09, echo: true });
+    tone({ type: 'sine', f0: f * 2.01, dur: 0.8, vol: 0.035, delay: 0.18, echo: true });
+    if (rarity === 2) for (let i = 0; i < 6; i++) tone({ type: 'triangle', f0: note(8 + i), dur: 0.2, vol: 0.03, delay: 0.3 + i * 0.06, echo: true });
+  },
+  /** Подобрана малина: сочный чпок и колокольчик; серия подряд идёт вверх по гамме */
+  berry(combo = 0) {
+    const f = note(combo + 2);
+    noise({ dur: 0.06, vol: 0.14, freq: 650, q: 1.5 });
+    tone({ type: 'sine', f0: 240, f1: 680, dur: 0.09, vol: 0.2 });
+    tone({ type: 'triangle', f0: f, dur: 0.22, vol: 0.1, delay: 0.05, echo: true });
+    tone({ type: 'sine', f0: f * 2, dur: 0.16, vol: 0.035, delay: 0.1, echo: true });
+  },
+  /** Подобран трофей: фанфара, у редких — длиннее */
+  treasure(rarity = 0) {
+    const run = [[0, 2, 4], [0, 2, 4, 5], [0, 2, 4, 5, 7, 9]][rarity] ?? [0, 2, 4];
+    run.forEach((n, i) => {
+      tone({ type: 'square', f0: note(n), dur: 0.12, vol: 0.035, delay: i * 0.075 });
+      tone({ type: 'triangle', f0: note(n), dur: 0.3, vol: 0.11, delay: i * 0.075, echo: true });
+    });
+    const end = run.length * 0.075;
+    for (const n of [5, 7]) tone({ type: 'sine', f0: note(n + rarity * 2), dur: 1, vol: 0.06, delay: end, echo: true });
+    noise({ dur: 0.6, vol: 0.05, freq: 7000, q: 1, delay: end });
+  },
+  /** Деревянный ящик разлетелся */
+  crateBreak() {
+    noise({ dur: 0.2, vol: 0.35, freq: 550, q: 0.7 });
+    noise({ dur: 0.06, vol: 0.22, freq: 1700, q: 1.5, delay: 0.03 });
+    noise({ dur: 0.05, vol: 0.16, freq: 1200, q: 1.5, delay: 0.1 });
+    tone({ type: 'triangle', f0: 190, f1: 90, dur: 0.12, vol: 0.15 });
+  },
 };

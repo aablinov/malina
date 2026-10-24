@@ -17,7 +17,7 @@ const DESC: Record<MerchantKind, string> = {
   smith: 'Выкует случайное оружие или броню по твоей силе и перекуёт надетое — +1 к силе за малину.',
   merchant: 'Продаёт артефакты наугад, стрелы связками и один особый товар, который видно заранее.',
 };
-const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask' };
+const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask', aura: 'a-bastion' };
 
 export class Shop {
   readonly el: HTMLDivElement;

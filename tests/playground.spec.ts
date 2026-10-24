@@ -223,14 +223,16 @@ test('склад: сундук на F, в нём стрелы и предмет 
     const m = (window as any).__malina;
     m.resetTargets(); m.hero.revive(); m.hero.god = false;
     const P = m.props;
-    // сундук: подойти, E — крышка открыта, лут на полу, проходя — подобран
+    // сундук: подойти, F — трясётся, крышка распахивается, лут вылетает фонтаном, проходя — подобран
     const s = P.supplies[0];
     m.hero.place(s.pos.x + Math.sin(s.yaw) * 1.2, s.pos.z + Math.cos(s.yaw) * 1.2, 0);
     m.step(0.1);
     const berries0 = m.berries, items0 = m.profile.data.items.length, arrows0 = m.profile.data.arrows;
     m.interact(); m.step(0.3);
+    const lootCharging = P.pickups.length, burstEarly = s.burst;
+    m.step(1.0);
     const loot = P.pickups.length;
-    m.step(1.2);
+    m.step(2);
     for (const p of [...P.pickups]) { m.hero.place(p.pos.x, p.pos.z, 0); m.step(0.4); }
     const lootLeft = P.pickups.length, berries = m.berries - berries0;
     const items1 = m.profile.data.items.length, arrows1 = m.profile.data.arrows;
@@ -259,9 +261,11 @@ test('склад: сундук на F, в нём стрелы и предмет 
     m.interact(); m.step(1.0);
     const healed = m.hero.hp - 30;
     m.resetTargets(); m.hero.revive();
-    return { loot, lootLeft, berries, barrelsLeft, crateBroken, verChanged, healed, items1, arrows1, items0, arrows0 };
+    return { lootCharging, burstEarly, loot, lootLeft, berries, barrelsLeft, crateBroken, verChanged, healed, items1, arrows1, items0, arrows0 };
   });
-  // 4 горсти малины, 2 лечения, связка стрел и предмет
+  // пока сундук копит силу — пусто; потом 4 горсти малины, 2 лечения, связка стрел и предмет
+  expect(r.lootCharging).toBe(0);
+  expect(r.burstEarly).toBe(false);
   expect(r.loot).toBe(8);
   expect(r.items1).toBe(r.items0 + 1);
   expect(r.arrows1).toBeGreaterThan(r.arrows0);
@@ -604,7 +608,8 @@ test('HUD как в Minecraft Dungeons: панель с артефактами, 
   expect(r.clip).toBeCloseTo(50, 0);
   // стартовая куртка даёт здоровье сверх 100
   expect(r.maxHp).toBeGreaterThan(100);
-  expect(r.emptyArt).toBe(1);
+  // стартовые заклинания занимают все три гнезда
+  expect(r.emptyArt).toBe(0);
 });
 
 test('снаряжение в бою: стрелы на ПКМ, артефакты 1/2/3 с перезарядкой, зелье, души и опыт', async ({ page }) => {
@@ -619,17 +624,18 @@ test('снаряжение в бою: стрелы на ПКМ, артефакт
     let shots = 0;
     for (let i = 0; i < 4; i++) { if (m.shoot(d.pos.x, d.pos.z)) shots++; m.step(0.7); }
     const arrowHits = d.hits - hits0, arrows1 = m.profile.data.arrows;
-    // огненная стрела: взрыв у чучела, перезарядка в HUD
+    // огненный шар: взрыв у чучела, перезарядка в HUD
     const hits1 = d.hits;
     const fired = m.artifact(0, d.pos.x, d.pos.z);
     const again = m.artifact(0, d.pos.x, d.pos.z);
     m.step(0.8);
     const boom = d.hits > hits1, cd = m.gear.hudState().artifacts[0][0];
-    const empty = m.artifact(2, d.pos.x, d.pos.z);
-    // тотем лечит, зелье лечит и уходит на перезарядку
+    // лечение лечит, пустое гнездо не срабатывает, зелье лечит и уходит на перезарядку
     m.hero.hp = 40;
-    m.artifact(1, 0, 0); m.step(2);
+    m.artifact(2, 0, 0); m.step(1);
     const totemHeal = m.hero.hp - 40;
+    m.profile.unequipArtifact(2);
+    const empty = m.artifact(2, d.pos.x, d.pos.z);
     m.hero.hp = 30;
     const drank = m.potion(), hpAfter = m.hero.hp, drankAgain = m.potion();
     const souls = m.profile.data.souls, xp = m.profile.data.xp + m.profile.data.level * 1000;
@@ -649,6 +655,124 @@ test('снаряжение в бою: стрелы на ПКМ, артефакт
   expect(r.drankAgain).toBe(false);
   expect(r.souls).toBeGreaterThan(0);
   expect(r.xp).toBeGreaterThan(1000);
+});
+
+test('заклинания: четыре стартовых, заряд сильнее тапа, удар со стоп-кадром, с боссов — не из сундуков', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.resetTargets(); m.hero.revive(); m.hero.god = true;
+    const p = m.profile;
+    const kinds = p.artifacts().map((it: any) => it?.def);
+    const inBag = ['spark', 'fireball', 'icerain', 'heal'].every((d) => p.data.items.some((i: any) => i.def === d));
+    // в сундуках и у торговцев заклинаний нет
+    let lootSpell = false;
+    for (let i = 0; i < 300; i++) if (['spark', 'fireball', 'icerain', 'heal'].includes(p.rollLoot().def)) lootSpell = true;
+    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    m.hero.place(d.pos.x + 6, d.pos.z, -Math.PI / 2);
+    m.step(0.2);
+    const sp = m.gear.spells;
+    // искра тапом и с полным зарядом: урон по чучелу
+    let h0 = d.hits;
+    m.artifact(1, d.pos.x, d.pos.z, 0); m.step(0.4);
+    const sparkHit = d.hits > h0;
+    m.gear.artT[1][0] = 0;
+    // удержание: заряд копится, герой идёт медленнее, отпустить — каст
+    m.fx.hitstop = 0;
+    const charged = m.hold(1, d.pos.x, d.pos.z, 1.2);
+    m.step(0.2);
+    const hitstop = m.fx.hitstop;
+    const slowWhile = (() => { m.gear.artT[1][0] = 0; m.gear.pressArtifact(1, d.pos); m.step(0.3); const k = m.gear.spells.charging?.k ?? 0; const sm = m.hero.speedMul; m.gear.releaseArtifact(1, d.pos); return { k, sm }; })();
+    m.step(0.5);
+    // ледяной дождь: надеть в гнездо 3 и кастовать
+    const ice = p.data.items.find((i: any) => i.def === 'icerain');
+    p.equip(ice.uid, 2);
+    h0 = d.hits;
+    m.artifact(2, d.pos.x, d.pos.z, 1); m.step(2.8);
+    const iceHits = d.hits - h0;
+    // огненный шар долетает и взрывается
+    h0 = d.hits;
+    m.artifact(0, d.pos.x, d.pos.z, 0.5); m.step(1);
+    const fireHit = d.hits > h0;
+    // лечение: заряженное лечит сильнее
+    const heal = p.data.items.find((i: any) => i.def === 'heal');
+    p.equip(heal.uid, 2);
+    m.hero.hp = 20; m.artifact(2, 0, 0, 0); m.step(0.5); const tap = m.hero.hp - 20;
+    m.gear.artT[2][0] = 0;
+    m.hero.hp = 20; m.artifact(2, 0, 0, 1); m.step(0.5); const full = m.hero.hp - 20;
+    m.step(4);
+    return { kinds, inBag, lootSpell, sparkHit, charged, slowWhile, iceHits, fireHit, tap, full, impacts: sp.impacts, hitstop };
+  });
+  expect(r.kinds).toEqual(['fireball', 'spark', 'heal']);
+  expect(r.inBag).toBe(true);
+  expect(r.lootSpell).toBe(false);
+  expect(r.sparkHit).toBe(true);
+  expect(r.charged).toBe(true);
+  expect(r.slowWhile.k).toBeGreaterThan(0.2);
+  expect(r.slowWhile.sm).toBeLessThan(0.7);
+  expect(r.iceHits).toBeGreaterThanOrEqual(3);
+  expect(r.fireHit).toBe(true);
+  expect(r.full).toBeGreaterThan(r.tap * 2);
+  expect(r.impacts).toBeGreaterThanOrEqual(6);
+  // полный заряд — стоп-кадр на ударе
+  expect(r.hitstop).toBeGreaterThan(0);
+});
+
+test('ауры: пять в инвентаре, гнездо R, эффекты, вспышка ×3 по шкале', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.resetTargets(); m.hero.revive(); m.hero.god = false;
+    const p = m.profile, g = m.gear, au = g.auras;
+    const uid = (def: string) => p.data.items.find((i: any) => i.def === def).uid;
+    const bag = ['pact', 'bastion', 'rage', 'clarity', 'thorns'].every((d) => p.data.items.some((i: any) => i.def === d));
+    const emptySlot = p.data.equip.aura === null && !!document.querySelector('.hud-aura.empty');
+    // ярость: урон выше, вспышка — только с полной шкалой, ×3, потом назад
+    const base = g.stats.meleeMult;
+    p.equip(uid('rage')); m.step(0.1);
+    const rage = g.stats.meleeMult / base;
+    const notReady = m.flare();
+    au.meter = 1e9; m.step(0.1);
+    const hudReady = !!document.querySelector('.hud-aura.ready') || au.ready;
+    const flared = m.flare();
+    const rageFlare = g.stats.meleeMult / base;
+    m.step(5.2);
+    const after = g.stats.meleeMult / base;
+    // бастион: удар слабее
+    p.equip(uid('bastion')); m.step(0.1);
+    m.hero.hp = 100; m.hero.hurt(50); const bastionLoss = 100 - m.hero.hp;
+    // пакт: стрелы по чучелу лечат
+    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    p.equip(uid('pact')); m.step(0.1);
+    m.hero.place(d.pos.x + 5, d.pos.z, -Math.PI / 2); m.step(0.2);
+    m.hero.hp = 40;
+    for (let i = 0; i < 3; i++) { m.shoot(d.pos.x, d.pos.z); m.step(0.7); }
+    const pactHeal = m.hero.hp - 40;
+    // шипы: ударили вблизи — чучело получает урон
+    p.equip(uid('thorns')); m.step(0.1);
+    m.hero.place(d.pos.x + 1.2, d.pos.z, -Math.PI / 2); m.step(0.2);
+    m.hero.hp = 100; m.step(0.05);
+    const h0 = d.hits; m.hero.hurt(30); m.step(0.1);
+    const thornsHit = d.hits > h0;
+    // ясность: перезарядка короче
+    const cd0 = g.stats.artifactCdMult;
+    p.equip(uid('clarity')); m.step(0.1);
+    const clarity = g.stats.artifactCdMult / cd0;
+    return { bag, emptySlot, rage, notReady, hudReady, flared, rageFlare, after, bastionLoss, pactHeal, thornsHit, clarity, flares: au.flares };
+  });
+  expect(r.bag).toBe(true);
+  expect(r.emptySlot).toBe(true);
+  expect(r.rage).toBeCloseTo(1.15, 2);
+  expect(r.notReady).toBe(false);
+  expect(r.hudReady).toBe(true);
+  expect(r.flared).toBe(true);
+  expect(r.rageFlare).toBeCloseTo(1.45, 2);
+  expect(r.after).toBeCloseTo(1.15, 2);
+  expect(r.bastionLoss).toBeCloseTo(40, 0);
+  expect(r.pactHeal).toBeGreaterThan(0);
+  expect(r.thornsHit).toBe(true);
+  expect(r.clarity).toBeCloseTo(0.75, 2);
+  expect(r.flares).toBe(1);
 });
 
 test('инвентарь: I открывает, надеть клеймор и броню, зачаровать за очки, разобрать за малину', async ({ page }) => {

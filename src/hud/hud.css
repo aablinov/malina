@@ -44,6 +44,9 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-points img, .hud-berries img { width: 1.7em; height: 1.7em; }
 .hud-berries { position: absolute; left: 100%; bottom: 0.95em; margin: 0 0 0 0.3em; white-space: nowrap; font-size: 1.05em; }
 .hud-berries img { width: 2em; height: 2em; }
+.hud-berries.bump { animation: berry-bump 0.45s ease-out; transform-origin: left center; }
+.hud-berries.bump b { color: #ff8fb0; text-shadow: 0 0 10px #ff2a6a, 0 2px 0 #000; }
+@keyframes berry-bump { 0% { transform: scale(1); } 30% { transform: scale(1.45) rotate(-6deg); } 60% { transform: scale(0.92); } 100% { transform: scale(1); } }
 
 .hud-slot {
   position: relative; width: 3.9em; height: 3.9em; box-sizing: border-box; cursor: pointer;
@@ -68,6 +71,15 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-art.souls .hud-ico { filter: grayscale(0.85) brightness(0.7); }
 @keyframes hud-glow { from { box-shadow: 0 0.18em 0 #000, 0 0 0.3em #ffc23a; } to { box-shadow: 0 0.18em 0 #000, 0 0 1.1em #ffc23a; } }
 
+/* гнездо ауры: шкала цветом ауры снизу вверх, полная — светится и ждёт R */
+.hud-aura { margin-left: 0.35em; outline-color: #7a6a9a; overflow: hidden; }
+.hud-aurafill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(to top, var(--c), transparent); opacity: 0.75; pointer-events: none; transition: height 0.15s; }
+.hud-aura.empty .hud-ico { display: none; }
+.hud-aura.empty .hud-plus { display: block; }
+.hud-aura .hud-ico { position: relative; }
+.hud-aura.ready { outline-color: #fff; animation: hud-aura-ready 0.6s ease-in-out infinite alternate; }
+.hud-aura.flaring { outline-color: var(--mcd-gold); animation: hud-glow 0.35s ease-in-out infinite alternate; }
+@keyframes hud-aura-ready { from { box-shadow: 0 0.18em 0 #000, 0 0 0.3em #fff; transform: scale(1); } to { box-shadow: 0 0.18em 0 #000, 0 0 1.2em #fff; transform: scale(1.06); } }
 .hud-arts { display: flex; flex-direction: column; gap: 0.3em; }
 .hud-artrow { display: flex; gap: 0.35em; }
 .hud-souls, .hud-xp { display: flex; align-items: center; gap: 0.3em; height: 0.9em; }

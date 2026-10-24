@@ -24,12 +24,13 @@ const TABS: { id: Tab; title: string; icon: string }[] = [
   { id: 'ranged', title: 'Дальний бой', icon: 'bow' },
   { id: 'armor', title: 'Броня', icon: 'helmet' },
   { id: 'artifact', title: 'Артефакты', icon: 'flask' },
+  { id: 'aura', title: 'Ауры', icon: 'a-bastion' },
   { id: 'enchanted', title: 'Зачарованные', icon: 'spiral' },
 ];
 /** Значок силы по виду предмета */
-const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask' };
+const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask', aura: 'a-bastion' };
 const ROMAN = ['', 'I', 'II', 'III'];
-const SLOT_ORDER: Record<ItemSlot, number> = { melee: 0, armor: 1, ranged: 2, artifact: 3 };
+const SLOT_ORDER: Record<ItemSlot, number> = { melee: 0, armor: 1, ranged: 2, artifact: 3, aura: 4 };
 const fmt = (v: number, d = 1): string => (Math.round(v * 10 ** d) / 10 ** d).toString().replace('.', ',');
 
 /** Полосы оружия: максимум по стандартному оружию */
@@ -74,6 +75,7 @@ export class Inventory {
         <div class="inv-eq art" data-eq="art0" style="left:8%;bottom:2%"></div>
         <div class="inv-eq art" data-eq="art1" style="left:37%;bottom:2%"></div>
         <div class="inv-eq art" data-eq="art2" style="left:66%;bottom:2%"></div>
+        <div class="inv-eq aura" data-eq="aura" style="right:1%;top:27%"></div>
       </section>
       <section class="inv-mid">
         <div class="inv-tablabel" data-id="tabLabel"></div>
@@ -217,7 +219,12 @@ export class Inventory {
       else if (act === 'salvage') this.askSalvage();
       else if (act === 'salvageOk') this.salvageSelected();
       else if (act === 'salvageNo') { this.confirm = false; this.render(); }
-      else if (act === 'unequip') { const i = this.profile.data.equip.artifacts.indexOf(this.sel); if (i >= 0) { this.profile.unequipArtifact(i); this.onChange?.(); this.render(); } }
+      else if (act === 'unequip') {
+        const i = this.profile.data.equip.artifacts.indexOf(this.sel);
+        if (i >= 0) this.profile.unequipArtifact(i);
+        else if (this.sel && this.profile.data.equip.aura === this.sel) this.profile.unequipAura();
+        this.onChange?.(); this.render();
+      }
       else if (act === 'enchant' && this.sel) { if (this.profile.enchant(this.sel, this.enchSlot, this.enchOpt)) { this.onChange?.(); this.flash(); } this.render(); }
       else if (act === 'enchBack') { this.enchSlot = -1; this.render(); }
       else if (opt !== undefined) { this.enchOpt = Number(opt); this.render(); }
@@ -260,7 +267,7 @@ export class Inventory {
 
   private eqUid(eq: string): string | null {
     const e = this.profile.data.equip;
-    return eq.startsWith('art') ? e.artifacts[Number(eq.slice(3))] : e[eq as 'melee' | 'ranged' | 'armor'];
+    return eq.startsWith('art') ? e.artifacts[Number(eq.slice(3))] : e[eq as 'melee' | 'ranged' | 'armor' | 'aura'];
   }
 
   private openSlot(i: number): void {
@@ -283,7 +290,7 @@ export class Inventory {
     const d = itemDef(it.def), p = this.profile;
     const spent = spentPoints(it);
     let cmp = '';
-    if (!p.isEquipped(it.uid) && d.slot !== 'artifact') {
+    if (!p.isEquipped(it.uid) && d.slot !== 'artifact' && d.slot !== 'aura') {
       const cur = p.equipped(d.slot);
       if (cur && it.power > cur.power) cmp = '<i class="it-cmp up"></i>';
       else if (cur && it.power < cur.power) cmp = '<i class="it-cmp down"></i>';
@@ -359,14 +366,28 @@ export class Inventory {
     } else if (d.armor) {
       line('heart', `+${armorHealth(it)} к здоровью`);
       for (const pk of d.armor.perks) line('e-star', PERK_TEXT[pk.kind](pk.value));
+    } else if (d.aura) {
+      const a = d.aura, v = Math.round(a.value * k);
+      const what: Record<string, string> = {
+        pact: `${v}% урона возвращается здоровьем`, bastion: `−${v}% получаемого урона`, rage: `+${v}% урона и +10% шанс крита`,
+        clarity: `−${v}% перезарядки заклинаний и артефактов, +50% душ`, thorns: `${v}% урона от ближнего удара — обратно врагу`,
+      };
+      line(d.icon, what[a.kind]);
+      line('e-star', `Союзники в радиусе ${a.radius} м тоже под аурой`);
+      line('e-clock', 'Урон копит шкалу ауры; полная — <b>R</b>: вспышка ×3 на 5 с');
     } else if (d.artifact) {
       const a = d.artifact, v = Math.round(a.power * k);
       const what: Record<string, string> = {
         firework: `Взрыв: ${v} урона в радиусе ${a.radius} м`, totem: `Лечит ${v} здоровья в секунду, ${a.duration} с`,
         boots: `Скорость ×${fmt(a.power)} на ${a.duration} с`, horn: `${v} урона и отбрасывание в радиусе ${a.radius} м`,
         lightning: `Молния: ${v} урона трём ближайшим`, harvester: `Взрыв душ: ${v} урона в радиусе ${a.radius} м`,
+        spark: `Молния: ${v} урона и 2 перескока (заряд — до ${Math.round(v * 2.5)} и 5)`,
+        fireball: `Взрыв: ${v} урона в радиусе ${a.radius} м (заряд — до ${Math.round(v * 2.5)})`,
+        icerain: `Сосульки: ${v} урона волной, ${a.duration} с в радиусе ${a.radius} м`,
+        heal: `Лечит ${v} здоровья (заряд — до ${Math.round(v * 2.5)})`,
       };
       line(d.icon, what[a.kind]);
+      if (a.charge) line('e-clock', `Держи клавишу — заряд за ${fmt(a.charge)} с`);
       if (a.souls) line('soul', `Тратит ${a.souls} душ`);
       line('e-clock', `Перезарядка ${fmt(a.cd * p.stats().artifactCdMult)} с`);
     }
@@ -390,8 +411,8 @@ export class Inventory {
     } else {
       body = `<ul class="d-stats">${lines.join('')}</ul><p class="d-desc">${d.description}</p>${bars}`;
     }
-    const slots = d.slot === 'artifact' ? '' : `<div class="d-enchtitle">Зачарования</div><div class="d-ench">${[0, 1, 2].map((i) => this.slotGem(it, i)).join('')}</div>`;
-    const unequip = equipped && d.slot === 'artifact' ? '<button class="d-unequip" data-act="unequip">Снять</button>' : '';
+    const slots = d.slot === 'artifact' || d.slot === 'aura' ? '' : `<div class="d-enchtitle">Зачарования</div><div class="d-ench">${[0, 1, 2].map((i) => this.slotGem(it, i)).join('')}</div>`;
+    const unequip = equipped && (d.slot === 'artifact' || d.slot === 'aura') ? '<button class="d-unequip" data-act="unequip">Снять</button>' : '';
     return head + body + unequip + slots;
   }
 

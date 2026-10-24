@@ -11,7 +11,7 @@ const _v = new THREE.Vector3();
 export type ColorLike = THREE.ColorRepresentation;
 export type RGB = readonly [number, number, number];
 
-interface SpawnOptions {
+export interface SpawnOptions {
   pos: THREE.Vector3;
   vel?: THREE.Vector3;
   life?: number;
@@ -122,12 +122,23 @@ const additive = (color: THREE.Color, opacity = 1, map?: THREE.Texture) => new T
   color, map, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
 });
 
+/** Вспышка настоящего света: точечный источник из пула */
+interface LightFlash { light: THREE.PointLight; t: number; dur: number; peak: number }
+
 export class FX {
   private readonly solid: Pool;
   private readonly glow: Pool;
   private readonly transients: Transient[] = [];
   private readonly texts: FloatText[] = [];
+  /** Пул света заклинаний: источники всегда в сцене (с нулевой силой), чтобы число огней не менялось и шейдеры не пересобирались */
+  private readonly lights: LightFlash[] = [];
+  private readonly flashEl: HTMLDivElement;
+  private flashT = 0;
+  private flashDur = 1;
+  private flashPeak = 0;
   shake = 0;
+  /** Стоп-кадр, с реального времени: пока > 0, цикл игры почти останавливает симуляцию */
+  hitstop = 0;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -138,6 +149,48 @@ export class FX {
     this.solid = new Pool(scene, 900, new THREE.MeshLambertMaterial());
     this.solid.mesh.castShadow = true;
     this.glow = new Pool(scene, 800, new THREE.MeshBasicMaterial({ toneMapped: false }), true);
+    for (let i = 0; i < 3; i++) {
+      const light = new THREE.PointLight('#ffffff', 0, 10, 1.4);
+      light.position.set(0, -50, 0);
+      scene.add(light);
+      this.lights.push({ light, t: 1, dur: 1, peak: 0 });
+    }
+    this.flashEl = document.createElement('div');
+    this.flashEl.className = 'fx-flash';
+    document.body.appendChild(this.flashEl);
+  }
+
+  // ---------- детали каста (wiki/design-spells.md, раздел 5) ----------
+
+  /** Засветка экрана цветом стихии: strength 0..1 — пик непрозрачности */
+  screenFlash(color: string, strength = 0.3, dur = 0.18): void {
+    if (strength < this.flashPeak * (1 - this.flashT / this.flashDur)) return;
+    this.flashEl.style.background = `radial-gradient(ellipse at center, ${color} 0%, ${color} 35%, transparent 100%)`;
+    this.flashT = 0; this.flashDur = dur; this.flashPeak = strength;
+  }
+
+  /** Вспышка настоящего света в точке: освещает пол и стены вокруг, гаснет за dur. follow — каждый кадр двигать за снарядом */
+  light(pos: THREE.Vector3, color: ColorLike, intensity: number, dist = 10, dur = 0.5): THREE.PointLight {
+    const f = this.lights.reduce((a, b) => (a.t / a.dur >= b.t / b.dur ? a : b));
+    f.light.color.set(color); f.light.distance = dist; f.light.position.copy(pos);
+    f.t = 0; f.dur = dur; f.peak = intensity;
+    f.light.intensity = intensity;
+    return f.light;
+  }
+
+  /** След на полу: выжженное пятно, иней. additive — светится; иначе затемняет */
+  decal(pos: THREE.Vector3, map: THREE.Texture, color: ColorLike, size: number, dur: number, additive = false, opacity = 1): void {
+    const mat = new THREE.MeshBasicMaterial({
+      map, color, transparent: true, opacity, depthWrite: false, toneMapped: !additive,
+      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, polygonOffset: true, polygonOffsetFactor: -2,
+    });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+    m.rotation.x = -Math.PI / 2;
+    m.rotation.z = Math.random() * Math.PI * 2;
+    m.position.copy(pos); m.position.y += 0.03 + Math.random() * 0.01;
+    m.renderOrder = 1;
+    // плавно проявляется, держится и тает в последней трети
+    this.add(m, dur, (k) => { mat.opacity = opacity * Math.min(1, k * 12) * Math.min(1, (1 - k) * 3); }, () => { m.geometry.dispose(); mat.dispose(); });
   }
 
   // ---------- частицы ----------
@@ -153,6 +206,11 @@ export class FX {
         color: Array.isArray(color) ? color[(Math.random() * color.length) | 0] : color, gravity, drag,
       });
     }
+  }
+
+  /** Одна частица с полным контролем (искры, втягивающиеся в точку, и т. п.) */
+  particle(p: SpawnOptions, glow = true): void {
+    (glow ? this.glow : this.solid).spawn(p);
   }
 
   /** Направленный веер частиц */
@@ -295,5 +353,21 @@ export class FX {
       tx.el.style.opacity = String(Math.min(1, (tx.dur - tx.t) * 4));
     }
     this.shake = Math.max(0, this.shake - dt * 3);
+    for (const f of this.lights) {
+      if (f.t >= f.dur) { f.light.intensity = 0; continue; }
+      f.t += dt;
+      const k = Math.min(1, f.t / f.dur);
+      f.light.intensity = f.peak * (1 - k) * (1 - k);
+    }
+  }
+
+  /** Засветка и стоп-кадр живут в реальном времени, а не в игровом */
+  updateReal(real: number): void {
+    this.hitstop = Math.max(0, this.hitstop - real);
+    if (this.flashT < this.flashDur) {
+      this.flashT += real;
+      const k = Math.min(1, this.flashT / this.flashDur);
+      this.flashEl.style.opacity = String(this.flashPeak * (1 - k) * (1 - k));
+    } else if (this.flashPeak) { this.flashPeak = 0; this.flashEl.style.opacity = '0'; }
   }
 }

@@ -266,6 +266,143 @@ const ICONS: Record<string, Draw> = {
       '..a..a..',
     ], { a: '#2b2b33', b: '#4a3a5a', c: '#6a4aa8', d: '#3fb8d8', s: '#bff6ff' });
   },
+  // ---------- заклинания (src/spells.ts) ----------
+  spark(p) {
+    // ломаная молния сверху вниз: белое ядро, голубое свечение
+    p.s(3, 0, [
+      '......aab.',
+      '.....abb..',
+      '....abb...',
+      '...abb....',
+      '..abbbbbb.',
+      '.aawwwwba.',
+      '....awwa..',
+      '...awwa...',
+      '..awwa....',
+      '.awwa.....',
+      '.aww......',
+      'aww.......',
+      'aw........',
+      'a.........',
+    ], { a: '#3a8ad8', b: '#7ad8ff', w: '#ffffff' });
+    p.p(12, 9, '#bff6ff'); p.p(13, 12, '#7ad8ff'); p.p(2, 4, '#bff6ff');
+  },
+  fireball(p) {
+    // шар пламени с хвостом в левый нижний угол
+    p.s(5, 2, [
+      '...aaaa..',
+      '..abbbba.',
+      '.abccccba',
+      'abccwwcba',
+      'abcwwwcba',
+      'abccwwcba',
+      '.abccccba',
+      '..abbbba.',
+      '...aaaa..',
+    ], { a: '#c03a1a', b: '#ff6a2a', c: '#ffb43a', w: '#fff2b0' });
+    p.l(1, 14, 5, 10, '#ff6a2a'); p.l(2, 14, 6, 10, '#ffb43a'); p.l(1, 13, 5, 9, '#c03a1a');
+    p.p(3, 9, '#ffb43a'); p.p(7, 13, '#ff6a2a'); p.p(2, 11, '#ffe27a');
+  },
+  icerain(p) {
+    // облако инея и три сосульки
+    p.s(2, 1, [
+      '...aaaaa....',
+      '.aabbbbbaa..',
+      'abbbwwbbbbaa',
+      'abwwwwwbbbba',
+      '.aaaaaaaaaa.',
+    ], { a: '#5a8ab8', b: '#a8d8f8', w: '#ffffff' });
+    for (const [x, y, h] of [[4, 7, 6], [8, 7, 8], [12, 7, 5]] as const) {
+      p.r(x, y, 2, h - 2, '#a8e8ff'); p.p(x, y, '#ffffff'); p.p(x + 1, y + h - 2, '#5ab8e8'); p.p(x, y + h - 2, '#a8e8ff'); p.p(x, y + h - 1, '#5ab8e8');
+    }
+  },
+  heal(p) {
+    // зелёный лист с лепестками малины вокруг
+    p.s(3, 2, [
+      '.......aa.',
+      '.....aabba',
+      '...aabbbba',
+      '..abbbcbba',
+      '.abbbcbba.',
+      '.abbcbba..',
+      'abbcbba...',
+      'abcbba....',
+      'acaaa.....',
+      'c.........',
+    ], { a: '#2f7a2a', b: '#6ad84a', c: '#d8ffb0' });
+    p.p(2, 2, '#ff5a8a'); p.p(3, 1, '#ff8fb0'); p.p(13, 13, '#ff5a8a'); p.p(12, 14, '#ff8fb0'); p.p(14, 11, '#ffe27a'); p.p(1, 6, '#ffe27a');
+  },
+  // ---------- ауры (src/auras.ts) ----------
+  'a-pact'(p) {
+    // капля крови в кольце из нитей
+    p.s(4, 1, [
+      '...aa...',
+      '...ab...',
+      '..abba..',
+      '..abba..',
+      '.abbcba.',
+      '.abbccba',
+      'abbbccba',
+      'abbbbbba',
+      'abbbbbba',
+      '.abbbba.',
+      '..aaaa..',
+    ], { a: '#6a0a1a', b: '#d8203a', c: '#ff8a9a' });
+    p.q(1, 12, 1, 15, 5, 14, '#ff4a5a'); p.q(14, 12, 14, 15, 10, 14, '#ff4a5a'); p.p(2, 5, '#ff4a5a'); p.p(13, 5, '#ff4a5a');
+  },
+  'a-bastion'(p) {
+    // щит с руной
+    p.s(3, 1, [
+      'aaaaaaaaaa',
+      'abbbbbbbba',
+      'abccccccba',
+      'abcwccwcba',
+      'abccwwccba',
+      'abccwwccba',
+      'abcwccwcba',
+      '.abccccba.',
+      '.abbccbba.',
+      '..abbbba..',
+      '...abba...',
+      '....aa....',
+    ], { a: '#2a3a6a', b: '#f2b632', c: '#4a7ad8', w: '#bfe6ff' });
+  },
+  'a-rage'(p) {
+    // пылающий кулак-пламя
+    p.s(3, 1, [
+      '....a.....',
+      '...aba..a.',
+      '..abba.aba',
+      '..abcba.ba',
+      '.abccba.ba',
+      'abcccbaaba',
+      'abccwcbbba',
+      'abcwwccba.',
+      'abcwwccba.',
+      '.abccccba.',
+      '..abbbba..',
+      '...aaaa...',
+    ], { a: '#8a1a0a', b: '#ff4a1a', c: '#ffa03a', w: '#fff2a0' });
+  },
+  'a-clarity'(p) {
+    // три голубых огонька вокруг глаза
+    p.s(3, 5, [
+      '..aaaaaa..',
+      '.abbbbbba.',
+      'abbwccwbba',
+      'abbcwwcbba',
+      '.abbbbbba.',
+      '..aaaaaa..',
+    ], { a: '#1a3a6a', b: '#4aa8f8', c: '#1a2a4a', w: '#e8f8ff' });
+    for (const [x, y] of [[2, 2], [13, 2], [7, 13]] as const) { p.r(x, y, 2, 2, '#7ad8ff'); p.p(x, y, '#ffffff'); }
+  },
+  'a-thorns'(p) {
+    // венок из колючих лоз
+    p.q(3, 8, 3, 2, 8, 2, '#2f6a2a'); p.q(8, 2, 13, 2, 13, 8, '#2f6a2a'); p.q(13, 8, 13, 14, 8, 14, '#2f6a2a'); p.q(8, 14, 3, 14, 3, 8, '#2f6a2a');
+    p.q(4, 8, 4, 3, 8, 3, '#5aa84a'); p.q(8, 3, 12, 3, 12, 8, '#5aa84a'); p.q(12, 8, 12, 13, 8, 13, '#5aa84a'); p.q(8, 13, 4, 13, 4, 8, '#5aa84a');
+    for (const [x, y] of [[1, 8], [14, 8], [8, 0], [8, 15], [3, 3], [12, 3], [3, 12], [12, 12]] as const) p.p(x, y, '#d8e8b0');
+    p.p(7, 7, '#ff4a6a'); p.p(8, 8, '#ff4a6a'); p.p(8, 7, '#ff8aa0');
+  },
   // ---------- HUD ----------
   chest(p) {
     p.s(1, 3, [
