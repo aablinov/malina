@@ -1,0 +1,421 @@
+import * as THREE from 'three';
+import type { FX } from './fx';
+import { iconCanvas } from './icons';
+import { itemDef, powerMult, RARITY, type GearStats, type Profile } from './items';
+import type { Knight } from './knight';
+import type { Terrain } from './level/collide.ts';
+import type { Target } from './target';
+import { HERO } from './tuning';
+import { applyWeapon, getWeapon, type WeaponDef } from './weapons';
+import type { HudBuff, HudState } from './hud/hud';
+
+/**
+ * Снаряжение в бою (wiki/design-inventory.md): надетое из профиля (src/items.ts) превращается в числа и действия —
+ * оружие героя и множители удара, здоровье брони, стрелы на ПКМ, артефакты на 1/2/3, зелье на E, души, опыт и уровни,
+ * жизни. Сцена сообщает о попаданиях и вызывает действия; что задело — решают цели (Target).
+ */
+
+export interface GearHooks {
+  scene: THREE.Scene;
+  fx: FX;
+  hero: Knight;
+  terrain: Terrain;
+  targets(): Target[];
+  /** Взрыв артефакта поджигает бочки и бьёт ящики */
+  blast?(at: THREE.Vector3, r: number, dmg: number): void;
+  sound(k: 'shoot' | 'potion' | 'level' | 'boom' | 'horn' | 'zap' | 'totem' | 'dash' | 'souls' | 'empty' | 'hit'): void;
+  toast(s: string): void;
+  banner(html: string): void;
+}
+
+interface Arrow { pos: THREE.Vector3; vel: THREE.Vector3; left: number; dmg: number; knock: number; pierce: number; hit: Set<Target>; mesh: THREE.Group }
+interface Totem { pos: THREE.Vector3; t: number; heal: number; r: number; mesh: THREE.Group }
+
+export const POTION_CD = 20;
+const LIVES = 3;
+
+const glowMat = (r: number, g: number, b: number): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), toneMapped: false });
+const box = (w: number, h: number, d: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh => {
+  const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+  o.position.set(x, y, z);
+  return o;
+};
+
+export class Gear {
+  stats!: GearStats;
+  lives = LIVES;
+  potionT = 0;
+  /** Перезарядка артефактов: осталось и полная */
+  readonly artT: [number, number][] = [[0, 1], [0, 1], [0, 1]];
+  private shotT = 0;
+  private speedT = 0;
+  private speedK = 1;
+  private soulAcc = 0;
+  private readonly arrows: Arrow[] = [];
+  private readonly totems: Totem[] = [];
+  private weaponId = '';
+  /** ?weapon=… из адреса — оружие для отладки поверх надетого */
+  weaponOverride: WeaponDef | null = null;
+  /** Попадания стрел (для тестов) */
+  arrowHits = 0;
+  arrowsShot = 0;
+
+  constructor(private readonly h: GearHooks, readonly profile: Profile) {
+    profile.onChange(() => this.apply());
+    this.apply();
+    h.hero.hp = h.hero.maxHp;
+  }
+
+  /** Надетое → герой: оружие, здоровье, скорость, перекат */
+  apply(): void {
+    const hero = this.h.hero;
+    this.stats = this.profile.stats();
+    const m = this.profile.equipped('melee');
+    const w = this.weaponOverride ?? (m ? getWeapon(itemDef(m.def).weapon ?? '') : undefined);
+    if (w && w.id !== this.weaponId) { this.weaponId = w.id; applyWeapon(w); hero.setWeapon(w); }
+    const max = HERO.hp + this.stats.maxHpBonus;
+    if (max !== hero.maxHp) {
+      const k = hero.maxHp > 0 ? hero.hp / hero.maxHp : 1;
+      hero.maxHp = max;
+      hero.hp = Math.min(max, Math.max(1, Math.round(max * k)));
+    }
+    hero.speedMul = this.stats.speedMult * (this.speedT > 0 ? this.speedK : 1);
+    hero.rollCdMul = this.stats.rollCdMult;
+  }
+
+  /** Оружие поправили в редакторе: заново применить, если оно надето */
+  refreshWeapon(w: WeaponDef): void { if (w.id === this.weaponId) { applyWeapon(w); this.h.hero.setWeapon(w); } }
+
+  // ---------- ближний бой ----------
+
+  /** Урон удара по цели: сила оружия, острота, крит, огонь */
+  meleeDamage(base: number): { dmg: number; crit: boolean; fire: number } {
+    const s = this.stats;
+    const crit = s.critChance > 0 && Math.random() < s.critChance;
+    const fire = s.fireDmg;
+    return { dmg: Math.round(base * s.meleeMult * (crit ? 3 : 1)) + fire, crit, fire };
+  }
+
+  /** Попали по цели (мечом, стрелой, артефактом): души, опыт, вампиризм */
+  onHit(dmg: number, melee: boolean): void {
+    const s = this.stats, hero = this.h.hero;
+    this.soulAcc += (melee ? s.soulsPerHit : 1) * s.soulsMult;
+    if (this.soulAcc >= 1) { const n = Math.floor(this.soulAcc); this.soulAcc -= n; this.profile.addSouls(n); }
+    if (melee && s.leech > 0) hero.hp = Math.min(hero.maxHp, hero.hp + dmg * s.leech);
+    this.gainXp(Math.max(1, Math.round(dmg * 0.25)));
+  }
+
+  gainXp(n: number): void {
+    const ups = this.profile.addXp(n);
+    if (ups > 0) {
+      const lv = this.profile.data.level;
+      this.h.banner(`Уровень ${lv}<small>+${ups} ${ups === 1 ? 'очко' : 'очка'} зачарования — открой инвентарь (I)</small>`);
+      this.h.sound('level');
+      this.h.fx.burst(this.h.hero.pos.clone().setY(this.h.hero.pos.y + 1), [new THREE.Color(2.4, 1.2, 3.4), new THREE.Color(3.2, 2.6, 1)], 26, { speed: 3, up: 4, size: 0.08, life: 0.9, glow: true, gravity: 2 });
+    }
+  }
+
+  // ---------- зелье ----------
+
+  potion(): boolean {
+    const hero = this.h.hero;
+    if (this.potionT > 0 || hero.down) { if (this.potionT > 0) this.h.toast(`Зелье будет готово через ${Math.ceil(this.potionT)} с`); return false; }
+    const heal = Math.round(hero.maxHp * 0.6 * this.stats.potionMult);
+    const before = hero.hp;
+    hero.hp = Math.min(hero.maxHp, hero.hp + heal);
+    this.potionT = POTION_CD;
+    this.h.fx.text(hero.pos.clone().setY(hero.pos.y + 0.6), `+${Math.round(hero.hp - before)}`, 'heal');
+    this.h.fx.burst(hero.pos.clone().setY(hero.pos.y + 1), [new THREE.Color(3.2, 0.5, 0.8), new THREE.Color(3, 2.6, 2.6)], 18, { speed: 1.6, up: 3, size: 0.07, life: 0.8, glow: true, gravity: 1 });
+    this.h.sound('potion');
+    return true;
+  }
+
+  // ---------- стрелы ----------
+
+  /** Выстрел к точке; держишь ПКМ — стреляет с паузой лука */
+  shoot(at: THREE.Vector3): boolean {
+    const r = this.profile.equipped('ranged');
+    if (!r || this.shotT > 0 || this.h.hero.down) return false;
+    const def = itemDef(r.def).ranged;
+    if (!def) return false;
+    const P = this.profile.data, s = this.stats, hero = this.h.hero;
+    if (P.arrows <= 0) { this.h.toast('Стрелы кончились — ищи связки в сундуках'); this.h.sound('empty'); this.shotT = 0.5; return false; }
+    this.shotT = def.cd * s.rangedCdMult;
+    const from = hero.pos.clone().setY(hero.pos.y + 1.1);
+    const yaw = Math.atan2(at.x - from.x, at.z - from.z);
+    hero.yaw = yaw;
+    let n = def.shots ?? 1;
+    if (s.multishot > 0 && Math.random() < s.multishot) n += 2;
+    const dmg = Math.round(def.dmg * s.rangedMult);
+    for (let i = 0; i < n; i++) {
+      const a = yaw + (i - (n - 1) / 2) * 0.2;
+      this.spawnArrow(from, a, def.speed, def.range, dmg, def.knock * s.rangedKnock, s.pierce, (def.shots ?? 1) > 1 || i > 0);
+    }
+    if (!(s.infinity > 0 && Math.random() < s.infinity)) P.arrows = Math.max(0, P.arrows - 1);
+    this.arrowsShot++;
+    this.h.sound('shoot');
+    return true;
+  }
+
+  private spawnArrow(from: THREE.Vector3, yaw: number, speed: number, range: number, dmg: number, knock: number, pierce: number, glow: boolean): void {
+    const g = new THREE.Group();
+    g.add(box(0.04, 0.04, 0.7, new THREE.MeshLambertMaterial({ color: '#a8774a' })));
+    g.add(box(0.09, 0.09, 0.12, glow ? glowMat(1.2, 2.6, 3.4) : glowMat(2.2, 2.3, 2.5), 0, 0, 0.38));
+    g.add(box(0.14, 0.02, 0.14, new THREE.MeshLambertMaterial({ color: '#f2f2f2' }), 0, 0, -0.3));
+    g.position.copy(from);
+    g.rotation.y = yaw;
+    this.h.scene.add(g);
+    const vel = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(speed);
+    this.arrows.push({ pos: from.clone(), vel, left: range, dmg, knock, pierce, hit: new Set(), mesh: g });
+  }
+
+  private updateArrows(dt: number): void {
+    const { terrain, fx, scene } = this.h;
+    for (let i = this.arrows.length - 1; i >= 0; i--) {
+      const a = this.arrows[i];
+      const step = a.vel.length() * dt;
+      const to = a.pos.clone().addScaledVector(a.vel, dt);
+      let dead = (a.left -= step) <= 0;
+      const wall = terrain.wallHit(a.pos.x, a.pos.z, to.x, to.z, a.pos.y);
+      if (wall) { to.set(wall.x, a.pos.y, wall.z); dead = true; fx.burst(to, ['#c8b890', '#8a7a5a'], 5, { speed: 1.5, up: 1.5, size: 0.06, life: 0.3 }); }
+      // попадание: цель ближе радиуса к отрезку пути на этом шаге
+      for (const t of this.h.targets()) {
+        if (!t.alive || a.hit.has(t)) continue;
+        if (a.pos.y < t.pos.y - 0.2 || a.pos.y > t.pos.y + (t.topY ?? 1.9)) continue;
+        const d = segDist(a.pos.x, a.pos.z, to.x, to.z, t.pos.x, t.pos.z);
+        if (d > t.radius + 0.08) continue;
+        a.hit.add(t);
+        const dir = a.vel.clone().setY(0).normalize();
+        const point = t.pos.clone().setY(a.pos.y).addScaledVector(dir, -t.radius);
+        t.hit(a.dmg, dir, point, a.knock);
+        fx.text(point, String(a.dmg), '');
+        fx.burst(point, [new THREE.Color(2, 2.6, 3.4), '#e8e2d0'], 6, { speed: 2.5, up: 2, size: 0.06, life: 0.3, glow: true });
+        this.arrowHits++;
+        this.onHit(a.dmg, false);
+        this.h.sound('hit');
+        if (a.pierce-- <= 0) { dead = true; break; }
+      }
+      a.pos.copy(to);
+      a.mesh.position.copy(to);
+      if (dead) { scene.remove(a.mesh); disposeGroup(a.mesh); this.arrows.splice(i, 1); }
+    }
+  }
+
+  // ---------- артефакты ----------
+
+  /** Применить артефакт из гнезда i (0..2) к точке курсора */
+  useArtifact(i: number, at: THREE.Vector3): boolean {
+    const it = this.profile.artifacts()[i];
+    const hero = this.h.hero;
+    if (!it) { this.h.toast(`Гнездо ${i + 1} пустое — надень артефакт в инвентаре (I)`); return false; }
+    if (this.artT[i][0] > 0 || hero.down) return false;
+    const a = itemDef(it.def).artifact;
+    if (!a) return false;
+    if (a.souls && this.profile.data.souls < a.souls) { this.h.toast(`Нужно ${a.souls} душ`); this.h.sound('empty'); return false; }
+    if (a.souls) this.profile.data.souls -= a.souls;
+    const k = powerMult(it.power) * this.stats.artifactMult;
+    const power = a.power * k;
+    const R = a.radius ?? 3;
+    const me = hero.pos.clone();
+    switch (a.kind) {
+      case 'firework': this.firework(me, at, R, power); break;
+      case 'totem': this.totem(me, R, power, a.duration ?? 8); break;
+      case 'boots':
+        this.speedT = a.duration ?? 2; this.speedK = a.power;
+        this.h.fx.burst(me.clone().setY(me.y + 0.2), [new THREE.Color(1, 2.2, 3.4)], 14, { speed: 2, up: 1, size: 0.07, life: 0.4, glow: true });
+        this.h.sound('dash');
+        break;
+      case 'horn':
+        this.aoe(me, R, power, 3.2, false);
+        this.h.fx.shock(me.clone().setY(me.y + 0.1), R, new THREE.Color(1.6, 2.6, 3.2), 0.45, 0.3);
+        this.h.fx.shock(me.clone().setY(me.y + 0.6), R * 0.7, new THREE.Color(2.4, 3, 3.2), 0.35, 0.2);
+        this.h.sound('horn');
+        break;
+      case 'lightning': this.lightning(me, R, power); break;
+      case 'harvester':
+        this.aoe(me, R, power, 1.6, true);
+        this.h.fx.explosion(me.clone().setY(me.y + 0.5), R, new THREE.Color(0.8, 2.6, 3.4));
+        this.h.sound('souls');
+        break;
+    }
+    this.artT[i] = [a.cd * this.stats.artifactCdMult, a.cd * this.stats.artifactCdMult];
+    this.apply();
+    return true;
+  }
+
+  /** Урон по площади вокруг c (без героя); blast — поджечь бочки */
+  private aoe(c: THREE.Vector3, r: number, dmg: number, knock: number, blast: boolean): number {
+    let n = 0;
+    for (const t of this.h.targets()) {
+      if (!t.alive) continue;
+      const d = Math.hypot(t.pos.x - c.x, t.pos.z - c.z);
+      if (d - t.radius > r) continue;
+      const dir = new THREE.Vector3(t.pos.x - c.x, 0, t.pos.z - c.z).normalize();
+      const v = Math.round(dmg * (1 - Math.min(1, d / (r + t.radius)) * 0.4));
+      t.hit(v, dir, t.pos.clone().setY(1), knock);
+      this.h.fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
+      this.onHit(v, false);
+      n++;
+    }
+    if (blast) this.h.blast?.(c, r, dmg);
+    return n;
+  }
+
+  private firework(from: THREE.Vector3, at: THREE.Vector3, r: number, dmg: number): void {
+    const dir = new THREE.Vector3(at.x - from.x, 0, at.z - from.z);
+    if (dir.length() > 14) dir.setLength(14);
+    const end = from.clone().add(dir);
+    end.y = this.h.terrain.floorAt(end.x, end.z, from.y + 3);
+    if (!Number.isFinite(end.y)) end.y = from.y;
+    const g = new THREE.Group();
+    g.add(box(0.12, 0.12, 0.5, new THREE.MeshLambertMaterial({ color: '#e23a3a' })), box(0.1, 0.1, 0.14, glowMat(3.4, 2.4, 0.8), 0, 0, -0.3));
+    const start = from.clone().setY(from.y + 1.2);
+    g.position.copy(start);
+    this.h.scene.add(g);
+    const fx = this.h.fx;
+    const T = 0.45;
+    fx.custom(g, T, (k) => {
+      const p = start.clone().lerp(end, k);
+      p.y += Math.sin(k * Math.PI) * 2.2;
+      g.lookAt(p.clone().add(new THREE.Vector3(end.x - start.x, (1 - 2 * k) * 6, end.z - start.z)));
+      g.position.copy(p);
+      if (Math.random() < 0.7) fx.burst(p, [new THREE.Color(3.4, 2.2, 0.6)], 1, { speed: 0.6, up: 0.5, size: 0.06, life: 0.3, glow: true, gravity: 0 });
+      if (k > 0.97 && !g.userData.boom) {
+        g.userData.boom = true;
+        fx.explosion(end.clone().setY(end.y + 0.6), r, new THREE.Color(3.4, 1.2, 2.2));
+        fx.burst(end.clone().setY(end.y + 1.2), [new THREE.Color(3.4, 0.8, 1.6), new THREE.Color(0.8, 2.6, 3.4), new THREE.Color(3.4, 3, 0.8)], 40, { speed: 6, up: 4, size: 0.08, life: 0.8, glow: true, gravity: 3 });
+        this.aoe(end, r, dmg, 1.8, true);
+        this.h.sound('boom');
+      }
+    });
+  }
+
+  private totem(at: THREE.Vector3, r: number, heal: number, dur: number): void {
+    const g = new THREE.Group();
+    const wood = new THREE.MeshLambertMaterial({ color: '#8a6038' });
+    g.add(box(0.5, 1.3, 0.5, wood, 0, 0.65, 0), box(0.62, 0.2, 0.62, new THREE.MeshLambertMaterial({ color: '#5a3a22' }), 0, 1.35, 0));
+    g.add(box(0.26, 0.22, 0.04, glowMat(3.4, 0.6, 1), 0, 0.55, 0.26), box(0.08, 0.08, 0.04, glowMat(0.2, 0.2, 0.2), -0.1, 1.0, 0.26), box(0.08, 0.08, 0.04, glowMat(0.2, 0.2, 0.2), 0.1, 1.0, 0.26));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.08, r, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 2.6, 1), transparent: true, opacity: 0.6, depthWrite: false, toneMapped: false }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05;
+    g.add(ring);
+    g.position.copy(at);
+    this.h.scene.add(g);
+    this.totems.push({ pos: at.clone(), t: dur, heal, r, mesh: g });
+    this.h.sound('totem');
+  }
+
+  private lightning(from: THREE.Vector3, r: number, dmg: number): void {
+    const near = this.h.targets().filter((t) => t.alive && Math.hypot(t.pos.x - from.x, t.pos.z - from.z) < r)
+      .sort((a, b) => a.pos.distanceToSquared(from) - b.pos.distanceToSquared(from)).slice(0, 3);
+    for (const t of near) {
+      const bolt = box(0.16, 12, 0.16, glowMat(2.4, 2.2, 3.4), 0, 6, 0);
+      const g = new THREE.Group();
+      g.add(bolt);
+      g.position.copy(t.pos);
+      this.h.scene.add(g);
+      this.h.fx.custom(g, 0.3, (k) => { bolt.scale.set(1 - k, 1, 1 - k); });
+      this.h.fx.flash(t.pos.clone().setY(1), new THREE.Color(2.4, 2.2, 3.4), 2.2, 0.2);
+      const dir = new THREE.Vector3(t.pos.x - from.x, 0, t.pos.z - from.z).normalize();
+      const v = Math.round(dmg);
+      t.hit(v, dir, t.pos.clone().setY(1), 0.8);
+      this.h.fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
+      this.onHit(v, false);
+    }
+    if (!near.length) this.h.toast('Рядом нет целей для молнии');
+    this.h.sound('zap');
+  }
+
+  // ---------- цикл ----------
+
+  /** Жизнь потеряна (герой упал) */
+  onDown(): void {
+    this.lives--;
+    if (this.lives <= 0) { this.lives = LIVES; this.h.banner('Все жизни потеряны<small>Плейграунд: жизни восстановлены</small>'); }
+  }
+
+  update(dt: number, rmb: boolean, aim: THREE.Vector3): void {
+    const hero = this.h.hero;
+    this.potionT = Math.max(0, this.potionT - dt);
+    this.shotT = Math.max(0, this.shotT - dt);
+    for (const a of this.artT) a[0] = Math.max(0, a[0] - dt);
+    if (this.speedT > 0) {
+      this.speedT -= dt;
+      if (Math.random() < 0.4 && hero.speed > 1) this.h.fx.burst(hero.pos.clone().setY(hero.pos.y + 0.1), [new THREE.Color(1, 2.2, 3.4)], 1, { speed: 0.4, up: 0.3, size: 0.06, life: 0.35, glow: true, gravity: 0 });
+      if (this.speedT <= 0) this.apply();
+    }
+    if (!hero.down && this.stats.regen > 0) hero.hp = Math.min(hero.maxHp, hero.hp + this.stats.regen * dt);
+    for (let i = this.totems.length - 1; i >= 0; i--) {
+      const t = this.totems[i];
+      t.t -= dt;
+      t.mesh.children[t.mesh.children.length - 1].rotation.z += dt;
+      if (!hero.down && Math.hypot(hero.pos.x - t.pos.x, hero.pos.z - t.pos.z) < t.r) {
+        hero.hp = Math.min(hero.maxHp, hero.hp + t.heal * dt);
+        if (Math.random() < 0.15) this.h.fx.burst(hero.pos.clone().setY(hero.pos.y + 0.8), [new THREE.Color(0.6, 3, 1)], 1, { speed: 0.5, up: 1.5, size: 0.06, life: 0.6, glow: true, gravity: -1 });
+      }
+      if (t.t <= 0) { this.h.scene.remove(t.mesh); disposeGroup(t.mesh); this.totems.splice(i, 1); }
+    }
+    if (rmb) this.shoot(aim);
+    this.updateArrows(dt);
+  }
+
+  /** Числа для HUD */
+  hudState(): HudState {
+    const hero = this.h.hero;
+    const arts = this.profile.artifacts();
+    const buffs: HudBuff[] = [];
+    if (this.speedT > 0) buffs.push({ icon: 'boots', name: 'Скорость', t: this.speedT, color: '#3a8ad8' });
+    for (const t of this.totems) if (Math.hypot(hero.pos.x - t.pos.x, hero.pos.z - t.pos.z) < t.r) { buffs.push({ icon: 'totem', name: 'Исцеление', t: t.t, color: '#3a9a4a' }); break; }
+    if (this.stats.multishot > 0) buffs.push({ icon: 'e-multi', name: 'Мультивыстрел', count: Math.round(this.stats.multishot * 100), color: '#3a9a4a' });
+    if (this.stats.infinity > 0) buffs.push({ icon: 'e-inf', name: 'Бесконечность', color: '#7a5cff' });
+    if (this.stats.regen > 0) buffs.push({ icon: 'e-leaf', name: 'Восстановление', color: '#3a9a4a' });
+    if (hero.god) buffs.push({ icon: 'champion', name: 'Бессмертие', color: '#c08a2a' });
+    return {
+      hp: hero.hp, maxHp: hero.maxHp, lives: this.lives,
+      potion: [this.potionT, POTION_CD],
+      roll: [hero.rollCdT, HERO.rollCd * hero.rollCdMul],
+      artifacts: this.artT.map(([t, f]) => [t, f]),
+      active: arts.map((it) => {
+        const k = it ? itemDef(it.def).artifact?.kind : undefined;
+        return (k === 'boots' && this.speedT > 0) || (k === 'totem' && this.totems.length > 0);
+      }),
+      buffs,
+    };
+  }
+}
+
+function segDist(ax: number, az: number, bx: number, bz: number, px: number, pz: number): number {
+  const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
+  const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / l2)) : 0;
+  return Math.hypot(ax + dx * t - px, az + dz * t - pz);
+}
+
+function disposeGroup(g: THREE.Object3D): void {
+  g.traverse((o) => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); } });
+}
+
+/** Трофей на полу: иконка-спрайт и луч цвета редкости, как в MCD */
+export function itemLootMesh(it: { def: string }): THREE.Group {
+  const d = itemDef(it.def);
+  const g = new THREE.Group();
+  const tex = new THREE.CanvasTexture(iconCanvas(d.icon));
+  tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  spr.scale.set(0.7, 0.7, 0.7);
+  spr.position.y = 0.35;
+  g.add(spr);
+  const c = new THREE.Color(RARITY[d.rarity].color).multiplyScalar(2.2);
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3, 0.12), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
+  beam.position.y = 1.5;
+  g.add(beam);
+  return g;
+}
+
+/** Связка стрел на полу */
+export function arrowsLootMesh(): THREE.Group {
+  const g = new THREE.Group();
+  const shaft = new THREE.MeshLambertMaterial({ color: '#a8774a' }), tip = new THREE.MeshLambertMaterial({ color: '#c6d0dc' }), band = new THREE.MeshLambertMaterial({ color: '#c03a3a' });
+  for (const x of [-0.07, 0, 0.07]) g.add(box(0.04, 0.04, 0.5, shaft, x, 0, 0), box(0.06, 0.06, 0.08, tip, x, 0, 0.27));
+  g.add(box(0.22, 0.07, 0.06, band, 0, 0, 0));
+  return g;
+}
+

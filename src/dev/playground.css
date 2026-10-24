@@ -15,7 +15,7 @@ body.dev-playground #hurt { display: none !important; }
   position: absolute; top: 12px; padding: 8px 10px; border-radius: 6px;
   background: rgba(20, 22, 27, 0.78); font-variant-numeric: tabular-nums;
 }
-.pg-tele { left: 12px; min-width: 220px; }
+.pg-tele { left: 12px; top: auto; bottom: 12px; min-width: 220px; }
 .pg-fps { right: 12px; }
 
 .pg-toast {
@@ -25,33 +25,9 @@ body.dev-playground #hurt { display: none !important; }
 }
 .pg-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-.pg-bar { position: absolute; bottom: 66px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: flex-end; }
-.pg-slot {
-  position: relative; width: 58px; height: 58px; border-radius: 6px; overflow: hidden;
-  background: linear-gradient(#3a3f52, #23263a); border: 3px solid #0d0e16; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12), 0 4px 0 rgba(0, 0, 0, 0.35);
-  display: grid; place-items: center;
-}
-.pg-slot kbd { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font: 700 9px/1 Rubik, system-ui, sans-serif; color: #c9c3b0; }
-/* меч из пиксельных квадратов: клинок, гарда, рукоять */
-.pg-sword { width: 6px; height: 30px; background: #e6eef6; box-shadow: 0 0 6px #8adfff, 0 15px 0 -1px #f2c040; transform: rotate(45deg) translateY(-4px); position: relative; }
-.pg-sword::after { content: ''; position: absolute; left: -6px; top: 26px; width: 18px; height: 4px; background: #f2c040; box-shadow: 6px 6px 0 -1px #6e4528; }
-.pg-roll { width: 26px; height: 26px; border-radius: 50%; border: 4px solid #8adfff; border-right-color: transparent; transform: rotate(-30deg); }
-.pg-cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.6); }
-.pg-combo { position: absolute; top: 4px; left: 0; right: 0; display: flex; gap: 3px; justify-content: center; }
-.pg-combo i { width: 8px; height: 4px; background: rgba(255, 255, 255, 0.18); }
-.pg-combo i.on { background: #ffd25a; box-shadow: 0 0 6px #ffb02a; }
-/* сердце здоровья: заливка снизу вверх */
-.pg-heart {
-  position: relative; width: 84px; height: 76px; margin: 0 4px;
-  clip-path: polygon(50% 100%, 6% 56%, 0 38%, 0 18%, 12% 4%, 30% 0, 50% 14%, 70% 0, 88% 4%, 100% 18%, 100% 38%, 94% 56%);
-  background: #2a1018; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.35));
-}
-.pg-heart-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; background: linear-gradient(#ff5a78, #d0203f 60%, #a3142e); transition: height 0.15s; }
-.pg-heart b { position: absolute; inset: 0; display: grid; place-items: center; font: 900 20px/1 Rubik, system-ui, sans-serif; color: #fff; text-shadow: 0 2px 0 #5a0a18; }
-
 .pg-help {
-  position: absolute; left: 12px; right: 12px; bottom: 10px; text-align: center; font-size: 11px; opacity: 0.85;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  position: absolute; left: 50%; top: 52px; transform: translateX(-50%); width: min(980px, 70vw); text-align: center; font-size: 11px; opacity: 0.85;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); transition: opacity 0.4s;
 }
 
 .pg-reticle { position: absolute; left: 0; top: 0; width: 0; height: 0; }
@@ -59,9 +35,6 @@ body.dev-playground #hurt { display: none !important; }
 /* под курсором цель — красный прицел; Shift — удар на месте, жёлтый */
 .pg-reticle.hover i { border-color: #ff5a6a; transform: rotate(45deg) scale(1.35); }
 .pg-reticle.here i { border-color: #ffd25a; }
-.pg-spells { display: flex; gap: 6px; margin-right: 6px; }
-.pg-spell { width: 46px; height: 46px; opacity: 0.85; }
-.pg-spell::before { content: ''; width: 14px; height: 14px; border: 2px dashed rgba(255, 255, 255, 0.25); border-radius: 50%; }
 
 .pg-dummy {
   position: absolute; left: 0; top: 0; white-space: nowrap; text-align: center; pointer-events: none;
@@ -96,11 +69,9 @@ body.dev-playground #hurt { display: none !important; }
 
 body.dev-playground #c { cursor: none; }
 
-.pg-berry { display: flex; align-items: center; gap: 6px; background: linear-gradient(#3a3f52, #23263a); border: 3px solid #0d0e16; border-radius: 6px; padding: 6px 10px; font: 900 16px/1 Rubik, system-ui, sans-serif; align-self: center; }
-.pg-berry i { width: 12px; height: 12px; background: #c4284f; box-shadow: inset -2px -2px 0 #8a1030, 0 0 8px #ff2a55; }
 .pg-prompt {
-  position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 7px 14px; border-radius: 6px;
-  background: rgba(20, 22, 27, 0.88); font-weight: 700; font-size: 13px; white-space: nowrap;
+  position: absolute; left: 50%; bottom: calc(clamp(10px, min(0.84vw, 1.5vh), 22px) * 9.5); transform: translateX(-50%); padding: 7px 14px;
+  background: rgba(14, 12, 18, 0.9); border: 2px solid #5a5763; font-weight: 700; font-size: 13px; white-space: nowrap;
 }
 .pg-prompt kbd {
   display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 4px; background: #ffd25a; color: #1a1b1e; font: 700 12px/1.4 Rubik, system-ui, sans-serif;
