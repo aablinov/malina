@@ -55,7 +55,11 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-slot img { width: 2.5em; height: 2.5em; }
 .hud-slot:hover { outline-color: #b9b7c2; }
 .hud-inv { outline-color: #9b6ad8; }
-.hud-cd { position: absolute; left: 0; right: 0; top: 0; height: 0; background: rgba(5, 4, 8, 0.72); pointer-events: none; }
+/* перезарядка как в MCD: иконка серая, цвет возвращается снизу вверх, сверху — лёгкая тень остатка */
+.hud-cd { position: absolute; left: 0; right: 0; top: 0; height: 0; background: rgba(20, 18, 26, 0.38); pointer-events: none; border-bottom: 0.12em solid rgba(255, 255, 255, 0.55); box-sizing: border-box; }
+.hud-slot.cooling .hud-cd { border-bottom-color: rgba(255, 255, 255, 0.55); }
+.hud-slot:not(.cooling) .hud-cd { border: 0; }
+.hud-slot.cooling > img, .hud-slot.cooling > .hud-ico { filter: grayscale(0.9) brightness(0.65); }
 .hud-cdn { position: absolute; inset: 0; display: grid; place-items: center; font: 400 0.95em/1 var(--mcd-px); text-shadow: 0 0 3px #000, 0 2px 0 #000; pointer-events: none; }
 .hud-art.empty .hud-ico { display: none; }
 .hud-plus { display: none; font: 400 1.6em/1 var(--mcd-px); color: #6d6b75; }
@@ -102,6 +106,7 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 
 .hud-right { display: flex; flex-direction: column; gap: 0.3em; }
 .hud-row { display: flex; gap: 0.35em; align-items: flex-end; }
+.hud-roll .hud-cd { border: 0; }
 .hud-roll { position: relative; width: 2.6em; height: 2.4em; margin: 0 0.15em 0.1em; display: grid; place-items: center; background: #1d1c21; border: 0.15em solid #050407; }
 .hud-roll img { width: 1.9em; height: 1.9em; }
 .hud-roll.cooling img { filter: grayscale(1) brightness(0.6); }
@@ -137,16 +142,26 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-banner small { display: block; font: 700 0.42em/1.5 var(--mcd-text); color: #fff; letter-spacing: 0.02em; }
 .hud-banner.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---------- карта (M) ---------- */
-.hud-mapwrap {
-  position: absolute; inset: 0; display: none; place-items: center; background: rgba(8, 6, 12, 0.55); pointer-events: auto;
+/* ---------- карты (src/hud/automap.ts) ---------- */
+.hud-minibox {
+  position: absolute; right: 1.6em; top: 5.2em; width: 15em; height: 10.5em; pointer-events: auto; cursor: pointer;
+  background: radial-gradient(closest-side, rgba(8, 12, 22, 0.55), rgba(8, 12, 22, 0.25) 80%, transparent);
+  -webkit-mask: radial-gradient(closest-side, #000 82%, transparent); mask: radial-gradient(closest-side, #000 82%, transparent);
 }
-.hud-mapwrap.open { display: grid; }
-.hud-mapbox { position: relative; border: 0.35em solid #050407; outline: 0.2em solid #8a6a3a; outline-offset: -0.45em; background: #e8d6a8; padding: 0.6em; }
-.hud-mapbox canvas { display: block; width: min(70vmin, 46em); height: auto; image-rendering: pixelated; }
-.hud-mapme { position: absolute; width: 0.9em; height: 0.9em; margin: -0.45em; background: #ff3a4a; border: 0.15em solid #fff; transform: rotate(45deg); animation: hud-glow 0.6s infinite alternate; }
-.hud-mapbox .hud-mapme { left: 50%; top: 50%; }
-.hud-maptitle { font: 400 1.4em/1 var(--mcd-px); text-align: center; margin-bottom: 0.6em; text-shadow: 0.1em 0.1em 0 #000; }
-.hud-maphint { font: 400 0.7em/1 var(--mcd-px); text-align: center; margin-top: 0.8em; opacity: 0.8; }
-.hud-mapwrap > div { display: flex; flex-direction: column; align-items: center; }
-.hud-mapwrap { grid-template-rows: auto auto auto; align-content: center; }
+.hud-minibox canvas { width: 100%; height: 100%; display: block; }
+.hud-over { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.hud-mapwrap { position: absolute; inset: 0; display: none; pointer-events: auto; background: rgba(8, 10, 16, 0.9); }
+.hud-mapwrap.open { display: block; }
+.hud-mapframe {
+  position: absolute; inset: 3.5% 3%; border: 0.15em solid #5a5f6c; box-shadow: inset 0 0 0 0.35em rgba(8, 10, 16, 0.9), inset 0 0 0 0.5em #2c303a;
+}
+.hud-mapframe::before, .hud-mapframe::after { content: ''; position: absolute; width: 1.6em; height: 1.6em; border: 0.15em solid #8a8f9c; }
+.hud-mapframe::before { left: -0.9em; top: -0.9em; border-right: 0; border-bottom: 0; }
+.hud-mapframe::after { right: -0.9em; bottom: -0.9em; border-left: 0; border-top: 0; }
+.hud-mapframe h2 { position: absolute; left: 4%; top: 6%; margin: 0; font: 400 2.2em/1 var(--mcd-px); color: var(--mcd-gold); text-transform: uppercase; text-shadow: 0.08em 0.08em 0 #000; z-index: 1; }
+.hud-mapframe canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hud-mapx { position: absolute; right: 1em; top: 1em; width: 2.4em; height: 2.4em; background: #0b0f17; border: 0.15em solid #cfd3dc; color: #fff; font: 700 1.1em/1 var(--mcd-text); cursor: pointer; z-index: 1; }
+.hud-mapstats { position: absolute; left: 4%; bottom: 6%; display: flex; flex-direction: column; gap: 0.7em; font: 600 1.05em/1 var(--mcd-text); z-index: 1; }
+.hud-mapstats div { display: flex; align-items: center; gap: 0.6em; text-transform: uppercase; letter-spacing: 0.03em; }
+.hud-mapstats img { width: 1.5em; height: 1.5em; }
+.hud-mapstats b { margin-left: 0.6em; }

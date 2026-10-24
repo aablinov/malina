@@ -20,7 +20,9 @@ import { itemDef, Profile } from '../items';
 import { arrowsLootMesh, Gear, itemLootMesh } from '../gear';
 import { Hud } from '../hud/hud';
 import { Inventory } from '../hud/inventory';
-import { levelMap } from '../hud/map';
+import { AutoMap } from '../hud/automap';
+import { Shop } from '../hud/shop';
+import { Merchant, MERCHANT_TITLE } from '../merchants';
 import { Weather } from '../weather';
 import { aimLight, lightData, makeLight, worldOf } from '../world';
 import { Dummy } from './dummies';
@@ -205,12 +207,17 @@ export function runPlayground(): void {
     terminals: [[-2.6, 10.6, 50]],
   });
   floorLabel('склад: бочки, сундуки (E), источник здоровья (E), ящики', -7.5, 21.3, 0.9);
-  /** Плоские препятствия героя и пути: предметы склада и декор (пересобираются, когда меняется одно из них) */
+  // лавки кузнеца и торговца — на плейграунде, в северо-западном углу (src/merchants.ts)
+  const merchants: Merchant[] = new URLSearchParams(window.location.search).has('map') ? [] : [
+    new Merchant(scene, overlayEl, T, 'smith', -17, -13, 0),
+    new Merchant(scene, overlayEl, T, 'merchant', -19, -6, Math.PI / 2),
+  ];
+  /** Плоские препятствия героя и пути: предметы склада, декор и лавки (пересобираются, когда меняется одно из них) */
   let solidsCache: Obstacle[] = [], solidsKey: [Obstacle[], number] | null = null;
   const solids = (): Obstacle[] => {
     const p = props.solids;
     if (!solidsKey || solidsKey[0] !== p || solidsKey[1] !== level.decorVersion) {
-      solidsCache = [...p, ...decorSolids(level)];
+      solidsCache = [...p, ...decorSolids(level), ...merchants.map((m) => m.solid)];
       solidsKey = [p, level.decorVersion];
     }
     return solidsCache;
@@ -390,6 +397,7 @@ export function runPlayground(): void {
     if (e.repeat) return;
     // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
     if (inventory.open) { inventory.key(e); return; }
+    if (shop.open) { shop.key(e); return; }
     if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
     keys.add(e.code);
     switch (e.code) {
@@ -397,9 +405,10 @@ export function runPlayground(): void {
       case 'Digit1': case 'Digit2': case 'Digit3': gear.useArtifact(Number(e.code.slice(5)) - 1, aimPoint()); break;
       case 'KeyE': gear.potion(); break;
       case 'KeyF': interactReq = true; break;
-      case 'KeyI': case 'Tab': openInventory(); break;
-      case 'KeyM': toggleMap(); break;
-      case 'Escape': if (hud.mapOpen) toggleMap(); break;
+      case 'KeyI': openInventory(); break;
+      case 'KeyM': hud.toggleMap(); break;
+      case 'Tab': hud.toggleOverlay(); break;
+      case 'Escape': if (hud.mapOpen) hud.toggleMap(); break;
       case 'KeyH': helpOn = !helpOn; helpT = helpOn ? Infinity : 0; break;
       case 'F9': toast(toggleMute() ? 'Звук выключен' : 'Звук включён'); break;
       case 'KeyL': night = !night; applyNight(); toast(night ? 'Ночь' : 'День'); refreshControls(); break;
@@ -635,9 +644,15 @@ export function runPlayground(): void {
   hud.onInventory = openInventory;
   hud.onPotion = () => gear.potion();
   hud.onArtifact = (i) => gear.useArtifact(i, aimPoint());
-  const map = levelMap(level);
-  function toggleMap(): void { if (map) hud.toggleMap(map.canvas); }
-  hud.onMap = toggleMap;
+  // карта с туманом войны: мини в углу, Tab — поверх игры, M — полная (src/hud/automap.ts)
+  const automap = new AutoMap(level);
+  hud.setMap(automap, new URLSearchParams(window.location.search).has('map') ? level.name : 'Плейграунд');
+  hud.onMap = () => hud.toggleMap();
+  let revealAt = '';
+  // торговцы: окно покупок (src/hud/shop.ts)
+  const shop = new Shop(document.body, profile);
+  shop.onClose = () => { lmb = false; rmb = false; keys.clear(); };
+  shop.onSound = (ok) => { if (!scripted) (ok ? sfx.pickup : sfx.empty)(); };
   /** Подсказка по управлению: первые 15 с, потом — по H */
   let helpOn = true;
   let helpT = 15;
@@ -649,7 +664,7 @@ export function runPlayground(): void {
     <div class="pg-fps" id="pgFps"></div>
     <div class="pg-toast" id="pgToast"></div>
     <div class="pg-prompt" id="pgPrompt"></div>
-    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — артефакты · E — зелье · F — использовать · I — инвентарь · M — карта<br>
+    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — артефакты · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры<br>
     F1 параметры · F2 коллайдеры · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · F9 звук · B bloom · U свет · L день/ночь · N сброс · F10 редактор · H — скрыть подсказку</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(dev);
@@ -661,13 +676,21 @@ export function runPlayground(): void {
   function setHTML(id: string, v: string): void { if (cache[id] !== v) { cache[id] = v; $(id).innerHTML = v; } }
 
   function updateHUD(dt: number, fps: number, frameMs: number): void {
-    const near = hero.down ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
+    const trader = hero.down ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
+    const near = hero.down || trader ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
     const promptEl = $('pgPrompt');
-    promptEl.style.display = near && !inventory.open ? '' : 'none';
-    if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
+    promptEl.style.display = (near || trader) && !inventory.open && !shop.open ? '' : 'none';
+    if (trader) setHTML('pgPrompt', `<kbd>F</kbd>Торговать: ${MERCHANT_TITLE[trader.kind].toLowerCase()}`);
+    else if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
     hud.update(gear.hudState(), dt);
     hud.el.classList.toggle('show-hp', showTelemetry);
-    if (map && hud.mapOpen) hud.mapHero((hero.pos.x - map.minX + 0.5) / map.w, (hero.pos.z - map.minZ + 0.5) / map.h);
+    const cell = `${Math.round(hero.pos.x)},${Math.round(hero.pos.z)}`;
+    if (cell !== revealAt) { revealAt = cell; automap.reveal(hero.pos.x, hero.pos.z); }
+    hud.drawMaps({ x: hero.pos.x, z: hero.pos.z, yaw: hero.yaw }, [
+      ...props.supplies.map((c) => ({ x: c.pos.x, z: c.pos.z, icon: 'chest', dim: c.opened })),
+      ...props.terminals.map((t) => ({ x: t.pos.x, z: t.pos.z, icon: 'heart' })),
+      ...merchants.map((m) => ({ x: m.pos.x, z: m.pos.z, icon: m.kind === 'smith' ? 'hammer' : 'berry', always: true })),
+    ], [props.supplies.filter((c) => c.opened).length, props.supplies.length]);
     helpT -= dt;
     $('pgHelp').style.opacity = helpOn && helpT > 0 ? String(Math.min(0.9, helpT)) : '0';
 
@@ -691,7 +714,7 @@ export function runPlayground(): void {
     if (toastT <= 0) $('pgToast').classList.remove('show');
 
     const ret = $('pgRet');
-    const show = mouseSeen && !scripted && !inventory.open && !hud.mapOpen;
+    const show = mouseSeen && !scripted && !inventory.open && !shop.open && !hud.mapOpen;
     ret.style.display = show ? '' : 'none';
     if (show) {
       ret.style.transform = `translate(${mousePx.x}px,${mousePx.y}px)`;
@@ -724,7 +747,9 @@ export function runPlayground(): void {
 
     if (interactReq) {
       interactReq = false;
-      const it = props.nearest(hero.pos, hero.hp, hero.maxHp);
+      const trader = merchants.find((m) => m.near(hero.pos));
+      if (trader && !hero.down) { shop.show(trader.kind); }
+      const it = trader ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
     }
     const healed = props.update(dt, hero);
@@ -732,6 +757,7 @@ export function runPlayground(): void {
     clearEdges();
     if (hero.down) { if (downT === 0) gear.onDown(); downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
     for (const d of dummies) d.update(dt);
+    for (const m of merchants) m.update(dt, hero.pos);
     fx.update(dt, window.innerWidth, window.innerHeight);
   }
 
@@ -748,7 +774,7 @@ export function runPlayground(): void {
     if (fpsAcc > 0.5) { fpsVal = fpsN / fpsAcc; frameMs = (fpsAcc / fpsN) * 1000; fpsAcc = 0; fpsN = 0; }
 
     // инвентарь открыт — игра на паузе, как в одиночной MCD
-    if (!paused && !inventory.open) acc += real * timeScale;
+    if (!paused && !inventory.open && !shop.open) acc += real * timeScale;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     let n = 0;
     while (acc >= STEP && n < 6) { tick(STEP); acc -= STEP; n++; }
@@ -786,6 +812,7 @@ export function runPlayground(): void {
 
     const w = window.innerWidth, h = window.innerHeight;
     for (const d of dummies) d.drawLabel(camera, w, h);
+    for (const m of merchants) m.drawLabel(camera, w, h);
     if (panel.open) panel.sync();
     updateHUD(real, fpsVal, frameMs);
 
@@ -805,7 +832,9 @@ export function runPlayground(): void {
     get solids() { return solids(); },
     get berries() { return profile.data.berries; },
     /** Снаряжение и прокачка: профиль (src/items.ts), бой (src/gear.ts), HUD и инвентарь (src/hud/) */
-    profile, gear, hud, inventory,
+    profile, gear, hud, inventory, shop, merchants, automap,
+    /** Подойти к торговцу и нажать F */
+    trade(kind: 'smith' | 'merchant') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
     /** ПКМ: выстрел к точке */
     shoot(x: number, z: number) { return gear.shoot(new THREE.Vector3(x, hero.pos.y, z)); },
     /** Клавиши 1/2/3: артефакт к точке */

@@ -54,6 +54,8 @@ export class Gear {
   private readonly arrows: Arrow[] = [];
   private readonly totems: Totem[] = [];
   private weaponId = '';
+  private armorId = '-';
+  private bowId = '-';
   /** ?weapon=… из адреса — оружие для отладки поверх надетого */
   weaponOverride: WeaponDef | null = null;
   /** Попадания стрел (для тестов) */
@@ -79,6 +81,11 @@ export class Gear {
       hero.maxHp = max;
       hero.hp = Math.min(max, Math.max(1, Math.round(max * k)));
     }
+    // вид: броня на теле и лук в левой руке
+    const a = this.profile.equipped('armor'), r = this.profile.equipped('ranged');
+    const ak = a?.def ?? '', rk = r?.def ?? '';
+    if (ak !== this.armorId) { this.armorId = ak; hero.setArmor(a ? itemDef(a.def).armor?.look ?? null : null); }
+    if (rk !== this.bowId) { this.bowId = rk; hero.setBow(r ? itemDef(r.def).ranged?.look ?? null : null); }
     hero.speedMul = this.stats.speedMult * (this.speedT > 0 ? this.speedK : 1);
     hero.rollCdMul = this.stats.rollCdMult;
   }
@@ -143,7 +150,7 @@ export class Gear {
     this.shotT = def.cd * s.rangedCdMult;
     const from = hero.pos.clone().setY(hero.pos.y + 1.1);
     const yaw = Math.atan2(at.x - from.x, at.z - from.z);
-    hero.yaw = yaw;
+    hero.shootPose(yaw, Math.max(0.45, this.shotT + 0.15));
     let n = def.shots ?? 1;
     if (s.multishot > 0 && Math.random() < s.multishot) n += 2;
     const dmg = Math.round(def.dmg * s.rangedMult);
@@ -234,13 +241,27 @@ export class Gear {
       case 'lightning': this.lightning(me, R, power); break;
       case 'harvester':
         this.aoe(me, R, power, 1.6, true);
-        this.h.fx.explosion(me.clone().setY(me.y + 0.5), R, new THREE.Color(0.8, 2.6, 3.4));
+        this.magicBoom(me, R, new THREE.Color(0.8, 2.6, 3.4), new THREE.Color(2.2, 1.2, 3.4));
         this.h.sound('souls');
         break;
     }
     this.artT[i] = [a.cd * this.stats.artifactCdMult, a.cd * this.stats.artifactCdMult];
     this.apply();
     return true;
+  }
+
+  /**
+   * Взрыв магии: вспышки, светящиеся искры и кольца — без дыма и обломков fx.explosion
+   * (тёмные кубики дыма у заклинаний выглядели чёрными квадратами)
+   */
+  private magicBoom(at: THREE.Vector3, r: number, a: THREE.Color, b: THREE.Color): void {
+    const fx = this.h.fx, c = at.clone().setY(at.y + 0.6);
+    fx.flash(c, a.clone().multiplyScalar(1.2), Math.min(6, r * 1.6), 0.3);
+    for (let i = 0; i < 4; i++) fx.flash(c.clone().add(new THREE.Vector3((Math.random() - 0.5) * r, Math.random() * 0.8, (Math.random() - 0.5) * r)), (i % 2 ? b : a).clone(), r * 0.6, 0.3 + Math.random() * 0.15);
+    fx.burst(c, [a, b, new THREE.Color(3.2, 3, 2.6)], Math.round(14 + r * 7), { speed: r * 2.6, up: r * 1.2, size: 0.08, life: 0.6, glow: true, gravity: 3 });
+    fx.shock(at, r, a, 0.4, 0.22);
+    fx.shock(at, r * 0.65, b, 0.3, 0.15);
+    fx.shake = Math.max(fx.shake, 0.5);
   }
 
   /** Урон по площади вокруг c (без героя); blast — поджечь бочки */
@@ -282,7 +303,7 @@ export class Gear {
       if (Math.random() < 0.7) fx.burst(p, [new THREE.Color(3.4, 2.2, 0.6)], 1, { speed: 0.6, up: 0.5, size: 0.06, life: 0.3, glow: true, gravity: 0 });
       if (k > 0.97 && !g.userData.boom) {
         g.userData.boom = true;
-        fx.explosion(end.clone().setY(end.y + 0.6), r, new THREE.Color(3.4, 1.2, 2.2));
+        this.magicBoom(end, r, new THREE.Color(3.4, 1.2, 2.2), new THREE.Color(3.4, 3, 0.8));
         fx.burst(end.clone().setY(end.y + 1.2), [new THREE.Color(3.4, 0.8, 1.6), new THREE.Color(0.8, 2.6, 3.4), new THREE.Color(3.4, 3, 0.8)], 40, { speed: 6, up: 4, size: 0.08, life: 0.8, glow: true, gravity: 3 });
         this.aoe(end, r, dmg, 1.8, true);
         this.h.sound('boom');

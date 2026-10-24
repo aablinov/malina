@@ -705,3 +705,106 @@ test('инвентарь: I открывает, надеть клеймор и �
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('malina.profile') || '{}').equip?.melee);
   expect(saved).toBe(clay);
 });
+
+test('броня и лук видны на герое: надел доспех — детали на теле, выстрел — лук в левой руке', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const tunic = m.hero.armorParts;
+    m.profile.equip(m.profile.data.items.find((i: any) => i.def === 'champion').uid);
+    const champ = m.hero.armorParts;
+    m.profile.equip(m.profile.data.items.find((i: any) => i.def === 'soulrobe').uid);
+    const robe = m.hero.armorParts;
+    m.hero.place(0, 4, 0); m.step(0.2);
+    const before = m.hero.bowShown;
+    m.shoot(0, 12); m.step(0.1);
+    const during = m.hero.bowShown;
+    m.step(1.2);
+    return { tunic, champ, robe, before, during, after: m.hero.bowShown };
+  });
+  expect(r.tunic).toBeGreaterThan(0);
+  expect(r.champ).toBeGreaterThan(r.tunic);
+  expect(r.robe).toBeGreaterThan(r.tunic);
+  expect(r.before).toBe(false);
+  expect(r.during).toBe(true);
+  expect(r.after).toBe(false);
+});
+
+test('кузнец и торговец: лавки с именами, F — окно, покупка за малину, перековка, стрелы', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const labels = [...document.querySelectorAll('.npc-label')].map((e) => e.textContent);
+    const opened = m.trade('smith');
+    const b0 = m.berries, n0 = m.profile.data.items.length;
+    const bought = m.shop.buy(0);
+    const got = m.profile.data.items[m.profile.data.items.length - 1];
+    const sword = m.profile.equipped('melee'), p0 = sword.power;
+    const forged = m.profile.reforge(sword.uid, 45);
+    m.shop.hide();
+    m.trade('merchant');
+    const a0 = m.profile.data.arrows;
+    m.shop.buy(1);
+    const arrows = m.profile.data.arrows - a0;
+    m.profile.data.berries = 0;
+    const poor = m.shop.buy(0);
+    m.shop.hide();
+    return { labels, opened, spent: b0 - m.berries, items: m.profile.data.items.length - n0, bought, gotSlot: got.def, forged, power: sword.power - p0, arrows, poor };
+  });
+  expect(r.labels).toEqual(['Кузнец', 'Торговец']);
+  expect(r.opened).toBe(true);
+  expect(r.bought).toBe(true);
+  expect(r.items).toBe(1);
+  expect(['sword', 'axe', 'mace', 'spear', 'claymore', 'dagger', 'hammer', 'scythe']).toContain(r.gotSlot);
+  expect(r.forged).toBe(true);
+  expect(r.power).toBe(1);
+  expect(r.arrows).toBe(24);
+  expect(r.poor).toBe(false);
+  await expect(page.locator('.trade.open')).toHaveCount(0);
+});
+
+test('карта как в Diablo: туман войны открывается по ходу, мини-карта, Tab — поверх игры, M — полная', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.hero.place(0, 4, 0); m.step(0.1); m.render();
+    const e0 = m.automap.explored;
+    m.hero.place(-15, -15, 0); m.step(0.1); m.render();
+    const e1 = m.automap.explored;
+    return { e0, e1, seenFar: m.automap.isSeen(20, 20), mini: (document.querySelector('[data-id="mini"]') as HTMLCanvasElement).width };
+  });
+  expect(r.e0).toBeGreaterThan(0);
+  expect(r.e1).toBeGreaterThan(r.e0);
+  expect(r.seenFar).toBe(false);
+  expect(r.mini).toBeGreaterThan(50);
+  await page.keyboard.press('Tab');
+  await page.evaluate(() => (window as any).__malina.render());
+  await expect(page.locator('.hud-over')).toBeVisible();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('KeyM');
+  await page.evaluate(() => (window as any).__malina.render());
+  await expect(page.locator('.hud-mapwrap.open')).toBeVisible();
+  await expect(page.locator('[data-id="mapStats"]')).toContainText('Сундуков открыто');
+  await page.keyboard.press('KeyM');
+  await expect(page.locator('.hud-mapwrap.open')).toHaveCount(0);
+});
+
+test('затенение AO не рисует спрайты: вспышки заклинаний не дают чёрных квадратов', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.artifact(0, m.hero.pos.x, m.hero.pos.z - 3);
+    m.step(0.5);
+    const sprites: any[] = [];
+    m.look.scene ?? null;
+    let root: any = m.hero.object; while (root.parent) root = root.parent;
+    root.traverse((o: any) => { if (o.isSprite && o.visible) sprites.push(o); });
+    m.look.ao.overrideVisibility();
+    const hidden = sprites.every((s) => !s.visible);
+    m.look.ao.restoreVisibility();
+    return { n: sprites.length, hidden, back: sprites.every((s) => s.visible) };
+  });
+  expect(r.n).toBeGreaterThan(0);
+  expect(r.hidden).toBe(true);
+  expect(r.back).toBe(true);
+});
