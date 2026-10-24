@@ -45,8 +45,10 @@ export const REST: Pose = { low: 0, rear: 0, spread: 0.8, jaw: 0, neck: 1, dip: 
 
 const NECK = 5, TAIL = 12;
 /** Длины звеньев ног: бедро, голень, стопа (высота) */
-const REAR = { thigh: 32, shin: 32, foot: 6 };
-const FRONT = { thigh: 24, shin: 24, foot: 4 };
+const REAR = { thigh: 20, shin: 18, foot: 5 };
+const FRONT = { thigh: 17, shin: 16, foot: 4 };
+/** Центр корпуса над землёй, «пикс.»: стоя брюхо в ~0,7 м от земли, лёжа — на земле */
+const STAND = 28, LIE = 12.5;
 
 interface Leg { hip: THREE.Group; shin: THREE.Group; foot: THREE.Group; s: number; front: boolean }
 
@@ -71,7 +73,7 @@ export class DragonRig {
 
   constructor(private readonly b: Boss, readonly look: DragonLook) {
     const u = this.u = look.size;
-    this.hipH = (REAR.thigh + REAR.shin + REAR.foot) * u;
+    this.hipH = STAND * u;
     this.bodyLen = 64 * u;
     this.throat = glowMat(look.glowA, 0, true);
     this.build();
@@ -195,13 +197,16 @@ export class DragonRig {
       this.wings.push({ arm, tip, s });
     }
 
-    // лапы: задние 16 × 32 × 16 → 12 × 32 × 12 → стопа 18 × 6 × 24; передние вдвое тоньше и короче
+    // лапы рептилии, раскинуты вбок: бедро (плечо) уходит от бока наружу, колено (локоть) смотрит в сторону,
+    // голень опускается к земле снаружи от тела. Задние 12 × 20 × 12 → 9 × 18 × 9 → стопа 14 × 5 × 18, передние тоньше
     for (const [front, s] of [[false, -1], [false, 1], [true, -1], [true, 1]] as [boolean, number][]) {
-      const D = front ? FRONT : REAR, w = front ? 8 : 16, w2 = front ? 6 : 12;
+      const D = front ? FRONT : REAR, w = front ? 9 : 12, w2 = front ? 7 : 9;
       const hip = new THREE.Group();
-      hip.position.set(s * (front ? 12 : 16) * u, 0, (front ? 22 : -22) * u);
+      hip.rotation.order = 'YZX'; // сначала шаг вперёд-назад (Y), потом размах вбок (Z)
+      hip.position.set(s * 11 * u, 0, (front ? 21 : -21) * u);
       this.root.add(hip);
-      B(hip, scale, w, D.thigh, w, 0, -D.thigh / 2 + 2, 0);
+      B(hip, scale, w, D.thigh + 4, w, 0, -D.thigh / 2 + 2, 0);
+      B(hip, dark, w * 0.6, w * 0.6, w * 0.6, 0, -D.thigh, 0);
       const shin = new THREE.Group();
       shin.position.y = -D.thigh * u;
       hip.add(shin);
@@ -209,9 +214,13 @@ export class DragonRig {
       const foot = new THREE.Group();
       foot.position.y = -D.shin * u;
       shin.add(foot);
-      const fw = front ? 8 : 18, fl = front ? 16 : 24;
-      B(foot, scale, fw, D.foot, fl, 0, -D.foot / 2, fl / 2 - 6);
-      for (const c of [-1, 0, 1]) B(foot, claw, 2, 2.4, 4, c * fw * 0.33, -D.foot + 1.2, fl - 4);
+      // стопа — растопыренные пальцы с когтями, чуть развёрнута наружу
+      const fw = front ? 10 : 14, fl = front ? 12 : 16;
+      B(foot, scale, fw, D.foot, fl * 0.6, 0, -D.foot / 2, fl * 0.15);
+      for (const c of [-1, -0.33, 0.33, 1]) {
+        B(foot, scale, 2.6, D.foot * 0.7, fl * 0.55, c * fw * 0.42, -D.foot * 0.6, fl * 0.55, 0, c * 0.35, 0);
+        B(foot, claw, 1.8, 2, 3, c * fw * 0.55, -D.foot * 0.7, fl * 0.85, 0, c * 0.35, 0);
+      }
       this.legs.push({ hip, shin, foot, s, front });
     }
   }
@@ -225,10 +234,13 @@ export class DragonRig {
     for (const key of Object.keys(P) as (keyof Pose)[]) P[key] += (want[key] - P[key]) * k;
     const breath = Math.sin(t * (sleeping ? 1.3 : 2.2)) * 0.03;
     // лёг: брюхо на земле (бедро на высоте полкорпуса)
-    const hipY = this.hipH * (1 - P.low) + 13 * u * P.low;
+    const hipY = this.hipH * (1 - P.low) + LIE * u * P.low;
     this.torso.position.y = hipY + breath + (walk !== null ? Math.abs(Math.sin(walk)) * 0.06 : 0);
     this.torso.rotation.x = -0.45 * P.rear;
     this.torso.rotation.z = walk !== null ? Math.sin(walk) * 0.03 : 0;
+    // ящерица на ходу изгибается: корпус качается вбок, хвост — в противофазе
+    const sway = walk !== null ? Math.sin(walk) * 0.1 : 0;
+    this.torso.rotation.y = sway;
     // шея поднимается звеньями (во сне — сворачивается вбок), голова держит взгляд вперёд
     for (let i = 0; i < NECK; i++) this.neck[i].rotation.set(-0.24 * P.neck + Math.sin(t * 1.7 + i * 0.5) * 0.015, P.side * 0.45 + Math.sin(t * 0.9 + i) * 0.02, 0);
     this.head.rotation.set(0.24 * NECK * P.neck * 0.92 + P.dip + 0.45 * P.rear, P.side * 0.3, 0);
@@ -236,7 +248,7 @@ export class DragonRig {
     // хвост: волна, замах в сторону, во сне — кольцом
     for (let i = 0; i < TAIL; i++) {
       const g = this.tail[i];
-      g.rotation.y = Math.sin(t * 1.5 - i * 0.5) * 0.06 + P.curl * 0.2;
+      g.rotation.y = Math.sin(t * 1.5 - i * 0.5) * 0.06 + P.curl * 0.2 + (walk !== null ? Math.sin(walk - i * 0.45) * -0.07 : 0);
       g.rotation.x = i === 0 ? 0.08 + 0.4 * P.rear - 0.08 * P.low : (i < 4 ? 0.05 : -0.03) * (1 - P.low);
     }
     // крылья: сложены назад вдоль тела ↔ раскрыты вширь; кончик складывается к локтю
@@ -247,24 +259,25 @@ export class DragonRig {
       w.arm.rotation.set(0, w.s * f * 1.35, w.s * (0.55 * P.spread - 0.15 * f + fl));
       w.tip.rotation.set(0, w.s * f * 2.6, w.s * (-0.45 * P.spread - fl * 0.8));
     }
-    // лапы: задние — двухзвенная IK, стопа под бедром и параллельна земле; передние висят, лёжа — опираются
+    // лапы: IK во фронтальной плоскости. Голень почти отвесна (φ от вертикали наружу), бедро — сколько нужно, чтобы
+    // стопа встала на землю: стоя почти горизонтально, лёжа — локтем вверх. Шаг — бедро вперёд-назад по диагонали
+    // (левая передняя с правой задней), стопа на переносе приподнята
+    const pitch = this.torso.rotation.x;
     for (const L of this.legs) {
       const D = L.front ? FRONT : REAR;
-      L.hip.position.y = hipY + (L.front ? -6 * u : -4 * u);
-      const reach = (D.thigh + D.shin) * u, h = Math.max(0.05, L.hip.position.y - D.foot * u);
-      const th = Math.acos(THREE.MathUtils.clamp(h / reach, 0, 1));
-      const sw = walk !== null ? Math.sin(walk + (L.s > 0 ? 0 : Math.PI) + (L.front ? Math.PI : 0)) * 0.35 : 0;
-      if (!L.front) {
-        L.hip.rotation.x = -th + sw;
-        L.shin.rotation.x = 2 * th;
-        L.foot.rotation.x = -th - sw;
-      } else {
-        // передние: стоя поджаты, лёжа — на земле
-        const hang = 1 - P.low;
-        L.hip.rotation.x = THREE.MathUtils.lerp(-th, -0.7 + sw * 0.5, hang) - 0.4 * P.rear;
-        L.shin.rotation.x = THREE.MathUtils.lerp(2 * th, 1.2, hang);
-        L.foot.rotation.x = THREE.MathUtils.lerp(-th, 0.3, hang);
-      }
+      const z = L.hip.position.z;
+      const y = hipY - 4 * u - Math.sin(pitch) * z;
+      L.hip.position.y = y;
+      const a = D.thigh * u, b2 = D.shin * u;
+      const phi = 0.12 + 0.55 * P.low;
+      const ph = walk !== null ? walk + (L.front === (L.s > 0) ? 0 : Math.PI) : 0;
+      const lift = walk !== null ? Math.max(0, Math.cos(ph)) * 0.35 : 0;
+      const h = y - D.foot * u - b2 * Math.cos(phi);
+      const th = Math.acos(THREE.MathUtils.clamp(h / a, -0.6, 1)) + lift;
+      // вперёд по Z: правой лапе (бедро к +X) — поворот по Y отрицательный, левой — положительный
+      L.hip.rotation.set(0, -L.s * (walk !== null ? Math.sin(ph) * 0.42 : 0), L.s * th);
+      L.shin.rotation.z = L.s * (phi - th);
+      L.foot.rotation.z = -L.s * phi;
     }
   }
 }

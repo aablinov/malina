@@ -15,11 +15,13 @@ import { Boss, C, glowMat, rand, RASP, UNIT, wrap, type BossHooks } from './kit'
  */
 
 const FIRE = C(4, 1.4, 0.3), EMBER = C(4, 2.6, 0.8), PINK = C(4, 1.7, 2.4);
-const SPEED = 2.4;
-const TURN = 2.2;
+const SPEED = 4.2;
+const TURN = 3.4;
+/** Прыжки: отскок назад, вбок (сменить позицию) и бросок на героя издалека */
+type LeapKind = 'back' | 'side' | 'pounce';
 const FLY_Y = 17;
 
-type State = 'sleep' | 'wake' | 'idle' | 'walk' | 'bite' | 'tail' | 'breath' | 'hammer' | 'daze' | 'roar' | 'dead';
+type State = 'sleep' | 'wake' | 'idle' | 'walk' | 'bite' | 'tail' | 'breath' | 'hammer' | 'leap' | 'daze' | 'roar' | 'dead';
 
 /** Багровый: чешуя цвета углей и крови, перепонки красные, свет огонь ↔ малина */
 export const CRIMSON_LOOK: DragonLook = {
@@ -36,7 +38,7 @@ interface Burn { pos: THREE.Vector3; t: number; r: number }
 export class CrimsonDragon extends Boss {
   readonly radius = 1.8;
   readonly title = 'Багровый дракон';
-  override readonly topY = 4.5;
+  override readonly topY = 3;
   state: State = 'sleep';
   /** Время в текущем состоянии */
   st = 0;
@@ -46,6 +48,15 @@ export class CrimsonDragon extends Boss {
   private hammerT = 9;
   private breathCd = 2;
   private farT = 0;
+  private leapCd = 1.5;
+  private nearT = 0;
+  private strafe = 1;
+  private strafeT = 2;
+  private readonly leapFrom = new THREE.Vector3();
+  private readonly leapTo = new THREE.Vector3();
+  private leapKind: LeapKind = 'back';
+  private leapDur = 0.6;
+  private leapH = 2;
   private hitDone = false;
   private walkPhase = 0;
   private stepSide = 0;
@@ -172,28 +183,39 @@ export class CrimsonDragon extends Boss {
       }
       case 'idle':
       case 'walk': {
-        this.cd -= dt; this.hammerT -= dt; this.breathCd -= dt;
+        this.cd -= dt; this.hammerT -= dt; this.breathCd -= dt; this.leapCd -= dt; this.strafeT -= dt;
         this.farT = dist > 10.5 ? this.farT + dt : 0;
+        this.nearT = dist < 3.6 ? this.nearT + dt : 0;
         const facing = Math.abs(rel) < 0.45;
+        // герой под самой мордой — отскок назад, не дожидаясь атаки
+        if (this.nearT > 0.5 && this.leapCd <= 0) { this.startLeap('back'); break; }
         if (this.cd <= 0) {
-          if (this.hammerT <= 0 || this.farT > 1.6) { this.startHammer(); break; }
+          if (this.hammerT <= 0 || this.farT > 2.2) { this.startHammer(); break; }
           if (Math.abs(rel) > 1.75 && dist < 6.5) { this.go('tail'); if (!this.quiet) bossSfx.tail(); break; }
           if (facing && dist < 5) { this.go('bite'); if (!this.quiet) bossSfx.bite(); break; }
+          if (facing && dist > 9 && dist < 16 && this.leapCd <= 0 && Math.random() < 0.6) { this.startLeap('pounce'); break; }
           if (facing && dist > 5.5 && dist < 11.5 && this.breathCd <= 0) { this.startBreath(rel); break; }
         }
-        // идёт к герою, если далеко или не лицом; рядом — разворачивается на месте
+        // далеко — бежит к герою; на средней дистанции кружит боком, держа морду к герою; рядом — разворачивается
         this.turnTo(toHero, dt, dist < 5.5 ? 1.4 : 1);
-        if (dist > 4.2 && Math.abs(rel) < 1.2) {
+        if (this.strafeT <= 0) { this.strafeT = rand(1.2, 2.4); this.strafe = Math.random() < 0.5 ? -1 : 1; }
+        const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+        if (dist > 7 && Math.abs(rel) < 1.2) {
           walk = 1;
           const sp = SPEED * this.speedK * dt;
-          this.pos.x += Math.sin(this.yaw) * sp; this.pos.z += Math.cos(this.yaw) * sp;
+          this.pos.x += fx * sp; this.pos.z += fz * sp;
+        } else if (dist > 4.2 && Math.abs(rel) < 1.2) {
+          walk = 1;
+          const sp = SPEED * 0.6 * this.speedK * dt, fwd = dist > 5.2 ? 0.5 : 0;
+          this.pos.x += (fz * this.strafe + fx * fwd) * sp; this.pos.z += (-fx * this.strafe + fz * fwd) * sp;
         }
         this.state = walk ? 'walk' : 'idle';
         break;
       }
+      case 'leap': this.leap(dt, S); break;
       case 'bite': {
         // замах: голова назад, пасть открыта; рывок вперёд и щелчок
-        const W = 0.55 / this.speedK;
+        const W = 0.4 / this.speedK;
         if (S < W) { this.want = { ...REST, neck: 1.35, jaw: 0.8, dip: -0.2, low: 0.15 }; this.turnTo(toHero, dt, 0.8); }
         else if (S < W + 0.18) {
           this.want = { ...REST, neck: 0.05, jaw: 0, dip: 0.35 };
@@ -205,7 +227,8 @@ export class CrimsonDragon extends Boss {
             this.h.fx.shake = Math.max(this.h.fx.shake, 0.3);
           }
         } else this.want = { ...REST, neck: 0.6, dip: 0.2 };
-        if (S > W + 0.8) this.endAttack(0.6);
+        // после укуса часто отпрыгивает вбок — меняет позицию
+        if (S > W + 0.6) { if (this.leapCd <= 0 && Math.random() < 0.45) this.startLeap('side'); else this.endAttack(0.35); }
         break;
       }
       case 'tail': {
@@ -219,7 +242,7 @@ export class CrimsonDragon extends Boss {
           if (!this.hitDone && k > 0.3 && dist < 6.2 + HERO.radius) { this.hitDone = true; this.h.hurtHero(14, this.pos, 10); }
           if (Math.random() < 0.6) this.h.fx.burst(this.tailTip(), [EMBER, FIRE], 2, { speed: 1, up: 1, size: 0.08, life: 0.4, glow: true, gravity: -1 });
         } else this.want = { ...REST, curl: 0.3 };
-        if (S > W + A + 0.55) this.endAttack(0.5);
+        if (S > W + A + 0.4) { if (this.leapCd <= 0 && Math.random() < 0.5) this.startLeap('back'); else this.endAttack(0.3); }
         break;
       }
       case 'breath': this.breathe(dt, S); break;
@@ -255,7 +278,7 @@ export class CrimsonDragon extends Boss {
     this.pos.y = this.flyY;
     // шаги: на каждом полупериоде ходьбы — удар в землю и пыль
     if (walk) {
-      this.walkPhase += dt * 4.2 * this.speedK;
+      this.walkPhase += dt * 6.5 * this.speedK;
       const side = Math.sin(this.walkPhase) > 0 ? 1 : -1;
       if (side !== this.stepSide) {
         this.stepSide = side;
@@ -292,6 +315,59 @@ export class CrimsonDragon extends Boss {
     for (let i = 0; i < 4; i++) this.h.fx.particle({ pos: p.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3) + Math.sin(this.yaw) * k, rand(0.4, 0.9), rand(-0.3, 0.3) + Math.cos(this.yaw) * k), life: rand(0.6, 1.1), size: rand(0.1, 0.18), color: i % 2 ? EMBER : RASP, gravity: -0.5 });
   }
 
+  // ---------- прыжки ----------
+  private startLeap(kind: LeapKind): void {
+    const hero = this.h.hero.pos, a = this.arena;
+    const away = new THREE.Vector3(this.pos.x - hero.x, 0, this.pos.z - hero.z);
+    if (away.lengthSq() < 1e-3) away.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+    away.normalize();
+    const side = new THREE.Vector3(away.z, 0, -away.x).multiplyScalar(Math.random() < 0.5 ? -1 : 1);
+    this.leapFrom.copy(this.pos).setY(0);
+    if (kind === 'back') this.leapTo.copy(this.pos).addScaledVector(away, 7).addScaledVector(side, rand(-2, 2));
+    else if (kind === 'side') this.leapTo.copy(this.pos).addScaledVector(side, 7).addScaledVector(away, 1.5);
+    else this.leapTo.set(hero.x, 0, hero.z).addScaledVector(away, 2.6);
+    // не за стены: если упирается — в другую сторону
+    const inside = (p: THREE.Vector3) => p.x > a.x0 + 2 && p.x < a.x1 - 2 && p.z > a.z0 + 2 && p.z < a.z1 - 2;
+    if (!inside(this.leapTo) && kind !== 'pounce') this.leapTo.copy(this.pos).addScaledVector(side, -7);
+    this.leapTo.x = THREE.MathUtils.clamp(this.leapTo.x, a.x0 + 2, a.x1 - 2);
+    this.leapTo.z = THREE.MathUtils.clamp(this.leapTo.z, a.z0 + 2, a.z1 - 2);
+    this.leapTo.y = 0;
+    this.leapKind = kind;
+    const d = this.leapFrom.distanceTo(this.leapTo);
+    this.leapDur = kind === 'pounce' ? 0.55 + d * 0.025 : 0.5;
+    this.leapH = kind === 'pounce' ? 3.2 : 1.8;
+    this.leapCd = this.phase2 ? 1.6 : 2.4;
+    this.go('leap');
+  }
+
+  private leap(dt: number, S: number): void {
+    const CROUCH = this.leapKind === 'pounce' ? 0.3 : 0.14, fx = this.h.fx, hero = this.h.hero.pos;
+    if (S < CROUCH) {
+      // присел перед прыжком: колени согнуты, крылья вверх
+      this.want = { ...REST, low: 0.45, spread: 1, neck: 0.8, jaw: this.leapKind === 'pounce' ? 0.6 : 0 };
+      if (this.leapKind === 'pounce') this.turnTo(Math.atan2(hero.x - this.pos.x, hero.z - this.pos.z), dt, 2);
+      return;
+    }
+    const k = Math.min(1, (S - CROUCH) / this.leapDur);
+    if (!this.hitDone) { this.hitDone = true; if (!this.quiet) bossSfx.flap(1.2); fx.burst(this.pos.clone().setY(0.2), ['#9a8f70', '#6b5a4a'], 14, { speed: 4, up: 1.2, size: 0.14, life: 0.6, gravity: 5 }); }
+    const e = k < 1 ? 1 - (1 - k) * (1 - k) : 1;
+    this.pos.x = THREE.MathUtils.lerp(this.leapFrom.x, this.leapTo.x, e);
+    this.pos.z = THREE.MathUtils.lerp(this.leapFrom.z, this.leapTo.z, e);
+    this.flyY = Math.sin(Math.PI * k) * this.leapH;
+    // в прыжке морда к герою (отскок и смена позиции), бросок — пасть открыта, лапы вперёд
+    this.turnTo(Math.atan2(hero.x - this.pos.x, hero.z - this.pos.z), dt, 2.5);
+    this.want = { ...REST, spread: 1, neck: this.leapKind === 'pounce' ? 0.4 : 1.1, jaw: this.leapKind === 'pounce' ? 1 : 0, dip: this.leapKind === 'pounce' ? 0.4 : 0, low: 0.2 };
+    if (k < 1) return;
+    // приземление: пыль, тряска; бросок бьёт тех, кто под лапами
+    this.flyY = 0;
+    if (!this.quiet) bossSfx.step(this.leapKind === 'pounce' ? 1.6 : 1);
+    fx.shake = Math.max(fx.shake, this.leapKind === 'pounce' ? 0.7 : 0.35);
+    fx.shock(this.pos.clone().setY(0.08), this.leapKind === 'pounce' ? 3.5 : 2.5, C(1.4, 1.2, 1), 0.4, 0.15);
+    fx.burst(this.pos.clone().setY(0.2), ['#9a8f70', '#6b5a4a', '#8a7a60'], 20, { speed: 5, up: 1.5, size: 0.16, life: 0.7, gravity: 5 });
+    if (this.leapKind === 'pounce' && Math.hypot(hero.x - this.pos.x, hero.z - this.pos.z) < 3.2 + HERO.radius) this.h.hurtHero(16, this.pos, 8);
+    this.endAttack(this.leapKind === 'pounce' ? 0.15 : 0.25);
+  }
+
   // ---------- огненное дыхание ----------
   private startBreath(rel: number): void {
     this.go('breath');
@@ -324,7 +400,7 @@ export class CrimsonDragon extends Boss {
       this.want = { ...REST, neck: 0.75, jaw: 1, spread: 0.7, dip: 0.45, low: 0.1 };
       this.rig.throat.opacity = 1;
       if (!this.hitDone) { this.hitDone = true; if (!this.quiet) bossSfx.breath(A); fx.light(this.mouthPos(), '#ff8030', 14, 12, A + 0.2); }
-      const m = this.mouthPos(), dir = new THREE.Vector3(Math.sin(this.yaw), -0.42, Math.cos(this.yaw)).normalize();
+      const m = this.mouthPos(), dir = new THREE.Vector3(Math.sin(this.yaw), -0.2, Math.cos(this.yaw)).normalize();
       for (let i = 0; i < 6; i++) {
         const v = dir.clone().add(new THREE.Vector3(rand(-0.15, 0.15), rand(-0.08, 0.1), rand(-0.15, 0.15))).multiplyScalar(rand(8, 12));
         fx.particle({ pos: m.clone(), vel: v, life: rand(0.5, 0.8), size: rand(0.18, 0.4), color: Math.random() < 0.3 ? RASP : Math.random() < 0.6 ? FIRE : EMBER, gravity: -1, drag: 1.5 });
