@@ -1065,3 +1065,39 @@ test('страж: квадрат у входа закрывает арену, д
   expect(r.gatesOpen).toBe(true);
   expect(r.reset).toEqual({ arena: 'idle', boss: 'sleep', hp: true, z: -27.5, down: false });
 });
+
+test('страж ловкий: под мордой отскакивает назад прыжком; лапы раскинуты как у рептилии, брюхо низко', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    m.hero.god = true;
+    m.hero.place(0, -32.5, Math.PI);
+    m.step(3.5);
+    // герой стоит вплотную к морде: дракон уходит прыжком, а не топчется
+    const from = m.boss.pos.clone();
+    let leapt = false, high = 0;
+    for (let i = 0; i < 240 && !leapt; i++) {
+      m.hero.place(m.boss.pos.x + Math.sin(m.boss.yaw) * 3, m.boss.pos.z + Math.cos(m.boss.yaw) * 3);
+      m.step(1 / 60);
+      leapt = m.boss.state === 'leap';
+    }
+    for (let i = 0; i < 90 && m.boss.state === 'leap'; i++) { m.step(1 / 60); high = Math.max(high, m.boss.pos.y); }
+    const moved = Math.hypot(m.boss.pos.x - from.x, m.boss.pos.z - from.z);
+    // лапы рептилии: колено вынесено вбок от бедра, брюхо низко над землёй
+    m.step(1.5);
+    const rig = m.boss.rig;
+    rig.root.updateMatrixWorld(true);
+    const inv = rig.root.matrixWorld.clone().invert();
+    const loc = (o: any) => o.getWorldPosition(new V()).applyMatrix4(inv);
+    const leg = rig.legs.find((l: any) => !l.front);
+    const hip = loc(leg.hip), knee = loc(leg.shin);
+    const belly = rig.torso.position.y - 12 * rig.look.size;
+    return { leapt, moved, high, kneeOut: Math.abs(knee.x) - Math.abs(hip.x), belly };
+  });
+  expect(r.leapt).toBe(true);
+  expect(r.moved).toBeGreaterThan(4);
+  expect(r.high).toBeGreaterThan(1.2);
+  expect(r.kneeOut as number).toBeGreaterThan(0.5);
+  expect(r.belly as number).toBeLessThan(1);
+});
