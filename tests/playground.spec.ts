@@ -986,3 +986,82 @@ test('затенение AO не рисует спрайты: вспышки з�
   expect(r.hidden).toBe(true);
   expect(r.back).toBe(true);
 });
+
+test('страж: квадрат у входа закрывает арену, дракон бьёт, молот оглушает (×2), смерть — гримуар; пал — сброс у входа', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    const out: Record<string, unknown> = {};
+    out.sleeping = m.boss.state === 'sleep' && m.arena.state === 'idle' && m.arena.solids.length === 0;
+    // вошёл в невидимый квадрат — решётки поднялись, дракон проснулся, полоса сверху
+    m.hero.place(0, -32.5, Math.PI);
+    m.step(1.2);
+    out.fight = m.arena.state === 'fight' && m.arena.solids.length > 0 && m.bossBar.shown && m.boss.awake;
+    // решётка держит: назад к выходу не пройти
+    m.input.move.set(0, 1);
+    m.step(1.5);
+    m.input.move.set(0, 0);
+    out.heldZ = m.hero.pos.z;
+    // стоит перед драконом — укус снимает здоровье
+    m.step(2);
+    m.hero.hp = m.hero.maxHp;
+    m.hero.place(m.boss.pos.x, m.boss.pos.z + 3.2, Math.PI);
+    m.boss.yaw = 0; m.boss.cd = 0;
+    for (let i = 0; i < 480 && m.hero.hp > m.hero.maxHp - 10; i++) { m.step(1 / 60); m.hero.place(m.boss.pos.x + Math.sin(m.boss.yaw) * 3.2, m.boss.pos.z + Math.cos(m.boss.yaw) * 3.2); }
+    out.bitten = m.hero.maxHp - m.hero.hp;
+    // Небесный молот: взлетает (в небе мечом не достать), падает, оглушён — сердце открыто, урон ×2
+    m.hero.god = true;
+    m.boss.startHammer();
+    m.step(1.0);
+    out.flying = m.boss.pos.y > 5;
+    const hp0 = m.boss.hp;
+    m.boss.hit(10, new V(0, 0, 1), m.boss.pos.clone(), 0);
+    out.airHit = hp0 - m.boss.hp;
+    let dazed = false;
+    for (let i = 0; i < 240 && !dazed; i++) { m.step(1 / 60); dazed = m.boss.state === 'daze' && m.boss.heartOpen; }
+    out.dazed = dazed;
+    const hp1 = m.boss.hp;
+    m.boss.hit(10, new V(0, 0, 1), m.boss.pos.clone(), 0);
+    out.heartHit = hp1 - m.boss.hp;
+    // меньше половины — ярость (фаза 2)
+    m.step(2);
+    m.boss.hit(m.boss.hp - m.boss.maxHp * 0.4, new V(0, 0, 1), m.boss.pos.clone(), 0);
+    out.phase2 = m.boss.phase2;
+    // смерть: тело рассыпается, сердце лопается — гримуар; подойти — заклинание в инвентаре
+    const had = m.profile.data.items.filter((i: { def: string }) => i.def === 'meteor').length;
+    m.boss.hit(99999, new V(0, 0, 1), m.boss.pos.clone(), 0);
+    m.step(3);
+    out.won = m.arena.state;
+    out.grimoires = m.grimoires.length;
+    m.step(2);
+    const g = m.grimoires[0];
+    m.hero.place(g.pos.x, g.pos.z);
+    m.step(0.2);
+    out.gotSpell = m.profile.data.items.filter((i: { def: string }) => i.def === 'meteor').length - had;
+    out.gatesOpen = m.arena.solids.length === 0 && !m.bossBar.shown;
+    // N — арена заново; герой пал — дракон спит, героя ставит у входа
+    m.resetTargets();
+    m.hero.god = false;
+    m.hero.place(0, -32.5, Math.PI);
+    m.step(0.5);
+    m.hero.hurt(9999);
+    m.step(3);
+    out.reset = { arena: m.arena.state, boss: m.boss.state, hp: m.boss.hp === m.boss.maxHp, z: m.hero.pos.z, down: m.hero.down };
+    return out;
+  });
+  expect(r.sleeping).toBe(true);
+  expect(r.fight).toBe(true);
+  expect(r.heldZ as number).toBeLessThan(-30.2);
+  expect(r.bitten as number).toBeGreaterThan(10);
+  expect(r.flying).toBe(true);
+  expect(r.airHit).toBe(0);
+  expect(r.dazed).toBe(true);
+  expect(r.heartHit).toBe(20);
+  expect(r.phase2).toBe(true);
+  expect(r.won).toBe('won');
+  expect(r.grimoires).toBe(1);
+  expect(r.gotSpell).toBe(1);
+  expect(r.gatesOpen).toBe(true);
+  expect(r.reset).toEqual({ arena: 'idle', boss: 'sleep', hp: true, z: -27.5, down: false });
+});
