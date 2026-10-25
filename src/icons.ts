@@ -9,6 +9,10 @@ import { ICONS as DARK_ARCANE_ICONS } from './magic/dark-arcane-icons';
 import { ICONS as EARTH_ICONS } from './magic/earth-icons';
 import { ICONS as FIRE_ICE_ICONS } from './magic/fire-ice-icons';
 import { ICONS as STORM_LIGHT_ICONS } from './magic/storm-light-icons';
+import { ICONS as BASE_FIRE_ICONS } from './magic/base-fire-icons';
+import { ICONS as BASE_SUMMON_ICONS } from './magic/base-summon-icons';
+import { ICONS as BASE_BLOOD_ICONS } from './magic/base-blood-icons';
+import { ICONS as BASE_LIGHT_ICONS } from './magic/base-light-icons';
 
 export type Draw = (p: Pen) => void;
 
@@ -58,7 +62,7 @@ function blade(p: Pen, x0: number, y0: number, x1: number, y1: number, hi: strin
 }
 
 const ICONS: Record<string, Draw> = {
-  ...FIRE_ICE_ICONS, ...STORM_LIGHT_ICONS, ...DARK_ARCANE_ICONS, ...EARTH_ICONS, ...AURA_ICONS,
+  ...FIRE_ICE_ICONS, ...STORM_LIGHT_ICONS, ...DARK_ARCANE_ICONS, ...EARTH_ICONS, ...AURA_ICONS, ...BASE_FIRE_ICONS, ...BASE_SUMMON_ICONS, ...BASE_BLOOD_ICONS, ...BASE_LIGHT_ICONS,
   // ---------- ближний бой ----------
   sword(p) {
     blade(p, 7, 8, 14, 1, STEEL[0], STEEL[2]);

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Textures } from './textures';
 import { FxPool } from './pool';
 import { Bolts, Cubes } from './fx-bolts';
+import { Streaks, type StreakOptions } from './fx-streaks';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -173,6 +174,20 @@ const PLANE_C = (): THREE.PlaneGeometry => planeC ??= markShared(new THREE.Plane
 /** Слот пула временных тел: материал свой на слот (цвет и прозрачность правятся), геометрия общая */
 interface Slot<M extends THREE.Material> { obj: THREE.Mesh<THREE.BufferGeometry, M> | THREE.Sprite; mat: M; gen: number }
 
+const WHITE = new THREE.Color(1, 1, 1);
+/** Стена кольца: открытый цилиндр высотой 1 от земли вверх, текстура — яркий низ, тающий вверх */
+let wallGeo: THREE.CylinderGeometry | null = null;
+const WALL = (): THREE.CylinderGeometry => wallGeo ??= markShared(new THREE.CylinderGeometry(1, 1, 1, 48, 1, true).translate(0, 0.5, 0) as THREE.CylinderGeometry);
+let wallT: THREE.CanvasTexture | null = null;
+function wallTex(): THREE.CanvasTexture {
+  if (wallT) return wallT;
+  const c = document.createElement('canvas'); c.width = 4; c.height = 64;
+  const g = c.getContext('2d')!, gr = g.createLinearGradient(0, 64, 0, 0);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.15, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 64);
+  return wallT = new THREE.CanvasTexture(c);
+}
+
 /** Вспышка настоящего света: точечный источник из пула */
 const SHOCK_COLOR = new THREE.Color(3, 0.6, 1.2);
 
@@ -185,6 +200,8 @@ export class FX {
   private readonly bolts: Bolts;
   private readonly cubes: Cubes;
   private readonly cubesSolid: Cubes;
+  /** Ленты-шлейфы по кривым (src/fx-streaks.ts) */
+  private readonly streaks: Streaks;
   private readonly transients: Transient[] = [];
   /** Пулы временных тел: кольца, вспышки, дуги, черты, декали — ничего не создаётся в бою */
   private readonly shocks: FxPool<Slot<THREE.MeshBasicMaterial>>;
@@ -243,6 +260,7 @@ export class FX {
     this.bolts = new Bolts(scene);
     this.cubes = new Cubes(scene, 512, true);
     this.cubesSolid = new Cubes(scene, 256, false);
+    this.streaks = new Streaks(scene, camera);
     for (let i = 0; i < 3; i++) {
       const light = new THREE.PointLight('#ffffff', 0, 10, 1.4);
       light.position.set(0, -50, 0);
@@ -399,6 +417,32 @@ export class FX {
     this.pooled(this.shocks, s, dur, (k) => { m.scale.setScalar(0.3 + radius * Math.sqrt(k)); mat.opacity = 1 - k; });
   }
 
+  /** Светящаяся лента за головой, летящей по path (src/fx-streaks.ts) */
+  streak(o: StreakOptions): void { this.streaks.add(o); }
+  get streakCount(): number { return this.streaks.count; }
+
+  /**
+   * Сочное кольцо: широкий мягкий ореол, яркий тонкий обод с белым и полупрозрачная стена света над ним,
+   * тающая вверх (как кольца у артефактов MCD). Подпись как у shock
+   */
+  ring(pos: THREE.Vector3, radius: number, color: THREE.Color = SHOCK_COLOR, dur = 0.45, thick = 0.15, wall = 1): void {
+    radius *= 0.92 + Math.random() * 0.18;
+    // цвет насыщенный: слабые составляющие ниже 1, иначе наложение колец выгорает в белое пятно
+    const k = 1 / Math.max(1, color.r, color.g, color.b);
+    this.shock(pos, radius, color.clone().multiplyScalar(0.55 * k * 1.6), dur * 1.1, Math.min(0.6, thick * 2.6));
+    this.shock(pos, radius * 1.02, color.clone().multiplyScalar(k * 1.25).lerp(WHITE, 0.15), dur, Math.max(0.03, thick * 0.35));
+    if (wall <= 0) return;
+    const mat = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(0.15 * k * 1.6), map: wallTex(), transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false });
+    const m = new THREE.Mesh(WALL(), mat);
+    m.position.copy(pos); m.position.y += 0.05;
+    m.renderOrder = 4;
+    this.custom(m, dur * 1.15, (t) => {
+      const r = 0.3 + radius * Math.sqrt(t);
+      m.scale.set(r, wall * (0.35 + 0.7 * (1 - t)) * Math.min(1.3, 0.4 + radius * 0.2), r);
+      mat.opacity = (1 - t) * (1 - t);
+    });
+  }
+
   /** Круглая вспышка-ореол */
   flash(pos: THREE.Vector3, color: THREE.Color, size = 1.4, dur = 0.18): void {
     const sl = this.flashes.acquire();
@@ -469,6 +513,7 @@ export class FX {
     this.bolts.update(dt);
     this.cubes.update(dt);
     this.cubesSolid.update(dt);
+    this.streaks.update(dt);
     for (let i = this.transients.length - 1; i >= 0; i--) {
       const tr = this.transients[i];
       tr.t += dt;

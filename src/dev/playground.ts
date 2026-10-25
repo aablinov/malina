@@ -362,7 +362,7 @@ export function runPlayground(): void {
       if (!m) continue;
       // смотрят на вход, видят героя вблизи
       m.yaw = Math.atan2(room.spec.enter.x - p.x, room.spec.enter.z - p.z);
-      m.aggro = 5;
+      m.aggro = Math.min(m.aggro, 5);
     }
   }
   for (const r of mobRooms) fillRoom(r);
@@ -447,7 +447,7 @@ export function runPlayground(): void {
       fx.burst(point, finisher ? [new THREE.Color(3.4, 2.6, 1.1), '#e8c35a'] : [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 10, { speed: 4, up: 2.5, size: 0.09, life: 0.45, glow: true, gravity: 8 });
       // закалка: вспышка и эффект каждого зачарования (огонь, капли, души, разряд…) — src/weapon-arts.ts
       gear.arts.onHitTarget(t, point, dir, d.crit, finisher);
-      gear.onHit(d.dmg, true, t.pos);
+      gear.onHit(d.dmg, true, t.pos, t);
       smite ||= !finisher && gear.stats.smiteChance > 0 && Math.random() < gear.stats.smiteChance;
     }
     if (smite) {

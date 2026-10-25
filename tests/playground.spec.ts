@@ -841,6 +841,58 @@ test('заклинания с боссов: все 21 творятся с пол
   expect(r.scale).toBeCloseTo(1, 2);
 });
 
+test('базовые заклинания: 10 у героя, бьют, кровь стоит здоровья, голем держит моба', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const ids = ['firewall', 'firestorm', 'armageddon', 'wolves', 'elemental', 'golem', 'bloodclaws', 'bloodswarm', 'bloodblade', 'blindflash'];
+    const p = m.profile;
+    const inBag = ids.every((id) => p.data.items.some((i: any) => i.def === id));
+    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const res: Record<string, { cast: boolean; hits: number; paid: number }> = {};
+    for (const id of ids) {
+      m.pack.clear();
+      m.resetTargets(); m.hero.revive(); m.hero.god = false;
+      m.hero.place(d.pos.x + 3.5, d.pos.z, -Math.PI / 2); m.step(0.1);
+      const it = p.data.items.find((i: any) => i.def === id);
+      p.equip(it.uid, 0);
+      m.gear.artT[0][0] = 0;
+      const h0 = d.hits, hp0 = m.hero.hp;
+      const cast = m.artifact(0, d.pos.x, d.pos.z, 1);
+      const paid = hp0 - m.hero.hp;
+      // малиновый клинок — усиление: бьём мечом сами
+      if (id === 'bloodblade') for (let j = 0; j < 4; j++) { m.gear.onHit(10, true, d.pos, d); m.step(0.2); }
+      m.step(4);
+      res[id] = { cast, hits: d.hits - h0, paid };
+      m.step(id === 'golem' ? 16 : id === 'elemental' ? 12 : id === 'wolves' ? 9 : 2);
+    }
+    // голем перетягивает моба: тот целится в голема, а не в героя
+    m.pack.clear(); m.resetTargets(); m.hero.revive(); m.hero.god = false;
+    m.hero.place(2, 8, Math.PI / 2); m.step(0.1);
+    const g = p.data.items.find((i: any) => i.def === 'golem');
+    p.equip(g.uid, 0); m.gear.artT[0][0] = 0;
+    const mob = m.spawnMob('hammer', 9, 8);
+    m.artifact(0, 5, 8, 0); m.step(1.5);
+    const focused = !!mob.focus;
+    m.step(18.5);
+    const freed = !mob.focus;
+    m.pack.clear();
+    return { inBag, res, focused, freed };
+  });
+  expect(errors).toEqual([]);
+  expect(r.inBag).toBe(true);
+  for (const [id, v] of Object.entries(r.res)) {
+    expect(v.cast, id).toBe(true);
+    expect(v.hits, id).toBeGreaterThan(0);
+    if (id.startsWith('blood')) expect(v.paid, id).toBeGreaterThan(0);
+  }
+  expect(r.focused).toBe(true);
+  // голем растворился — моб снова смотрит на героя
+  expect(r.freed).toBe(true);
+});
+
 test('ауры: двенадцать в инвентаре, гнездо R, эффекты, вспышка ×3 по шкале', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
@@ -1111,7 +1163,8 @@ test('кузнец и торговец: лавки с именами, F — ок
     const spellList = m.shop.list.map((w: any) => w.key);
     const spellBought = m.shop.buy(spellList[0]);
     const spellGot = m.profile.data.items[m.profile.data.items.length - 1].def;
-    const shopSpells = ['ashcrown', 'frostridge', 'stormcloud', 'skullscythe', 'raspberrybush'];
+    const shopSpells = ['ashcrown', 'frostridge', 'stormcloud', 'skullscythe', 'raspberrybush',
+      'firewall', 'firestorm', 'armageddon', 'wolves', 'elemental', 'golem', 'bloodclaws', 'bloodswarm', 'bloodblade', 'blindflash'];
     let lootSpell = false;
     for (let i = 0; i < 300; i++) if (shopSpells.includes(m.profile.rollLoot().def)) lootSpell = true;
     m.shop.setTab('melee');
@@ -1341,7 +1394,7 @@ test('масштаб стражей: здоровье, урон и малина 
 const MOB_IDS = ['healer', 'pyro', 'summoner', 'squire', 'shield', 'berryling', 'gardener', 'wolf',
   'spear', 'crossbow', 'banner', 'hammer', 'slime', 'hedgehog', 'vine', 'bud', 'horror',
   'reaper', 'archer', 'wisp', 'scarecrow', 'boarlet', 'beetle', 'spider', 'hive',
-  'druseling', 'pot', 'obelisk', 'mimic', 'keg'];
+  'druseling', 'pot', 'obelisk', 'mimic', 'keg', 'soller'];
 
 test('мобы: каждый задевает героя, падает от меча и роняет малину', async ({ page }) => {
   await open(page);
@@ -1482,7 +1535,7 @@ test('комнаты мобов: казарма, Терновый сад, пог
     out.refilled = B.mobs.length === (out.count as number[])[0] && B.mobs.every((x: any) => !x.dead && !x.alerted);
     return out;
   });
-  expect(r.kinds).toEqual(['archer', 'banner', 'beetle', 'berryling', 'boarlet', 'bud', 'crossbow', 'druseling', 'gardener', 'hammer', 'healer', 'hedgehog', 'hive', 'horror', 'keg', 'mimic', 'obelisk', 'pot', 'pyro', 'reaper', 'scarecrow', 'shield', 'slime', 'spear', 'spider', 'squire', 'summoner', 'vine', 'wisp', 'wolf']);
+  expect(r.kinds).toEqual(['archer', 'banner', 'beetle', 'berryling', 'boarlet', 'bud', 'crossbow', 'druseling', 'gardener', 'hammer', 'healer', 'hedgehog', 'hive', 'horror', 'keg', 'mimic', 'obelisk', 'pot', 'pyro', 'reaper', 'scarecrow', 'shield', 'slime', 'soller', 'spear', 'spider', 'squire', 'summoner', 'vine', 'wisp', 'wolf']);
   expect(r.count).toEqual([22, 10, 9, 7, 10]);
   expect(r.door).toBe(0);
   expect(r.groups).toEqual({ berryling: true, wolf: true, shield: true, healer: true, hammer: true });
@@ -1717,4 +1770,83 @@ test('мобы четвёртой партии: обелиск держит ку
   expect(r.loot).toBe(true);
   expect(r.druse).toBe(true);
   expect(r.pot).toBe(true);
+});
+
+test('Соллер: славит солнце под лучом, просыпается в 6 м, серия мечом и копьё, молитва лечит и срывается, герой ушёл — снова на посту', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    const out: Record<string, unknown> = {};
+    // на Солнечной поляне стоит один Соллер
+    const glade = m.mobRooms.find((x: any) => x.spec.id === 'glade').pack;
+    out.glade = glade.mobs.map((x: any) => x.kind);
+    m.pack.clear();
+    m.hero.god = true;
+    m.hero.place(0, 8);
+    const s = m.spawnMob('soller', 8, 8);
+    m.step(0.6);
+    out.idle = { praising: s.praising, beam: s.shine > 0.8, alerted: s.alerted };
+    // в 7 м не видит, в 5,5 м — опускает руки, луч гаснет
+    m.hero.place(8, 15);
+    m.step(0.3);
+    const far = s.alerted;
+    m.hero.place(8, 13.5);
+    m.step(0.3);
+    const near = s.alerted && !s.praising;
+    m.step(1);
+    out.wake = { far, near, beamOff: s.shine < 0.3 };
+    // вплотную — серия мечом задевает героя
+    m.hero.god = false;
+    let lost = 0, combo = false;
+    for (let j = 0; j < 4 * 30; j++) {
+      m.hero.hp = Math.max(m.hero.hp, 80);
+      m.hero.place(s.pos.x + Math.sin(s.yaw) * 1.5, s.pos.z + Math.cos(s.yaw) * 1.5);
+      const hp = m.hero.hp;
+      m.step(1 / 30);
+      lost += Math.max(0, hp - m.hero.hp);
+      combo ||= s.attack === 'combo';
+    }
+    out.combo = combo && lost >= 10;
+    // издали — копьё по полосе
+    s.state = 'idle'; s.cd = 0; s.spearCd = 0;
+    const hp0 = m.hero.hp = 100;
+    m.hero.place(s.pos.x + Math.sin(s.yaw) * 9, s.pos.z + Math.cos(s.yaw) * 9);
+    const spot = m.hero.pos.clone();
+    let spear = false;
+    for (let j = 0; j < 4 * 30; j++) { m.hero.place(spot.x, spot.z); m.step(1 / 30); spear ||= s.attack === 'spear'; }
+    out.spear = spear && m.hero.hp < hp0;
+    m.hero.god = true;
+    // ниже половины — молитва: луч вернулся, лечит; удар срывает; второй раз не молится
+    s.state = 'idle'; s.cd = 0;
+    s.hp = s.maxHp * 0.4;
+    m.hero.place(s.pos.x + Math.sin(s.yaw) * 2, s.pos.z + Math.cos(s.yaw) * 2);
+    for (let j = 0; j < 60 && s.attack !== 'praise'; j++) m.step(1 / 30);
+    const hpPray = s.hp;
+    m.step(1.2);
+    out.praise = { started: s.attack === 'praise', healed: s.hp > hpPray + 1, beam: s.shine > 0.5 };
+    s.hit(5, new V(0, 0, 1), s.pos.clone(), 0);
+    m.step(0.05);
+    out.broken = s.state === 'daze';
+    s.cd = 0;
+    let again = false;
+    for (let j = 0; j < 3 * 30; j++) { m.step(1 / 30); again ||= s.state === 'attack' && s.attack === 'praise'; }
+    out.again = again;
+    // герой ушёл далеко — Соллер идёт на пост, здоровье полное, снова славит солнце
+    m.hero.place(-14, -8);
+    for (let j = 0; j < 10 * 30 && (s.homing || s.alerted || s.state === 'attack'); j++) m.step(1 / 30);
+    m.step(0.3);
+    out.home = { atPost: Math.hypot(s.pos.x - 8, s.pos.z - 8) < 0.5, full: s.hp === s.maxHp, praising: s.praising, alerted: s.alerted };
+    m.pack.clear();
+    return out;
+  });
+  expect(r.glade).toEqual(['soller']);
+  expect(r.idle).toEqual({ praising: true, beam: true, alerted: false });
+  expect(r.wake).toEqual({ far: false, near: true, beamOff: true });
+  expect(r.combo).toBe(true);
+  expect(r.spear).toBe(true);
+  expect(r.praise).toEqual({ started: true, healed: true, beam: true });
+  expect(r.broken).toBe(true);
+  expect(r.again).toBe(false);
+  expect(r.home).toEqual({ atPost: true, full: true, praising: true, alerted: false });
 });

@@ -27,7 +27,9 @@ export type BossSpellKind =
   | 'meteor' | 'flameserpent' | 'ashcrown' | 'icetomb' | 'frostridge' | 'absolutezero'
   | 'thunderspear' | 'thunderleap' | 'stormcloud' | 'starfall' | 'starbeam' | 'judgement'
   | 'deadchoir' | 'gravitywell' | 'skullscythe' | 'fallenguards'
-  | 'rift' | 'raspberrybush' | 'titanform' | 'bladephalanx' | 'blink';
+  | 'rift' | 'raspberrybush' | 'titanform' | 'bladephalanx' | 'blink'
+  // базовые: огонь, призыв, малиновая кровь, свет — у торговца (src/magic/base-*.ts)
+  | 'firewall' | 'firestorm' | 'armageddon' | 'wolves' | 'elemental' | 'golem' | 'bloodclaws' | 'bloodswarm' | 'bloodblade' | 'blindflash';
 export type ArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning' | 'spark' | 'fireball' | 'icerain' | 'heal' | BossSpellKind;
 export type PerkKind = 'souls' | 'artifactDmg' | 'cooldown' | 'meleeDmg' | 'rangedDmg' | 'speed' | 'potion' | 'roll' | 'arrows';
 
@@ -209,6 +211,17 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'skullscythe', slot: 'artifact', spell: 'shop', title: 'Коса-череп', rarity: 'common', icon: 'skullscythe', description: 'Летящий череп: врагу — урон, герою — немного жизни.', artifact: A('skullscythe', 5, 30, { radius: 14, charge: 0.7, info: 'Череп: {v} урона, дальность {r} м' }) },
   { id: 'fallenguards', slot: 'artifact', spell: 'boss', title: 'Павшие стражи', rarity: 'rare', icon: 'fallenguards', description: 'Три призрачных рыцаря выходят из порталов и сражаются рядом.', artifact: A('fallenguards', 30, 12, { duration: 15, souls: 50, charge: 1.2, info: 'Стражи: {v} урона за удар, {d} с' }) },
   { id: 'rift', slot: 'artifact', spell: 'boss', title: 'Разлом', rarity: 'rare', icon: 'rift', description: 'Трещина бежит вперёд, из неё вырастают каменные шипы.', artifact: A('rift', 10, 40, { radius: 10, charge: 1, info: 'Разлом: {v} урона по линии {r} м' }) },
+  // базовые заклинания — src/magic/base-*.ts; не слишком сильные, все у торговца
+  { id: 'firewall', slot: 'artifact', spell: 'shop', title: 'Огненная стена', rarity: 'common', icon: 'firewall', description: 'Поперёк пути к курсору встаёт стена огня и жжёт всех, кто в ней или идёт сквозь. Держи клавишу — стена длиннее и жарче.', artifact: A('firewall', 10, 8, { radius: 5, duration: 4, charge: 1, info: 'Стена {r} м: {v} урона каждые 0,5 с, {d} с' }) },
+  { id: 'firestorm', slot: 'artifact', spell: 'shop', title: 'Огненный ураган', rarity: 'common', icon: 'firestorm', description: 'Огненный смерч медленно катится к курсору, затягивает и замедляет врагов.', artifact: A('firestorm', 12, 6, { radius: 1.8, duration: 4, charge: 1, info: 'Смерч: {v} урона каждые 0,3 с, −30 % скорости, {d} с' }) },
+  { id: 'armageddon', slot: 'artifact', spell: 'shop', title: 'Малый армагеддон', rarity: 'common', icon: 'armageddon', description: 'Три секунды вокруг героя падают огненные шары.', artifact: A('armageddon', 16, 14, { radius: 5, duration: 3, charge: 1.1, info: 'Дождь шаров: {v} урона каждый, круг {r} м, {d} с' }) },
+  { id: 'wolves', slot: 'artifact', spell: 'shop', title: 'Стая волков', rarity: 'common', icon: 'wolves', description: 'Из порталов выбегают волки и гонят ближайших врагов; укус замедляет. Держи клавишу — волков трое.', artifact: A('wolves', 20, 8, { duration: 12, charge: 1, info: 'Волки: {v} урона за укус, {d} с' }) },
+  { id: 'elemental', slot: 'artifact', spell: 'shop', title: 'Малый элементаль', rarity: 'common', icon: 'elemental', description: 'Рядом парит элементаль и стреляет огоньками; стихия меняется по очереди — огонь, лёд, молния.', artifact: A('elemental', 22, 10, { radius: 6, duration: 15, charge: 1, info: 'Элементаль: {v} урона за огонёк, {d} с' }) },
+  { id: 'golem', slot: 'artifact', spell: 'shop', title: 'Каменный голем', rarity: 'common', icon: 'golem', description: 'Медленный каменный голем бьёт кулаком в землю и держит врагов на себе.', artifact: A('golem', 28, 18, { radius: 2, duration: 18, charge: 1.1, info: 'Голем: {v} урона по кругу {r} м, оглушение, {d} с' }) },
+  { id: 'bloodclaws', slot: 'artifact', spell: 'shop', title: 'Малиновые когти', rarity: 'common', icon: 'bloodclaws', description: 'Перед героем из земли вырываются три когтя малинового пламени. Стоит здоровья, копит кровотечение.', artifact: A('bloodclaws', 5, 22, { radius: 3, charge: 0.8, info: 'Когти: {v} урона, кровотечение; цена — 6 % здоровья' }) },
+  { id: 'bloodswarm', slot: 'artifact', spell: 'shop', title: 'Рой малинок', rarity: 'common', icon: 'bloodswarm', description: 'Поток крошечных малиновых мушек конусом жалит и копит кровотечение. Стоит здоровья.', artifact: A('bloodswarm', 6, 4, { radius: 5, duration: 1.5, charge: 0.8, info: 'Рой: {v} урона за укус, {d} с; цена — 8 % здоровья' }) },
+  { id: 'bloodblade', slot: 'artifact', spell: 'shop', title: 'Малиновый клинок', rarity: 'common', icon: 'bloodblade', description: 'Оружие покрывается малиновым соком: удары сильнее и копят кровотечение. Стоит здоровья.', artifact: A('bloodblade', 25, 10, { duration: 15, charge: 1, info: 'Клинок: +{v}% урона мечом и кровотечение, {d} с; цена — 10 % здоровья' }) },
+  { id: 'blindflash', slot: 'artifact', spell: 'shop', title: 'Ослепляющая вспышка', rarity: 'common', icon: 'blindflash', description: 'Вспышка света вокруг героя: урон, отброс и оглушение рядовых врагов (боссов — нет).', artifact: A('blindflash', 14, 12, { radius: 4, duration: 1.5, charge: 0.9, info: 'Вспышка: {v} урона в радиусе {r} м, оглушение {d} с' }) },
   { id: 'raspberrybush', slot: 'artifact', spell: 'shop', title: 'Малиновый куст', rarity: 'common', icon: 'raspberrybush', description: 'Колючий куст держит врагов, а потом лопается ягодами, которые лечат.', artifact: A('raspberrybush', 12, 20, { radius: 3, duration: 4, charge: 0.9, info: 'Куст: {v} урона колючками, лечит ягодами' }) },
   { id: 'titanform', slot: 'artifact', spell: 'boss', title: 'Облик титана', rarity: 'unique', icon: 'titanform', description: 'Герой становится огромным каменным великаном: удары трясут землю.', artifact: A('titanform', 40, 60, { duration: 10, charge: 1.5, info: 'Титан: +{v}% урона, −50% получаемого, {d} с' }) },
   { id: 'bladephalanx', slot: 'artifact', spell: 'boss', title: 'Фаланга клинков', rarity: 'rare', icon: 'bladephalanx', description: 'Над головой веером раскрываются семь призрачных мечей и летят по очереди.', artifact: A('bladephalanx', 10, 20, { radius: 14, charge: 1, info: 'Клинки: 7 × {v} урона' }) },
@@ -223,6 +236,8 @@ export const AURAS = ['pact', 'bastion', 'rage', 'clarity', 'thorns', 'inferno',
 export const SHOP_SPELLS = (): string[] => ITEMS.filter((d) => d.spell === 'shop').map((d) => d.id);
 /** Заклинания с боссов — пока боссов нет, лежат в инвентаре с начала */
 const BOSS_SPELL_IDS = (): string[] => ITEMS.filter((d) => d.spell === 'boss' && d.slot === 'artifact').map((d) => d.id);
+/** Базовые заклинания (src/magic/base-*.ts): продаёт торговец, а в плейграунде они у героя с начала */
+export const BASE_SPELLS = ['firewall', 'firestorm', 'armageddon', 'wolves', 'elemental', 'golem', 'bloodclaws', 'bloodswarm', 'bloodblade', 'blindflash'];
 
 export const itemDef = (id: string): ItemDef => {
   const d = ITEMS.find((x) => x.id === id);
@@ -436,7 +451,7 @@ export class Profile {
     const add = STARTER_SPELLS.filter((d) => !have.has(d));
     // пока боссов нет — ауры и заклинания с боссов кладём в инвентарь, чтобы их можно было примерить
     // плейграунд: всё оружие ближнего боя — в инвентаре, новое оружие тоже доходит до старых сохранений
-    const extra = [...AURAS, ...BOSS_SPELL_IDS(), ...ITEMS.filter((d) => d.slot === 'melee').map((d) => d.id)].filter((d) => !have.has(d));
+    const extra = [...AURAS, ...BOSS_SPELL_IDS(), ...BASE_SPELLS, ...ITEMS.filter((d) => d.slot === 'melee').map((d) => d.id)].filter((d) => !have.has(d));
     if (!add.length && !extra.length) return;
     for (const d of add) {
       const it = this.add(d, 1);
@@ -455,6 +470,7 @@ export class Profile {
     for (const [def, power] of [
       ['icerain', 1], ['firework', 1], ['totem', 1], ...AURAS.map((id): [string, number] => [id, 1]),
       ...BOSS_SPELL_IDS().map((id): [string, number] => [id, 1]),
+      ...BASE_SPELLS.map((id): [string, number] => [id, 1]),
       ['claymore', 3], ['axe', 2], ['dagger', 2], ['hammer', 3], ['scythe', 4], ['mace', 1], ['spear', 2],
       ['katana', 3], ['nagakiba', 4], ['dragonslayer', 4], ['pontiff', 4], ['staff', 3], ['halberd', 3], ['rapier', 2], ['knuckles', 2],
       ['crossbow', 2], ['longbow', 3], ['twinbow', 4],
