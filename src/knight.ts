@@ -119,6 +119,8 @@ export class Knight {
   rollCdT = 0;
   /** Множители снаряжения (src/gear.ts): скорость ходьбы и перезарядка переката */
   speedMul = 1;
+  /** Замедление от зон на полу (паутина мобов), 0..1 — выставляется каждый тик */
+  slow = 0;
   /** Множитель получаемого урона (аура «Бастион») */
   dmgTakenMul = 1;
   rollCdMul = 1;
@@ -430,7 +432,7 @@ export class Knight {
       if (this.rollT <= 0) { this.rollT = 0; this.vel.multiplyScalar(H.walk / (H.rollDist / H.rollTime)); }
       this.yaw = Math.atan2(this.rollDir.x, this.rollDir.z);
     } else {
-      let target = H.walk * this.speedMul;
+      let target = H.walk * this.speedMul * (1 - this.slow);
       if (this.attacking) target *= H.attackMove;
       const want = moveDir ? moveDir.clone().multiplyScalar(target * Math.min(1, mv.length())) : new THREE.Vector3();
       const diff = want.clone().sub(this.vel);

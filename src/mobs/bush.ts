@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { resolveCircle } from '../collision';
 import { pixelTex } from '../textures';
 import { boom, hiss, voice } from '../spell-audio';
 import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit';
@@ -168,12 +167,8 @@ export class ThornBall extends Mob {
     }
     if (t < 0.7) return false;
     // катится 11 м/с до конца полосы или до стены
-    const step = 11 * dt;
-    this.move(this.dir, step);
-    this.rolled += step;
-    const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
-    resolveCircle(p, this.radius, this.h.obstacles());
-    const blocked = Math.hypot(p.x - this.pos.x, p.z - this.pos.z) > step * 0.5;
+    const blocked = this.dash(this.dir, 11, dt);
+    this.rolled += 11 * dt;
     // задел героя — сбил с ног и остановился
     if (this.inCircle(this.pos, this.radius + 0.2)) { this.hurt(9, this.pos, 6); if (!this.quiet) boom(200, 80, 0.2, 0.25); return true; }
     if (Math.random() < 0.5) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1, rand(-1, 1)), life: 0.3, size: 0.08, color: '#8a6a40', gravity: 6 });
