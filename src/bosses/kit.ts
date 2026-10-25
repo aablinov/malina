@@ -4,6 +4,7 @@ import type { FX } from '../fx';
 import type { Knight } from '../knight';
 import type { Terrain } from '../level/collide.ts';
 import type { Target } from '../target';
+import { HERO } from '../tuning';
 import { dmgMult, hpMult, lootMult, type BossScale } from './scaling';
 
 /**
@@ -142,6 +143,20 @@ export abstract class Boss implements Target {
     return m;
   }
 
+  protected fwd(): THREE.Vector3 { return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
+  protected move(dir: THREE.Vector3, d: number): void { this.pos.x += dir.x * d; this.pos.z += dir.z * d; }
+  protected heroAt(): THREE.Vector3 { return this.h.hero.pos.clone().setY(0); }
+
+  // ---------- урон герою ----------
+  /** Герой в круге */
+  protected inCircle(c: THREE.Vector3, r: number): boolean { const p = this.h.hero.pos; return Math.hypot(p.x - c.x, p.z - c.z) < r + HERO.radius; }
+  /** Герой в полосе от from вдоль dir длиной len, шириной w */
+  protected inLine(from: THREE.Vector3, dir: THREE.Vector3, len: number, w: number): boolean {
+    const p = this.h.hero.pos, dx = p.x - from.x, dz = p.z - from.z;
+    const along = dx * dir.x + dz * dir.z, side = Math.abs(dx * dir.z - dz * dir.x);
+    return along > -HERO.radius && along < len + HERO.radius && side < w / 2 + HERO.radius;
+  }
+  protected hurt(dmg: number, from: THREE.Vector3, knock = 4): void { this.h.hurtHero(dmg, from, knock); }
   /** Герой в конусе перед точкой from: half — полуугол, рад */
   protected inCone(from: THREE.Vector3, yaw: number, range: number, half: number): boolean {
     const p = this.h.hero.pos, dx = p.x - from.x, dz = p.z - from.z, d = Math.hypot(dx, dz);

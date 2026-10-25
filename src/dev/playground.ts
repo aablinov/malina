@@ -19,12 +19,14 @@ import { surfaceAt } from '../level/kit.ts';
 import { worldSource } from '../world/gen.ts';
 import { RegionManager } from '../world/regions.ts';
 import { mapSource, STREAM_CHUNKS } from '../world/map-source.ts';
-import { BOSS_ARENAS, type PgLabel } from '../level/playground-map.ts';
+import { BARRACKS, BARRACKS_POSTS, BOSS_ARENAS, type PgLabel } from '../level/playground-map.ts';
 import { Arena } from '../bosses/arena';
 import { BossBar } from '../bosses/boss-bar';
 import { MINI_BOSSES } from '../bosses/roster';
 import type { MiniBoss } from '../bosses/mini';
 import { Grimoire } from '../bosses/grimoire';
+import { Pack } from '../mobs/pack';
+import { MOBS, SQUADS } from '../mobs/roster';
 import { HERO, SWORD, snapshotTuning } from '../tuning';
 import { onWeaponChange, pickWeapon } from '../weapons';
 import { itemDef, Profile } from '../items';
@@ -334,6 +336,30 @@ export function runPlayground(): void {
     arenas.push(arena);
     bossIds.push(spec.id);
   }
+  // рядовые мобы Ордена (src/mobs/, wiki/design-mobs.md): выходят по кнопкам F1, малина с павших — кучкой
+  const pack = new Pack(bossHooks, (at, n) => props.berries(at, n));
+  /** Отряд в 9 м перед героем */
+  function spawnSquad(kinds: readonly string[]): void {
+    const f = new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw));
+    pack.squad(kinds, hero.pos.clone().setY(0).addScaledVector(f, 9), kinds.length > 4 ? 3.5 : 2);
+  }
+  // казарма Ордена за западной стеной: гарнизон стоит на постах и просыпается, когда герой рядом (5 м);
+  // все пали, а герой вышел — казарма снова полна
+  const barracks = new Pack(bossHooks, (at, n) => props.berries(at, n));
+  /** Казарма есть только на карте плейграунда */
+  const garrison = !new URLSearchParams(window.location.search).has('map');
+  function fillBarracks(): void {
+    barracks.clear();
+    if (!garrison) return;
+    for (const p of BARRACKS_POSTS) {
+      const m = barracks.spawn(p.kind, new THREE.Vector3(p.x, 0, p.z));
+      if (!m) continue;
+      // смотрят на вход, видят героя вблизи
+      m.yaw = Math.PI / 2;
+      m.aggro = 5;
+    }
+  }
+  fillBarracks();
   // масштаб стражей (src/bosses/scaling.ts): уровень — по уровню героя или из панели F1, число игроков — из панели
   let bossLevelPick: 'hero' | string = 'hero';
   let bossPlayers = 1;
@@ -345,6 +371,8 @@ export function runPlayground(): void {
     if (key === scaleKey) return;
     scaleKey = key;
     for (const b of bosses) b.setScale(bossLevel(), bossPlayers);
+    pack.setScale(bossLevel(), bossPlayers);
+    barracks.setScale(bossLevel(), bossPlayers);
   }
   rescaleBosses();
   const grimoires: Grimoire[] = [];
@@ -380,6 +408,7 @@ export function runPlayground(): void {
   const targets = (): Target[] => {
     const list: Target[] = [...dummies, ...props.targets];
     for (const b of bosses) if (b.awake) list.push(...b.targets());
+    list.push(...pack.targets(), ...barracks.targets());
     return list;
   };
   let lastStrike: { s: Strike; t: number } | null = null;
@@ -741,6 +770,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     props.reset();
     for (const a of arenas) a.reset();
     for (const g of grimoires.splice(0)) g.dispose();
+    pack.clear();
+    fillBarracks();
     toast('Чучела и склад на местах');
   }
 
@@ -764,6 +795,14 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     row2.className = 'pg-btnrow';
     c.appendChild(row2);
     for (const spec of BOSS_ARENAS) button(row2, `Страж: ${spec.title}`, () => hero.place(spec.exit.x, spec.exit.z, spec.exit.yaw));
+    // рядовые мобы: отряд перед героем
+    const row3 = document.createElement('div');
+    row3.className = 'pg-btnrow';
+    c.appendChild(row3);
+    button(row3, 'Мобы: первая партия', () => spawnSquad(SQUADS.first));
+    for (const [id, def] of Object.entries(MOBS)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
+    button(row3, 'Убрать мобов', () => pack.clear());
+    button(row3, 'Казарма Ордена', () => hero.place(BARRACKS.x1 + 4, 0, -Math.PI / 2));
     // масштаб стражей: уровень и число игроков
     refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
     refreshers.push(select(c, 'Игроков', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']], () => String(bossPlayers), (v) => { bossPlayers = Number(v); rescaleBosses(); }));
@@ -916,6 +955,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (hero.down) { if (downT === 0) gear.onDown(); downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
+    pack.update(dt);
+    // казарма думает, когда герой рядом или гарнизон в бою
+    if (hero.pos.x < BARRACKS.x1 + 30 || barracks.mobs.some((m) => m.alerted)) barracks.update(dt);
+    if (garrison && hero.pos.x > BARRACKS.x1 + 3 && barracks.mobs.every((m) => m.dead)) fillBarracks();
     if (arenas.length) {
       rescaleBosses();
       for (const a of arenas) a.update(dt, hero);
@@ -1034,6 +1077,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Встать у ворот стража (id арены: cauldron, boar, …) */
     /** Масштаб стражей: уровень (число или 'hero') и число игроков */
     bossScale(level: number | 'hero', players = bossPlayers) { bossLevelPick = String(level); bossPlayers = players; rescaleBosses(); return { level: bossLevel(), players: bossPlayers }; },
+    /** Рядовые мобы (src/mobs/): pack.mobs; вызвать моба в точку */
+    pack,
+    /** Казарма Ордена: гарнизон на постах (BARRACKS_POSTS), refill — заново */
+    barracks, fillBarracks,
+    spawnMob(kind: string, x: number, z: number) { return pack.spawn(kind, new THREE.Vector3(x, 0, z)); },
     toBoss(id: string) { const s = BOSS_ARENAS.find((a) => a.id === id); if (s) hero.place(s.exit.x, s.exit.z, s.exit.yaw); return !!s; },
     /** Эффекты: стоп-кадр, засветка, свет заклинаний */
     fx,
