@@ -107,7 +107,13 @@ export class Level {
     if (c[i] === code) return;
     c[i] = code;
     this.version++;
-    this.bounds = null;
+    // границы растут на месте, без обхода всех клеток; стирание их не сужает (надмножество безопасно: это диапазон поиска)
+    if (id !== 0 && this.bounds) {
+      const b = this.bounds;
+      if (x < b.minX) b.minX = x; if (x > b.maxX) b.maxX = x;
+      if (y < b.minY) b.minY = y; if (y > b.maxY) b.maxY = y;
+      if (z < b.minZ) b.minZ = z; if (z > b.maxZ) b.maxZ = z;
+    }
     // перестроить этот чанк и соседние, если клетка на границе
     const cx = x >> 4, cy = y >> 4, cz = z >> 4;
     this.dirty.add(key);
@@ -115,6 +121,45 @@ export class Level {
     if (lx === 0) this.dirty.add(chunkKey(cx - 1, cy, cz)); else if (lx === 15) this.dirty.add(chunkKey(cx + 1, cy, cz));
     if (ly === 0) this.dirty.add(chunkKey(cx, cy - 1, cz)); else if (ly === 15) this.dirty.add(chunkKey(cx, cy + 1, cz));
     if (lz === 0) this.dirty.add(chunkKey(cx, cy, cz - 1)); else if (lz === 15) this.dirty.add(chunkKey(cx, cy, cz + 1));
+  }
+
+  /** Положить готовый чанк (копия из карты-источника, src/world/map-source.ts): палитры должны совпадать */
+  putChunk(key: string, data: Uint16Array): void {
+    this.chunks.set(key, data);
+    this.version++;
+    const [cx, cy, cz] = key.split(',').map(Number);
+    this.dirty.add(key);
+    for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+      const nk = chunkKey(cx + dx, cy + dy, cz + dz);
+      if (this.chunks.has(nk)) this.dirty.add(nk);
+    }
+    if (this.bounds) {
+      const b = this.bounds;
+      b.minX = Math.min(b.minX, cx * CH); b.maxX = Math.max(b.maxX, cx * CH + CH - 1);
+      b.minY = Math.min(b.minY, cy * CH); b.maxY = Math.max(b.maxY, cy * CH + CH - 1);
+      b.minZ = Math.min(b.minZ, cz * CH); b.maxZ = Math.max(b.maxZ, cz * CH + CH - 1);
+    }
+  }
+
+  /** Та же палитра, что у другого уровня (чтобы копировать чанки без перекодирования) */
+  adoptPalette(from: Level): void { for (const name of from.palette) this.idOf(name); }
+
+  /** Убрать чанк целиком (выгрузка региона, src/world/regions.ts): рендер его снесёт, границы остаются надмножеством */
+  removeChunk(key: string): boolean {
+    if (!this.chunks.delete(key)) return false;
+    this.dirty.add(key);
+    this.version++;
+    return true;
+  }
+
+  /** Ключи чанков региона 32 × 32 м (2 × 2 чанка по X и Z, все по Y) */
+  chunkKeysOf(rx: number, rz: number): string[] {
+    const out: string[] = [];
+    for (const k of this.chunks.keys()) {
+      const [cx, , cz] = k.split(',').map(Number);
+      if ((cx >> 1) === rx && (cz >> 1) === rz) out.push(k);
+    }
+    return out;
   }
 
   /** Заполнить параллелепипед (включительно) */
