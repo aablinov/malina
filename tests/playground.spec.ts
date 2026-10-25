@@ -841,14 +841,14 @@ test('заклинания с боссов: все 21 творятся с пол
   expect(r.scale).toBeCloseTo(1, 2);
 });
 
-test('ауры: пять в инвентаре, гнездо R, эффекты, вспышка ×3 по шкале', async ({ page }) => {
+test('ауры: двенадцать в инвентаре, гнездо R, эффекты, вспышка ×3 по шкале', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     m.resetTargets(); m.hero.revive(); m.hero.god = false;
     const p = m.profile, g = m.gear, au = g.auras;
     const uid = (def: string) => p.data.items.find((i: any) => i.def === def).uid;
-    const bag = ['pact', 'bastion', 'rage', 'clarity', 'thorns'].every((d) => p.data.items.some((i: any) => i.def === d));
+    const bag = ['pact', 'bastion', 'rage', 'clarity', 'thorns', 'inferno', 'frost', 'storm', 'halo', 'shade', 'quake', 'blades'].every((d) => p.data.items.some((i: any) => i.def === d));
     const emptySlot = p.data.equip.aura === null && !!document.querySelector('.hud-aura.empty');
     // ярость: урон выше, вспышка — только с полной шкалой, ×3, потом назад
     const base = g.stats.meleeMult;
@@ -896,6 +896,71 @@ test('ауры: пять в инвентаре, гнездо R, эффекты, 
   expect(r.thornsHit).toBe(true);
   expect(r.clarity).toBeCloseTo(0.75, 2);
   expect(r.flares).toBe(1);
+});
+
+test('наступательные ауры: бьют врагов рядом, шкала вполовину, холод, тень, заморозка вспышкой', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    m.resetTargets(); m.pack.clear(); m.hero.revive(); m.hero.god = true;
+    const p = m.profile, g = m.gear, au = g.auras, off = au.offense;
+    const uid = (def: string) => p.data.items.find((i: any) => i.def === def).uid;
+    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const out: Record<string, { dealt: number; hits: number; procs: number }> = {};
+    // каждая аура задевает чучело в 1,3 м; ореолу нужны удары героя
+    for (const id of ['inferno', 'frost', 'storm', 'halo', 'shade', 'quake', 'blades']) {
+      p.equip(uid(id)); m.step(0.1);
+      m.hero.place(d.pos.x + 1.3, d.pos.z, -Math.PI / 2); m.step(0.1);
+      const h0 = d.hits, dealt0 = off.dealt, procs0 = off.procs;
+      if (id === 'halo') for (let i = 0; i < 4; i++) { g.onHit(10, true, d.pos.clone()); m.step(0.1); }
+      // тень сама бьёт только во вспышке — пьёт жизнь
+      if (id === 'shade') { au.meter = 1e9; m.step(0.05); m.flare(); }
+      m.step(3.5);
+      out[id] = { dealt: off.dealt - dealt0, hits: d.hits - h0, procs: off.procs - procs0 };
+    }
+    // шкала: урон самой ауры — вполовину
+    p.equip(uid('inferno')); m.step(0.1);
+    au.meter = 0; const dl0 = off.dealt;
+    m.step(1.6);
+    const meterK = au.meter / Math.max(1, off.dealt - dl0);
+    // стужа: волк рядом замедлен, вспышка — заморожен
+    m.hero.place(30, 30, 0); m.step(0.1);
+    p.equip(uid('frost')); m.step(0.1);
+    const w = m.spawnMob('wolf', 31.5, 30); m.step(1.2);
+    const chilled = w.chillT > 0 && w.pace < w.speed;
+    au.meter = 1e9; m.step(0.05);
+    const flared = m.flare(); m.step(0.1);
+    const frozen = w.state === 'daze';
+    m.step(5.5);
+    // тень: новый волк рядом ослаблен (первого стужа уже доела)
+    m.pack.clear();
+    p.equip(uid('shade')); m.step(0.1);
+    const w2 = m.spawnMob('wolf', 31.5, 30); m.step(1.2);
+    const exposed = w2.exposeT > 0 && w2.exposeK > 0.1;
+    // бочки и ящики аура не трогает
+    m.pack.clear();
+    const barrel = m.props.barrels?.[0];
+    let barrelSafe = true;
+    if (barrel) {
+      p.equip(uid('inferno')); m.step(0.1);
+      const hp0 = barrel.hp;
+      m.hero.place(barrel.pos.x + 1.2, barrel.pos.z, 0); m.step(1.5);
+      barrelSafe = barrel.hp === hp0;
+    }
+    return { out, meterK, chilled, flared, frozen, exposed, barrelSafe };
+  });
+  for (const [id, v] of Object.entries(r.out)) {
+    expect(v.dealt, id).toBeGreaterThan(0);
+    // молния бьёт случайного врага в 5 м — рядом есть и другие чучела
+    if (id !== 'storm') expect(v.hits, id).toBeGreaterThan(0);
+    expect(v.procs, id).toBeGreaterThan(0);
+  }
+  expect(r.meterK).toBeCloseTo(0.5, 1);
+  expect(r.chilled).toBe(true);
+  expect(r.flared).toBe(true);
+  expect(r.frozen).toBe(true);
+  expect(r.exposed).toBe(true);
+  expect(r.barrelSafe).toBe(true);
 });
 
 test('инвентарь: I открывает, надеть клеймор и броню, зачаровать за очки, разобрать за малину', async ({ page }) => {

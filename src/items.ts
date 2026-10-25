@@ -99,10 +99,12 @@ export interface ArtifactStats {
 }
 
 /** Ауры (wiki/design-spells.md, раздел 4): действуют всегда, по шкале — вспышка ×3 */
-export type AuraKind = 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns';
+export type AuraKind = 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns' | OffenseKind;
+/** Наступательные ауры (src/aura-offense.ts): сами бьют врагов вокруг героя */
+export type OffenseKind = 'inferno' | 'frost' | 'storm' | 'halo' | 'shade' | 'quake' | 'blades';
 export interface AuraStats {
   kind: AuraKind;
-  /** Сила эффекта, % при силе предмета 1 */
+  /** Сила эффекта, % при силе предмета 1; у наступательных — урон за раз (у «Голодной тени» — % ослабления) */
   value: number;
   /** Радиус: союзники в нём получают эффект, м */
   radius: number;
@@ -181,6 +183,14 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'rage', slot: 'aura', spell: 'boss', title: 'Ярость', rarity: 'unique', icon: 'a-rage', description: 'Оружие тлеет, удары бьют сильнее и чаще бывают сокрушительными.', aura: { kind: 'rage', value: 15, radius: 8 } },
   { id: 'clarity', slot: 'aura', spell: 'boss', title: 'Ясность', rarity: 'unique', icon: 'a-clarity', description: 'Голубые огоньки ускоряют мысль: заклинания и артефакты перезаряжаются быстрее, души липнут к рукам.', aura: { kind: 'clarity', value: 25, radius: 8 } },
   { id: 'thorns', slot: 'aura', spell: 'boss', title: 'Терновый венец', rarity: 'unique', icon: 'a-thorns', description: 'Колючие лозы под ногами хлещут каждого, кто бьёт героя вблизи.', aura: { kind: 'thorns', value: 30, radius: 8 } },
+  // наступательные ауры — src/aura-offense.ts
+  { id: 'inferno', slot: 'aura', spell: 'boss', title: 'Горнило', rarity: 'unique', icon: 'a-inferno', description: 'Вокруг героя тлеет кольцо углей и жжёт каждого, кто подойдёт.', aura: { kind: 'inferno', value: 3, radius: 8 } },
+  { id: 'frost', slot: 'aura', spell: 'boss', title: 'Стужа', rarity: 'unique', icon: 'a-frost', description: 'Иней стелется по земле: враги рядом мёрзнут и вязнут в холоде.', aura: { kind: 'frost', value: 2, radius: 8 } },
+  { id: 'storm', slot: 'aura', spell: 'boss', title: 'Грозовой венец', rarity: 'unique', icon: 'a-storm', description: 'По доспеху бегут искры, а молния сама находит врага и перескакивает дальше.', aura: { kind: 'storm', value: 8, radius: 8 } },
+  { id: 'halo', slot: 'aura', spell: 'boss', title: 'Карающий ореол', rarity: 'unique', icon: 'a-halo', description: 'Золотой нимб над головой: каждый четвёртый удар зовёт луч с неба.', aura: { kind: 'halo', value: 12, radius: 8 } },
+  { id: 'shade', slot: 'aura', spell: 'boss', title: 'Голодная тень', rarity: 'unique', icon: 'a-shade', description: 'Тень у ног слабит врагов рядом, а во вспышке тянет из них жизнь.', aura: { kind: 'shade', value: 15, radius: 8 } },
+  { id: 'quake', slot: 'aura', spell: 'boss', title: 'Каменная поступь', rarity: 'unique', icon: 'a-quake', description: 'Земля под героем вздрагивает и раз в несколько секунд отбрасывает врагов.', aura: { kind: 'quake', value: 10, radius: 8 } },
+  { id: 'blades', slot: 'aura', spell: 'boss', title: 'Вихрь клинков', rarity: 'unique', icon: 'a-blades', description: 'Призрачные мечи кружат вокруг героя и режут всех, кого заденут.', aura: { kind: 'blades', value: 4, radius: 8 } },
   // заклинания — src/magic/; редкость: обычное → common (продаёт торговец), редкое → rare, легендарное и мифическое → unique (с боссов)
   { id: 'meteor', slot: 'artifact', spell: 'boss', title: 'Небесный молот', rarity: 'rare', icon: 'meteor', description: 'С неба падает пылающий камень: кратер, оглушение и горящая земля.', artifact: A('meteor', 14, 70, { radius: 3.5, charge: 1.2, info: 'Метеор: {v} урона в радиусе {r} м' }) },
   { id: 'flameserpent', slot: 'artifact', spell: 'boss', title: 'Пламенный змей', rarity: 'unique', icon: 'flameserpent', description: 'Огненный змей ползёт по земле, петляет между врагами и оставляет горящую колею.', artifact: A('flameserpent', 18, 22, { radius: 1.6, duration: 3.5, charge: 1.2, info: 'Змей: {v} урона за касание, {d} с' }) },
@@ -208,7 +218,7 @@ export const ITEMS: readonly ItemDef[] = [
 
 /** Стартовые заклинания (wiki/design-spells.md, раздел 2) */
 export const STARTER_SPELLS = ['fireball', 'spark', 'heal', 'icerain'] as const;
-export const AURAS = ['pact', 'bastion', 'rage', 'clarity', 'thorns'] as const;
+export const AURAS = ['pact', 'bastion', 'rage', 'clarity', 'thorns', 'inferno', 'frost', 'storm', 'halo', 'shade', 'quake', 'blades'] as const;
 /** Заклинания, которые продаёт торговец (обычные) */
 export const SHOP_SPELLS = (): string[] => ITEMS.filter((d) => d.spell === 'shop').map((d) => d.id);
 /** Заклинания с боссов — пока боссов нет, лежат в инвентаре с начала */
@@ -443,7 +453,7 @@ export class Profile {
     const eq = (def: string, power: number): string => p.add(def, power, false).uid;
     p.data.equip = { melee: eq('sword', 1), armor: eq('tunic', 1), ranged: eq('bow', 1), artifacts: [eq('fireball', 1), eq('spark', 1), eq('heal', 1)], aura: null };
     for (const [def, power] of [
-      ['icerain', 1], ['firework', 1], ['totem', 1], ['pact', 1], ['bastion', 1], ['rage', 1], ['clarity', 1], ['thorns', 1],
+      ['icerain', 1], ['firework', 1], ['totem', 1], ...AURAS.map((id): [string, number] => [id, 1]),
       ...BOSS_SPELL_IDS().map((id): [string, number] => [id, 1]),
       ['claymore', 3], ['axe', 2], ['dagger', 2], ['hammer', 3], ['scythe', 4], ['mace', 1], ['spear', 2],
       ['katana', 3], ['nagakiba', 4], ['dragonslayer', 4], ['pontiff', 4], ['staff', 3], ['halberd', 3], ['rapier', 2], ['knuckles', 2],

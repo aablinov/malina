@@ -59,6 +59,9 @@ export abstract class Boss implements Target {
   yaw = 0;
   /** Всего получено урона (для тестов) */
   taken = 0;
+  /** Ослаблен аурой «Голодная тень»: урон по нему ×(1 + exposeK), осталось exposeT с */
+  exposeK = 0;
+  exposeT = 0;
   /** Вызывается один раз, когда здоровье кончилось: где лопнуло сердце */
   onDeath?: (at: THREE.Vector3) => void;
   protected flashT = 0;
@@ -98,13 +101,19 @@ export abstract class Boss implements Target {
 
   hit(dmg: number, _dir: THREE.Vector3, point: THREE.Vector3, _knock: number): void {
     if (this.dead || !this.awake) return;
-    const v = this.heartOpen ? dmg * 2 : dmg;
+    const v = (this.heartOpen ? dmg * 2 : dmg) * (this.exposeT > 0 ? 1 + this.exposeK : 1);
     if (this.heartOpen) this.h.fx.text(point.clone().setY(point.y + 0.6), 'сердце! ×2', 'crit');
     this.hp = Math.max(0, this.hp - v);
     this.taken += v;
     this.flashT = 0.1;
     this.onHurt(v);
     if (this.hp <= 0) { this.dead = true; this.die(); }
+  }
+
+  expose(k: number, sec: number): void {
+    if (this.dead) return;
+    this.exposeK = this.exposeT > 0 ? Math.max(this.exposeK, k) : k;
+    this.exposeT = Math.max(this.exposeT, sec);
   }
 
   /** Материал тела: вспыхивает белым от удара */
@@ -126,6 +135,7 @@ export abstract class Boss implements Target {
   protected tickLook(dt: number, boost: number): void {
     this.time += dt;
     this.flashT = Math.max(0, this.flashT - dt);
+    this.exposeT -= dt;
     for (const m of this.flashMats) m.emissive.setScalar(this.flashT > 0 ? 0.6 : 0);
     for (const s of this.shimmers) {
       const k = 0.5 + 0.5 * Math.sin(this.time * s.speed + s.phase);

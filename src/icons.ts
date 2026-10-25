@@ -4,6 +4,7 @@
  * с image-rendering: pixelated. Внешних картинок нет (как и у текстур).
  */
 
+import { ICONS as AURA_ICONS } from './aura-icons';
 import { ICONS as DARK_ARCANE_ICONS } from './magic/dark-arcane-icons';
 import { ICONS as EARTH_ICONS } from './magic/earth-icons';
 import { ICONS as FIRE_ICE_ICONS } from './magic/fire-ice-icons';
@@ -57,7 +58,7 @@ function blade(p: Pen, x0: number, y0: number, x1: number, y1: number, hi: strin
 }
 
 const ICONS: Record<string, Draw> = {
-  ...FIRE_ICE_ICONS, ...STORM_LIGHT_ICONS, ...DARK_ARCANE_ICONS, ...EARTH_ICONS,
+  ...FIRE_ICE_ICONS, ...STORM_LIGHT_ICONS, ...DARK_ARCANE_ICONS, ...EARTH_ICONS, ...AURA_ICONS,
   // ---------- ближний бой ----------
   sword(p) {
     blade(p, 7, 8, 14, 1, STEEL[0], STEEL[2]);
