@@ -47,7 +47,8 @@ export class OrderJudge extends MiniBoss {
   override readonly topY = 4.6;
   readonly drop = 'judgement';
   override readonly tier = 'boss' as const;
-  override readonly aura = 'bastion';
+  /** Ауры на выбор после победы, шанс % — щит Ордена или карающий свет */
+  override readonly auras = [['bastion', 50], ['halo', 50]] as const;
   private readonly torso = new THREE.Group();
   private readonly head = new THREE.Group();
   private readonly swordArm = new THREE.Group();

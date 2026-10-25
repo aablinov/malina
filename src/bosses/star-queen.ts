@@ -46,7 +46,8 @@ export class StarQueen extends MiniBoss {
   override readonly topY = 4.6;
   readonly drop = 'starfall';
   override readonly tier = 'boss' as const;
-  override readonly aura = 'clarity';
+  /** Ауры на выбор после победы, шанс % — звёздный сад: ясность, клинки, холод ночи */
+  override readonly auras = [['clarity', 40], ['blades', 30], ['frost', 30]] as const;
   private readonly head = new THREE.Group();
   private readonly arms: THREE.Group[] = [];
   private readonly staff = new THREE.Group();

@@ -53,7 +53,8 @@ export class ThunderBeast extends MiniBoss {
   override readonly topY = 3.4;
   readonly drop = 'thunderleap';
   override readonly tier = 'boss' as const;
-  override readonly aura = 'rage';
+  /** Ауры на выбор после победы, шанс % — молния или ярость зверя */
+  override readonly auras = [['storm', 50], ['rage', 50]] as const;
   private readonly trunk = new THREE.Group();
   private readonly head = new THREE.Group();
   private readonly jaw = new THREE.Group();

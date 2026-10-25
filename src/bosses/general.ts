@@ -44,7 +44,8 @@ export class GeneralRdyan extends MiniBoss {
   override readonly topY = 5.4;
   readonly drop = 'gravitywell';
   override readonly tier = 'boss' as const;
-  override readonly aura = 'thorns';
+  /** Ауры на выбор после победы, шанс % — терн, тень гравитации, кратер метеора */
+  override readonly auras = [['thorns', 40], ['shade', 30], ['quake', 30]] as const;
   private readonly horse = new THREE.Group();
   private readonly legsF = new THREE.Group();
   private readonly legsB = new THREE.Group();

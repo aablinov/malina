@@ -1,3 +1,4 @@
+import { auraLines } from '../aura-offense';
 import { iconImg, iconURL } from '../icons';
 import { armorHealth, ITEMS, itemDef, PERK_TEXT, powerMult, PRICE, RARITY, SLOT_TITLE, type Item, type ItemDef, type ItemSlot, type Profile } from '../items';
 import { MERCHANT_TITLE, type MerchantKind } from '../merchants';
@@ -133,7 +134,7 @@ export class Shop {
     this.el.querySelector('.trade-grid .it.sel')?.scrollIntoView({ block: 'nearest' });
   }
 
-  /** Товары вкладки: по цене, дешёвые первыми; заклинания с боссов и стартовые не продаются */
+  /** Товары вкладки: по цене, дешёвые первыми; заклинания с боссов, стартовые и ауры (падают с боссов) не продаются */
   private makeWares(): Ware[] {
     const pw = this.profile.power;
     const of = (f: (d: ItemDef) => boolean): Ware[] => ITEMS.filter(f).map((d) => ({ key: d.id, def: d, price: priceOf(d.id, pw) }));
@@ -258,6 +259,8 @@ export class Shop {
       if (a.radius) line('e-arrow', `Радиус ${a.radius} м`);
       if (a.souls) line('soul', `Тратит ${a.souls} душ`);
       line('e-clock', `Перезарядка ${a.cd} с`);
+    } else if (d.aura) {
+      for (const [icon, text] of auraLines(d.aura, k, d.icon)) line(icon, text);
     }
     const cmp = this.compare(d);
     if (cmp) line(cmp > 0 ? 'e-star' : 'e-fist', cmp > 0 ? '<b class="up">▲ сильнее надетого</b>' : '<b class="down">▼ слабее надетого</b>');

@@ -898,6 +898,38 @@ test('ауры: двенадцать в инвентаре, гнездо R, эф
   expect(r.flares).toBe(1);
 });
 
+test('ауры с боссов: все двенадцать разложены по боссам этажа, шансы в сумме 100, выпадают по шансам', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const floor = m.bosses.filter((b: any) => b.tier === 'boss');
+    const sums = floor.map((b: any) => b.auras.reduce((a: number, [, w]: [string, number]) => a + w, 0));
+    const all = floor.flatMap((b: any) => b.auras.map(([id]: [string, number]) => id));
+    const others = m.bosses.filter((b: any) => b.tier !== 'boss').every((b: any) => b.aura === null && b.drops.length === 1);
+    // генерал: терн 40 / тень 30 / поступь 30 — 2000 бросков; аура держится до сброса
+    const g = floor.find((b: any) => b.auras.length === 3 && b.auras.some(([id]: [string, number]) => id === 'thorns'));
+    const freq: Record<string, number> = {};
+    let stable = true;
+    for (let i = 0; i < 2000; i++) {
+      g.reset();
+      const a = g.aura;
+      if (g.drops[1] !== a) stable = false;
+      freq[a] = (freq[a] ?? 0) + 1;
+    }
+    g.reset();
+    return { n: floor.length, sums, all, others, freq, stable };
+  });
+  expect(r.n).toBe(5);
+  for (const s of r.sums) expect(s).toBe(100);
+  expect([...new Set(r.all)].sort()).toEqual(['bastion', 'blades', 'clarity', 'frost', 'halo', 'inferno', 'pact', 'quake', 'rage', 'shade', 'storm', 'thorns']);
+  expect(r.others).toBe(true);
+  expect(r.stable).toBe(true);
+  expect(r.freq.thorns / 2000).toBeGreaterThan(0.34);
+  expect(r.freq.thorns / 2000).toBeLessThan(0.46);
+  expect(r.freq.shade / 2000).toBeGreaterThan(0.25);
+  expect(r.freq.quake / 2000).toBeGreaterThan(0.25);
+});
+
 test('наступательные ауры: бьют врагов рядом, шкала вполовину, холод, тень, заморозка вспышкой', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
@@ -1097,6 +1129,7 @@ test('кузнец и торговец: лавки с именами, F — ок
   expect(r.inInventory).toHaveLength(16);
   expect(r.opened).toBe(true);
   expect(r.smithTabs).toEqual(['melee', 'ranged', 'armor']);
+  // ауры не продаются — падают с боссов этажа
   expect(r.merchantTabs).toEqual(['melee', 'ranged', 'armor', 'artifact', 'spell']);
   // всё оружие на прилавке, каждое — со своей ценой, дешёвые первыми
   expect(r.tiles).toBe(16);
