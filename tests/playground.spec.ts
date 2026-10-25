@@ -988,7 +988,7 @@ test('затенение AO не рисует спрайты: вспышки з�
 });
 
 /** Стражи зала (src/bosses/roster.ts): все восемь — или сколько уже есть */
-const BOSS_IDS = ['cauldron', 'boar', 'storm', 'golden', 'night', 'druse', 'gatherer', 'cat'];
+const BOSS_IDS = ['cauldron', 'boar', 'storm', 'golden', 'night', 'druse', 'gatherer', 'cat', 'serpent', 'beast', 'queen', 'judge', 'general', 'winter', 'star', 'gardener'];
 
 for (const id of BOSS_IDS) {
   test(`страж «${id}»: квадрат закрывает арену, бьёт героя, оглушение даёт ×2, смерть — гримуар, пал — сброс`, async ({ page }) => {
@@ -1033,13 +1033,20 @@ for (const id of BOSS_IDS) {
       out.heart = h0 - boss.hp;
       // смерть — гримуар; подойти — заклинание в инвентаре
       const had = m.profile.data.items.filter((x: any) => x.def === boss.drop).length;
+      const berries0 = m.profile.data.berries;
       for (let j = 0; j < 240 && !boss.dead; j++) { boss.hit(99999, new V(0, 0, 1), boss.pos.clone(), 0); if (!boss.dead) m.step(1 / 60); }
       m.step(3);
       out.won = arena.state;
-      const g = m.grimoires[m.grimoires.length - 1];
-      out.grimoire = !!g && g.item === boss.drop;
+      // фонтан малины: чем сильнее страж, тем больше; у боссов этажа — пара гримуаров на выбор
+      // ягоды: подобранные герой уже получил, остальные лежат на полу
+      const onFloor = m.props.pickups.filter((p: any) => p.kind === 'berry').reduce((a: number, p: any) => a + p.amount, 0);
+      out.berries = boss.berries > 0 && onFloor + m.profile.data.berries - berries0 >= boss.berries;
+      const pair = m.grimoires.slice(-boss.drops.length);
+      const g = pair.find((x: any) => x.item === boss.drop);
+      out.grimoire = !!g && pair.length === boss.drops.length && pair.map((x: any) => x.item).join() === boss.drops.join();
       if (g) { m.step(1.8); m.hero.place(g.pos.x, g.pos.z); m.step(0.2); }
       out.got = m.profile.data.items.filter((x: any) => x.def === boss.drop).length - had;
+      out.chose = pair.every((x: any) => x.taken);
       m.step(1);
       out.open = arena.solids.length === 0 && boss.minions.length === 0;
       // сброс и гибель героя: страж спит, героя ставит у ворот
@@ -1059,8 +1066,10 @@ for (const id of BOSS_IDS) {
     expect(r.enraged).toBe(true);
     expect(r.heart).toBe(20);
     expect(r.won).toBe('won');
+    expect(r.berries).toBe(true);
     expect(r.grimoire).toBe(true);
     expect(r.got).toBe(1);
+    expect(r.chose).toBe(true);
     expect(r.open).toBe(true);
     expect(r.reset).toEqual({ arena: 'idle', boss: 'sleep', full: true, atExit: true });
   });

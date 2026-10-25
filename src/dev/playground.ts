@@ -315,10 +315,15 @@ export function runPlayground(): void {
   const grimoires: Grimoire[] = [];
   arenas.forEach((arena, i) => {
     arena.onWin = (at) => {
-      // сердце лопнуло — поднимается гримуар с заклинанием стража
-      const drop = bosses[i].drop;
-      grimoires.push(new Grimoire(scene, fx, at, drop, profile.power + 1, () => scripted));
-      hud.banner(`Страж повержен<small>Подойди к гримуару — «${itemDef(drop).title}»</small>`, 3);
+      // сердце лопнуло: фонтан малины (чем сильнее страж, тем больше) и гримуар — у боссов этажа пара на выбор
+      const boss = bosses[i], drops = boss.drops;
+      props.fountain(at, boss.berries);
+      const side = new THREE.Vector3(Math.cos(boss.yaw), 0, -Math.sin(boss.yaw));
+      const pair = drops.map((id, j) => new Grimoire(scene, fx, at.clone().addScaledVector(side, (j - (drops.length - 1) / 2) * 3.2), id, profile.power + 1, () => scripted));
+      for (const g of pair) g.siblings = pair.filter((x) => x !== g);
+      grimoires.push(...pair);
+      const names = drops.map((id) => `«${itemDef(id).title}»`).join(' или ');
+      hud.banner(`Страж повержен<small>+${boss.berries} малины · ${drops.length > 1 ? `выбери гримуар: ${names}` : `гримуар ${names}`}</small>`, 3.5);
     };
   });
   /** Удар по герою от стража: урон, цифра, отброс */

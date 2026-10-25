@@ -11,6 +11,14 @@ import { NightRider } from './night-rider';
 import { DruseGolem } from './druse-golem';
 import { Gatherer } from './gatherer';
 import { GraveCat } from './grave-cat';
+import { CrimsonSerpent } from './serpent';
+import { ThunderBeast } from './thunder-beast';
+import { StarQueen } from './star-queen';
+import { OrderJudge } from './judge';
+import { GeneralRdyan } from './general';
+import { WinterMistress } from './winter-mistress';
+import { FallenStar } from './fallen-star';
+import { FirstGardener } from './first-gardener';
 
 /** Мини-боссы зала стражей (wiki/design-bosses.md, раздел 2): id арены → страж */
 export type MiniBossCtor = new (h: BossHooks, home: THREE.Vector3, yaw: number, arena: Rect) => MiniBoss;
@@ -24,4 +32,12 @@ export const MINI_BOSSES: Record<string, MiniBossCtor> = {
   druse: DruseGolem,
   gatherer: Gatherer,
   cat: GraveCat,
+  serpent: CrimsonSerpent,
+  beast: ThunderBeast,
+  queen: StarQueen,
+  judge: OrderJudge,
+  general: GeneralRdyan,
+  winter: WinterMistress,
+  star: FallenStar,
+  gardener: FirstGardener,
 };

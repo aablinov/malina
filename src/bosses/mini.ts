@@ -141,6 +141,14 @@ export abstract class MiniBoss extends Boss {
   keep = 2.5;
   /** Какой гримуар роняет (id предмета) */
   abstract readonly drop: string;
+  /** Ступень: мини-босс, босс этажа (выбор из двух гримуаров), финальный */
+  readonly tier: 'mini' | 'boss' | 'final' = 'mini';
+  /** Аура — второй гримуар у боссов этажа (выбор: заклинание или аура) */
+  readonly aura: string | null = null;
+  /** Гримуары после победы: один, у боссов — пара на выбор */
+  get drops(): string[] { return this.aura ? [this.drop, this.aura] : [this.drop]; }
+  /** Малина из лопнувшего сердца: чем сильнее страж, тем больше — от здоровья и ступени */
+  get berries(): number { return Math.round(this.baseHp / ({ mini: 20, boss: 10, final: 6 } as const)[this.tier]); }
   readonly minions: Minion[] = [];
   protected flyY = 0;
   protected hitDone = false;
@@ -152,6 +160,8 @@ export abstract class MiniBoss extends Boss {
   private readonly lobs: Lob[] = [];
   private readonly hazards: Hazard[] = [];
   private hazardTick = 0;
+  /** Тело твёрдое: расталкивает героя (под землёй, в тумане — нет) */
+  protected get solid(): boolean { return true; }
   /** Замедление героя от зон (0..1) — плейграунд домножает скорость */
   heroSlow = 0;
 
@@ -275,7 +285,7 @@ export abstract class MiniBoss extends Boss {
       const a = this.arena;
       this.pos.x = THREE.MathUtils.clamp(p.x, a.x0 + this.radius, a.x1 - this.radius);
       this.pos.z = THREE.MathUtils.clamp(p.z, a.z0 + this.radius, a.z1 - this.radius);
-      if (this.state !== 'sleep') {
+      if (this.state !== 'sleep' && this.solid) {
         const d = Math.hypot(hero.x - this.pos.x, hero.z - this.pos.z), R = this.radius + HERO.radius;
         if (d < R && d > 1e-3) { const k = (R - d) / d; hero.x += (hero.x - this.pos.x) * k; hero.z += (hero.z - this.pos.z) * k; }
       }

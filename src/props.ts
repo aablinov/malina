@@ -780,6 +780,22 @@ export class Props {
   }
 
   /** Бросить предмет на пол */
+  /**
+   * Фонтан малины — страж повержен (wiki/design-bosses.md): total ягод кучками по per разлетаются кольцом из точки,
+   * волнами по 0,05 с; подобрать — пройти рядом (малину тянет издалека)
+   */
+  fountain(at: THREE.Vector3, total: number, per = 5): void {
+    const n = Math.max(1, Math.ceil(total / per));
+    for (let i = 0; i < n; i++) {
+      const amount = i === n - 1 ? total - per * (n - 1) : per;
+      const a = (i / n) * Math.PI * 2 * 3 + this.rand() * 0.6, sp = 1.5 + this.rand() * 4;
+      const vel = new THREE.Vector3(Math.cos(a) * sp, 5 + this.rand() * 5, Math.sin(a) * sp);
+      this.drop('berry', amount, at.clone().setY(1.2 + this.rand() * 0.6), vel, 0.7 + i * 0.01);
+    }
+    this.fx.flash(at.clone().setY(1.2), BERRY_GLOW, 3, 0.4);
+    this.fx.burst(at.clone().setY(1.2), ['#ff4a7e', '#c8124a', '#ffd0e0'], 30, { speed: 5, up: 6, size: 0.1, life: 1, glow: true, gravity: 6 });
+  }
+
   private drop(kind: LootKind, amount: number, pos: THREE.Vector3, vel: THREE.Vector3, lock: number, mesh = lootMesh(kind), data?: unknown): Pickup {
     mesh.position.copy(pos);
     this.scene.add(mesh);

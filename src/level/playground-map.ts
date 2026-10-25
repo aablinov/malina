@@ -276,6 +276,12 @@ const HALL = [
   ['cauldron', 'Котёл Ордена'], ['boar', 'Морозный кабан'], ['storm', 'Грозовой голем'], ['golden', 'Золотой страж'],
   ['night', 'Ночной всадник'], ['druse', 'Друзовый голем'], ['gatherer', 'Скорбная Сборщица'], ['cat', 'Кот-могильщик'],
 ] as const;
+/** Боссы этажа — дальше по коридору, арены просторнее (27 × 24 м) */
+const HALL_BOSSES = [
+  ['serpent', 'Рдяный Змей'], ['beast', 'Громовой Зверь'], ['queen', 'Королева Звёздного Сада'], ['judge', 'Судия Ордена'], ['general', 'Генерал Рдян'],
+] as const;
+/** Финальные стражи — в самом конце коридора, арены 31 × 30 м */
+const HALL_FINALS = [['winter', 'Хозяйка Вечной Зимы'], ['star', 'Павшая Звезда'], ['gardener', 'Первый Садовник']] as const;
 /** Акцент пола по стражу: блоки, которыми усыпан пол, и декор у стен */
 const THEME: Record<string, { floor: string[]; dots: string[] }> = {
   cauldron: { floor: ['cobble', 'stone', 'bricks_cracked'], dots: ['fire', 'campfire'] },
@@ -286,20 +292,36 @@ const THEME: Record<string, { floor: string[]; dots: string[] }> = {
   druse: { floor: ['stone', 'cobble', 'gravel'], dots: ['dry_grass'] },
   gatherer: { floor: ['dirt', 'mossy', 'grass'], dots: ['fern', 'flower_white'] },
   cat: { floor: ['bricks_old', 'cobble', 'mossy'], dots: ['torch', 'fern'] },
+  serpent: { floor: ['cobble', 'gravel', 'bricks_cracked'], dots: ['fire', 'campfire', 'berry_bush'] },
+  beast: { floor: ['stone', 'gravel', 'cobble'], dots: ['dry_grass', 'torch'] },
+  queen: { floor: ['tiles', 'grass', 'path'], dots: ['flower_white', 'flower_blue', 'daisies'] },
+  judge: { floor: ['tiles', 'bricks', 'stone'], dots: ['torch', 'flower_white'] },
+  general: { floor: ['path', 'grass', 'cobble'], dots: ['berry_bush', 'tall_grass', 'flower_red'] },
+  // тёмный пол: белая ледяная Хозяйка на нём читается
+  winter: { floor: ['cobble', 'bricks_old', 'mossy'], dots: ['dry_grass', 'torch'] },
+  star: { floor: ['bricks_cracked', 'stone', 'gravel'], dots: ['torch', 'dry_grass'] },
+  gardener: { floor: ['grass', 'dirt', 'path'], dots: ['berry_bush', 'flower_red', 'tall_grass', 'daisies'] },
 };
 
-export const BOSS_ARENAS: BossArenaSpec[] = HALL.map(([id, title], i) => {
-  const left = i % 2 === 0, k = Math.floor(i / 2);
-  const z1 = -28 - 23 * k, z0 = z1 - 19, zc = (z0 + z1) / 2;
-  const x0 = left ? -23 : 3, x1 = left ? -3 : 23;
+/** Арена: сторона, верхний край по z, ширина, глубина */
+function arenaSpec(id: string, title: string, left: boolean, z1: number, w: number, d: number): BossArenaSpec {
+  const z0 = z1 - d + 1, zc = (z0 + z1) / 2;
+  const x0 = left ? -3 - w + 1 : 3, x1 = left ? -3 : 3 + w - 1;
   return {
     id, title, x0, x1, z0, z1,
     gate: { x: left ? -2 : 2, z: zc, rot: Math.PI / 2 },
     trigger: left ? { x0: -6.5, x1: -3, z0: zc - 2, z1: zc + 2 } : { x0: 3, x1: 6.5, z0: zc - 2, z1: zc + 2 },
     exit: { x: 0, z: zc, yaw: left ? Math.PI / 2 : -Math.PI / 2 },
   };
-});
-export const BOSS_HALL_END = BOSS_ARENAS[BOSS_ARENAS.length - 1].z0 - 1;
+}
+
+const MINI_END = -28 - 23 * 3 - 19;
+export const BOSS_ARENAS: BossArenaSpec[] = [
+  ...HALL.map(([id, title], i) => arenaSpec(id, title, i % 2 === 0, -28 - 23 * Math.floor(i / 2), 21, 20)),
+  ...HALL_BOSSES.map(([id, title], i) => arenaSpec(id, title, i % 2 === 0, MINI_END - 4 - 28 * Math.floor(i / 2), 27, 24)),
+  ...HALL_FINALS.map(([id, title], i) => arenaSpec(id, title, i % 2 === 0, MINI_END - 4 - 28 * 3 - 4 - 34 * Math.floor(i / 2), 31, 30)),
+];
+export const BOSS_HALL_END = Math.min(...BOSS_ARENAS.map((a) => a.z0)) - 1;
 
 function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
   const hash = (x: number, z: number, s = 0) => (((x * 73856093) ^ (z * 19349663) ^ (s * 83492791)) >>> 0) % 1000 / 1000;
@@ -311,7 +333,7 @@ function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
     L.set(-2, -1, z, 'stone'); L.set(2, -1, z, 'stone');
     L.set(-2, 0, z, 'bricks_old'); L.set(2, 0, z, 'bricks_mossy');
   }
-  for (let x = -24; x <= 24; x++) for (let y = 0; y < 3; y++) L.set(x, y, END - 1, 'cliff_dark');
+  for (let x = -35; x <= 35; x++) for (let y = 0; y < 3; y++) L.set(x, y, END - 1, 'cliff_dark');
   for (const A of BOSS_ARENAS) {
     const T = THEME[A.id];
     const left = A.x0 < 0;
