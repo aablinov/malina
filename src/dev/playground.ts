@@ -433,28 +433,39 @@ export function runPlayground(): void {
   }
 
   // ---------- Светлячки: медленно плывут вокруг камеры, ночью ярче ----------
+  // Положение каждого светлячка считает вершинный шейдер по сиду и времени (wiki/dev-performance.md): CPU ничего не
+  // пересчитывает и не перезаливает матрицы, с кадра в кадр меняются два uniform-а
   const MOTES = 70;
+  const moteU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() } };
   const moteMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.7), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-  const motes = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), moteMat, MOTES);
+  moteMat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, moteU);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>
+attribute vec4 seed; uniform float uTime; uniform vec3 uCam;
+// точка в квадрате 2R вокруг камеры, переносится по кругу, чтобы светлячки не кончались
+float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R; }`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+{
+  float R = 14.0, t = uTime, a = seed.x, b = seed.y, c = seed.z, d = seed.w;
+  float x = wrapR(a * 2.0 * R + sin(t * 0.3 + d * 9.0) * 2.0 + t * 0.15, uCam.x, R);
+  float z = wrapR(b * 2.0 * R + cos(t * 0.25 + c * 7.0) * 2.0, uCam.z, R);
+  // высота — от земли под камерой, а не от героя: в падении светлячки остаются на месте
+  float y = uCam.y + 0.4 + c * 2.6 + sin(t * (0.6 + d) + a * 20.0) * 0.3;
+  float s = 0.6 + 0.5 * max(0.0, sin(t * (1.2 + c * 2.0) + b * 30.0));
+  transformed = transformed * s + vec3(x, y, z);
+}`);
+  };
+  moteMat.customProgramCacheKey = () => 'motes';
+  const moteGeo = new THREE.BoxGeometry(0.07, 0.07, 0.07);
+  moteGeo.setAttribute('seed', new THREE.InstancedBufferAttribute(Float32Array.from({ length: MOTES * 4 }, () => fxRand()), 4));
+  const motes = new THREE.InstancedMesh(moteGeo, moteMat, MOTES);
   motes.frustumCulled = false;
   scene.add(motes);
-  const moteSeed = Array.from({ length: MOTES }, () => [fxRand(), fxRand(), fxRand(), fxRand()]);
-  const moteM = new THREE.Matrix4();
   function updateMotes(t: number): void {
-    const R = 14;
     moteMat.opacity = night ? 1 : 0.45;
-    moteSeed.forEach(([a, b, c, d], i) => {
-      // точка в квадрате 2R вокруг героя, переносится по кругу, чтобы светлячки не кончались
-      const wrapR = (v: number, o: number) => o + ((((v - o + R) % (2 * R)) + 2 * R) % (2 * R)) - R;
-      const x = wrapR(a * 2 * R + Math.sin(t * 0.3 + d * 9) * 2 + t * 0.15, camTarget.x);
-      const z = wrapR(b * 2 * R + Math.cos(t * 0.25 + c * 7) * 2, camTarget.z);
-      // высота — от земли под камерой, а не от героя: в падении светлячки остаются на месте
-      const y = camTarget.y + 0.4 + c * 2.6 + Math.sin(t * (0.6 + d) + a * 20) * 0.3;
-      const s = 0.6 + 0.5 * Math.max(0, Math.sin(t * (1.2 + c * 2) + b * 30));
-      moteM.makeScale(s, s, s).setPosition(x, y, z);
-      motes.setMatrixAt(i, moteM);
-    });
-    motes.instanceMatrix.needsUpdate = true;
+    moteU.uTime.value = t;
+    moteU.uCam.value.copy(camTarget);
   }
 
   // ---------- Ввод ----------
@@ -757,6 +768,7 @@ export function runPlayground(): void {
   hud.setMap(automap, new URLSearchParams(window.location.search).has('map') ? level.name : 'Плейграунд');
   hud.onMap = () => hud.toggleMap();
   let revealAt = '';
+  let mapT = 0;
   // торговцы: окно покупок (src/hud/shop.ts)
   const shop = new Shop(document.body, profile);
   shop.onClose = () => { lmb = false; rmb = false; keys.clear(); };
@@ -799,11 +811,13 @@ export function runPlayground(): void {
     hud.el.classList.toggle('show-hp', showTelemetry);
     const cell = `${Math.round(hero.pos.x)},${Math.round(hero.pos.z)}`;
     if (cell !== revealAt) { revealAt = cell; automap.reveal(hero.pos.x, hero.pos.z); }
-    hud.drawMaps({ x: hero.pos.x, z: hero.pos.z, yaw: hero.yaw }, [
+    // карты — 2D-канвас, перерисовка каждый кадр заметна; 10 раз в секунду хватает
+    mapT -= dt;
+    if (mapT <= 0 || hud.mapOpen) { mapT = 0.1; hud.drawMaps({ x: hero.pos.x, z: hero.pos.z, yaw: hero.yaw }, [
       ...props.supplies.map((c) => ({ x: c.pos.x, z: c.pos.z, icon: 'chest', dim: c.opened })),
       ...props.terminals.map((t) => ({ x: t.pos.x, z: t.pos.z, icon: 'heart' })),
       ...merchants.map((m) => ({ x: m.pos.x, z: m.pos.z, icon: m.kind === 'smith' ? 'hammer' : 'berry', always: true })),
-    ], [props.supplies.filter((c) => c.opened).length, props.supplies.length]);
+    ], [props.supplies.filter((c) => c.opened).length, props.supplies.length]); }
     helpT -= dt;
     $('pgHelp').style.opacity = helpOn && helpT > 0 ? String(Math.min(0.9, helpT)) : '0';
 
@@ -851,12 +865,8 @@ export function runPlayground(): void {
     (marker.material as THREE.MeshBasicMaterial).opacity = Math.max(0, markerT * 2);
     marker.scale.setScalar(1 + (0.5 - markerT));
     hero.update(dt, input, solids(), terrain);
-    view.sync();
-    view.update(simTime, night ? 1 : 0.4, hero.pos);
-    view.setXray(hero.pos.clone().setY(hero.pos.y + 0.9), camera.position, 2.0);
     // под крышей: срезать потолок и всё, что выше, — виден этаж, где стоит герой
     cutY = ceilingAt(level, hero.pos.x, hero.pos.z, hero.pos.y);
-    view.setCut(cutY - 0.01);
 
     if (interactReq) {
       interactReq = false;
@@ -919,8 +929,18 @@ export function runPlayground(): void {
     perf.end(real);
   }
 
+  /** Уровень: перестроить изменённые чанки, вода и огонь, ближайшие факелы, рентген и срез — раз в кадр, не в каждом тике */
+  function syncView(): void {
+    view.sync();
+    view.update(simTime, night ? 1 : 0.4, hero.pos);
+    view.setXray(_xray.copy(hero.pos).setY(hero.pos.y + 0.9), camera.position, 2.0);
+    view.setCut(cutY - 0.01);
+  }
+  const _xray = new THREE.Vector3();
+
   /** Камера, оверлеи, HUD и кадр; real — сколько прошло реального времени */
   function render(real: number): void {
+    syncView();
     // камера следит за героем; по высоте — плавно, чтобы падение не дёргало кадр
     const want = hero.pos.clone();
     if (camOverride) camTarget.copy(camOverride); else if (scripted) camTarget.copy(want); else {
@@ -984,6 +1004,8 @@ export function runPlayground(): void {
     perf, renderer,
     /** Прогрев шейдеров завершён (число программ) */
     ready,
+    /** Погода (src/weather.ts): set(kind, intensity, wind) */
+    weather,
     /** Подойти к торговцу и нажать F */
     trade(kind: 'smith' | 'merchant') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
     /** ПКМ: выстрел к точке */
@@ -1005,7 +1027,7 @@ export function runPlayground(): void {
     /** Ввод из теста: клавиатура и мышь перестают влиять на героя */
     script(on = true) { scripted = on; if (on) { input.move.set(0, 0); input.attack = false; pointer.down = false; goal = null; chase = null; path = []; } },
     /** Прогнать симуляцию sec секунд без реального времени */
-    step(sec: number) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) tick(STEP); },
+    step(sec: number) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) tick(STEP); syncView(); },
     /** Нарисовать кадр сейчас (вкладка в фоне не получает requestAnimationFrame) */
     render() { render(0); },
     /** Нажатие пробела: перекат */

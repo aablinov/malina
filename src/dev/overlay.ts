@@ -75,17 +75,32 @@ export class Overlays {
   private pathLines: THREE.LineSegments | null = null;
   /** Пути по навигационной сетке (путь героя по клику) */
   drawPaths(paths: THREE.Vector3[][]): void {
-    const pts: THREE.Vector3[] = [];
-    for (const p of paths) for (let i = 0; i + 1 < p.length; i++) pts.push(p[i].clone().setY(p[i].y + 0.08), p[i + 1].clone().setY(p[i + 1].y + 0.08));
+    // буфер один на всё время: раньше каждый кадр создавалась новая геометрия, даже для пустого пути
+    let n = 0;
+    for (const p of paths) n += Math.max(0, p.length - 1) * 2;
     if (!this.pathLines) {
+      if (!n) return;
       this.pathLines = new THREE.LineSegments(new THREE.BufferGeometry(), lineMat('#ff5ad2'));
       this.pathLines.renderOrder = 10;
       this.pathLines.frustumCulled = false;
       this.scene.add(this.pathLines);
     }
-    this.pathLines.geometry.dispose();
-    this.pathLines.geometry = new THREE.BufferGeometry().setFromPoints(pts);
-    this.pathLines.visible = pts.length > 0;
+    this.pathLines.visible = n > 0;
+    if (!n) return;
+    const g = this.pathLines.geometry;
+    let attr = g.getAttribute('position') as THREE.BufferAttribute | undefined;
+    if (!attr || attr.count < n) {
+      attr = new THREE.BufferAttribute(new Float32Array(Math.max(n, 256) * 3), 3);
+      attr.setUsage(THREE.DynamicDrawUsage);
+      g.setAttribute('position', attr);
+    }
+    let k = 0;
+    for (const p of paths) for (let i = 0; i + 1 < p.length; i++) {
+      attr.setXYZ(k++, p[i].x, p[i].y + 0.08, p[i].z);
+      attr.setXYZ(k++, p[i + 1].x, p[i + 1].y + 0.08, p[i + 1].z);
+    }
+    attr.needsUpdate = true;
+    g.setDrawRange(0, n);
   }
 
   update(): void { this.obsLines.visible = this.colliders; }
