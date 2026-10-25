@@ -27,7 +27,7 @@ export type BossSpellKind =
   | 'meteor' | 'flameserpent' | 'ashcrown' | 'icetomb' | 'frostridge' | 'absolutezero'
   | 'thunderspear' | 'thunderleap' | 'stormcloud' | 'starfall' | 'starbeam' | 'judgement'
   | 'deadchoir' | 'gravitywell' | 'skullscythe' | 'fallenguards'
-  | 'rift' | 'raspberrybush' | 'titanform' | 'bladephalanx';
+  | 'rift' | 'raspberrybush' | 'titanform' | 'bladephalanx' | 'blink';
 export type ArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning' | 'spark' | 'fireball' | 'icerain' | 'heal' | BossSpellKind;
 export type PerkKind = 'souls' | 'artifactDmg' | 'cooldown' | 'meleeDmg' | 'rangedDmg' | 'speed' | 'potion' | 'roll' | 'arrows';
 
@@ -194,6 +194,7 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'raspberrybush', slot: 'artifact', spell: 'shop', title: 'Малиновый куст', rarity: 'common', icon: 'raspberrybush', description: 'Колючий куст держит врагов, а потом лопается ягодами, которые лечат.', artifact: A('raspberrybush', 12, 20, { radius: 3, duration: 4, charge: 0.9, info: 'Куст: {v} урона колючками, лечит ягодами' }) },
   { id: 'titanform', slot: 'artifact', spell: 'boss', title: 'Облик титана', rarity: 'unique', icon: 'titanform', description: 'Герой становится огромным каменным великаном: удары трясут землю.', artifact: A('titanform', 40, 60, { duration: 10, charge: 1.5, info: 'Титан: +{v}% урона, −50% получаемого, {d} с' }) },
   { id: 'bladephalanx', slot: 'artifact', spell: 'boss', title: 'Фаланга клинков', rarity: 'rare', icon: 'bladephalanx', description: 'Над головой веером раскрываются семь призрачных мечей и летят по очереди.', artifact: A('bladephalanx', 10, 20, { radius: 14, charge: 1, info: 'Клинки: 7 × {v} урона' }) },
+  { id: 'blink', slot: 'artifact', spell: 'boss', title: 'Разрыв', rarity: 'rare', icon: 'blink', description: 'Рывок сквозь пространство: взрыв там, где исчез, и там, где появился.', artifact: A('blink', 8, 45, { radius: 8, charge: 0.8, info: 'Разрыв: {v} урона дважды, рывок до {r} м' }) },
   { id: 'harvester', slot: 'artifact', title: 'Жнец душ', rarity: 'unique', icon: 'harvester', description: 'Высвобождает собранные души взрывом вокруг героя.', artifact: A('harvester', 3, 45, { radius: 4, souls: 40 }) },
 ];
 

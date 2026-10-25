@@ -78,6 +78,13 @@ export const ICONS: Record<string, Draw> = {
     ], { a: '#3a7ab8', b: '#6ad8e8', w: '#ffffff' });
     p.s(0, 8, ['aaa', 'aba', 'aba', 'aba', '.a.'], { a: '#2a5a8a', b: '#9a6ad8' });
   },
+  blink(p) {
+    // два пурпурных разрыва и след силуэтов между ними
+    p.s(0, 9, ['.aa.', 'abba', 'abba', '.aa.'], { a: '#9a3ad8', b: '#ffd8ff' });
+    p.s(11, 3, ['.aa.', 'abba', 'abba', '.aa.'], { a: '#d84a9a', b: '#ffe8f4' });
+    p.s(4, 6, ['..c.', '.cc.', 'cc..'], { c: '#c88ae8' });
+    p.s(7, 4, ['..c.', '.cc.', 'cc..'], { c: '#e8a8f0' });
+  },
   bladephalanx(p) {
     // веер из пяти призрачных мечей
     const C = ['#ff8ae8', '#d86af8', '#ffb0f0', '#d86af8', '#ff8ae8'];

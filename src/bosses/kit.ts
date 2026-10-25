@@ -86,7 +86,8 @@ export abstract class Boss implements Target {
 
   /** Материал тела: вспыхивает белым от удара */
   lam(color: THREE.ColorRepresentation, map?: THREE.Texture): THREE.MeshLambertMaterial {
-    const m = new THREE.MeshLambertMaterial({ color, map });
+    // текстура pixelTex уже в цвете — второй раз не красим, иначе цвет темнеет вдвое
+    const m = new THREE.MeshLambertMaterial(map ? { map } : { color });
     this.flashMats.push(m);
     return m;
   }
