@@ -45,6 +45,28 @@ export function initAudio(): void {
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   } catch { ctx = null; }
 }
+/**
+ * Бюджет голосов (wiki/dev-performance.md): залп заклинаний и хор гримуара заводили по сотне аудионод за кадр.
+ * Каждый голос перед созданием берёт билет на свою длительность; когда одновременно звучит MAX_VOICES, новые
+ * тихо пропускаются. busy() — доля занятого бюджета: пакетные звуки по ней урезают дубли и искорки первыми
+ */
+const MAX_VOICES = 32;
+const ends: number[] = [];
+function prune(): void {
+  const now = ctx ? ctx.currentTime : 0;
+  for (let i = ends.length - 1; i >= 0; i--) if (ends[i] <= now) { ends[i] = ends[ends.length - 1]; ends.pop(); }
+}
+/** Взять билет на голос длительностью dur (с задержкой delay); false — бюджет исчерпан, звук пропустить */
+export function claimVoice(dur: number, delay = 0): boolean {
+  if (!ctx) return false;
+  prune();
+  if (ends.length >= MAX_VOICES) return false;
+  ends.push(ctx.currentTime + delay + dur + 0.05);
+  return true;
+}
+/** Доля занятого бюджета голосов 0..1 */
+export function busy(): number { prune(); return ends.length / MAX_VOICES; }
+
 export function toggleMute(): boolean {
   muted = !muted;
   if (master) master.gain.value = muted ? 0 : VOL;

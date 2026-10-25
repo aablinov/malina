@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { FX } from './fx';
 import { additive, additiveSprite } from './loot-look';
+import { markShared } from './fx';
 
 /**
  * Круги каста (wiki/design-spells.md, раздел 5): у каждой школы свой узор из слоёв — кольцо с засечками, квадраты и ромбы,
@@ -240,6 +241,13 @@ const layerTex = (key: string): THREE.Texture => {
   texCache.set(key, t);
   return t;
 };
+/** Прогрев: нарисовать и отдать все текстуры кругов заранее (src/fx-zoo.ts), чтобы первый каст не рисовал 512² на лету */
+export function sigilTextures(): THREE.Texture[] {
+  const out = Object.keys(DRAW).map(layerTex);
+  out.push(wallTex());
+  for (let i = 0; i < 6; i++) out.push(glyphSprite(i));
+  return out;
+}
 let wallT: THREE.Texture | null = null;
 /** Стена света: вертикальные лучи разной яркости, к верху тают (повторяется по кругу) */
 const wallTex = (): THREE.Texture => {
@@ -375,6 +383,11 @@ const STYLE: Record<SigilSchool, Layer[]> = {
 
 interface Item { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; layer: Layer; t: number }
 
+/** Геометрии общие на все круги: единичная плоскость (размер — scale) и стена света */
+let layerG: THREE.PlaneGeometry | null = null, wallG: THREE.CylinderGeometry | null = null;
+const LAYER_GEO = (): THREE.PlaneGeometry => layerG ??= markShared(new THREE.PlaneGeometry(1, 1));
+const WALL_GEO = (): THREE.CylinderGeometry => wallG ??= markShared(new THREE.CylinderGeometry(0.98, 1, 1.5, 48, 1, true));
+
 export class Sigil {
   readonly group = new THREE.Group();
   private readonly items: Item[] = [];
@@ -389,7 +402,8 @@ export class Sigil {
   constructor(school: SigilSchool, private readonly R: number, a: THREE.Color, b: THREE.Color, glow = 0.4) {
     STYLE[school].forEach((layer, i) => {
       const mat = additive(layerTex(layer.key), (layer.alt ? b : a).clone().multiplyScalar(glow), 0);
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2 * layer.r, 2 * layer.r), mat);
+      const mesh = new THREE.Mesh(LAYER_GEO(), mat);
+      mesh.scale.setScalar(2 * layer.r);
       mesh.rotation.x = -Math.PI / 2;
       mesh.rotation.z = layer.rot ?? 0;
       mesh.position.y = 0.05 + i * 0.006;
@@ -408,7 +422,7 @@ export class Sigil {
     }
     // стена света по краю — с четвёртой
     this.wallMat = additive(wallTex(), a.clone().multiplyScalar(glow * 0.5), 0);
-    this.wall = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 1, 1.5, 48, 1, true), this.wallMat);
+    this.wall = new THREE.Mesh(WALL_GEO(), this.wallMat);
     this.wall.position.y = 0.75;
     this.wall.visible = false;
     this.group.add(this.wall);
@@ -474,8 +488,8 @@ export class Sigil {
 
   dispose(): void {
     this.group.parent?.remove(this.group);
-    for (const it of this.items) { it.mesh.geometry.dispose(); it.mat.dispose(); }
+    for (const it of this.items) it.mat.dispose();
     for (const s of this.glyphs) s.material.dispose();
-    this.wall.geometry.dispose(); this.wallMat.dispose();
+    this.wallMat.dispose();
   }
 }

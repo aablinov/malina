@@ -4,6 +4,8 @@ import { Lighting } from '../lighting';
 import { Props, type LootKind } from '../props';
 import { type Obstacle } from '../collision';
 import { FX } from '../fx';
+import { Perf } from './perf';
+import { warmUp } from '../fx-zoo';
 import { emptyInput, Knight, type Strike } from '../knight';
 import type { Target } from '../target';
 import { makeTextures, rng } from '../textures';
@@ -84,12 +86,16 @@ export function runPlayground(): void {
 
   // ---------- Рендер ----------
   const canvas = $<HTMLCanvasElement>('c');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // без MSAA на канвасе: кадр собирает композер в своих буферах (src/lighting.ts), на канвас ложится готовая картинка;
+  // плотность пикселей канваса — как у композера, иначе финальный проход и bloom масштабировались бы в пустую
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
+  // замеры кадра (F8): CPU симуляции и рендера, вызовы, программы, геометрии; длинные кадры с метками причин
+  const perf = new Perf(renderer);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 220);
@@ -778,7 +784,7 @@ export function runPlayground(): void {
   const cache: Record<string, string> = {};
   function setHTML(id: string, v: string): void { if (cache[id] !== v) { cache[id] = v; $(id).innerHTML = v; } }
 
-  function updateHUD(dt: number, fps: number, frameMs: number): void {
+  function updateHUD(dt: number, _fps: number, _frameMs: number): void {
     const trader = hero.down ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
     const near = hero.down || trader ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
     // подошёл к сундуку — он тихо звенит
@@ -815,7 +821,7 @@ export function runPlayground(): void {
     }
     const f = $('pgFps');
     f.style.display = showFps ? '' : 'none';
-    if (showFps) setHTML('pgFps', `${fps.toFixed(0)} FPS · ${frameMs.toFixed(1)} мс`);
+    if (showFps) setHTML('pgFps', perf.html());
 
     toastT -= dt;
     if (toastT <= 0) $('pgToast').classList.remove('show');
@@ -901,10 +907,16 @@ export function runPlayground(): void {
     // инвентарь открыт — игра на паузе, как в одиночной MCD
     if (!paused && !inventory.open && !shop.open) acc += real * timeScale * stop;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
+    perf.begin();
     let n = 0;
+    perf.tickStart();
     while (acc >= STEP && n < 6) { tick(STEP); acc -= STEP; n++; }
+    perf.tickEnd();
     if (n >= 6) acc = 0;
+    perf.renderStart();
     render(real);
+    perf.renderEnd();
+    perf.end(real);
   }
 
   /** Камера, оверлеи, HUD и кадр; real — сколько прошло реального времени */
@@ -943,8 +955,10 @@ export function runPlayground(): void {
 
 
     if (postFX) look.render();
-    else renderer.render(scene, camera);
+    else look.renderPlain(camera);
   }
+  // прогрев шейдеров и текстур боя (src/fx-zoo.ts): компилируем до первого каста, а не в кадре удара
+  const ready = warmUp(renderer, scene, camera, T, look.composer.renderTarget1).catch((e) => { console.warn('прогрев не удался', e); return 0; });
   frame();
 
   // ---------- Отладочный хук ----------
@@ -966,6 +980,10 @@ export function runPlayground(): void {
     toBoss(id: string) { const s = BOSS_ARENAS.find((a) => a.id === id); if (s) hero.place(s.exit.x, s.exit.z, s.exit.yaw); return !!s; },
     /** Эффекты: стоп-кадр, засветка, свет заклинаний */
     fx,
+    /** Замеры кадра (src/dev/perf.ts): snapshot() — сводка, длинные кадры с метками; renderer.info */
+    perf, renderer,
+    /** Прогрев шейдеров завершён (число программ) */
+    ready,
     /** Подойти к торговцу и нажать F */
     trade(kind: 'smith' | 'merchant') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
     /** ПКМ: выстрел к точке */

@@ -2120,7 +2120,7 @@ export function runEditor(): void {
       if (vp.index === 0 && !vp.isOrtho && vp.mode === 'lit' && world.post.enabled) {
         if (composerSize.w !== vp.rect.w || composerSize.h !== vp.rect.h) { composerSize.w = vp.rect.w; composerSize.h = vp.rect.h; look.setSize(vp.rect.w, vp.rect.h); }
         look.render();
-      } else renderer.render(scene, vp.camera);
+      } else look.renderPlain(vp.camera);
       scene.overrideMaterial = null;
       look.hemi.intensity = sun.h; look.sun.intensity = sun.s; look.ambient.intensity = sun.a;
     }

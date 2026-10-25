@@ -1,4 +1,4 @@
-import { audioCore } from './audio';
+import { audioCore, busy, claimVoice } from './audio';
 
 /**
  * Звук заклинаний (wiki/design-spells.md, раздел 5): не «пищалки», а маленький оркестр в зале.
@@ -47,6 +47,9 @@ interface VoiceOpts {
 export function voice({ type = 'triangle', f, f1, dur, vol, attack = 0.005, delay = 0, detune = 0, lp, lp1, q = 0.7, verb = 0.25 }: VoiceOpts): void {
   const a = audioCore();
   if (!a) return;
+  // бюджет голосов: при нехватке первым уходит детюн-дубль, затем сама нота
+  if (detune && busy() > 0.6) detune = 0;
+  if (!claimVoice(dur, delay)) return;
   const { ctx } = a, t = ctx.currentTime + delay;
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
@@ -75,6 +78,9 @@ interface HissOpts { dur: number; vol: number; f: number; f1?: number; q?: numbe
 export function hiss({ dur, vol, f, f1, q = 0.8, type = 'bandpass', attack = 0.003, delay = 0, verb = 0.2 }: HissOpts): void {
   const a = audioCore();
   if (!a) return;
+  // искорки и треск (короче 0,1 с) уступают первыми, когда бюджет заполнен наполовину
+  if (dur < 0.1 && busy() > 0.5) return;
+  if (!claimVoice(dur, delay)) return;
   const { ctx } = a, t = ctx.currentTime + delay;
   const s = ctx.createBufferSource(); s.buffer = a.noise; s.loop = true;
   s.playbackRate.value = rnd(0.9, 1.1);
@@ -94,6 +100,7 @@ export function hiss({ dur, vol, f, f1, q = 0.8, type = 'bandpass', attack = 0.0
 export function boom(f0: number, f1: number, dur: number, vol: number, delay = 0, verb = 0.25): void {
   const a = audioCore();
   if (!a) return;
+  if (!claimVoice(dur, delay)) return;
   const { ctx } = a, t = ctx.currentTime + delay;
   const o = ctx.createOscillator(); o.type = 'sine';
   o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.7);

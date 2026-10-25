@@ -42,7 +42,7 @@ const rand = (a: number, b: number): number => a + Math.random() * (b - a);
 
 let shieldT: THREE.Texture | null = null;
 /** Щит-руна для «Бастиона»: контур щита и знак внутри */
-const shieldTex = (): THREE.Texture => {
+export const shieldTex = (): THREE.Texture => {
   if (shieldT) return shieldT;
   const cv = document.createElement('canvas');
   cv.width = cv.height = 128;
