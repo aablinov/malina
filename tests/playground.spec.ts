@@ -1122,3 +1122,145 @@ test('масштаб стражей: здоровье, урон и малина 
   expect(r.bar).toBe(true);
   expect(r.followsHero).toBe(true);
 });
+
+/** Рядовые мобы, первая партия (src/mobs/, wiki/design-mobs.md) */
+const MOB_IDS = ['healer', 'pyro', 'summoner', 'squire', 'shield', 'berryling', 'gardener', 'wolf'];
+
+test('мобы первой партии: каждый задевает героя, падает от меча и роняет малину', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate((ids) => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    const out: Record<string, unknown> = {};
+    for (const id of ids) {
+      m.pack.clear();
+      m.hero.god = false;
+      m.hero.place(2, 8, Math.PI / 2);
+      const mob = m.spawnMob(id, 8, 8);
+      m.step(0.6);
+      // ближние — герой стоит перед мобом; дальние (держат дистанцию) и волк — герой стоит на месте
+      const far = mob.keep > 3;
+      let lost = 0;
+      for (let j = 0; j < 14 * 30 && lost < 4; j++) {
+        m.hero.hp = Math.max(m.hero.hp, 60);
+        const hp = m.hero.hp;
+        if (!far || id === 'healer') m.hero.place(mob.pos.x + Math.sin(mob.yaw) * (mob.radius + 1), mob.pos.z + Math.cos(mob.yaw) * (mob.radius + 1));
+        m.step(1 / 30);
+        lost += Math.max(0, hp - m.hero.hp);
+      }
+      m.hero.god = true;
+      const berries0 = m.profile.data.berries;
+      const floor0 = m.props.pickups.filter((p: any) => p.kind === 'berry').reduce((a: number, p: any) => a + p.amount, 0);
+      for (let j = 0; j < 60 && !mob.dead; j++) { mob.hit(9999, new V(0, 0, 1), mob.pos.clone(), 0); if (!mob.dead) m.step(1 / 60); }
+      m.step(1.5);
+      const floor = m.props.pickups.filter((p: any) => p.kind === 'berry').reduce((a: number, p: any) => a + p.amount, 0);
+      out[id] = { lost: lost >= 4, dead: mob.dead, gone: !m.pack.mobs.includes(mob), berries: floor - floor0 + m.profile.data.berries - berries0 >= mob.loot };
+    }
+    m.pack.clear();
+    return out;
+  }, MOB_IDS);
+  for (const id of MOB_IDS) expect(r[id], id).toEqual({ lost: true, dead: true, gone: true, berries: true });
+});
+
+test('мобы: щит держит удар спереди, целительница лечит и срывается от удара, призыватель зовёт малинёнышей, волк после промаха оглушён', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    const out: Record<string, unknown> = {};
+    m.hero.god = true;
+    // щитоносец смотрит на героя: спереди проходит 0,2, в спину — весь урон
+    m.pack.clear();
+    m.hero.place(2, 8);
+    const sh = m.spawnMob('shield', 6, 8);
+    sh.yaw = -Math.PI / 2;
+    m.step(0.6);
+    sh.cd = 99; sh.alerted = false; sh.aggro = 0;
+    let h0 = sh.hp; sh.hit(10, new V(1, 0, 0), sh.pos.clone(), 0); out.front = h0 - sh.hp;
+    h0 = sh.hp; sh.hit(10, new V(-1, 0, 0), sh.pos.clone(), 0); out.back = h0 - sh.hp;
+    // целительница лечит раненого оруженосца; удар во время каста — сорвано, оглушена
+    m.pack.clear();
+    m.hero.place(-14, 8);
+    const sq = m.spawnMob('squire', 6, 8), he = m.spawnMob('healer', 8, 8.5);
+    m.step(0.6);
+    sq.cd = 99; sq.speed = 0;
+    sq.hp = sq.maxHp / 2;
+    he.notice();
+    const half = sq.hp;
+    let healing = false;
+    for (let j = 0; j < 4 * 30 && !healing; j++) { m.step(1 / 30); healing = he.state === 'attack' && he.attack === 'heal' && he.st > 0.6; }
+    out.healed = sq.hp > half;
+    he.hit(5, new V(0, 0, 1), he.pos.clone(), 0);
+    m.step(1 / 30);
+    out.interrupted = he.state === 'daze';
+    // призыватель: малинёныши из кругов, призванные малины не дают
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const su = m.spawnMob('summoner', 8, 8);
+    m.step(4);
+    const called = m.pack.mobs.filter((x: any) => x.kind === 'berryling');
+    out.summoned = called.length >= 3 && called.every((x: any) => x.summoned);
+    // волк: пока присел, герой отошёл в сторону — промах, оглушён
+    m.pack.clear();
+    m.hero.place(2, 8);
+    const w = m.spawnMob('wolf', 6, 8);
+    let crouch = false;
+    for (let j = 0; j < 8 * 60 && !crouch; j++) { m.step(1 / 60); crouch = w.state === 'attack' && w.st < 0.3; }
+    m.hero.place(w.pos.x + Math.cos(w.yaw) * 4, w.pos.z - Math.sin(w.yaw) * 4);
+    m.step(1.2);
+    out.wolfDazed = crouch && w.state === 'daze';
+    // масштаб — как у стражей
+    m.bossScale(11, 4);
+    const w2 = m.spawnMob('wolf', 0, 0);
+    out.scaled = w2.maxHp / w2.baseHp;
+    m.bossScale('hero', 1);
+    m.pack.clear();
+    void su;
+    return out;
+  });
+  expect(r.front).toBeCloseTo(2, 5);
+  expect(r.back).toBeCloseTo(10, 5);
+  expect(r.healed).toBe(true);
+  expect(r.interrupted).toBe(true);
+  expect(r.summoned).toBe(true);
+  expect(r.wolfDazed).toBe(true);
+  expect(r.scaled as number).toBeCloseTo(1.6 * 2.5, 1);
+});
+
+test('казарма Ордена: гарнизон на постах просыпается группами, пал весь — герой вышел, казарма снова полна', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    const B = m.barracks;
+    const out: Record<string, unknown> = {};
+    m.hero.god = true;
+    out.kinds = [...new Set(B.mobs.map((x: any) => x.kind))].sort();
+    out.count = B.mobs.length;
+    // через проход в западной стене — в казарму; у входа никто не просыпается
+    m.hero.place(-23, 0, -Math.PI / 2);
+    m.step(0.5);
+    m.hero.place(-26.5, 0);
+    m.step(0.5);
+    out.door = B.mobs.filter((x: any) => x.alerted).length;
+    // подошёл к малинёнышам — проснулись они, волки и рыцари дальше спят
+    m.hero.place(-29, -4);
+    m.step(0.3);
+    const awake = (k: string) => B.mobs.filter((x: any) => x.kind === k).every((x: any) => x.alerted);
+    const asleep = (k: string) => B.mobs.filter((x: any) => x.kind === k).every((x: any) => !x.alerted);
+    out.groups = { berryling: awake('berryling'), wolf: asleep('wolf'), shield: asleep('shield'), healer: asleep('healer') };
+    // гарнизон пал; герой вышел на плейграунд — казарма снова полна и спит
+    for (let j = 0; j < 30; j++) { for (const x of B.mobs) if (!x.dead) x.hit(9999, new V(1, 0, 0), x.pos.clone(), 0); m.step(1 / 30); }
+    out.allDead = B.mobs.every((x: any) => x.dead);
+    m.hero.place(-10, 0);
+    m.step(0.5);
+    out.refilled = B.mobs.length === out.count && B.mobs.every((x: any) => !x.dead && !x.alerted);
+    return out;
+  });
+  expect(r.kinds).toEqual(['berryling', 'gardener', 'healer', 'pyro', 'shield', 'squire', 'summoner', 'wolf']);
+  expect(r.count).toBe(16);
+  expect(r.door).toBe(0);
+  expect(r.groups).toEqual({ berryling: true, wolf: true, shield: true, healer: true });
+  expect(r.allDead).toBe(true);
+  expect(r.refilled).toBe(true);
+});

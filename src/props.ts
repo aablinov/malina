@@ -848,6 +848,12 @@ export class Props {
     this.fx.burst(at.clone().setY(1.2), ['#ff4a7e', '#c8124a', '#ffd0e0'], 30, { speed: 5, up: 6, size: 0.1, life: 1, glow: true, gravity: 6 });
   }
 
+  /** Малина с рядового моба (wiki/design-mobs.md): одна кучка подскакивает из точки, без фонтана */
+  berries(at: THREE.Vector3, amount: number): void {
+    if (amount <= 0) return;
+    this.drop('berry', amount, at.clone().setY(0.8), new THREE.Vector3((this.rand() - 0.5) * 2, 4, (this.rand() - 0.5) * 2), 0.4);
+  }
+
   private drop(kind: LootKind, amount: number, pos: THREE.Vector3, vel: THREE.Vector3, lock: number, mesh = lootMesh(kind), data?: unknown): Pickup {
     mesh.position.copy(pos);
     this.scene.add(mesh);

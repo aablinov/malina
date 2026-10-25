@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { resolveCircle } from '../collision';
-import { glowTex } from '../loot-look';
 import { HERO } from '../tuning';
 import type { Target } from '../target';
 import { boom, hiss, voice } from '../spell-audio';
 import type { Rect } from './arena';
+import { Field } from './field';
 import { Boss, C, glowMat, rand, RASP, UNIT, wrap, type BossHooks } from './kit';
 
 /**
@@ -15,41 +15,6 @@ import { Boss, C, glowMat, rand, RASP, UNIT, wrap, type BossHooks } from './kit'
  */
 
 export type MiniState = 'sleep' | 'wake' | 'idle' | 'walk' | 'attack' | 'daze' | 'dead';
-
-// ---------- метки на полу ----------
-
-interface Mark { mesh: THREE.Mesh; t: number; dur: number; done: () => void; pulse: boolean }
-const RED = C(2.2, 0.35, 0.18);
-
-/** Круг: наливается за dur, по краю — яркое кольцо; на исходе — done */
-function circleMesh(r: number, color: THREE.Color): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 40), glowMat(color.clone().multiplyScalar(0.35), 0, true));
-  m.rotation.x = -Math.PI / 2;
-  const edge = new THREE.Mesh(new THREE.RingGeometry(r * 0.92, r, 48), glowMat(color, 0.9, true));
-  edge.position.z = 0.004;
-  m.add(edge);
-  return m;
-}
-
-/** Полоса: от from на len вдоль dir, ширина w */
-function lineMesh(len: number, w: number, color: THREE.Color): THREE.Mesh {
-  const g = new THREE.PlaneGeometry(w, len);
-  g.translate(0, len / 2, 0);
-  const m = new THREE.Mesh(g, glowMat(color.clone().multiplyScalar(0.4), 0, true));
-  m.rotation.x = -Math.PI / 2;
-  const eg = new THREE.PlaneGeometry(w, len);
-  eg.translate(0, len / 2, 0);
-  const edge = new THREE.Mesh(eg, glowMat(color, 0.25, true));
-  edge.scale.x = 0.25;
-  edge.position.z = 0.004;
-  m.add(edge);
-  return m;
-}
-
-// ---------- снаряды по дуге и опасные зоны ----------
-
-interface Lob { mesh: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; h: number; trail: THREE.Color; land: (at: THREE.Vector3) => void }
-interface Hazard { pos: THREE.Vector3; r: number; t: number; dps: number; color: THREE.Color; slow: number }
 
 // ---------- подручные ----------
 
@@ -156,17 +121,14 @@ export abstract class MiniBoss extends Boss {
   protected dazeFor = 0;
   /** Тело (всё, что качается и наклоняется); group — только позиция */
   protected readonly body = new THREE.Group();
-  private readonly marks: Mark[] = [];
-  private readonly lobs: Lob[] = [];
-  private readonly hazards: Hazard[] = [];
-  private hazardTick = 0;
+  /** Метки, снаряды и зоны на полу */
+  protected readonly field: Field;
   /** Тело твёрдое: расталкивает героя (под землёй, в тумане — нет) */
   protected get solid(): boolean { return true; }
-  /** Замедление героя от зон (0..1) — плейграунд домножает скорость */
-  heroSlow = 0;
 
   constructor(h: BossHooks, hp: number, home: THREE.Vector3, homeYaw: number, readonly arena: Rect) {
     super(h, hp, home, homeYaw);
+    this.field = new Field(this.h);
     this.setPlayers(1);
     this.group.add(this.body);
   }
@@ -276,7 +238,7 @@ export abstract class MiniBoss extends Boss {
         break;
       case 'dead': this.dying(dt); break;
     }
-    this.updateField(dt);
+    this.field.update(dt);
     for (let i = this.minions.length - 1; i >= 0; i--) { const m = this.minions[i]; m.update(dt); if (m.dead) this.minions.splice(i, 1); }
     // тело не проходит сквозь стены, героя расталкивает
     if (this.state !== 'dead' && this.flyY < 1) {
@@ -307,8 +269,6 @@ export abstract class MiniBoss extends Boss {
     this.yaw += Math.max(-m, Math.min(m, d));
   }
 
-  protected fwd(): THREE.Vector3 { return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
-  protected move(dir: THREE.Vector3, d: number): void { this.pos.x += dir.x * d; this.pos.z += dir.z * d; }
   /** Точка внутри арены (с отступом) */
   protected clampIn(p: THREE.Vector3, pad = 1.5): THREE.Vector3 {
     const a = this.arena;
@@ -317,7 +277,6 @@ export abstract class MiniBoss extends Boss {
     p.y = 0;
     return p;
   }
-  protected heroAt(): THREE.Vector3 { return this.h.hero.pos.clone().setY(0); }
 
   private dying(dt: number): void {
     // заваливается, свет гаснет, на 1,2 с рассыпается малиновыми кубами — сердце лопается
@@ -338,45 +297,17 @@ export abstract class MiniBoss extends Boss {
     }
   }
 
-  // ---------- урон герою ----------
-  /** Герой в круге */
-  protected inCircle(c: THREE.Vector3, r: number): boolean { const p = this.h.hero.pos; return Math.hypot(p.x - c.x, p.z - c.z) < r + HERO.radius; }
-  /** Герой в полосе от from вдоль dir длиной len, шириной w */
-  protected inLine(from: THREE.Vector3, dir: THREE.Vector3, len: number, w: number): boolean {
-    const p = this.h.hero.pos, dx = p.x - from.x, dz = p.z - from.z;
-    const along = dx * dir.x + dz * dir.z, side = Math.abs(dx * dir.z - dz * dir.x);
-    return along > -HERO.radius && along < len + HERO.radius && side < w / 2 + HERO.radius;
-  }
-  protected hurt(dmg: number, from: THREE.Vector3, knock = 4): void { this.h.hurtHero(dmg, from, knock); }
-
-  // ---------- поле: метки, снаряды, зоны ----------
+  // ---------- поле: метки, снаряды, зоны (src/bosses/field.ts) ----------
   /** Круг-метка: наливается dur секунд, потом done (там и бьют) */
-  markCircle(at: THREE.Vector3, r: number, dur: number, done: () => void, color = RED): void {
-    const m = circleMesh(r, color);
-    m.position.set(at.x, 0.06, at.z);
-    this.h.scene.add(m);
-    this.marks.push({ mesh: m, t: 0, dur, done, pulse: true });
-  }
+  markCircle(at: THREE.Vector3, r: number, dur: number, done: () => void, color?: THREE.Color): void { this.field.markCircle(at, r, dur, done, color); }
   /** Полоса-метка от from вдоль dir */
-  markLine(from: THREE.Vector3, dir: THREE.Vector3, len: number, w: number, dur: number, done: () => void, color = RED): void {
-    const m = lineMesh(len, w, color);
-    m.position.set(from.x, 0.06, from.z);
-    // после поворота плоскости на пол локальная +Y смотрит в −Z; поворот по Z разворачивает полосу вдоль dir
-    m.rotation.z = Math.atan2(-dir.x, -dir.z);
-    this.h.scene.add(m);
-    this.marks.push({ mesh: m, t: 0, dur, done, pulse: false });
-  }
+  markLine(from: THREE.Vector3, dir: THREE.Vector3, len: number, w: number, dur: number, done: () => void, color?: THREE.Color): void { this.field.markLine(from, dir, len, w, dur, done, color); }
   /** Снаряд по дуге из from в to за dur с высотой h; land — на месте падения */
-  lob(mesh: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, dur: number, h: number, trail: THREE.Color, land: (at: THREE.Vector3) => void): void {
-    mesh.position.copy(from);
-    this.h.scene.add(mesh);
-    this.lobs.push({ mesh, from: from.clone(), to: to.clone().setY(0), t: 0, dur, h, trail, land });
-  }
+  lob(mesh: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, dur: number, h: number, trail: THREE.Color, land: (at: THREE.Vector3) => void): void { this.field.lob(mesh, from, to, dur, h, trail, land); }
   /** Опасная зона: dps урона в секунду, slow — замедление героя внутри */
-  hazard(pos: THREE.Vector3, r: number, t: number, dps: number, color: THREE.Color, slow = 0): void {
-    this.hazards.push({ pos: pos.clone().setY(0), r, t, dps, color, slow });
-    this.h.fx.decal(pos.clone().setY(0.03), glowTex(), color.clone().multiplyScalar(0.3), r * 2.4, t, true, 0.85);
-  }
+  hazard(pos: THREE.Vector3, r: number, t: number, dps: number, color: THREE.Color, slow = 0): void { this.field.hazard(pos, r, t, dps, color, slow); }
+  /** Замедление героя от зон (0..1) — плейграунд домножает скорость */
+  get heroSlow(): number { return this.field.heroSlow; }
   /** Подручный рядом с точкой */
   summon(at: THREE.Vector3, look: ConstructorParameters<typeof Minion>[2]): Minion {
     const m = new Minion(this.h, this.clampIn(at.clone(), 1), look);
@@ -386,48 +317,7 @@ export abstract class MiniBoss extends Boss {
   }
 
   private clearField(): void {
-    for (const m of this.marks.splice(0)) this.disposeMesh(m.mesh);
-    for (const l of this.lobs.splice(0)) this.disposeMesh(l.mesh);
-    this.hazards.length = 0;
+    this.field.clear();
     for (const m of this.minions.splice(0)) m.kill();
-    this.heroSlow = 0;
-  }
-
-  private disposeMesh(o: THREE.Object3D): void {
-    this.h.scene.remove(o);
-    o.traverse((x) => { if (x instanceof THREE.Mesh) { x.geometry !== UNIT && x.geometry.dispose(); (x.material as THREE.Material).dispose(); } });
-  }
-
-  private updateField(dt: number): void {
-    for (let i = this.marks.length - 1; i >= 0; i--) {
-      const m = this.marks[i];
-      m.t += dt;
-      const k = Math.min(1, m.t / m.dur);
-      (m.mesh.material as THREE.MeshBasicMaterial).opacity = 0.15 + k * 0.6 + (k > 0.7 ? Math.sin(m.t * 40) * 0.1 : 0);
-      if (m.pulse) { const s = 0.3 + 0.7 * k; m.mesh.scale.setScalar(s); }
-      if (m.t >= m.dur) { this.marks.splice(i, 1); this.disposeMesh(m.mesh); m.done(); }
-    }
-    for (let i = this.lobs.length - 1; i >= 0; i--) {
-      const l = this.lobs[i];
-      l.t += dt;
-      const k = Math.min(1, l.t / l.dur);
-      l.mesh.position.lerpVectors(l.from, l.to, k);
-      l.mesh.position.y = THREE.MathUtils.lerp(l.from.y, 0.3, k) + Math.sin(Math.PI * k) * l.h;
-      l.mesh.rotation.set(l.t * 6, l.t * 4, 0);
-      if (Math.random() < 0.7) this.h.fx.particle({ pos: l.mesh.position.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.2, 0.8), rand(-0.3, 0.3)), life: 0.4, size: rand(0.08, 0.16), color: l.trail, gravity: -0.5 });
-      if (k >= 1) { this.lobs.splice(i, 1); this.disposeMesh(l.mesh); l.land(l.to.clone()); }
-    }
-    const hero = this.h.hero.pos;
-    let dps = 0, slow = 0;
-    for (let i = this.hazards.length - 1; i >= 0; i--) {
-      const z = this.hazards[i];
-      z.t -= dt;
-      if (z.t <= 0) { this.hazards.splice(i, 1); continue; }
-      if (Math.random() < 0.3 * Math.min(1, z.t)) this.h.fx.particle({ pos: z.pos.clone().add(new THREE.Vector3(rand(-z.r, z.r) * 0.6, 0.05, rand(-z.r, z.r) * 0.6)), vel: new THREE.Vector3(0, rand(0.8, 1.8), 0), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: z.color, gravity: -1 });
-      if (Math.hypot(hero.x - z.pos.x, hero.z - z.pos.z) < z.r) { dps = Math.max(dps, z.dps); slow = Math.max(slow, z.slow); }
-    }
-    this.heroSlow = slow;
-    this.hazardTick = dps > 0 ? this.hazardTick - dt : 0;
-    if (dps > 0 && this.hazardTick <= 0) { this.hazardTick = 0.25; this.h.hurtHero(dps * 0.25, hero, 0); }
   }
 }
