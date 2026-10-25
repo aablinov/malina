@@ -257,45 +257,88 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   return { level: L, labels };
 }
 
-/** Арена стража за северной стеной (wiki/design-bosses.md, раздел 5): проход x −1…1, коридор, руины x −15…15, z −58…−31 */
-export const BOSS_ARENA = { x0: -15, x1: 15, z0: -58, z1: -31, gateZ: -30, trigger: { x0: -3, x1: 3, z0: -34, z1: -31 } };
+/** Арена стража: пол, ворота в коридор, невидимый квадрат-триггер, точка возврата */
+export interface BossArenaSpec {
+  id: string;
+  title: string;
+  x0: number; x1: number; z0: number; z1: number;
+  /** Ворота в стене коридора: центр, поворот (90° — вдоль Z) */
+  gate: { x: number; z: number; rot: number };
+  trigger: { x0: number; x1: number; z0: number; z1: number };
+  exit: { x: number; z: number; yaw: number };
+}
+
+/**
+ * Зал стражей за северной стеной (wiki/design-bosses.md, раздел 1): коридор x −1…1 на север, по сторонам — восемь арен
+ * 21 × 20 м, по четыре с каждой стороны; ворота — в стене коридора, квадрат-триггер — сразу за воротами.
+ */
+const HALL = [
+  ['cauldron', 'Котёл Ордена'], ['boar', 'Морозный кабан'], ['storm', 'Грозовой голем'], ['golden', 'Золотой страж'],
+  ['night', 'Ночной всадник'], ['druse', 'Друзовый голем'], ['gatherer', 'Скорбная Сборщица'], ['cat', 'Кот-могильщик'],
+] as const;
+/** Акцент пола по стражу: блоки, которыми усыпан пол, и декор у стен */
+const THEME: Record<string, { floor: string[]; dots: string[] }> = {
+  cauldron: { floor: ['cobble', 'stone', 'bricks_cracked'], dots: ['fire', 'campfire'] },
+  boar: { floor: ['stone', 'gravel', 'tiles'], dots: ['dry_grass'] },
+  storm: { floor: ['tiles', 'stone', 'bricks'], dots: ['torch'] },
+  golden: { floor: ['tiles', 'path', 'grass'], dots: ['flower_yellow', 'tall_grass'] },
+  night: { floor: ['cobble', 'mossy', 'gravel'], dots: ['fern', 'tall_grass'] },
+  druse: { floor: ['stone', 'cobble', 'gravel'], dots: ['dry_grass'] },
+  gatherer: { floor: ['dirt', 'mossy', 'grass'], dots: ['fern', 'flower_white'] },
+  cat: { floor: ['bricks_old', 'cobble', 'mossy'], dots: ['torch', 'fern'] },
+};
+
+export const BOSS_ARENAS: BossArenaSpec[] = HALL.map(([id, title], i) => {
+  const left = i % 2 === 0, k = Math.floor(i / 2);
+  const z1 = -28 - 23 * k, z0 = z1 - 19, zc = (z0 + z1) / 2;
+  const x0 = left ? -23 : 3, x1 = left ? -3 : 23;
+  return {
+    id, title, x0, x1, z0, z1,
+    gate: { x: left ? -2 : 2, z: zc, rot: Math.PI / 2 },
+    trigger: left ? { x0: -6.5, x1: -3, z0: zc - 2, z1: zc + 2 } : { x0: 3, x1: 6.5, z0: zc - 2, z1: zc + 2 },
+    exit: { x: 0, z: zc, yaw: left ? Math.PI / 2 : -Math.PI / 2 },
+  };
+});
+export const BOSS_HALL_END = BOSS_ARENAS[BOSS_ARENAS.length - 1].z0 - 1;
 
 function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
-  const A = BOSS_ARENA;
   const hash = (x: number, z: number, s = 0) => (((x * 73856093) ^ (z * 19349663) ^ (s * 83492791)) >>> 0) % 1000 / 1000;
-  // проход в северной стене плейграунда и коридор к арене
+  const END = BOSS_HALL_END;
+  // проход в северной стене плейграунда и коридор на север
   for (let x = -1; x <= 1; x++) for (let y = 0; y < 3; y++) L.set(x, y, -W, 'air');
-  for (let z = A.gateZ; z <= -W; z++) {
-    for (let x = -1; x <= 1; x++) L.set(x, -1, z, 'tiles');
-    for (let y = 0; y < 3; y++) { L.set(-2, y, z, y === 2 ? 'bricks' : 'bricks_old'); L.set(2, y, z, y === 2 ? 'bricks' : 'bricks_old'); }
+  for (let z = END; z <= -W; z++) {
+    for (let x = -1; x <= 1; x++) { L.set(x, -1, z, 'tiles'); L.set(x, -2, z, 'stone'); }
+    L.set(-2, -1, z, 'stone'); L.set(2, -1, z, 'stone');
+    L.set(-2, 0, z, 'bricks_old'); L.set(2, 0, z, 'bricks_mossy');
   }
-  // пол руин: плиты, булыжник и гравий пятнами, у центра — выжженный круг из камня
-  for (let x = A.x0; x <= A.x1; x++) for (let z = A.z0; z <= A.z1; z++) {
-    const cx = x, cz = z - (A.z0 + A.z1) / 2, r = Math.hypot(cx, cz), n = hash(x, z);
-    L.set(x, -1, z, r < 4.5 ? (n < 0.3 ? 'bricks_cracked' : 'stone') : n < 0.45 ? 'tiles' : n < 0.78 ? 'cobble' : n < 0.92 ? 'gravel' : 'bricks_cracked');
-    L.set(x, -2, z, 'stone');
+  for (let x = -24; x <= 24; x++) for (let y = 0; y < 3; y++) L.set(x, y, END - 1, 'cliff_dark');
+  for (const A of BOSS_ARENAS) {
+    const T = THEME[A.id];
+    const left = A.x0 < 0;
+    for (let x = A.x0; x <= A.x1; x++) for (let z = A.z0; z <= A.z1; z++) {
+      const n = hash(x, z, 1);
+      L.set(x, -1, z, n < 0.5 ? T.floor[0] : n < 0.82 ? T.floor[1] : T.floor[2]);
+      L.set(x, -2, z, 'stone');
+    }
+    // стены: дальняя (запад у левых, север) — скала 3 блока, остальные 1 блок; между аренами — одна стена
+    const ox = left ? A.x0 - 1 : A.x1 + 1;
+    for (let z = A.z0 - 1; z <= A.z1 + 1; z++) {
+      L.set(ox, -1, z, 'stone');
+      for (let y = 0; y < (left ? 3 : 1); y++) L.set(ox, y, z, left ? 'cliff_dark' : 'cliff');
+    }
+    for (let x = Math.min(A.x0, ox); x <= Math.max(A.x1, ox); x++) for (const z of [A.z0 - 1, A.z1 + 1]) {
+      L.set(x, -1, z, 'stone');
+      for (let y = 0; y < (z === A.z0 - 1 ? 2 : 1); y++) L.set(x, y, z, z === A.z0 - 1 ? 'cliff_dark' : 'cliff');
+    }
+    // ворота: проём 3 м в стене коридора
+    for (let dz = -1; dz <= 1; dz++) { L.set(A.gate.x, 0, Math.round(A.gate.z) + dz, 'air'); L.set(A.gate.x, -1, Math.round(A.gate.z) + dz, 'tiles'); }
+    // россыпь декора у стен — по теме стража
+    for (let j = 0; j < 9; j++) {
+      const x = Math.round(A.x0 + 1 + hash(j, A.z0, 3) * (A.x1 - A.x0 - 2)), z = Math.round(A.z0 + 1 + hash(j, A.z1, 5) * (A.z1 - A.z0 - 2));
+      const nearWall = x <= A.x0 + 2 || x >= A.x1 - 2 || z <= A.z0 + 2 || z >= A.z1 - 2;
+      if (nearWall && L.nameAt(x, 0, z) === 'air') L.set(x, 0, z, T.dots[j % T.dots.length]);
+    }
+    labels.push({ text: A.title, x: left ? -1.6 : 1.6, z: Math.round(A.gate.z) + (left ? 2.4 : -2.4), size: 0.55 });
   }
-  // стены: дальние (−X, −Z) — скала 3 блока, ближние к камере (+X, южная) — 1 блок; в южной — ворота x −1…1
-  for (let z = A.z0 - 1; z <= A.z1 + 1; z++) {
-    for (let y = 0; y < 3; y++) L.set(A.x0 - 1, y, z, 'cliff_dark');
-    L.set(A.x1 + 1, 0, z, 'cliff');
-  }
-  for (let x = A.x0 - 1; x <= A.x1 + 1; x++) {
-    for (let y = 0; y < 3; y++) L.set(x, y, A.z0 - 1, 'cliff_dark');
-    if (Math.abs(x) > 1) L.set(x, 0, A.gateZ, 'bricks_old');
-    L.set(x, -1, A.gateZ, 'tiles');
-  }
-  // обломки колонн по углам: по ним дракон не ходит, за ними можно переждать дыхание
-  for (const [x, z, h] of [[-10, -38, 3], [10, -37, 2], [-9, -52, 2], [11, -51, 3], [-13, -45, 1], [13, -44, 1]] as [number, number, number][]) {
-    for (let y = 0; y < h; y++) L.set(x, y, z, y === h - 1 && h > 1 ? 'bricks_cracked' : 'bricks_old');
-    if (h > 1) L.set(x + 1, 0, z, 'bricks_cracked');
-  }
-  // огни: костры у дальних стен, факелы, тлеющие огоньки на камне
-  for (const [x, z] of [[-14, -57], [0, -57], [14, -57], [-14, -40], [-14, -50]] as [number, number][]) L.set(x, 0, z, 'campfire');
-  for (const x of [-8, 8]) L.set(x, 1, A.z0 - 1, 'torch');
-  for (let i = 0; i < 14; i++) {
-    const x = Math.round(A.x0 + 1 + hash(i, 7, 3) * (A.x1 - A.x0 - 2)), z = Math.round(A.z0 + 1 + hash(i, 9, 5) * (A.z1 - A.z0 - 4));
-    if (L.nameAt(x, 0, z) === 'air' && Math.hypot(x, z + 44) > 5) L.set(x, 0, z, i % 3 ? 'dry_grass' : 'fire');
-  }
-  labels.push({ text: 'арена стража: Багровый дракон ↑', x: 0, z: -22.6, size: 0.8 });
+  labels.push({ text: 'зал стражей ↑', x: 0, z: -22.6, size: 0.8 });
 }

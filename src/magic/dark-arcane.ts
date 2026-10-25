@@ -489,11 +489,59 @@ function bladephalanx(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
   }
 }
 
-/** Тьма, души и аркана: хор мёртвых, гравитационный колодец, коса-череп, павшие стражи, фаланга клинков */
+// ---------- Разрыв (с Кота-могильщика) ----------
+
+/**
+ * Рывок-телепорт к курсору (до radius м, не сквозь стены): там, где герой исчез, и там, где появился, — взрыв арканы;
+ * между точками — след из гаснущих силуэтов-кубов. Заряд — дальше рывок и шире взрывы.
+ */
+function blink(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
+  const fx = kit.h.fx, s = kit.color('arcane'), hero = kit.h.hero, terr = kit.h.terrain;
+  const from = hero.pos.clone();
+  const R = (a.radius ?? 8) * (1 + k * 0.3), r = 2.2 + k * 0.8;
+  const dir = new THREE.Vector3(at.x - from.x, 0, at.z - from.z);
+  const want = Math.min(R, dir.length());
+  if (dir.lengthSq() < 0.01) dir.set(Math.sin(hero.yaw), 0, Math.cos(hero.yaw));
+  dir.normalize();
+  // шагаем по 0,4 м, пока нет стены и пол рядом по высоте
+  let d = 0;
+  for (let t = 0.4; t <= want; t += 0.4) {
+    const x = from.x + dir.x * t, z = from.z + dir.z * t, y = terr.floorAt(x, z, from.y + 1);
+    if (terr.blocked(from.x + dir.x * d, from.z + dir.z * d, x, z, from.y + 0.5) || !Number.isFinite(y) || Math.abs(y - from.y) > 1.1) break;
+    d = t;
+  }
+  const to = from.clone().addScaledVector(dir, d);
+  to.y = terr.floorAt(to.x, to.z, from.y + 1);
+  if (!Number.isFinite(to.y)) to.y = from.y;
+  const burst = (p: THREE.Vector3, first: boolean) => {
+    const c = p.clone().setY(p.y + 0.8);
+    fx.flash(c, s.a.clone().multiplyScalar(0.6), r * 1.3, 0.25);
+    fx.shock(p.clone().setY(p.y + 0.06), r, s.a, 0.35, 0.2);
+    fx.burst(c, [s.a, s.b, C(4, 3.4, 4)], 22, { speed: r * 2.4, up: 3, size: 0.08, life: 0.5, glow: true, gravity: 4 });
+    if (first) { kit.impact('arcane', p, k, 10, 0.3); kit.pomp('rare', p, 'arcane'); }
+    boom(first ? 160 : 120, 50, 0.4, 0.4);
+    hiss({ dur: 0.25, vol: 0.2, f: 5000, f1: 1200, q: 0.8, verb: 0.4 });
+    voice({ type: 'triangle', f: semi(349.23, first ? 0 : 7), f1: semi(349.23, first ? 12 : 19), dur: 0.3, vol: 0.04, verb: 0.5 });
+    kit.h.aoe(p, r, Math.round(power), 1.4 + k, false);
+  };
+  burst(from, true);
+  // след: гаснущие кубы-силуэты вдоль пути
+  for (let t = 0.6; t < d; t += 0.8) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, 0.4), ghost(s.b.clone().multiplyScalar(0.35), 0.7));
+    m.position.copy(from).addScaledVector(dir, t).setY(from.y + 0.8);
+    m.rotation.y = hero.yaw;
+    fx.custom(m, 0.45, (kk) => { (m.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - kk); m.scale.set(1 - kk * 0.5, 1 + kk * 0.4, 1 - kk * 0.5); });
+  }
+  hero.place(to.x, to.z, Math.atan2(dir.x, dir.z), to.y);
+  kit.later(0.08, () => burst(to, false));
+}
+
+/** Тьма, души и аркана: хор мёртвых, гравитационный колодец, коса-череп, павшие стражи, фаланга клинков, разрыв */
 export const DARK_ARCANE: Partial<Record<BossSpellKind, BossSpell>> = {
   deadchoir: { school: 'void', tier: 'rare', title: 'Хор мёртвых', cast: deadchoir },
   gravitywell: { school: 'void', tier: 'legendary', title: 'Гравитационный колодец', cast: gravitywell },
   skullscythe: { school: 'void', tier: 'common', title: 'Коса-череп', cast: skullscythe },
   fallenguards: { school: 'void', tier: 'rare', title: 'Павшие стражи', cast: fallenguards },
   bladephalanx: { school: 'arcane', tier: 'rare', title: 'Фаланга клинков', cast: bladephalanx },
+  blink: { school: 'arcane', tier: 'rare', title: 'Разрыв', cast: blink },
 };
