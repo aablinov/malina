@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { initAudio, sfx, toggleMute } from '../audio';
+import { Music } from '../music';
 import { Lighting } from '../lighting';
 import { Props, type LootKind } from '../props';
 import { type Obstacle } from '../collision';
@@ -1008,6 +1009,14 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     fx.update(dt, window.innerWidth, window.innerHeight);
   }
 
+  // фоновая музыка (src/music.ts): тихая в покое, ещё тише в бою, тревожная при низком здоровье
+  const music = new Music();
+  const near = (p: THREE.Vector3, r: number): boolean => Math.hypot(p.x - hero.pos.x, p.z - hero.pos.z) < r;
+  /** Бой: проснувшийся страж или моб, поднявший тревогу, в 25 м от героя */
+  const inFight = (): boolean =>
+    bosses.some((b) => b.awake && !b.dead) ||
+    [pack, ...mobRooms.map((r) => r.pack)].some((p) => p.mobs.some((m) => m.alerted && !m.dead && near(m.pos, 25)));
+
   let acc = 0;
   let last = performance.now();
   let fpsAcc = 0, fpsN = 0, fpsVal = 60, frameMs = 16;
@@ -1032,6 +1041,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     while (acc >= STEP && n < 6) { tick(STEP); acc -= STEP; n++; }
     perf.tickEnd();
     if (n >= 6) acc = 0;
+    music.update(real, inFight(), hero.down ? 0 : hero.hp / hero.maxHp);
     perf.renderStart();
     render(real);
     perf.renderEnd();
@@ -1122,6 +1132,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     toBoss(id: string) { const s = BOSS_ARENAS.find((a) => a.id === id); if (s) hero.place(s.exit.x, s.exit.z, s.exit.yaw); return !!s; },
     /** Эффекты: стоп-кадр, засветка, свет заклинаний */
     fx,
+    /** Фоновая музыка (src/music.ts): mood, bpm, notes */
+    music,
     /** Замеры кадра (src/dev/perf.ts): snapshot() — сводка, длинные кадры с метками; renderer.info */
     perf, renderer,
     /** Прогрев шейдеров завершён (число программ) */
