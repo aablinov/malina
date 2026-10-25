@@ -54,6 +54,10 @@ export abstract class Mob extends Boss {
   readonly knight: boolean = false;
   /** Воодушевлён знаменем (секунды): урон и скорость +25 % */
   rally = 0;
+  /** Призрак: летает сквозь стены */
+  ghost = false;
+  /** Под куполом обелиска (секунды): урон по мобу ×0,5 */
+  ward = 0;
   protected readonly body = new THREE.Group();
   protected readonly field: Field;
   protected readonly mh: MobHooks;
@@ -92,6 +96,8 @@ export abstract class Mob extends Boss {
   override get dmgMult(): number { return super.dmgMult * (this.rally > 0 ? 1.25 : 1); }
   /** Скорость бега со знаменем */
   get pace(): number { return this.speed * (this.rally > 0 ? 1.25 : 1); }
+  /** Замедление героя от зон моба (0..1) */
+  get heroSlow(): number { return this.field.heroSlow; }
   /** Ещё цели, кроме самого моба (воткнутое знамя) */
   extras(): Target[] { return []; }
 
@@ -107,9 +113,9 @@ export abstract class Mob extends Boss {
 
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void {
     if (this.dead || this.state === 'spawn') return;
-    const k = this.guard(dir);
+    const k = this.guard(dir) * (this.ward > 0 ? 0.5 : 1);
     if (k < 1) {
-      this.h.fx.text(point.clone().setY(point.y + 0.5), 'блок', '');
+      this.h.fx.text(point.clone().setY(point.y + 0.5), this.ward > 0 && this.guard(dir) >= 1 ? 'купол' : 'блок', '');
       this.h.fx.burst(point, ['#ffffff', '#e8b84a'], 6, { speed: 3, up: 2, size: 0.07, life: 0.3, glow: true, gravity: 8 });
       if (!this.quiet) boom(900, 500, 0.12, 0.15);
     }
@@ -117,6 +123,14 @@ export abstract class Mob extends Boss {
     // отброс: лёгкого — дальше; стены поправит update
     this.pos.addScaledVector(dir, (0.15 + knock * 0.5) * k / this.mass);
     this.notice();
+  }
+
+  /** Пасть без удара (пал хозяин, лопнул сам): мимо щита и появления */
+  vanish(): void {
+    if (this.dead) return;
+    this.hp = 0;
+    this.dead = true;
+    this.die();
   }
 
   /** Лечение: здоровье не выше полного, зелёные искры, цифра */
@@ -150,6 +164,7 @@ export abstract class Mob extends Boss {
   // ---------- мозг ----------
   update(dt: number): void {
     this.st += dt;
+    this.ward -= dt;
     if (this.rally > 0) {
       this.rally -= dt;
       if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
@@ -188,9 +203,9 @@ export abstract class Mob extends Boss {
     }
     this.field.update(dt);
     if (this.state !== 'dead') {
-      // не сквозь стены; на героя не налезает — уступает ему
+      // не сквозь стены (кроме призраков); на героя не налезает — уступает ему
       const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
-      resolveCircle(p, this.radius, this.h.obstacles());
+      if (!this.ghost) resolveCircle(p, this.radius, this.h.obstacles());
       const d = Math.hypot(hero.x - p.x, hero.z - p.z), R = this.radius + HERO.radius;
       if (d < R && d > 1e-3) { const k = (R - d) / d; p.x -= (hero.x - p.x) * k; p.z -= (hero.z - p.z) * k; }
       this.pos.x = p.x; this.pos.z = p.z;
@@ -209,6 +224,15 @@ export abstract class Mob extends Boss {
     if (Math.abs(rel) < 1.2 && dist > this.keep + 0.3) { this.pos.x += (dx / dist) * sp; this.pos.z += (dz / dist) * sp; return true; }
     if (this.keep > 4 && dist < this.keep - 2) { this.pos.x -= (dx / dist) * sp * 0.7; this.pos.z -= (dz / dist) * sp * 0.7; return true; }
     return false;
+  }
+
+  /** Рывок вдоль dir: speed м/с; true — упёрся в стену */
+  protected dash(dir: THREE.Vector3, speed: number, dt: number): boolean {
+    const step = speed * dt;
+    this.move(dir, step);
+    const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
+    resolveCircle(p, this.radius, this.h.obstacles());
+    return Math.hypot(p.x - this.pos.x, p.z - this.pos.z) > step * 0.5;
   }
 
   protected place(): void {

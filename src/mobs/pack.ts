@@ -47,6 +47,9 @@ export class Pack {
     for (const m of this.mobs) m.setScale(level, players);
   }
 
+  /** Замедление героя от зон стаи */
+  get heroSlow(): number { return this.mobs.reduce((a, m) => Math.max(a, m.heroSlow), 0); }
+
   targets(): Target[] { return [...this.mobs.filter((m) => m.alive), ...this.mobs.flatMap((m) => m.extras())]; }
 
   update(dt: number): void {

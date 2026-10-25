@@ -252,6 +252,9 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   buildBossArena(L, labels, W);
   buildBarracks(L, labels, W, dec);
   buildGarden(L, labels, dec);
+  buildCrypt(L, labels, W, dec);
+  buildLair(L, labels, dec);
+  buildWorkshop(L, labels, dec);
 
   L.spawn = [0, 0, 0];
   L.meta = { labels };
@@ -412,9 +415,57 @@ export const MOB_ROOMS: MobRoomSpec[] = [
       ...at('horror', [[-39, 32]]), ...at('bud', [[-42, 34], [-36, 34]]),
     ],
   },
+  {
+    id: 'crypt', title: 'Старый погост', x0: -50, x1: -27, z0: -36, z1: -13,
+    enter: { x: -22, z: -16, yaw: -Math.PI / 2 },
+    posts: [
+      // у входа — сборщики; посреди — огоньки; в глубине — пугало, у дальней стены — лучники
+      ...at('reaper', [[-31, -20], [-32.5, -22], [-30, -23]]),
+      ...at('wisp', [[-41, -15], [-43, -17], [-40, -18]]),
+      ...at('scarecrow', [[-35, -30.5]]),
+      ...at('archer', [[-46, -28], [-44, -31.5]]),
+    ],
+  },
+  {
+    id: 'lair', title: 'Звериное логово', x0: -50, x1: -27, z0: -62, z1: -39,
+    enter: { x: -35, z: -34, yaw: Math.PI },
+    posts: [
+      // у входа справа — кабанчики, слева — лозоплёты, в глубине — жуки и улей
+      ...at('boarlet', [[-30, -44], [-29, -47]]),
+      ...at('spider', [[-44, -45], [-46, -48]]),
+      ...at('beetle', [[-36, -55], [-34, -57]]),
+      ...at('hive', [[-44, -59]]),
+    ],
+  },
+  {
+    id: 'workshop', title: 'Мастерская Ордена', x0: -50, x1: -27, z0: 38, z1: 61,
+    enter: { x: -35, z: 34, yaw: 0 },
+    posts: [
+      // у входа справа — бочонки; посреди — котелки; в глубине — обелиск с големчиками; по углам — «корзины малины»
+      ...at('keg', [[-29, 41], [-30, 43], [-28, 44.5]]),
+      ...at('pot', [[-36, 50], [-33, 52]]),
+      ...at('obelisk', [[-41, 57]]), ...at('druseling', [[-38, 58.5], [-44, 58.5]]),
+      ...at('mimic', [[-44, 43], [-28, 59.5]]),
+    ],
+  },
 ];
 
 type Dec = (name: string, x: number, y: number, z: number, rot?: number, on?: [number, number, number]) => void;
+
+/** Коробка комнаты: пол по floor(x, z), стены — северная и западная 3 блока (wall), южная и восточная 1 блок (low) */
+function roomShell(L: Level, R: MobRoomSpec, floor: (x: number, z: number) => string, wall: string, low: string): void {
+  for (let x = R.x0; x <= R.x1; x++) for (let z = R.z0; z <= R.z1; z++) { L.set(x, -1, z, floor(x, z)); L.set(x, -2, z, 'stone'); }
+  for (let x = R.x0 - 1; x <= R.x1 + 1; x++) {
+    L.set(x, -1, R.z0 - 1, 'stone'); L.set(x, -1, R.z1 + 1, 'stone');
+    for (let y = 0; y < 3; y++) L.set(x, y, R.z0 - 1, wall);
+    L.set(x, 0, R.z1 + 1, low);
+  }
+  for (let z = R.z0; z <= R.z1; z++) {
+    L.set(R.x0 - 1, -1, z, 'stone'); L.set(R.x1 + 1, -1, z, 'stone');
+    for (let y = 0; y < 3; y++) L.set(R.x0 - 1, y, z, wall);
+    L.set(R.x1 + 1, 0, z, low);
+  }
+}
 
 function buildBarracks(L: Level, labels: PgLabel[], W: number, dec: Dec): void {
   const B = MOB_ROOMS[0];
@@ -483,4 +534,74 @@ function buildGarden(L: Level, labels: PgLabel[], dec: Dec): void {
   labels.push({ text: 'слизни', x: -29, z: 21.6, size: 0.5 });
   labels.push({ text: 'клубки', x: -46.5, z: 19.6, size: 0.5 });
   labels.push({ text: 'чудище и бутоны', x: -39, z: 29.4, size: 0.5 });
+}
+
+/** Старый погост: мшистые плиты и земля, надгробия, свечи; проход — в западной стене плейграунда (z −17…−15) */
+function buildCrypt(L: Level, labels: PgLabel[], W: number, dec: Dec): void {
+  const R = MOB_ROOMS[2];
+  const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
+  roomShell(L, R, (x, z) => { const n = hash(x, z); return Math.abs(z + 16) <= 1 && x > -34 ? 'path' : n < 0.55 ? 'bricks_old' : n < 0.8 ? 'dirt' : 'grass'; }, 'cliff_dark', 'bricks_mossy');
+  // проход: западная стена плейграунда и восточная погоста
+  for (let z = -17; z <= -15; z++) for (const x of [-W, R.x1 + 1]) { for (let y = 0; y < 3; y++) L.set(x, y, z, 'air'); L.set(x, -1, z, 'path'); }
+  // надгробия рядами: невысокие камни, у каждого — свеча или цветок
+  for (const [x, z] of [[-30, -32], [-33, -34], [-38, -34], [-41, -24], [-47, -21], [-48, -34], [-29, -28], [-37, -25]] as const) {
+    L.set(x, 0, z, 'cobble_low');
+    if (L.nameAt(x, 0, z + 1) === 'air') L.set(x, 0, z + 1, hash(x, z) < 0.5 ? 'flower_white' : 'fern');
+  }
+  dec('candles_group', -46.5, 0, -35, 20);
+  dec('candles', -31, 0, -33.5, 0);
+  dec('bones', -42, 0, -27, 70);
+  dec('cobweb', -49.4, 2.4, R.z0 - 0.5, 0, [-49, 2, R.z0 - 1]);
+  dec('roots', R.x0 - 0.5, 2.5, -26, -90, [R.x0 - 1, 2, -26]);
+  dec('lantern_post', -28, 0, -18.6, 90);
+  dec('lantern_post', -28, 0, -13.4, 90);
+  labels.push({ text: 'Старый погост ←', x: -21.6, z: -16, size: 0.7 });
+  labels.push({ text: 'сборщики', x: -31, z: -17.6, size: 0.5 });
+  labels.push({ text: 'огоньки', x: -41.5, z: -20.4, size: 0.5 });
+  labels.push({ text: 'пугало', x: -35, z: -28, size: 0.5 });
+  labels.push({ text: 'лучники', x: -45, z: -34.4, size: 0.5 });
+  labels.push({ text: 'Звериное логово ↑', x: -35, z: -34.6, size: 0.55 });
+}
+
+/** Звериное логово: земля, мох и сено, корни и кости; проход — из северной стены погоста */
+function buildLair(L: Level, labels: PgLabel[], dec: Dec): void {
+  const R = MOB_ROOMS[3];
+  const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
+  roomShell(L, R, (x, z) => (hash(x, z) < 0.5 ? 'dirt' : 'grass'), 'cliff', 'bricks_old');
+  // проход между погостом и логовом: стены у них общие по z −38…−37
+  for (let x = -36; x <= -34; x++) for (const z of [R.z1 + 1, MOB_ROOMS[2].z0 - 1]) { for (let y = 0; y < 3; y++) L.set(x, y, z, 'air'); L.set(x, -1, z, 'dirt'); }
+  for (const [x, z, b] of [[-49, -61, 'dry_grass'], [-48, -40, 'berry_bush'], [-28, -61, 'berry_bush'], [-28, -55, 'tall_grass'], [-49, -52, 'dry_grass'], [-40, -40, 'fern']] as [number, number, string][]) L.set(x, 0, z, b);
+  dec('bones', -32, 0, -51, 30);
+  dec('bones', -47, 0, -55, 110);
+  dec('roots', R.x0 - 0.5, 2.5, -44, -90, [R.x0 - 1, 2, -44]);
+  dec('roots', -40, 2.5, R.z0 - 0.5, 0, [-40, 2, R.z0 - 1]);
+  dec('mushrooms', -29, 0, -58, 40);
+  labels.push({ text: 'кабанчики', x: -29.5, z: -41.6, size: 0.5 });
+  labels.push({ text: 'лозоплёты', x: -45, z: -42.4, size: 0.5 });
+  labels.push({ text: 'жуки', x: -35, z: -52.4, size: 0.5 });
+  labels.push({ text: 'улей', x: -44, z: -56.6, size: 0.5 });
+}
+
+/** Мастерская Ордена: плиты и булыжник, ящики и тележки, свечи; проход — из южной стены Тернового сада */
+function buildWorkshop(L: Level, labels: PgLabel[], dec: Dec): void {
+  const R = MOB_ROOMS[4];
+  const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
+  roomShell(L, R, (x, z) => (Math.abs(x + 35) <= 1 && z <= 46 ? 'path' : hash(x, z) < 0.6 ? 'tiles' : 'cobble'), 'bricks_old', 'bricks_mossy');
+  // проход между садом и мастерской: стены по z 36…37
+  for (let x = -36; x <= -34; x++) {
+    for (const z of [R.z0 - 1, MOB_ROOMS[1].z1 + 1]) { for (let y = 0; y < 3; y++) L.set(x, y, z, 'air'); L.set(x, -1, z, 'path'); }
+    // кусты у южной стены сада не загораживают проход
+    L.set(x, 0, MOB_ROOMS[1].z1, 'air');
+  }
+  for (const x of [-48, -40, -30]) L.set(x, 0, R.z1, 'torch');
+  dec('crates_banded_stack', -48.5, 0, 40, 10);
+  dec('crate_banded', -47, 0, 42.5, 30);
+  dec('cart_loaded', -31, 0, 55, 70);
+  dec('crate_small', -29, 0, 57.5, 15);
+  dec('chest', -46, 0, 60, 180);
+  dec('candles_row', -40, 0, 60.4, 0);
+  labels.push({ text: 'Мастерская Ордена ↓', x: -35, z: 33.4, size: 0.55 });
+  labels.push({ text: 'бочонки', x: -29, z: 39.4, size: 0.5 });
+  labels.push({ text: 'котелки', x: -34.5, z: 47.6, size: 0.5 });
+  labels.push({ text: 'обелиск и големчики', x: -41, z: 54.4, size: 0.5 });
 }

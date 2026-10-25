@@ -803,6 +803,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     c.appendChild(row3);
     button(row3, 'Мобы: первая партия', () => spawnSquad(SQUADS.first));
     button(row3, 'Мобы: вторая партия', () => spawnSquad(SQUADS.second));
+    button(row3, 'Мобы: третья партия', () => spawnSquad(SQUADS.third));
+    button(row3, 'Мобы: четвёртая партия', () => spawnSquad(SQUADS.fourth));
     for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
     button(row3, 'Убрать мобов', () => pack.clear());
     for (const r of MOB_ROOMS) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
@@ -941,6 +943,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     marker.visible = markerT > 0;
     (marker.material as THREE.MeshBasicMaterial).opacity = Math.max(0, markerT * 2);
     marker.scale.setScalar(1 + (0.5 - markerT));
+    // зоны мобов (паутина лозоплёта) замедляют героя
+    const slow = Math.max(pack.heroSlow, ...mobRooms.map((r) => r.pack.heroSlow));
+    hero.slow = Math.min(0.8, slow);
     hero.update(dt, input, solids(), terrain);
     // под крышей: срезать потолок и всё, что выше, — виден этаж, где стоит герой
     cutY = ceilingAt(level, hero.pos.x, hero.pos.z, hero.pos.y);

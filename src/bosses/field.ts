@@ -41,11 +41,14 @@ function lineMesh(len: number, w: number, color: THREE.Color): THREE.Mesh {
 
 interface Lob { mesh: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; h: number; trail: THREE.Color; land: (at: THREE.Vector3) => void }
 interface Hazard { pos: THREE.Vector3; r: number; t: number; dps: number; color: THREE.Color; slow: number }
+/** Прямой выстрел (болт, стрела): только вид — урон считает тот, кто стрелял, по метке-полосе */
+interface Shot { mesh: THREE.Mesh; from: THREE.Vector3; dir: THREE.Vector3; len: number; t: number; dur: number }
 
 export class Field {
   private readonly marks: Mark[] = [];
   private readonly lobs: Lob[] = [];
   private readonly hazards: Hazard[] = [];
+  private readonly shots: Shot[] = [];
   private hazardTick = 0;
   /** Замедление героя от зон (0..1) */
   heroSlow = 0;
@@ -81,6 +84,7 @@ export class Field {
   }
   /** Убрать всё с пола */
   clear(): void {
+    for (const b of this.shots.splice(0)) this.disposeMesh(b.mesh);
     for (const m of this.marks.splice(0)) this.disposeMesh(m.mesh);
     for (const l of this.lobs.splice(0)) this.disposeMesh(l.mesh);
     this.hazards.length = 0;
@@ -92,7 +96,23 @@ export class Field {
     o.traverse((x) => { if (x instanceof THREE.Mesh) { x.geometry !== UNIT && x.geometry.dispose(); (x.material as THREE.Material).dispose(); } });
   }
 
+  /** Выстрел из from вдоль dir на len метров со скоростью speed, на высоте y */
+  shot(from: THREE.Vector3, dir: THREE.Vector3, len: number, color: THREE.Color, speed = 60, y = 1.2): void {
+    const mesh = new THREE.Mesh(UNIT, glowMat(color));
+    mesh.scale.set(0.06, 0.06, 0.7);
+    mesh.rotation.y = Math.atan2(dir.x, dir.z);
+    mesh.position.copy(from).setY(y);
+    this.h.scene.add(mesh);
+    this.shots.push({ mesh, from: from.clone().setY(y), dir: dir.clone(), len, t: 0, dur: len / speed });
+  }
+
   update(dt: number): void {
+    for (let i = this.shots.length - 1; i >= 0; i--) {
+      const b = this.shots[i];
+      b.t += dt;
+      b.mesh.position.copy(b.from).addScaledVector(b.dir, Math.min(1, b.t / b.dur) * b.len);
+      if (b.t >= b.dur) { this.shots.splice(i, 1); this.disposeMesh(b.mesh); }
+    }
     for (let i = this.marks.length - 1; i >= 0; i--) {
       const m = this.marks[i];
       m.t += dt;

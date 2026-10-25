@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { pixelTex } from '../textures';
 import { boom, hiss, voice } from '../spell-audio';
-import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit';
+import { C, rand, RASP } from '../bosses/kit';
 import type { Target } from '../target';
 import { Mob, type MobHooks } from './mob';
 
@@ -289,10 +289,7 @@ export class Crossbowman extends Mob {
   override readonly topY = 2;
   private readonly rig: Rig;
   private readonly bow = new THREE.Group();
-  private readonly bolt: THREE.Mesh;
   private readonly aim = new THREE.Vector3();
-  private boltT = -1;
-  private readonly boltFrom = new THREE.Vector3();
 
   constructor(h: MobHooks, at: THREE.Vector3) {
     super(h, 40, at);
@@ -308,34 +305,11 @@ export class Crossbowman extends Mob {
     B(this.bow, wood, 0.1, 0.1, 0.8, 0, 0, 0);
     B(this.bow, steel, 0.9, 0.08, 0.08, 0, 0.02, 0.3);
     B(this.bow, str, 0.86, 0.02, 0.02, 0, 0.06, 0.1);
-    this.bolt = new THREE.Mesh(UNIT, glowMat(C(3.4, 2.6, 1.4)));
-    this.bolt.scale.set(0.06, 0.06, 0.7);
-    this.bolt.visible = false;
-    h.scene.add(this.bolt);
     this.place();
-  }
-
-  override dispose(): void {
-    super.dispose();
-    this.h.scene.remove(this.bolt);
-    (this.bolt.material as THREE.Material).dispose();
   }
 
   protected choose(dist: number, rel: number): string | null { return dist < 15 && Math.abs(rel) < 0.3 ? 'shoot' : null; }
   protected override rest(): number { return rand(0.6, 1); }
-
-  override update(dt: number): void {
-    super.update(dt);
-    // болт летит по полосе за 0,25 с
-    if (this.boltT >= 0) {
-      this.boltT += dt;
-      const k = this.boltT / 0.25;
-      this.bolt.visible = k < 1;
-      this.bolt.position.copy(this.boltFrom).addScaledVector(this.aim, k * 15).setY(1.2);
-      this.bolt.rotation.y = Math.atan2(this.aim.x, this.aim.z);
-      if (k >= 1) this.boltT = -1;
-    }
-  }
 
   protected act(_name: string, t: number, dt: number): boolean {
     if (t - dt <= 0) {
@@ -344,8 +318,7 @@ export class Crossbowman extends Mob {
       this.field.markLine(from, this.aim, 15, 0.5, 0.75, () => {
         if (this.dead) return;
         if (!this.quiet) { voice({ type: 'triangle', f: 220, f1: 90, dur: 0.12, vol: 0.06 }); hiss({ dur: 0.2, vol: 0.1, f: 3000, f1: 1200, q: 1, type: 'bandpass' }); }
-        this.boltFrom.copy(from);
-        this.boltT = 0;
+        this.field.shot(from, this.aim, 15, C(3.4, 2.6, 1.4));
         if (this.inLine(from, this.aim, 15, 0.5)) this.hurt(8, from, 3);
       });
     }

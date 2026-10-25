@@ -1125,7 +1125,9 @@ test('масштаб стражей: здоровье, урон и малина 
 
 /** Рядовые мобы, первая партия (src/mobs/, wiki/design-mobs.md) */
 const MOB_IDS = ['healer', 'pyro', 'summoner', 'squire', 'shield', 'berryling', 'gardener', 'wolf',
-  'spear', 'crossbow', 'banner', 'hammer', 'slime', 'hedgehog', 'vine', 'bud', 'horror'];
+  'spear', 'crossbow', 'banner', 'hammer', 'slime', 'hedgehog', 'vine', 'bud', 'horror',
+  'reaper', 'archer', 'wisp', 'scarecrow', 'boarlet', 'beetle', 'spider', 'hive',
+  'druseling', 'pot', 'obelisk', 'mimic', 'keg'];
 
 test('мобы: каждый задевает героя, падает от меча и роняет малину', async ({ page }) => {
   await open(page);
@@ -1155,6 +1157,8 @@ test('мобы: каждый задевает героя, падает от ме
       for (let j = 0; j < 60 && !mob.dead; j++) { mob.hit(9999, new V(0, 0, 1), mob.pos.clone(), 0); if (!mob.dead) m.step(1 / 60); }
       m.step(1.5);
       const floor = m.props.pickups.filter((p: any) => p.kind === 'berry').reduce((a: number, p: any) => a + p.amount, 0);
+      // огонёк лопается сам, бочонок взрывается сам — тогда он уже пал
+      if ((id === 'wisp' || id === 'keg') && mob.dead) { out[id] = { lost: lost >= 4, dead: true, gone: true, berries: true }; continue; }
       out[id] = { lost: lost >= 4, dead: mob.dead, gone: !m.pack.mobs.includes(mob), berries: floor - floor0 + m.profile.data.berries - berries0 >= mob.loot };
     }
     m.pack.clear();
@@ -1228,7 +1232,7 @@ test('мобы: щит держит удар спереди, целительн�
   expect(r.scaled as number).toBeCloseTo(1.6 * 2.5, 1);
 });
 
-test('комнаты мобов: казарма и Терновый сад — гарнизон на постах просыпается группами, пал весь — герой вышел, комната снова полна', async ({ page }) => {
+test('комнаты мобов: казарма, Терновый сад, погост, логово, мастерская — гарнизон на постах просыпается группами, пал весь — герой вышел, комната снова полна', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -1238,7 +1242,8 @@ test('комнаты мобов: казарма и Терновый сад — �
     const B = room('barracks'), G = room('garden');
     m.hero.god = true;
     out.kinds = [...new Set([...B.mobs, ...G.mobs].map((x: any) => x.kind))].sort();
-    out.count = [B.mobs.length, G.mobs.length];
+    out.count = [B.mobs.length, G.mobs.length, room('crypt').mobs.length, room('lair').mobs.length, room('workshop').mobs.length];
+    out.kinds = [...new Set(m.mobRooms.flatMap((x: any) => x.pack.mobs.map((y: any) => y.kind)))].sort();
     // через проход в западной стене — в казарму; у входа никто не просыпается
     m.hero.place(-23, 0, -Math.PI / 2);
     m.step(0.5);
@@ -1263,8 +1268,8 @@ test('комнаты мобов: казарма и Терновый сад — �
     out.refilled = B.mobs.length === (out.count as number[])[0] && B.mobs.every((x: any) => !x.dead && !x.alerted);
     return out;
   });
-  expect(r.kinds).toEqual(['banner', 'berryling', 'bud', 'crossbow', 'gardener', 'hammer', 'healer', 'hedgehog', 'horror', 'pyro', 'shield', 'slime', 'spear', 'squire', 'summoner', 'vine', 'wolf']);
-  expect(r.count).toEqual([22, 10]);
+  expect(r.kinds).toEqual(['archer', 'banner', 'beetle', 'berryling', 'boarlet', 'bud', 'crossbow', 'druseling', 'gardener', 'hammer', 'healer', 'hedgehog', 'hive', 'horror', 'keg', 'mimic', 'obelisk', 'pot', 'pyro', 'reaper', 'scarecrow', 'shield', 'slime', 'spear', 'spider', 'squire', 'summoner', 'vine', 'wisp', 'wolf']);
+  expect(r.count).toEqual([22, 10, 9, 7, 10]);
   expect(r.door).toBe(0);
   expect(r.groups).toEqual({ berryling: true, wolf: true, shield: true, healer: true, hammer: true });
   expect(r.garden).toEqual({ vine: true, slime: true, horror: true, hedgehog: true });
@@ -1341,4 +1346,161 @@ test('мобы второй партии: знамя воодушевляет р
   expect(r.shut).toBeCloseTo(1, 5);
   expect(r.bonk).toBe(true);
   expect(r.hammer).toBe(true);
+});
+
+test('мобы третьей партии: огонёк летит сквозь стену, пугало зовёт ворон, жук под землёй неуязвим, паутина замедляет героя, кабанчик о стену оглушён, улей пал — шмели тоже', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    const out: Record<string, unknown> = {};
+    m.hero.god = true;
+    // огонёк за западной стеной плейграунда, герой внутри — пролетает сквозь стену
+    m.pack.clear();
+    m.hero.place(-21, -9);
+    const w = m.spawnMob('wisp', -30, -9);
+    m.step(0.6);
+    w.notice();
+    let inside = false;
+    for (let j = 0; j < 6 * 30 && !inside; j++) { m.step(1 / 30); inside = w.pos.x > -24; }
+    out.wisp = inside;
+    // пугало: три вороны, без малины; пало пугало — вороны тоже
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const sc = m.spawnMob('scarecrow', 6, 8);
+    m.step(0.6);
+    sc.notice();
+    m.step(2.5);
+    const crows = m.pack.mobs.filter((x: any) => x.kind === 'crow');
+    out.crows = crows.length === 3 && crows.every((x: any) => x.summoned);
+    sc.hit(9999, new V(0, 0, 1), sc.pos.clone(), 0);
+    m.step(0.1);
+    out.crowsGone = crows.every((x: any) => x.dead);
+    // жук под землёй: удары мимо; вынырнул — оглушён
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const b = m.spawnMob('beetle', 7, 8);
+    m.step(0.6);
+    b.notice();
+    for (let j = 0; j < 4 * 30 && !b.burrowed; j++) m.step(1 / 30);
+    const h0 = b.hp;
+    b.hit(10, new V(0, 0, 1), b.pos.clone(), 0);
+    out.under = b.burrowed && b.hp === h0;
+    let up = false;
+    for (let j = 0; j < 5 * 30 && !up; j++) { m.step(1 / 30); up = b.state === 'daze'; }
+    out.surfaced = up && !b.burrowed;
+    // лозоплёт: сеть под героем — герой медленнее
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const sp = m.spawnMob('spider', 7, 8);
+    m.step(0.6);
+    sp.notice();
+    let slow = 0;
+    for (let j = 0; j < 5 * 30 && slow === 0; j++) { m.step(1 / 30); slow = m.hero.slow; }
+    out.slow = slow;
+    m.pack.clear();
+    m.step(0.1);
+    out.slowGone = m.hero.slow;
+    // кабанчик несётся в западную стену — оглушён
+    m.hero.place(-22, -4);
+    const bo = m.spawnMob('boarlet', -16, -4);
+    m.step(0.6);
+    bo.notice();
+    let dazed = false;
+    for (let j = 0; j < 6 * 30 && !dazed; j++) { if (bo.state === 'attack' && bo.st > 0.3) m.hero.place(-14, -8); m.step(1 / 30); dazed = bo.state === 'daze'; }
+    out.boar = dazed;
+    // улей выпускает шмелей; пал улей — шмели падают
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const hv = m.spawnMob('hive', 6, 8);
+    m.step(0.6);
+    hv.notice();
+    m.step(1.5);
+    const bees = m.pack.mobs.filter((x: any) => x.kind === 'bee');
+    out.bees = bees.length >= 2;
+    hv.hit(9999, new V(0, 0, 1), hv.pos.clone(), 0);
+    m.step(0.1);
+    out.beesGone = bees.every((x: any) => x.dead);
+    m.pack.clear();
+    return out;
+  });
+  expect(r.wisp).toBe(true);
+  expect(r.crows).toBe(true);
+  expect(r.crowsGone).toBe(true);
+  expect(r.under).toBe(true);
+  expect(r.surfaced).toBe(true);
+  expect(r.slow as number).toBeCloseTo(0.45, 2);
+  expect(r.slowGone).toBe(0);
+  expect(r.boar).toBe(true);
+  expect(r.bees).toBe(true);
+  expect(r.beesGone).toBe(true);
+});
+
+test('мобы четвёртой партии: обелиск держит купол, бочонок взрывается и бьёт своих, мимик прикидывается корзиной, големчик и котелок', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    const out: Record<string, unknown> = {};
+    m.hero.god = true;
+    // обелиск: под куполом — половина урона; пал обелиск — купол спал
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const ob = m.spawnMob('obelisk', 8, 8), sq = m.spawnMob('squire', 6, 8);
+    m.step(0.6);
+    ob.notice(); sq.cd = 99; sq.speed = 0;
+    m.step(0.1);
+    let h0 = sq.hp; sq.hit(10, new V(0, 0, 1), sq.pos.clone(), 0); out.ward = h0 - sq.hp;
+    ob.hit(9999, new V(0, 0, 1), ob.pos.clone(), 0);
+    m.step(0.5);
+    h0 = sq.hp; sq.hit(10, new V(0, 0, 1), sq.pos.clone(), 0); out.bare = h0 - sq.hp;
+    // бочонок: взрыв от удара бьёт соседа и подрывает второй бочонок
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const k1 = m.spawnMob('keg', 8, 8), k2 = m.spawnMob('keg', 9.5, 8), gd = m.spawnMob('gardener', 8, 9.6);
+    m.step(0.6);
+    h0 = gd.hp;
+    k1.hit(5, new V(1, 0, 0), k1.pos.clone(), 0);
+    k1.hit(99, new V(1, 0, 0), k1.pos.clone(), 0);
+    m.step(0.1);
+    out.keg = { chain: k2.dead, ally: h0 - gd.hp >= 30 };
+    // мимик: спит корзиной, пока герой не подошёл на 2,5 м; с него много малины
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const mi = m.spawnMob('mimic', 5, 8);
+    m.step(1.5);
+    out.disguised = !mi.alerted;
+    m.hero.place(3, 8);
+    m.step(0.3);
+    out.awake = mi.alerted;
+    out.loot = mi.loot >= 8;
+    // големчик: после удара шипами — кулаки в земле, оглушён
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const dg = m.spawnMob('druseling', 5, 8);
+    m.step(0.6);
+    let slam = false, stuck = false;
+    for (let j = 0; j < 8 * 30 && !stuck; j++) { m.step(1 / 30); slam ||= dg.state === 'attack'; stuck = slam && dg.state === 'daze'; }
+    out.druse = stuck;
+    // котелок: прыгает, а не ходит — после прыжка ближе к герою
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const pt = m.spawnMob('pot', 7, 8);
+    m.step(0.6);
+    pt.notice();
+    const d0 = Math.hypot(pt.pos.x - 0, pt.pos.z - 8);
+    let flew = 0;
+    for (let j = 0; j < 3 * 30; j++) { m.step(1 / 30); flew = Math.max(flew, pt.flyY); }
+    out.pot = flew > 1 && Math.hypot(pt.pos.x - 0, pt.pos.z - 8) < d0 - 2;
+    m.pack.clear();
+    return out;
+  });
+  expect(r.ward).toBeCloseTo(5, 5);
+  expect(r.bare).toBeCloseTo(10, 5);
+  expect(r.keg).toEqual({ chain: true, ally: true });
+  expect(r.disguised).toBe(true);
+  expect(r.awake).toBe(true);
+  expect(r.loot).toBe(true);
+  expect(r.druse).toBe(true);
+  expect(r.pot).toBe(true);
 });
