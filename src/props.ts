@@ -70,6 +70,7 @@ export class Barrel implements Target, Placed {
   readonly pos: THREE.Vector3;
   readonly radius = 0.36;
   readonly topY = 0.95;
+  readonly prop = true;
   hp = PROPS.barrelHp;
   /** Горит: сколько осталось до взрыва; −1 — не горит */
   fuse = -1;
@@ -136,6 +137,7 @@ export class BreakCrate implements Target, Placed {
   readonly pos: THREE.Vector3;
   readonly radius = 0.56;
   readonly topY = 1.0;
+  readonly prop = true;
   hp = PROPS.crateHp;
   broken = false;
   readonly group = new THREE.Group();

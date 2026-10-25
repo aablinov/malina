@@ -23,6 +23,8 @@ export interface MobHooks extends BossHooks {
 
 /** Зелёный свет лечения */
 export const HEAL = C(0.9, 3.4, 1.1);
+/** Голубой иней замедления */
+const FROST = C(1.6, 3, 4);
 
 export abstract class Mob extends Boss {
   /** id в реестре (src/mobs/roster.ts) */
@@ -58,6 +60,9 @@ export abstract class Mob extends Boss {
   ghost = false;
   /** Под куполом обелиска (секунды): урон по мобу ×0,5 */
   ward = 0;
+  /** Замедлен аурой «Стужа»: теряет долю скорости chillK, осталось chillT с */
+  chillK = 0;
+  chillT = 0;
   protected readonly body = new THREE.Group();
   protected readonly field: Field;
   protected readonly mh: MobHooks;
@@ -95,7 +100,9 @@ export abstract class Mob extends Boss {
   /** Урон по героям: масштаб и знамя */
   override get dmgMult(): number { return super.dmgMult * (this.rally > 0 ? 1.25 : 1); }
   /** Скорость бега со знаменем */
-  get pace(): number { return this.speed * (this.rally > 0 ? 1.25 : 1); }
+  get pace(): number { return this.speed * (this.rally > 0 ? 1.25 : 1) * this.slowMul; }
+  /** Множитель скорости от холода */
+  get slowMul(): number { return this.chillT > 0 ? 1 - this.chillK : 1; }
   /** Замедление героя от зон моба (0..1) */
   get heroSlow(): number { return this.field.heroSlow; }
   /** Ещё цели, кроме самого моба (воткнутое знамя) */
@@ -143,8 +150,16 @@ export abstract class Mob extends Boss {
   }
 
   protected go(s: MobState, attack = ''): void { this.state = s; this.attack = attack; this.st = 0; this.hitDone = false; }
+  chill(k: number, sec: number): void {
+    if (this.dead) return;
+    this.chillK = this.chillT > 0 ? Math.max(this.chillK, k) : k;
+    this.chillT = Math.max(this.chillT, sec);
+  }
+
   /** Оглушить: стоит, над головой кружат искры */
   daze(sec: number): void { if (this.dead) return; this.dazeFor = sec; this.flyY = 0; this.go('daze'); }
+  /** Оглушение от ауры (заморозка «Стужи», толчок «Каменной поступи»): не короче уже идущего */
+  stun(sec: number): void { if (this.state === 'spawn' || (this.state === 'daze' && this.dazeFor - this.st >= sec)) return; this.daze(sec); }
 
   protected die(): void {
     this.flyY = 0;
@@ -165,6 +180,10 @@ export abstract class Mob extends Boss {
   update(dt: number): void {
     this.st += dt;
     this.ward -= dt;
+    if (this.chillT > 0) {
+      this.chillT -= dt;
+      if (Math.random() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.2, this.topY), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, -0.4, 0), life: 0.5, size: 0.07, color: FROST, gravity: 0 });
+    }
     if (this.rally > 0) {
       this.rally -= dt;
       if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
@@ -228,7 +247,7 @@ export abstract class Mob extends Boss {
 
   /** Рывок вдоль dir: speed м/с; true — упёрся в стену */
   protected dash(dir: THREE.Vector3, speed: number, dt: number): boolean {
-    const step = speed * dt;
+    const step = speed * this.slowMul * dt;
     this.move(dir, step);
     const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
     resolveCircle(p, this.radius, this.h.obstacles());

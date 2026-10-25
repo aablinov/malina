@@ -11,7 +11,8 @@ import { markShared } from './fx';
  * Текстуры белые, рисуются кодом один раз; цвет — в материале.
  */
 
-export type SigilSchool = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane' | 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns';
+export type SigilSchool = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane' | 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns'
+  | 'inferno' | 'frost' | 'storm' | 'halo' | 'shade' | 'quake' | 'blades';
 
 type Draw = (g: CanvasRenderingContext2D, c: number, r: number, w: number) => void;
 
@@ -370,6 +371,50 @@ const STYLE: Record<SigilSchool, Layer[]> = {
     { key: 'leaves', r: 0.8, speed: -0.25, at: 0.25, alt: true },
     { key: 'square', r: 0.55, speed: 0.4, at: 0.5, rot: Math.PI / 4 },
     { key: 'diamonds', r: 1.16, speed: -0.2, at: 0.75, alt: true },
+  ],
+  // наступательные ауры (src/aura-offense.ts)
+  inferno: [
+    { key: 'ticks', r: 1, speed: -0.5, at: 0 },
+    { key: 'flames', r: 1.16, speed: 0.6, at: 0.25, alt: true },
+    { key: 'triangle', r: 0.62, speed: -0.8, at: 0.5 },
+    { key: 'triangle', r: 0.62, speed: 0.8, at: 0.5, rot: Math.PI, alt: true },
+    { key: 'runes', r: 0.4, speed: 1, at: 0.75 },
+  ],
+  frost: [
+    { key: 'ticks', r: 1, speed: 0.15, at: 0 },
+    { key: 'snowflake', r: 0.8, speed: -0.2, at: 0.25, alt: true },
+    { key: 'hexagon', r: 0.5, speed: 0.4, at: 0.5 },
+    { key: 'dots', r: 1.16, speed: -0.15, at: 0.75, alt: true },
+  ],
+  storm: [
+    { key: 'ticks', r: 1, speed: 0.6, at: 0 },
+    { key: 'zigzag', r: 1.12, speed: -0.7, at: 0.25, alt: true },
+    { key: 'hexagram', r: 0.6, speed: 0.9, at: 0.5 },
+    { key: 'runes', r: 0.4, speed: -1.2, at: 0.75, alt: true },
+  ],
+  halo: [
+    { key: 'ticks', r: 1, speed: 0.2, at: 0 },
+    { key: 'rays', r: 1.1, speed: -0.15, at: 0.25, alt: true },
+    { key: 'pentagram', r: 0.62, speed: 0.35, at: 0.5 },
+    { key: 'dots', r: 0.4, speed: -0.6, at: 0.75, alt: true },
+  ],
+  shade: [
+    { key: 'spiral', r: 1, speed: -0.35, at: 0 },
+    { key: 'eye', r: 0.5, speed: 0, at: 0.25, alt: true },
+    { key: 'runes', r: 0.8, speed: 0.4, at: 0.5 },
+    { key: 'dots', r: 1.16, speed: -0.25, at: 0.75, alt: true },
+  ],
+  quake: [
+    { key: 'cracks', r: 0.95, speed: 0, at: 0 },
+    { key: 'stones', r: 1.12, speed: -0.15, at: 0.25, alt: true },
+    { key: 'square', r: 0.5, speed: 0.3, at: 0.5 },
+    { key: 'diamonds', r: 0.8, speed: -0.25, at: 0.75, alt: true },
+  ],
+  blades: [
+    { key: 'ticks', r: 1, speed: 0.5, at: 0 },
+    { key: 'blades', r: 1.16, speed: -0.9, at: 0.25, alt: true },
+    { key: 'pentagram', r: 0.6, speed: 0.6, at: 0.5 },
+    { key: 'runes', r: 0.4, speed: -1, at: 0.75, alt: true },
   ],
   heal: [
     { key: 'ticks', r: 1, speed: 0.25, at: 0 },

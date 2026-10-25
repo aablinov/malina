@@ -246,9 +246,17 @@ export class ChargeSound {
 
 let lastShard = 0, lastDrink = 0;
 
-export type AuraSound = 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns';
-const AURA_ROOT: Record<AuraSound, number> = { pact: 220, bastion: 196, rage: 146.83, clarity: 293.66, thorns: 246.94 };
-const AURA_CHORD: Record<AuraSound, number[]> = { pact: [0, 3, 7, 12], bastion: [0, 7, 12, 16], rage: [0, 7, 12, 19], clarity: [0, 4, 7, 11, 14], thorns: [0, 5, 7, 12] };
+export type AuraSound = 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns' | 'inferno' | 'frost' | 'storm' | 'halo' | 'shade' | 'quake' | 'blades';
+const AURA_ROOT: Record<AuraSound, number> = {
+  pact: 220, bastion: 196, rage: 146.83, clarity: 293.66, thorns: 246.94,
+  inferno: 110, frost: 329.63, storm: 164.81, halo: 261.63, shade: 185, quake: 98, blades: 277.18,
+};
+const AURA_CHORD: Record<AuraSound, number[]> = {
+  pact: [0, 3, 7, 12], bastion: [0, 7, 12, 16], rage: [0, 7, 12, 19], clarity: [0, 4, 7, 11, 14], thorns: [0, 5, 7, 12],
+  inferno: [0, 7, 12, 15, 19], frost: [0, 4, 7, 11, 16], storm: [0, 6, 7, 12], halo: [0, 4, 7, 12, 16], shade: [0, 3, 6, 10], quake: [0, 7, 12], blades: [0, 5, 9, 12, 17],
+};
+const SAW_AURA: AuraSound[] = ['rage', 'inferno', 'storm'];
+let lastBurn = 0, lastChill = 0, lastCut = 0, lastDrainS = 0;
 
 export const spellSfx = {
   /** Сорвалось с руки: свист и тело стихии; k — заряд */
@@ -337,7 +345,7 @@ export const spellSfx = {
     const r = AURA_ROOT[kind], ch = AURA_CHORD[kind];
     boom(110, 30, 1.2, 0.75, 0, 0.45);
     hiss({ dur: 0.5, vol: 0.2, f: 400, f1: 6000, q: 0.6, attack: 0.05, verb: 0.4 });
-    ch.forEach((s, i) => { voice({ type: kind === 'rage' ? 'sawtooth' : 'triangle', f: semi(r, s), dur: 1.6, vol: 0.06, detune: 9, lp: 3500, lp1: 900, delay: i * 0.05, verb: 0.6 }); bell(semi(r * 2, s), 1.4, 0.05, 0.1 + i * 0.06, 0.7); });
+    ch.forEach((s, i) => { voice({ type: SAW_AURA.includes(kind) ? 'sawtooth' : 'triangle', f: semi(r, s), dur: 1.6, vol: 0.06, detune: 9, lp: 3500, lp1: 900, delay: i * 0.05, verb: 0.6 }); bell(semi(r * 2, s), 1.4, 0.05, 0.1 + i * 0.06, 0.7); });
     ch.forEach((s) => voice({ type: 'sine', f: semi(r, s), dur: 3, vol: 0.035, attack: 0.5, delay: 0.2, verb: 0.7 }));
     for (let i = 0; i < 12; i++) voice({ type: 'sine', f: deg(r * 4, (Math.random() * 8) | 0), dur: 0.2, vol: 0.02, delay: 0.3 + i * 0.06, verb: 0.6 });
   },
@@ -358,6 +366,50 @@ export const spellSfx = {
     pluck(deg(392, 4), 0.08);
     boom(140, 60, 0.18, 0.2);
   },
+  /** Горнило жжёт: треск углей и мягкое «фух» */
+  auraBurn() {
+    const n = performance.now(); if (n - lastBurn < 200) return; lastBurn = n;
+    hiss({ dur: 0.25, vol: 0.08, f: 900, f1: 300, q: 0.5, type: 'lowpass', verb: 0.2 });
+    for (let i = 0; i < 3; i++) hiss({ dur: 0.02, vol: 0.05, f: rnd(2500, 6000), q: 3, delay: Math.random() * 0.15, verb: 0.1 });
+  },
+  /** Стужа: хрустальный щелчок инея */
+  auraChill() {
+    const n = performance.now(); if (n - lastChill < 200) return; lastChill = n;
+    voice({ type: 'triangle', f: deg(1318.5, (Math.random() * 5) | 0), dur: 0.12, vol: 0.035, verb: 0.4 });
+    hiss({ dur: 0.06, vol: 0.05, f: 7000, type: 'highpass', verb: 0.2 });
+  },
+  /** Грозовой венец: короткий хлёсткий разряд */
+  auraZap() {
+    hiss({ dur: 0.03, vol: 0.3, f: 3000, type: 'highpass', verb: 0.2 });
+    hiss({ dur: 0.22, vol: 0.2, f: 3500, f1: 500, q: 0.9, verb: 0.3 });
+    boom(120, 45, 0.35, 0.25, 0, 0.3);
+    pluck(deg(659.25, (Math.random() * 5) | 0), 0.06);
+  },
+  /** Карающий ореол: луч с неба — колокол и сияние */
+  auraBeam() {
+    bell(deg(1046.5, (Math.random() * 5) | 0), 0.9, 0.06, 0, 0.6);
+    hiss({ dur: 0.3, vol: 0.12, f: 6000, f1: 1500, q: 0.7, verb: 0.4 });
+    boom(150, 60, 0.25, 0.2);
+  },
+  /** Голодная тень пьёт: низкий вдох вниз */
+  auraDrain() {
+    const n = performance.now(); if (n - lastDrainS < 250) return; lastDrainS = n;
+    voice({ type: 'sine', f: 370, f1: 185, dur: 0.3, vol: 0.06, verb: 0.5 });
+    voice({ type: 'triangle', f: deg(277.18, (Math.random() * 4) | 0), dur: 0.35, vol: 0.03, delay: 0.08, verb: 0.6 });
+  },
+  /** Каменная поступь: глухой удар земли и стук камешков; big — во вспышке */
+  auraStomp(big = false) {
+    boom(90, 30, 0.6, big ? 0.65 : 0.45, 0, 0.3);
+    hiss({ dur: 0.35, vol: 0.14, f: 700, f1: 150, q: 0.5, type: 'lowpass', verb: 0.2 });
+    for (let i = 0; i < 5; i++) hiss({ dur: 0.03, vol: 0.06, f: rnd(1500, 3500), q: 2, delay: 0.08 + Math.random() * 0.3, verb: 0.1 });
+  },
+  /** Вихрь клинков задел: свист и нота клинка — вместе складываются в мелодию */
+  bladeCut() {
+    const n = performance.now(); if (n - lastCut < 70) return; lastCut = n;
+    hiss({ dur: 0.1, vol: 0.12, f: 5000, f1: 2000, q: 1.5, verb: 0.2 });
+    voice({ type: 'triangle', f: deg(1108.7, (Math.random() * 7) | 0), dur: 0.2, vol: 0.035, verb: 0.4 });
+  },
+
   /** Кровавый пакт: мягкий «глоток» жизни */
   pactDrink() {
     const n = performance.now(); if (n - lastDrink < 120) return; lastDrink = n;
