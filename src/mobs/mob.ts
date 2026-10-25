@@ -4,6 +4,7 @@ import { HERO } from '../tuning';
 import { boom, hiss } from '../spell-audio';
 import { Boss, C, rand, RASP, wrap, type BossHooks } from '../bosses/kit';
 import { Field } from '../bosses/field';
+import type { Target } from '../target';
 
 /**
  * Рядовой моб Ордена Малины (wiki/design-mobs.md): облегчённый мозг мини-босса — без арены, ярости и сердца.
@@ -49,6 +50,10 @@ export abstract class Mob extends Boss {
   gone = false;
   /** Вес: отброс от удара и толкотня в стае */
   mass = 1;
+  /** Рыцарь Ордена: знамя знаменосца его воодушевляет */
+  readonly knight: boolean = false;
+  /** Воодушевлён знаменем (секунды): урон и скорость +25 % */
+  rally = 0;
   protected readonly body = new THREE.Group();
   protected readonly field: Field;
   protected readonly mh: MobHooks;
@@ -83,6 +88,12 @@ export abstract class Mob extends Boss {
   protected guard(_dir: THREE.Vector3): number { return 1; }
 
   get quiet(): boolean { return this.h.quiet(); }
+  /** Урон по героям: масштаб и знамя */
+  override get dmgMult(): number { return super.dmgMult * (this.rally > 0 ? 1.25 : 1); }
+  /** Скорость бега со знаменем */
+  get pace(): number { return this.speed * (this.rally > 0 ? 1.25 : 1); }
+  /** Ещё цели, кроме самого моба (воткнутое знамя) */
+  extras(): Target[] { return []; }
 
   /** Заметил героя — и соседи в 8 м тоже */
   notice(): void {
@@ -139,6 +150,10 @@ export abstract class Mob extends Boss {
   // ---------- мозг ----------
   update(dt: number): void {
     this.st += dt;
+    if (this.rally > 0) {
+      this.rally -= dt;
+      if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
+    }
     const hero = this.h.hero.pos;
     const dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, dist = Math.hypot(dx, dz);
     const rel = wrap(Math.atan2(dx, dz) - this.yaw);
@@ -190,7 +205,7 @@ export abstract class Mob extends Boss {
   /** Идти к герою и держать дистанцию; дальние пятятся, если подошли вплотную. true — шёл */
   protected steer(dt: number, dist: number, dx: number, dz: number, rel: number): boolean {
     this.face(dt);
-    const sp = this.speed * dt;
+    const sp = this.pace * dt;
     if (Math.abs(rel) < 1.2 && dist > this.keep + 0.3) { this.pos.x += (dx / dist) * sp; this.pos.z += (dz / dist) * sp; return true; }
     if (this.keep > 4 && dist < this.keep - 2) { this.pos.x -= (dx / dist) * sp * 0.7; this.pos.z -= (dz / dist) * sp * 0.7; return true; }
     return false;

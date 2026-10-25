@@ -1124,9 +1124,10 @@ test('масштаб стражей: здоровье, урон и малина 
 });
 
 /** Рядовые мобы, первая партия (src/mobs/, wiki/design-mobs.md) */
-const MOB_IDS = ['healer', 'pyro', 'summoner', 'squire', 'shield', 'berryling', 'gardener', 'wolf'];
+const MOB_IDS = ['healer', 'pyro', 'summoner', 'squire', 'shield', 'berryling', 'gardener', 'wolf',
+  'spear', 'crossbow', 'banner', 'hammer', 'slime', 'hedgehog', 'vine', 'bud', 'horror'];
 
-test('мобы первой партии: каждый задевает героя, падает от меча и роняет малину', async ({ page }) => {
+test('мобы: каждый задевает героя, падает от меча и роняет малину', async ({ page }) => {
   await open(page);
   const r = await page.evaluate((ids) => {
     const m = (window as any).__malina;
@@ -1138,13 +1139,13 @@ test('мобы первой партии: каждый задевает геро
       m.hero.place(2, 8, Math.PI / 2);
       const mob = m.spawnMob(id, 8, 8);
       m.step(0.6);
-      // ближние — герой стоит перед мобом; дальние (держат дистанцию) и волк — герой стоит на месте
-      const far = mob.keep > 3;
+      // ближние — герой стоит перед мобом; дальние (держат дистанцию), волк и слизень (прыгают на метку) — герой стоит на месте
+      const far = mob.keep > 3 || id === 'slime';
       let lost = 0;
       for (let j = 0; j < 14 * 30 && lost < 4; j++) {
         m.hero.hp = Math.max(m.hero.hp, 60);
         const hp = m.hero.hp;
-        if (!far || id === 'healer') m.hero.place(mob.pos.x + Math.sin(mob.yaw) * (mob.radius + 1), mob.pos.z + Math.cos(mob.yaw) * (mob.radius + 1));
+        if (!far || id === 'healer' || id === 'banner') m.hero.place(mob.pos.x + Math.sin(mob.yaw) * (mob.radius + 1), mob.pos.z + Math.cos(mob.yaw) * (mob.radius + 1));
         m.step(1 / 30);
         lost += Math.max(0, hp - m.hero.hp);
       }
@@ -1227,40 +1228,117 @@ test('мобы: щит держит удар спереди, целительн�
   expect(r.scaled as number).toBeCloseTo(1.6 * 2.5, 1);
 });
 
-test('казарма Ордена: гарнизон на постах просыпается группами, пал весь — герой вышел, казарма снова полна', async ({ page }) => {
+test('комнаты мобов: казарма и Терновый сад — гарнизон на постах просыпается группами, пал весь — герой вышел, комната снова полна', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const V = m.hero.pos.constructor;
-    const B = m.barracks;
     const out: Record<string, unknown> = {};
+    const room = (id: string) => m.mobRooms.find((x: any) => x.spec.id === id).pack;
+    const B = room('barracks'), G = room('garden');
     m.hero.god = true;
-    out.kinds = [...new Set(B.mobs.map((x: any) => x.kind))].sort();
-    out.count = B.mobs.length;
+    out.kinds = [...new Set([...B.mobs, ...G.mobs].map((x: any) => x.kind))].sort();
+    out.count = [B.mobs.length, G.mobs.length];
     // через проход в западной стене — в казарму; у входа никто не просыпается
     m.hero.place(-23, 0, -Math.PI / 2);
     m.step(0.5);
     m.hero.place(-26.5, 0);
     m.step(0.5);
     out.door = B.mobs.filter((x: any) => x.alerted).length;
-    // подошёл к малинёнышам — проснулись они, волки и рыцари дальше спят
+    // подошёл к малинёнышам — проснулись они, волки, рыцари и гвардия дальше спят
     m.hero.place(-29, -4);
     m.step(0.3);
-    const awake = (k: string) => B.mobs.filter((x: any) => x.kind === k).every((x: any) => x.alerted);
-    const asleep = (k: string) => B.mobs.filter((x: any) => x.kind === k).every((x: any) => !x.alerted);
-    out.groups = { berryling: awake('berryling'), wolf: asleep('wolf'), shield: asleep('shield'), healer: asleep('healer') };
-    // гарнизон пал; герой вышел на плейграунд — казарма снова полна и спит
+    const awake = (P: any, k: string) => P.mobs.filter((x: any) => x.kind === k).every((x: any) => x.alerted);
+    const asleep = (P: any, k: string) => P.mobs.filter((x: any) => x.kind === k).every((x: any) => !x.alerted);
+    out.groups = { berryling: awake(B, 'berryling'), wolf: asleep(B, 'wolf'), shield: asleep(B, 'shield'), healer: asleep(B, 'healer'), hammer: asleep(B, 'hammer') };
+    // сад: вход из казармы, у прохода просыпаются лозы, слизни и чудище спят
+    m.hero.place(-35, 13);
+    m.step(0.3);
+    out.garden = { vine: awake(G, 'vine'), slime: asleep(G, 'slime'), horror: asleep(G, 'horror'), hedgehog: asleep(G, 'hedgehog') };
+    // гарнизон казармы пал; герой вышел на плейграунд — казарма снова полна и спит
     for (let j = 0; j < 30; j++) { for (const x of B.mobs) if (!x.dead) x.hit(9999, new V(1, 0, 0), x.pos.clone(), 0); m.step(1 / 30); }
     out.allDead = B.mobs.every((x: any) => x.dead);
     m.hero.place(-10, 0);
     m.step(0.5);
-    out.refilled = B.mobs.length === out.count && B.mobs.every((x: any) => !x.dead && !x.alerted);
+    out.refilled = B.mobs.length === (out.count as number[])[0] && B.mobs.every((x: any) => !x.dead && !x.alerted);
     return out;
   });
-  expect(r.kinds).toEqual(['berryling', 'gardener', 'healer', 'pyro', 'shield', 'squire', 'summoner', 'wolf']);
-  expect(r.count).toBe(16);
+  expect(r.kinds).toEqual(['banner', 'berryling', 'bud', 'crossbow', 'gardener', 'hammer', 'healer', 'hedgehog', 'horror', 'pyro', 'shield', 'slime', 'spear', 'squire', 'summoner', 'vine', 'wolf']);
+  expect(r.count).toEqual([22, 10]);
   expect(r.door).toBe(0);
-  expect(r.groups).toEqual({ berryling: true, wolf: true, shield: true, healer: true });
+  expect(r.groups).toEqual({ berryling: true, wolf: true, shield: true, healer: true, hammer: true });
+  expect(r.garden).toEqual({ vine: true, slime: true, horror: true, hedgehog: true });
   expect(r.allDead).toBe(true);
   expect(r.refilled).toBe(true);
+});
+
+test('мобы второй партии: знамя воодушевляет рыцарей и падает с трёх ударов, слизень делится дважды, бутон сомкнут в плевке, клубок о стену оглушён, молот увязает', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const V = m.hero.pos.constructor;
+    const out: Record<string, unknown> = {};
+    m.hero.god = true;
+    // знаменосец втыкает знамя: рыцарь рядом бьёт на 25 % сильнее; три удара — знамя пало
+    m.pack.clear();
+    m.hero.place(0, 8);
+    const bb = m.spawnMob('banner', 6, 8), sq = m.spawnMob('squire', 6, 10);
+    m.step(0.6);
+    bb.notice(); sq.speed = 0; sq.cd = 99;
+    for (let j = 0; j < 4 * 30 && !bb.standard.up; j++) m.step(1 / 30);
+    m.step(0.1);
+    const rallied = sq.rally > 0, boosted = sq.dmgMult;
+    sq.rally = 0;
+    out.rally = bb.standard.up && rallied && Math.abs(boosted / sq.dmgMult - 1.25) < 0.01;
+    const st = bb.standard;
+    for (let j = 0; j < 3; j++) st.hit(1, new V(1, 0, 0), st.pos.clone(), 0);
+    out.fell = !st.up && !m.pack.targets().includes(st);
+    // слизень: большой → два средних → четыре малых; малина — только с большого
+    m.pack.clear();
+    const sl = m.spawnMob('slime', 8, 8);
+    m.step(0.6);
+    sl.hit(9999, new V(0, 0, 1), sl.pos.clone(), 0);
+    m.step(0.6);
+    const mids = m.pack.mobs.filter((x: any) => x.kind === 'slime_mid');
+    for (const x of mids) x.hit(9999, new V(0, 0, 1), x.pos.clone(), 0);
+    m.step(0.6);
+    const smalls = m.pack.mobs.filter((x: any) => x.kind === 'slime_small');
+    out.slime = [mids.length, smalls.length, smalls.every((x: any) => x.summoned)];
+    // бутон: в плевке сомкнут — четверть урона, в паузе — весь
+    m.pack.clear();
+    m.hero.place(2, 8);
+    const bud = m.spawnMob('bud', 9, 8);
+    m.step(0.6);
+    bud.notice();
+    let h0 = bud.hp; bud.hit(4, new V(1, 0, 0), bud.pos.clone(), 0); out.open = h0 - bud.hp;
+    for (let j = 0; j < 4 * 30 && bud.state !== 'attack'; j++) m.step(1 / 30);
+    h0 = bud.hp; bud.hit(4, new V(1, 0, 0), bud.pos.clone(), 0); out.shut = h0 - bud.hp;
+    // клубок катится в стену — оглушён
+    m.pack.clear();
+    m.hero.place(-22, -2.5);
+    const hh = m.spawnMob('hedgehog', -17, -2.5);
+    m.step(0.6);
+    hh.notice();
+    let dazed = false;
+    // свернулся — герой отошёл с полосы, клубок катится дальше в западную стену
+    for (let j = 0; j < 6 * 30 && !dazed; j++) { if (hh.state === 'attack' && hh.st > 0.3) m.hero.place(-14, -6); m.step(1 / 30); dazed = hh.state === 'daze'; }
+    out.bonk = dazed;
+    // молотобоец после удара увяз — оглушён
+    m.pack.clear();
+    m.hero.place(2, 8);
+    const hm = m.spawnMob('hammer', 5, 8);
+    m.step(0.6);
+    let smashed = false, stuck = false;
+    for (let j = 0; j < 8 * 30 && !stuck; j++) { m.step(1 / 30); smashed ||= hm.state === 'attack'; stuck = smashed && hm.state === 'daze'; }
+    out.hammer = stuck;
+    m.pack.clear();
+    return out;
+  });
+  expect(r.rally).toBe(true);
+  expect(r.fell).toBe(true);
+  expect(r.slime).toEqual([2, 4, true]);
+  expect(r.open).toBeCloseTo(4, 5);
+  expect(r.shut).toBeCloseTo(1, 5);
+  expect(r.bonk).toBe(true);
+  expect(r.hammer).toBe(true);
 });
