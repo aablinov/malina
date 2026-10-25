@@ -154,14 +154,14 @@ export class FirstGardener extends MiniBoss {
   override reset(): void {
     super.reset();
     this.last = ''; this.gait = 0; this.growT = -1; this.quakeHit = false;
-    this.setScale(1);
+    this.setSize(1);
     this.speed = 2.2; this.keep = 3.5;
     this.hat.visible = true; this.hat.position.set(0, 2.62, 0.05); this.hat.rotation.set(0, 0, 0);
     this.bloom.visible = false; this.cracks.visible = false;
   }
 
   /** Рост тела: вместе с ним — радиус и макушка */
-  private setScale(s: number): void {
+  private setSize(s: number): void {
     this.rig.scale.setScalar(s);
     this.radius = 1.3 * s;
     this.topY = 4.3 * s;
@@ -364,7 +364,7 @@ export class FirstGardener extends MiniBoss {
     if (this.growT >= 0 && this.growT < GROW_T + 1) {
       this.growT += dt;
       const k = Math.min(1, this.growT / GROW_T);
-      this.setScale(1 + (GROW - 1) * (k * k * (3 - 2 * k)));
+      this.setSize(1 + (GROW - 1) * (k * k * (3 - 2 * k)));
       if (this.hat.visible) {
         const hk = Math.min(1, this.growT / 0.9);
         this.hat.position.set(0, 2.62 + hk * 3, 0.05 - hk * 2.5);

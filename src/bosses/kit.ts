@@ -4,6 +4,7 @@ import type { FX } from '../fx';
 import type { Knight } from '../knight';
 import type { Terrain } from '../level/collide.ts';
 import type { Target } from '../target';
+import { dmgMult, hpMult, lootMult, type BossScale } from './scaling';
 
 /**
  * Общее для стражей Малины (wiki/design-bosses.md): цель для меча и заклинаний, здоровье с множителем на игроков,
@@ -64,14 +65,35 @@ export abstract class Boss implements Target {
   protected readonly shimmers: Shimmer[] = [];
   protected time = 0;
 
-  constructor(protected readonly h: BossHooks, readonly baseHp: number, readonly home: THREE.Vector3, readonly homeYaw = 0) {
-    h.scene.add(this.group);
+  /** Уровень и число игроков (src/bosses/scaling.ts): здоровье, урон, малина */
+  readonly scale: BossScale = { level: 1, players: 1 };
+  protected readonly h: BossHooks;
+
+  constructor(hooks: BossHooks, readonly baseHp: number, readonly home: THREE.Vector3, readonly homeYaw = 0) {
+    // весь урон стража по героям — через hurtHero: здесь он домножается на масштаб (атаки, зоны, подручные)
+    this.h = { ...hooks, hurtHero: (dmg, from, knock) => hooks.hurtHero(dmg * this.dmgMult, from, knock) };
+    hooks.scene.add(this.group);
   }
 
   get alive(): boolean { return !this.dead; }
+  /** Множитель урона по героям от уровня и числа игроков */
+  get dmgMult(): number { return dmgMult(this.scale); }
+  /** Множитель малины */
+  get lootMult(): number { return lootMult(this.scale); }
 
-  /** Здоровье ×(1 + 0,75·(игроков − 1)) */
-  setPlayers(n: number): void { this.maxHp = Math.round(this.baseHp * (1 + 0.75 * (n - 1))); this.hp = this.maxHp; }
+  /**
+   * Задать уровень и число игроков: здоровье = база × множитель. В бою доля здоровья сохраняется
+   * (зашёл второй игрок — страж крепчает, но не лечится); спящий — с полным здоровьем
+   */
+  setScale(level: number, players: number): void {
+    const k = this.maxHp > 0 ? this.hp / this.maxHp : 1;
+    this.scale.level = level;
+    this.scale.players = players;
+    this.maxHp = Math.round(this.baseHp * hpMult(this.scale));
+    this.hp = this.awake && !this.dead ? Math.max(1, Math.round(this.maxHp * k)) : this.maxHp;
+  }
+  /** Только число игроков (уровень прежний) */
+  setPlayers(n: number): void { this.setScale(this.scale.level, n); }
 
   hit(dmg: number, _dir: THREE.Vector3, point: THREE.Vector3, _knock: number): void {
     if (this.dead || !this.awake) return;

@@ -1074,3 +1074,51 @@ for (const id of BOSS_IDS) {
     expect(r.reset).toEqual({ arena: 'idle', boss: 'sleep', full: true, atExit: true });
   });
 }
+
+test('масштаб стражей: здоровье, урон и малина растут с уровнем и числом игроков; уровень по умолчанию — героя', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const boss = m.bosses[m.bossIds.indexOf('cauldron')];
+    const out: Record<string, unknown> = {};
+    // по умолчанию — уровень героя, один игрок: здоровье = база
+    out.start = { level: boss.scale.level, players: boss.scale.players, hp: m.profile.data.level === 1 ? boss.maxHp === boss.baseHp : true, heroLevel: m.profile.data.level };
+    const berries1 = boss.berries;
+    // урон по герою: удар в 10 через хуки стража на уровне 1 и на уровне 11 с четырьмя игроками
+    const hit = () => { m.hero.hp = m.hero.maxHp; m.hero.down = false; m.step(0.5); const h0 = m.hero.hp; boss.h.hurtHero(10, boss.pos, 0); return h0 - m.hero.hp; };
+    const d1 = hit();
+    m.bossScale(11, 4);
+    out.scaled = { level: boss.scale.level, players: boss.scale.players };
+    // здоровье: (1 + 0,06·10) · (1 + 0,5·3) = 1,6 · 2,5 относительно уровня 1 соло
+    out.hpK = boss.maxHp / boss.baseHp;
+    // урон: (1 + 0,03·10) = 1,3 — от числа игроков не растёт
+    out.dmgK = hit() / d1;
+    out.lootK = boss.berries / berries1;
+    // в бою доля здоровья сохраняется: половина остаётся половиной
+    m.bossScale(1, 1);
+    m.toBoss('cauldron');
+    const t = m.arenas[m.bossIds.indexOf('cauldron')].spec.trigger;
+    m.hero.god = true;
+    m.hero.place((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2);
+    m.step(0.3);
+    boss.hp = boss.maxHp / 2;
+    m.bossScale(1, 2);
+    out.fightRatio = boss.hp / boss.maxHp;
+    m.step(1 / 60);
+    out.bar = m.bossBar.el.textContent.includes('игроков 2');
+    // уровень героя вырос — стражи на плейграунде крепчают сами
+    m.bossScale('hero', 1);
+    m.profile.data.level = 6;
+    m.step(0.1);
+    out.followsHero = boss.scale.level === 6;
+    return out;
+  });
+  expect(r.start).toEqual({ level: r.start && (r.start as any).heroLevel, players: 1, hp: true, heroLevel: (r.start as any).heroLevel });
+  expect(r.scaled).toEqual({ level: 11, players: 4 });
+  expect(r.hpK as number).toBeCloseTo(1.6 * 2.5, 1);
+  expect(r.dmgK as number).toBeCloseTo(1.3, 1);
+  expect(r.lootK as number).toBeCloseTo(1.5 * 4, 1);
+  expect(r.fightRatio as number).toBeCloseTo(0.5, 2);
+  expect(r.bar).toBe(true);
+  expect(r.followsHero).toBe(true);
+});

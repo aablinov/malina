@@ -10,6 +10,7 @@ export class BossBar {
   private trailK = 1;
   private holdT = 0;
   private lastK = 1;
+  private scaleKey = '';
 
   constructor(parent: HTMLElement) {
     this.el.className = 'boss-bar';
@@ -24,7 +25,7 @@ export class BossBar {
   show(b: Boss): void {
     this.boss = b;
     (this.el.querySelector('b') as HTMLElement).textContent = b.title;
-    (this.el.querySelector('i') as HTMLElement).textContent = b.subtitle;
+    this.scaleKey = '';
     this.trailK = this.lastK = 1;
     this.el.classList.add('show');
   }
@@ -34,6 +35,12 @@ export class BossBar {
   update(dt: number): void {
     const b = this.boss;
     if (!b) return;
+    // подпись: «страж малины · ур. 5 · игроков 2» — меняется, если масштаб сменили посреди боя
+    const key = `${b.scale.level}/${b.scale.players}`;
+    if (key !== this.scaleKey) {
+      this.scaleKey = key;
+      (this.el.querySelector('i') as HTMLElement).textContent = `${b.subtitle} · ур. ${b.scale.level}${b.scale.players > 1 ? ` · игроков ${b.scale.players}` : ''}`;
+    }
     const k = Math.max(0, b.hp / b.maxHp);
     if (k < this.lastK) this.holdT = 0.6;
     this.lastK = k;
