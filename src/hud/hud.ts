@@ -25,6 +25,8 @@ export interface HudState {
   /** Артефакт сейчас действует (тотем стоит, сапоги бегут) */
   active: boolean[];
   buffs: HudBuff[];
+  /** Спец-удар оружия (Q): шкала 0..1, название, цвет закалки, иконка оружия; active — идёт сейчас */
+  spec?: { title: string; meter: number; color: string; icon: string; active: boolean };
   /** Аура: шкала 0..1, осталось вспышки, с; null — гнездо пустое */
   aura?: { icon: string; title: string; meter: number; flare: number; color: string } | null;
 }
@@ -46,6 +48,7 @@ export class Hud {
   onArtifact?: (i: number) => void;
   onPotion?: () => void;
   onAura?: () => void;
+  onSpecial?: () => void;
 
   constructor(parent: HTMLElement, private readonly profile: Profile) {
     const el = document.createElement('div');
@@ -76,6 +79,7 @@ export class Hud {
           <div class="hud-row">
             ${slot('hud-potion', 'E', iconImg('potion')).replace('class="hud-slot', 'data-act="potion" title="Зелье здоровья (E)" class="hud-slot')}
             ${slot('hud-map', 'M', iconImg('map')).replace('class="hud-slot', 'data-act="map" title="Карта (M)" class="hud-slot')}
+            <div class="hud-slot hud-spec" data-act="spec" title="Спец-удар (Q)"><div class="hud-aurafill"></div><img class="px hud-ico" alt="" draggable="false"><kbd>Q</kbd></div>
             <div class="hud-roll" title="Перекат (Space)">${iconImg('roll')}<div class="hud-cd"></div><kbd>␣</kbd></div>
             <div class="hud-ammo" title="Стрелы: ПКМ — выстрел"><b data-id="arrows">0</b><div class="hud-hex"><div class="hud-hex-in">${iconImg('arrows')}</div></div>${iconImg('mouse', 'hud-mouse')}</div>
           </div>
@@ -104,6 +108,7 @@ export class Hud {
       else if (a === 'map') this.onMap?.();
       else if (a === 'potion') this.onPotion?.();
       else if (a === 'aura') this.onAura?.();
+      else if (a === 'spec') this.onSpecial?.();
       else if (a.startsWith('art')) this.onArtifact?.(Number(a.slice(3)));
     });
   }
@@ -225,6 +230,17 @@ export class Hud {
       if (fill) { fill.style.height = `${k * 100}%`; fill.style.setProperty('--c', au?.color ?? '#555'); }
       ael.classList.toggle('ready', !!au && au.flare <= 0 && au.meter >= 1);
       ael.classList.toggle('flaring', !!au && au.flare > 0);
+    }
+    // спец-удар: шкала цветом закалки, полная — светится и ждёт Q
+    const sp = s.spec, sel = this.el.querySelector<HTMLElement>('.hud-spec');
+    if (sel && sp) {
+      const img = sel.querySelector<HTMLImageElement>('.hud-ico');
+      if (img && img.dataset.icon !== sp.icon) { img.dataset.icon = sp.icon; img.src = iconURL(sp.icon); }
+      const fill = sel.querySelector<HTMLElement>('.hud-aurafill');
+      if (fill) { fill.style.height = `${Math.min(1, sp.meter) * 100}%`; fill.style.setProperty('--c', sp.color); }
+      sel.title = `${sp.title} (Q) — шкала ${Math.floor(sp.meter * 100)} %`;
+      sel.classList.toggle('ready', sp.meter >= 1);
+      sel.classList.toggle('flaring', sp.active);
     }
     this.cooldown(this.el.querySelector('.hud-potion') as HTMLElement, s.potion[0], s.potion[1]);
     this.cooldown(this.el.querySelector('.hud-roll') as HTMLElement, s.roll[0], s.roll[1], false);

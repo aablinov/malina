@@ -131,6 +131,90 @@ test('мышь: клик — идти, клик по чучелу — подой
   expect(r.goalAfterKeys).toBe(null);
 });
 
+test('закалка: зачарования красят шлейф, все 28 синергий срабатывают на добивающем, спец-удар Q у каждого из 16 оружий', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina;
+    const E = ['sharpness', 'critical', 'leeching', 'knockback', 'swirling', 'fireAspect', 'soulSiphon', 'smiting'];
+    const d1 = () => m.dummies.find((d: any) => d.name === 'чучело 1');
+    const total = () => m.dummies.reduce((s: number, d: any) => s + d.total, 0);
+    const stand = (dz: number) => { const d = d1(); m.hero.place(d.pos.x, d.pos.z + dz, Math.PI); m.setAim(d.pos.x, d.pos.z); m.step(0.3); };
+    // без закалки — стандартный шлейф; одна закалка — её цвет, синергий нет
+    m.weapon('sword');
+    const plain = m.hero.swingLooks;
+    m.temper(['fireAspect']);
+    const one = { looks: m.hero.swingLooks?.length, syn: m.arts.synergies.length, red: m.hero.swingLooks?.[0].color.r > m.hero.swingLooks?.[0].color.b };
+    // каждая пара: синергия срабатывает на добивающем комбо и бьёт чучела
+    const pairs: [string, number][] = [];
+    for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+      m.resetTargets(); m.step(0.2);
+      const [id] = m.temper([E[i], E[j]]);
+      stand(1.8);
+      const p0 = m.arts.procs.get(id) ?? 0;
+      m.input.attack = true;
+      for (let k = 0; k < 200 && (m.arts.procs.get(id) ?? 0) === p0; k++) m.step(1 / 60);
+      m.input.attack = false;
+      m.step(2.5);
+      pairs.push([id, (m.arts.procs.get(id) ?? 0) - p0]);
+    }
+    // три закалки — резонанс: три синергии сразу
+    m.resetTargets(); m.step(0.2);
+    const tri = m.temper(['sharpness', 'fireAspect', 'smiting']);
+    stand(1.8);
+    const res0 = m.arts.procs.get('resonance') ?? 0;
+    m.input.attack = true; for (let k = 0; k < 120; k++) m.step(1 / 60); m.input.attack = false; m.step(2);
+    const resonance = (m.arts.procs.get('resonance') ?? 0) - res0;
+    // шкала копится попаданиями; без неё Q не бьёт
+    m.temper([]); m.resetTargets(); m.step(0.2); stand(1.8);
+    m.arts.meter = 0;
+    const early = m.special(d1().pos.x, d1().pos.z);
+    m.input.attack = true; for (let k = 0; k < 240; k++) m.step(1 / 60); m.input.attack = false; m.step(0.5);
+    const filled = m.arts.meter;
+    // спец-удар каждого вида оружия
+    const specials: Record<string, { ok: boolean; dmg: number; moved: number; hidden: boolean; back: boolean; state: string; dual: boolean; style: string }> = {};
+    for (const id of ['sword', 'axe', 'dagger', 'mace', 'spear', 'hammer', 'scythe', 'katana', 'nagakiba', 'dragonslayer', 'pontiff', 'staff', 'halberd', 'rapier', 'knuckles']) {
+      m.resetTargets(); m.step(0.2);
+      m.weapon(id); m.temper(['knockback', 'smiting']);
+      stand(['sword', 'scythe', 'dragonslayer', 'halberd', 'pontiff', 'knuckles', 'rapier'].includes(id) ? 1.6 : 3.5);
+      m.arts.meter = 1;
+      const p0 = m.hero.pos.clone(), t0 = total();
+      const ok = m.special(d1().pos.x, d1().pos.z);
+      let hidden = false;
+      const states = new Set<string>();
+      for (let k = 0; k < 150; k++) { m.step(1 / 60); hidden ||= m.hero.weaponHidden; states.add(m.hero.state); }
+      specials[id] = { ok, dmg: total() - t0, moved: p0.distanceTo(m.hero.pos), hidden, back: !m.hero.weaponHidden, state: [...states].includes('спец-удар') ? 'спец-удар' : '', dual: m.hero.dual, style: m.hero.style };
+    }
+    m.weapon(''); m.temper([]);
+    return { plain, one, pairs, tri, resonance, early, filled, specials, after: m.arts.meter };
+  });
+  expect(r.plain).toBe(null);
+  expect(r.one).toEqual({ looks: 4, syn: 0, red: true });
+  expect(r.pairs).toHaveLength(28);
+  expect(new Set(r.pairs.map((p) => p[0])).size).toBe(28);
+  for (const [id, n] of r.pairs) expect(n, id).toBeGreaterThan(0);
+  expect(r.tri).toHaveLength(3);
+  expect(r.resonance).toBeGreaterThan(0);
+  expect(r.early).toBe(false);
+  expect(r.filled).toBe(1);
+  for (const [id, s] of Object.entries(r.specials)) {
+    expect(s.ok, id).toBe(true);
+    expect(s.state, id).toBe('спец-удар');
+    expect(s.dmg, id).toBeGreaterThan(0);
+    expect(s.back, id).toBe(true);
+  }
+  expect(r.specials.axe.hidden).toBe(true);
+  // парное оружие — второй клинок в левой руке
+  expect(r.specials.pontiff.dual).toBe(true);
+  expect(r.specials.knuckles.dual).toBe(true);
+  expect(r.specials.katana.dual).toBe(false);
+  // свои позы ударов у каждого вида: восемь стилей
+  expect(Object.fromEntries(Object.entries(r.specials).map(([id, s]) => [id, s.style]))).toEqual({
+    sword: 'sword', axe: 'heavy', dagger: 'dagger', mace: 'heavy', spear: 'thrust', hammer: 'heavy', scythe: 'pole', katana: 'katana',
+    nagakiba: 'katana', dragonslayer: 'heavy', pontiff: 'dual', staff: 'pole', halberd: 'pole', rapier: 'thrust', knuckles: 'fist',
+  });
+  for (const id of ['dagger', 'spear', 'hammer', 'katana', 'halberd']) expect(r.specials[id].moved, id).toBeGreaterThan(2);
+});
+
 test('поиск пути: клик ведёт в обход стен, по ступеням, вброд через пруд и на площадку витрины', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
@@ -893,50 +977,82 @@ test('броня и лук видны на герое: надел доспех �
   expect(r.after).toBe(false);
 });
 
-test('кузнец и торговец: лавки с именами, F — окно, покупка за малину, перековка, стрелы', async ({ page }) => {
+test('кузнец и торговец: лавки с именами, F — окно, сетка всех товаров с ценой по силе, покупка выбранного, перековка, стрелы; всё оружие в инвентаре', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const labels = [...document.querySelectorAll('.npc-label')].map((e) => e.textContent);
+    const melee = ['sword', 'axe', 'mace', 'spear', 'claymore', 'dagger', 'hammer', 'scythe', 'katana', 'nagakiba', 'dragonslayer', 'pontiff', 'staff', 'halberd', 'rapier', 'knuckles'];
+    const inInventory = melee.filter((id) => m.profile.data.items.some((i: any) => i.def === id));
+    m.profile.data.berries = 1000;
     const opened = m.trade('smith');
+    const smithTabs = [...document.querySelectorAll('.trade.open [data-tab]')].map((e: any) => e.dataset.tab);
+    m.shop.setTab('melee');
+    const list = m.shop.list as { key: string; price: number }[];
+    const price = (k: string) => list.find((w) => w.key === k)?.price ?? 0;
+    const tiles = document.querySelectorAll('.trade.open .trade-ware').length;
+    // выбрать катану и купить именно её
+    m.shop.select('katana');
+    const card = document.querySelector('.trade.open .trade-detail')?.textContent ?? '';
     const b0 = m.berries, n0 = m.profile.data.items.length;
-    const bought = m.shop.buy(0);
+    const bought = m.shop.buy();
     const got = m.profile.data.items[m.profile.data.items.length - 1];
+    const spent = b0 - m.berries, added = m.profile.data.items.length - n0;
+    // Enter — надеть покупку
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter' }));
+    const worn = m.profile.equipped('melee').def;
     const sword = m.profile.equipped('melee'), p0 = sword.power;
     const forged = m.profile.reforge(sword.uid, 45);
     m.shop.hide();
     m.trade('merchant');
+    const merchantTabs = [...document.querySelectorAll('.trade.open [data-tab]')].map((e: any) => e.dataset.tab);
+    m.shop.setTab('ranged');
     const a0 = m.profile.data.arrows;
-    m.shop.buy(1);
+    m.shop.buy('arrows');
     const arrows = m.profile.data.arrows - a0;
-    // обычное заклинание — четвёртый товар торговца; после покупки на прилавке другое
-    const cards = document.querySelectorAll('.trade.open .trade-card').length;
-    const spellOn = document.querySelectorAll('.trade.open .trade-card h3')[3]?.textContent;
-    m.profile.data.berries = 500;
-    const spellBought = m.shop.buy(3);
+    m.shop.setTab('spell');
+    const spellList = m.shop.list.map((w: any) => w.key);
+    const spellBought = m.shop.buy(spellList[0]);
     const spellGot = m.profile.data.items[m.profile.data.items.length - 1].def;
     const shopSpells = ['ashcrown', 'frostridge', 'stormcloud', 'skullscythe', 'raspberrybush'];
-    // в случайный товар и в бесплатный набор обычные заклинания не попадают
     let lootSpell = false;
     for (let i = 0; i < 300; i++) if (shopSpells.includes(m.profile.rollLoot().def)) lootSpell = true;
+    m.shop.setTab('melee');
     m.profile.data.berries = 0;
-    const poor = m.shop.buy(0);
+    const poor = m.shop.buy('dragonslayer');
     m.shop.hide();
-    return { labels, opened, spent: b0 - m.berries, items: m.profile.data.items.length - n0, bought, gotSlot: got.def, forged, power: sword.power - p0, arrows, poor, cards, spellOn, spellBought, spellGot, shopSpells, lootSpell };
+    return {
+      labels, inInventory, opened, smithTabs, merchantTabs, tiles, keys: list.map((w) => w.key), prices: list.map((w) => w.price),
+      sword: price('sword'), dragonslayer: price('dragonslayer'), katana: price('katana'), card,
+      bought, got: got.def, spent, items: added, worn, forged, power: sword.power - p0,
+      arrows, spellList, spellBought, spellGot, shopSpells, lootSpell, poor,
+    };
   });
   expect(r.labels).toEqual(['Кузнец', 'Торговец']);
+  expect(r.inInventory).toHaveLength(16);
   expect(r.opened).toBe(true);
+  expect(r.smithTabs).toEqual(['melee', 'ranged', 'armor']);
+  expect(r.merchantTabs).toEqual(['melee', 'ranged', 'armor', 'artifact', 'spell']);
+  // всё оружие на прилавке, каждое — со своей ценой, дешёвые первыми
+  expect(r.tiles).toBe(16);
+  expect([...r.keys].sort()).toEqual([...r.inInventory].sort());
+  expect(r.prices).toEqual([...r.prices].sort((a, b) => a - b));
+  expect(r.dragonslayer).toBeGreaterThan(r.sword * 2);
+  expect(r.katana).toBeGreaterThan(r.sword);
+  expect(r.card).toContain('Иайдо');
+  expect(r.card).toContain(String(r.katana));
   expect(r.bought).toBe(true);
-  expect(r.items).toBe(2);
-  expect(r.cards).toBe(4);
-  expect(r.spellOn).toBe('Заклинание');
-  expect(r.spellBought).toBe(true);
-  expect(r.shopSpells).toContain(r.spellGot);
-  expect(r.lootSpell).toBe(false);
-  expect(['sword', 'axe', 'mace', 'spear', 'claymore', 'dagger', 'hammer', 'scythe']).toContain(r.gotSlot);
+  expect(r.got).toBe('katana');
+  expect(r.spent).toBe(r.katana);
+  expect(r.items).toBe(1);
+  expect(r.worn).toBe('katana');
   expect(r.forged).toBe(true);
   expect(r.power).toBe(1);
   expect(r.arrows).toBe(24);
+  expect(r.spellList.every((s: string) => r.shopSpells.includes(s))).toBe(true);
+  expect(r.spellBought).toBe(true);
+  expect(r.shopSpells).toContain(r.spellGot);
+  expect(r.lootSpell).toBe(false);
   expect(r.poor).toBe(false);
   await expect(page.locator('.trade.open')).toHaveCount(0);
 });

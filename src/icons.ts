@@ -126,6 +126,67 @@ const ICONS: Record<string, Draw> = {
       '....c....',
     ], { a: '#8a8f99', b: '#b7bcc4', c: '#5d626c', r: '#ffb347' });
   },
+  katana(p) {
+    p.q(6, 9, 10, 2, 15, 0, STEEL[0]); p.q(7, 9, 11, 3, 15, 1, STEEL[2]);
+    p.r(4, 9, 3, 3, '#2b2b33'); p.p(5, 10, GOLD[1]);
+    p.l(1, 14, 4, 11, '#c03a4a'); p.l(2, 14, 4, 12, '#2a2230');
+  },
+  nagakiba(p) {
+    p.q(4, 11, 9, 3, 15, 0, STEEL[0]); p.q(5, 11, 10, 4, 15, 1, STEEL[2]);
+    p.r(3, 11, 2, 2, '#2b2b33'); p.p(4, 11, '#7ad8ff');
+    p.l(0, 15, 3, 12, '#3a5ab8'); p.l(1, 15, 3, 13, '#1e1a26');
+  },
+  dragonslayer(p) {
+    p.s(5, 0, [
+      '......aaaa',
+      '.....aabbc',
+      '....aabbc.',
+      '...aabbc..',
+      '..aabbc...',
+      '.aabbc....',
+      'aabbc.....',
+      'abbc......',
+      '.cc.......',
+    ], { a: '#9aa0aa', b: '#6e737c', c: '#4a4e56' });
+    p.l(2, 8, 6, 12, '#4a4e56');
+    p.l(1, 14, 4, 11, '#5a4030'); p.p(0, 15, '#4a4e56');
+  },
+  pontiff(p) {
+    blade(p, 6, 9, 14, 1, '#ffd2a0', '#ff6a1a');
+    blade(p, 9, 9, 1, 1, '#d8d0ff', '#8a6aff');
+    p.l(4, 8, 7, 11, '#8a2a1a'); p.l(9, 11, 12, 8, '#3a2a8a');
+    p.l(3, 12, 5, 10, '#2a1a14'); p.l(12, 12, 10, 10, '#1a1a2a');
+    p.p(2, 13, GOLD[1]); p.p(13, 13, '#c9d2dc');
+  },
+  staff(p) {
+    p.l(2, 15, 11, 6, WOOD[0]); p.l(3, 15, 11, 7, WOOD[1]);
+    p.p(4, 13, '#3a5ab8'); p.p(5, 12, '#3a5ab8');
+    p.l(10, 6, 12, 4, GOLD[1]); p.l(12, 7, 14, 5, GOLD[1]);
+    p.s(11, 1, ['.a..', 'abb.', '.bbc', '..c.'], { a: '#fff2a0', b: '#7ad8ff', c: '#3a9ad8' });
+  },
+  halberd(p) {
+    p.l(1, 15, 12, 4, WOOD[1]); p.l(2, 15, 12, 5, WOOD[2]);
+    p.l(12, 3, 15, 0, STEEL[0]);
+    p.s(7, 1, ['..aab', '.aaab', 'caab.', 'cab..', '.c...'], { a: STEEL[1], b: STEEL[0], c: STEEL[2] });
+    p.p(11, 5, GOLD[1]); p.p(12, 5, GOLD[1]);
+  },
+  rapier(p) {
+    p.l(6, 9, 15, 0, STEEL[0]); p.l(7, 9, 15, 1, STEEL[2]);
+    p.s(3, 8, ['.aa.', 'abba', 'abba', '.aa.'], { a: GOLD[2], b: GOLD[0] });
+    p.l(1, 14, 4, 11, '#3a2a40');
+    p.p(0, 15, GOLD[1]);
+  },
+  knuckles(p) {
+    p.s(1, 4, [
+      '.aaaaaaaaaaaa.',
+      'abbabbabbabbaa',
+      'abbabbabbabbaa',
+      '.cccccccccccc.',
+      '..c........c..',
+      '..cccccccccc..',
+    ], { a: STEEL[0], b: STEEL[1], c: STEEL[2] });
+    p.r(6, 5, 2, 1, '#ffb347');
+  },
   scythe(p) {
     p.l(4, 14, 9, 2, '#4a3560'); p.l(5, 14, 10, 2, '#3b2a4a');
     p.p(4, 14, '#8a5cff');

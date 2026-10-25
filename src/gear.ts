@@ -10,12 +10,14 @@ import { AURA_COLOR, AURA_METER, Auras } from './auras';
 import { isSpell, Spells } from './spells';
 import { HERO } from './tuning';
 import { applyWeapon, getWeapon, type WeaponDef } from './weapons';
+import { temperOf, type TemperSlot } from './temper';
+import { WeaponArts } from './weapon-arts';
 import type { HudBuff, HudState } from './hud/hud';
 
 /**
  * Снаряжение в бою (wiki/design-inventory.md): надетое из профиля (src/items.ts) превращается в числа и действия —
  * оружие героя и множители удара, здоровье брони, стрелы на ПКМ, артефакты на 1/2/3, зелье на E, души, опыт и уровни,
- * жизни. Сцена сообщает о попаданиях и вызывает действия; что задело — решают цели (Target).
+ * жизни, закалка и спец-удар (Q) — src/weapon-arts.ts. Сцена сообщает о попаданиях и вызывает действия; что задело — решают цели (Target).
  */
 
 export interface GearHooks {
@@ -29,6 +31,8 @@ export interface GearHooks {
   sound(k: 'shoot' | 'potion' | 'level' | 'boom' | 'horn' | 'zap' | 'totem' | 'dash' | 'souls' | 'empty' | 'hit'): void;
   toast(s: string): void;
   banner(html: string): void;
+  /** Без звука (сцену ведёт тест) */
+  quiet?(): boolean;
 }
 
 interface Arrow { pos: THREE.Vector3; vel: THREE.Vector3; left: number; dmg: number; knock: number; pierce: number; hit: Set<Target>; mesh: THREE.Group }
@@ -58,6 +62,10 @@ export class Gear {
   private readonly totems: Totem[] = [];
   /** Заклинания: заряд и каст (src/spells.ts) */
   readonly spells: Spells;
+  /** Закалка оружия и спец-удар (src/weapon-arts.ts) */
+  readonly arts: WeaponArts;
+  /** Закалка для отладки (панель F1) поверх зачарований надетого: только вид, синергии и спец-удар */
+  temperOverride: TemperSlot[] | null = null;
   /** Аура в четвёртом гнезде (src/auras.ts) */
   readonly auras: Auras;
   /** Здоровье на прошлом кадре: упало — героя ударили (для «Бастиона» и шипов) */
@@ -85,6 +93,20 @@ export class Gear {
     });
     this.spells.onBuffs = () => this.apply();
     this.auras = new Auras({ scene: h.scene, fx: h.fx, hero: h.hero, targets: () => h.targets(), damage, changed: () => this.apply(), banner: h.banner });
+    this.arts = new WeaponArts({
+      scene: h.scene, fx: h.fx, hero: h.hero, terrain: h.terrain, targets: () => h.targets(),
+      hitTarget: (t, v, dir, knock, melee) => {
+        t.hit(v, dir, t.pos.clone().setY(1), knock);
+        h.fx.text(t.pos.clone().setY(1.1), String(v), melee ? 'crit' : '');
+        this.onHit(v, melee, t.pos);
+      },
+      heal: (v) => { if (!h.hero.down) h.hero.hp = Math.min(h.hero.maxHp, h.hero.hp + v); },
+      souls: (n) => { if (n > 0) this.profile.addSouls(n); },
+      meleeMult: () => this.stats.meleeMult,
+      sound: (k) => h.sound(k),
+      blast: (at, r, dmg) => h.blast?.(at, r, dmg),
+      quiet: () => h.quiet?.() ?? false,
+    });
     profile.onChange(() => this.apply());
     this.apply();
     h.hero.hp = h.hero.maxHp;
@@ -109,7 +131,8 @@ export class Gear {
     hero.object.scale.setScalar(sc);
     const m = this.profile.equipped('melee');
     const w = this.weaponOverride ?? (m ? getWeapon(itemDef(m.def).weapon ?? '') : undefined);
-    if (w && w.id !== this.weaponId) { this.weaponId = w.id; applyWeapon(w); hero.setWeapon(w); }
+    if (w && w.id !== this.weaponId) { this.weaponId = w.id; applyWeapon(w); hero.setWeapon(w); this.arts.set(w, []); }
+    if (w) this.arts.set(w, this.temperOverride ?? temperOf(m));
     const max = HERO.hp + this.stats.maxHpBonus;
     if (max !== hero.maxHp) {
       const k = hero.maxHp > 0 ? hero.hp / hero.maxHp : 1;
@@ -127,16 +150,26 @@ export class Gear {
   }
 
   /** Оружие поправили в редакторе: заново применить, если оно надето */
-  refreshWeapon(w: WeaponDef): void { if (w.id === this.weaponId) { applyWeapon(w); this.h.hero.setWeapon(w); } }
+  refreshWeapon(w: WeaponDef): void { if (w.id === this.weaponId) { applyWeapon(w); this.h.hero.setWeapon(w); this.arts.set(w, []); this.apply(); } }
 
   // ---------- ближний бой ----------
 
   /** Урон удара по цели: сила оружия, острота, крит, огонь */
   meleeDamage(base: number): { dmg: number; crit: boolean; fire: number } {
     const s = this.stats;
-    const crit = s.critChance > 0 && Math.random() < s.critChance;
+    // «Сердце звезды» (синергия крита и вампиризма): следующие удары — гарантированный крит
+    const forced = this.arts.forcedCrits > 0;
+    if (forced) this.arts.forcedCrits--;
+    const crit = forced || (s.critChance > 0 && Math.random() < s.critChance);
     const fire = s.fireDmg;
     return { dmg: Math.round(base * s.meleeMult * (crit ? 3 : 1)) + fire, crit, fire };
+  }
+
+  /** Q: спец-удар оружия, если шкала полна */
+  special(aim: THREE.Vector3): boolean {
+    if (this.arts.special(aim)) return true;
+    if (!this.arts.ready && !this.h.hero.down) { this.h.toast(`${this.arts.specialTitle}: шкала ${Math.floor(this.arts.meter * 100)} % — бей врагов`); this.h.sound('empty'); }
+    return false;
   }
 
   /** Попали по цели (мечом, стрелой, артефактом): души, опыт, вампиризм, шкала ауры; at — где цель */
@@ -452,6 +485,7 @@ export class Gear {
     }
     this.spells.update(dt, aim);
     this.auras.update(dt);
+    this.arts.update(dt);
     if (rmb) this.shoot(aim);
     this.updateArrows(dt);
     this.lastHp = hero.hp;
@@ -469,6 +503,10 @@ export class Gear {
     if (this.stats.regen > 0) buffs.push({ icon: 'e-leaf', name: 'Восстановление', color: '#3a9a4a' });
     if (hero.god) buffs.push({ icon: 'champion', name: 'Бессмертие', color: '#c08a2a' });
     const aura = this.profile.aura(), au = this.auras;
+    const syn = this.arts.synergies;
+    for (const x of syn) buffs.push({ icon: 'e-swirl', name: x.title, color: '#c08a2a' });
+    if (syn.length >= 3) buffs.push({ icon: 'e-star', name: 'Резонанс', color: '#d8a020' });
+    if (this.arts.forcedCrits > 0) buffs.push({ icon: 'e-star', name: 'Звёздный крит', count: this.arts.forcedCrits, color: '#c08a2a' });
     if (aura && au.kind && au.flareT > 0) buffs.push({ icon: itemDef(aura.def).icon, name: `${itemDef(aura.def).title} ×3`, t: au.flareT, color: AURA_COLOR[au.kind] });
     return {
       hp: hero.hp, maxHp: hero.maxHp, lives: this.lives,
@@ -480,9 +518,16 @@ export class Gear {
         return (k === 'boots' && this.speedT > 0) || (k === 'totem' && this.totems.length > 0);
       }),
       buffs,
+      spec: { title: this.arts.specialTitle, meter: this.arts.meter, color: cssColor(this.arts.color), icon: this.profile.equipped('melee') ? itemDef(this.profile.equipped('melee')!.def).icon : 'e-blade', active: this.h.hero.special !== null },
       aura: aura && au.kind ? { icon: itemDef(aura.def).icon, title: itemDef(aura.def).title, meter: au.meter / AURA_METER, flare: au.flareT, color: AURA_COLOR[au.kind] } : null,
     };
   }
+}
+
+/** HDR-цвет → CSS: ярчайшая составляющая — 1 */
+function cssColor(c: THREE.Color): string {
+  const k = 1 / Math.max(c.r, c.g, c.b, 1e-3);
+  return `#${c.clone().multiplyScalar(k).getHexString()}`;
 }
 
 function segDist(ax: number, az: number, bx: number, bz: number, px: number, pz: number): number {

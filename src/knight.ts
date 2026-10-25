@@ -4,7 +4,7 @@ import { STEP, type Terrain } from './level/collide.ts';
 import { pixelTex, type Textures } from './textures';
 import { SwordTrail } from './trail';
 import { HERO, SWORD } from './tuning';
-import { buildWeaponModel, disposeWeaponModel, type WeaponDef } from './weapons';
+import { buildWeaponModel, disposeWeaponModel, type WeaponCategory, type WeaponDef } from './weapons';
 import type { ArmorLook, BowLook } from './items';
 
 /**
@@ -43,7 +43,13 @@ export interface Strike {
   knock: number;
 }
 
-export type KnightState = 'стоит' | 'идёт' | 'падает' | 'перекат' | 'удар 1' | 'удар 2' | 'удар 3' | 'без сил';
+export type KnightState = 'стоит' | 'идёт' | 'падает' | 'перекат' | 'удар 1' | 'удар 2' | 'удар 3' | 'спец-удар' | 'без сил';
+
+/** Спец-удар оружия (Q, src/weapon-arts.ts): движение и поза героя; кого задело — решает сцена по доле specialK */
+export type SpecialMove = 'spin' | 'throw' | 'dash' | 'lunge' | 'slam' | 'leap' | 'wave' | 'reap' | 'iai' | 'berserk' | 'flurry' | 'mill';
+
+/** Облик взмаха от закалки (src/weapon-arts.ts): цвета следа, ширина и жизнь точки */
+export interface SwingLook { color: THREE.Color; color2: THREE.Color; width: number; life: number; core: number }
 
 // ---------- размеры модели, м ----------
 const LEG = 0.62;
@@ -66,11 +72,14 @@ function box(w: number, h: number, d: number, m: THREE.Material | THREE.Material
   return mesh;
 }
 
-/** Поза рук и корпуса в ударе: ax/ay/az — правое плечо, w — кисть (наклон клинка), twist/lean — корпус, lx — левое плечо */
-interface Pose { ax: number; ay: number; az: number; w: number; twist: number; lean: number; lx: number; ly: number }
-const P = (ax: number, ay: number, az: number, w: number, twist = 0, lean = 0, lx = 0.25, ly = 0): Pose => ({ ax, ay, az, w, twist, lean, lx, ly });
+/**
+ * Поза рук и корпуса в ударе: ax/ay/az — правое плечо, w — кисть (наклон клинка), twist/lean — корпус, lx/ly — левое
+ * плечо, wl — наклон второго клинка в левой кисти (парное оружие; без него — как w)
+ */
+interface Pose { ax: number; ay: number; az: number; w: number; twist: number; lean: number; lx: number; ly: number; wl?: number }
+const P = (ax: number, ay: number, az: number, w: number, twist = 0, lean = 0, lx = 0.25, ly = 0, wl?: number): Pose => ({ ax, ay, az, w, twist, lean, lx, ly, wl });
 const IDLE = P(-0.35, -0.1, 0.12, -0.45);
-/** Замах и конец удара для каждого шага комбо */
+/** Стандартные цвета и ширина следа трёх шагов комбо */
 const SWINGS: { from: Pose; to: Pose; trail: THREE.Color; width: number }[] = [
   // слева направо по экрану: от правого плеча через грудь налево, чуть сверху вниз
   { from: P(-1.95, -1.6, 0, 1.3, -0.6, 0.05, 0.5, 0.3), to: P(-1.15, 0.95, 0, 1.25, 0.55, 0.12, -0.2, 0), trail: new THREE.Color(0.6, 1.5, 3.0), width: 0.8 },
@@ -80,9 +89,88 @@ const SWINGS: { from: Pose; to: Pose; trail: THREE.Color; width: number }[] = [
   { from: P(-3.35, -0.12, 0, 1.45, 0, -0.28, -3.2, 0.15), to: P(-0.75, -0.05, 0, 1.0, 0, 0.42, -0.9, 0.2), trail: new THREE.Color(3.2, 1.9, 0.5), width: 0.95 },
 ];
 
+/**
+ * Стиль ударов вида оружия (wiki/design-weapon-arts.md, раздел 5): у каждого — свои три удара комбо, замах → удар.
+ * Меч — слева, справа, сверху; тяжёлое — широкий разворот корпусом и удар двумя руками с глубоким замахом; катана —
+ * выхват от левого бедра, косой разрез, вертикальный с шагом; выпад — три укола вперёд; кинжал — короткие обратные
+ * взмахи и укол; древковое — низкий широкий мах двумя руками, обратный высокий, рубящий сверху; парное — правой,
+ * левой, обеими крест-накрест; кулаки — правый, левый прямые и апперкот
+ */
+export type SwingStyle = 'sword' | 'heavy' | 'katana' | 'thrust' | 'dagger' | 'pole' | 'dual' | 'fist';
+export const STYLE_OF: Record<WeaponCategory, SwingStyle> = {
+  'меч': 'sword', 'топор': 'heavy', 'булава': 'heavy', 'молот': 'heavy', 'великий меч': 'heavy', 'кинжал': 'dagger',
+  'копьё': 'thrust', 'рапира': 'thrust', 'посох': 'pole', 'коса': 'pole', 'алебарда': 'pole', 'катана': 'katana',
+  'парные клинки': 'dual', 'кастеты': 'fist',
+};
+type Swing3 = [[Pose, Pose], [Pose, Pose], [Pose, Pose]];
+const STYLES: Record<SwingStyle, Swing3> = {
+  sword: [[SWINGS[0].from, SWINGS[0].to], [SWINGS[1].from, SWINGS[1].to], [SWINGS[2].from, SWINGS[2].to]],
+  heavy: [
+    [P(-2.1, -1.9, 0, 1.35, -0.9, -0.1, 0.4, 0.3), P(-1.1, 1.1, 0, 1.3, 0.8, 0.2, -0.4, 0)],
+    [P(-1.0, 1.2, 0, 1.3, 0.8, 0.15, -0.3, 0), P(-2.0, -1.8, 0, 1.3, -0.8, 0, 0.5, 0.3)],
+    [P(-3.4, -0.1, 0, 1.5, 0, -0.4, -3.3, 0.15), P(-0.55, -0.05, 0, 0.95, 0, 0.55, -0.7, 0.2)],
+  ],
+  katana: [
+    [P(-0.7, 1.0, 0, -0.1, 0.7, 0.2, 0.5, 0), P(-1.5, -1.5, 0, 1.45, -0.7, 0.05, 0.6, 0.3)],
+    [P(-2.6, -0.9, 0, 1.4, -0.5, -0.15, -1.2, 0.2), P(-0.8, 0.8, 0, 1.2, 0.6, 0.3, -0.5, 0)],
+    [P(-3.2, 0, 0, 1.5, 0, -0.3, -3.0, 0), P(-1.0, 0, 0, 1.25, 0, 0.45, -1.1, 0)],
+  ],
+  thrust: [
+    [P(-1.1, -0.6, 0, 1.55, -0.5, -0.1, 0.5, 0), P(-1.62, -0.1, 0, 1.55, 0.35, 0.3, 0.6, 0)],
+    [P(-1.2, -0.7, 0, 1.55, -0.6, -0.1, 0.5, 0), P(-1.6, 0.2, 0, 1.55, 0.45, 0.32, 0.6, 0)],
+    [P(-0.9, -0.9, 0, 1.55, -0.8, -0.2, 0.8, 0), P(-1.65, 0, 0, 1.57, 0.5, 0.5, 0.9, 0)],
+  ],
+  dagger: [
+    [P(-1.6, -1.2, 0, 0.9, -0.4, 0.1, 0.4, 0), P(-1.3, 0.7, 0, 1.0, 0.45, 0.15, 0.2, 0)],
+    [P(-1.2, 0.8, 0, 1.0, 0.5, 0.15, 0.2, 0), P(-1.6, -1.2, 0, 0.9, -0.45, 0.1, 0.4, 0)],
+    [P(-1.0, -0.4, 0, 1.5, -0.5, -0.1, 0.4, 0), P(-1.6, 0, 0, 1.55, 0.4, 0.4, 0.5, 0)],
+  ],
+  pole: [
+    [P(-1.3, -1.8, 0, 1.4, -0.9, 0.15, -1.0, -0.4), P(-1.0, 1.3, 0, 1.4, 0.9, 0.2, -1.1, 0.5)],
+    [P(-1.9, 1.3, 0, 1.35, 0.8, 0, -1.4, 0.5), P(-1.6, -1.7, 0, 1.4, -0.8, 0.1, -1.0, -0.4)],
+    [P(-3.3, -0.1, 0, 1.4, 0, -0.35, -3.1, 0.1), P(-0.9, 0, 0, 1.1, 0, 0.45, -0.9, 0.1)],
+  ],
+  dual: [
+    [P(-1.95, -1.6, 0, 1.3, -0.6, 0.05, -0.4, 0, -0.45), P(-1.15, 0.95, 0, 1.25, 0.55, 0.12, -0.3, 0, -0.45)],
+    [P(-0.5, -0.2, 0, 0.3, 0.6, 0.05, -1.95, 1.6, 1.3), P(-0.5, -0.2, 0, 0.3, -0.55, 0.12, -1.15, -0.95, 1.25)],
+    [P(-2.4, -1.2, 0, 1.3, 0, -0.2, -2.4, 1.2, 1.3), P(-1.2, 0.8, 0, 1.3, 0, 0.35, -1.2, -0.8, 1.3)],
+  ],
+  fist: [
+    [P(-0.6, -0.3, 0, 1.5, -0.4, 0.05, -0.9, 0, 1.5), P(-1.6, 0.05, 0, 1.5, 0.4, 0.25, -0.5, 0, 1.5)],
+    [P(-1.0, -0.2, 0, 1.5, 0.4, 0.05, -0.5, 0, 1.5), P(-0.7, -0.2, 0, 1.5, -0.45, 0.25, -1.6, -0.05, 1.5)],
+    [P(-0.2, -0.3, 0, 1.5, -0.4, 0.2, -0.8, 0, 1.5), P(-2.7, 0, 0, 1.5, 0.2, -0.25, -0.6, 0, 1.5)],
+  ],
+};
+
+/**
+ * Спец-удары: замах from → удар to на доле [a, b] длительности. dash — рывок [метры, с доли, до доли], turns — обороты
+ * за [a, b], hop — высота прыжка, iframes — до какой доли неуязвим, walk — доля скорости ходьбы во время удара
+ */
+interface SpecialPose { from: Pose; to: Pose; a: number; b: number; dash?: [number, number, number]; turns?: number; hop?: number; iframes?: number; walk?: number }
+const SPIN = P(-1.55, -1.25, 0, 1.45, 0, 0.05, -0.6, 0.4);
+const THRUST = P(-1.6, -0.15, 0, 1.5, 0.35, 0.35, 0.5, 0);
+const SPECIALS: Record<SpecialMove, SpecialPose> = {
+  spin: { from: SPIN, to: SPIN, a: 0.1, b: 0.92, turns: 2, walk: 0.6 },
+  reap: { from: P(-1.55, 1.0, 0, 1.45, 0.6, 0.1, -0.4, 0), to: SPIN, a: 0.22, b: 0.85, turns: 1 },
+  throw: { from: P(-2.9, -0.4, 0, 1.0, -0.5, -0.2, 0.6, 0), to: P(-1.4, 0.1, 0, 0.3, 0.35, 0.3, 0.3, 0), a: 0.45, b: 0.65 },
+  dash: { from: P(-1.0, -1.4, 0, 1.3, -0.6, 0.1, 0.4, 0), to: THRUST, a: 0.12, b: 0.3, dash: [6, 0.12, 0.5], iframes: 0.7 },
+  lunge: { from: P(-1.2, -0.3, 0, 1.5, -0.4, -0.1, 0.5, 0), to: THRUST, a: 0.25, b: 0.4, dash: [5, 0.25, 0.6], iframes: 0.65 },
+  slam: { from: P(-3.35, -0.12, 0, 1.45, 0, -0.28, -3.2, 0.15), to: P(-0.75, -0.05, 0, 1.0, 0, 0.42, -0.9, 0.2), a: 0.42, b: 0.52 },
+  leap: { from: P(-3.35, -0.12, 0, 1.45, 0, -0.28, -3.2, 0.15), to: P(-0.75, -0.05, 0, 1.0, 0, 0.42, -0.9, 0.2), a: 0.5, b: 0.62, dash: [2.5, 0.12, 0.6], hop: 1.8, iframes: 0.65 },
+  wave: { from: P(-2.8, 0, 0, 0.9, 0, -0.2, -2.6, 0), to: P(-1.5, 0, 0, 1.3, 0, 0.3, -1.4, 0), a: 0.35, b: 0.5 },
+  // иайдо: клинок у левого бедра, долгая пауза — и мгновенный широкий разрез с шагом вперёд
+  iai: { from: P(-0.6, 0.9, 0, -0.2, 0.6, 0.25, 0.6, 0), to: P(-1.3, -1.6, 0, 1.35, -0.7, 0.1, 0.5, 0.3), a: 0.55, b: 0.62, dash: [3.5, 0.55, 0.62], iframes: 0.62 },
+  berserk: { from: SPIN, to: SPIN, a: 0.08, b: 0.94, turns: 3, walk: 0.4 },
+  // шквал: руки бьют по очереди (specialPose)
+  flurry: { from: THRUST, to: THRUST, a: 0.1, b: 0.9, walk: 0.3 },
+  mill: { from: SPIN, to: SPIN, a: 0.1, b: 0.9, turns: 2.5, dash: [4, 0.1, 0.9] },
+};
+const _tint = new THREE.Color();
+
 const lerpPose = (a: Pose, b: Pose, k: number): Pose => ({
   ax: a.ax + (b.ax - a.ax) * k, ay: a.ay + (b.ay - a.ay) * k, az: a.az + (b.az - a.az) * k, w: a.w + (b.w - a.w) * k,
   twist: a.twist + (b.twist - a.twist) * k, lean: a.lean + (b.lean - a.lean) * k, lx: a.lx + (b.lx - a.lx) * k, ly: a.ly + (b.ly - a.ly) * k,
+  wl: a.wl === undefined && b.wl === undefined ? undefined : (a.wl ?? a.w) + ((b.wl ?? b.w) - (a.wl ?? a.w)) * k,
 });
 
 export class Knight {
@@ -114,6 +202,10 @@ export class Knight {
   private lastCombo = -1;
   private attackCd = 0;
   private hitStopT = 0;
+  /** Идёт спец-удар: движение, время и направление */
+  private sp: { move: SpecialMove; t: number; prev: number; dur: number; yaw: number } | null = null;
+  /** Облик взмахов от закалки: три шага комбо и спец-удар; null — стандартные цвета */
+  swingLooks: SwingLook[] | null = null;
 
   private rollT = 0;
   rollCdT = 0;
@@ -160,6 +252,15 @@ export class Knight {
   private armorMeshes: THREE.Object3D[] = [];
   private capeMat!: THREE.MeshLambertMaterial;
   private capeMap!: THREE.Texture;
+  /** Второе оружие в левой руке (парные клинки, кастеты) и его след */
+  private readonly offhand = new THREE.Group();
+  readonly offTrail: SwordTrail;
+  private offBase = 0.2;
+  private offTip = 1;
+  /** Стиль ударов надетого оружия (STYLE_OF) */
+  style: SwingStyle = 'sword';
+  /** Свой цвет следа оружия без закалки (WeaponDef.trail) */
+  private weaponTrail: THREE.Color | null = null;
   /** Лук в левой руке: виден, пока стреляет (shootPose) */
   private readonly bow = new THREE.Group();
   private bowT = 0;
@@ -255,7 +356,12 @@ export class Knight {
     this.bow.visible = false;
     this.arms[1].add(this.bow);
 
+    this.offhand.position.set(0, -ARM + 0.08, 0);
+    this.offhand.rotation.order = 'XYZ';
+    this.arms[1].add(this.offhand);
+
     this.trail = new SwordTrail(scene);
+    this.offTrail = new SwordTrail(scene);
     this.animate(0);
   }
 
@@ -337,7 +443,16 @@ export class Knight {
 
   get rolling(): boolean { return this.rollT > 0; }
   get attacking(): boolean { return this.combo >= 0; }
-  get invulnerable(): boolean { return this.god || (this.rolling && HERO.rollTime - this.rollT < HERO.rollIframes); }
+  get invulnerable(): boolean {
+    const sp = this.sp, fr = sp ? SPECIALS[sp.move].iframes ?? 0 : 0;
+    return this.god || (this.rolling && HERO.rollTime - this.rollT < HERO.rollIframes) || (!!sp && sp.t / sp.dur < fr);
+  }
+  /** Спец-удар, который идёт сейчас, и его доля 0..1 (−1 — нет) */
+  get special(): SpecialMove | null { return this.sp?.move ?? null; }
+  get specialK(): number { return this.sp ? Math.min(1, this.sp.t / this.sp.dur) : -1; }
+  /** Оружие в руке спрятано (летит бумерангом) */
+  set weaponHidden(v: boolean) { this.sword.visible = !v; }
+  get weaponHidden(): boolean { return !this.sword.visible; }
   get object(): THREE.Object3D { return this.root; }
   /** Деталей брони на теле (для тестов) */
   get armorParts(): number { return this.armorMeshes.length; }
@@ -347,6 +462,7 @@ export class Knight {
   get state(): KnightState {
     if (this.down) return 'без сил';
     if (this.rolling) return 'перекат';
+    if (this.sp) return 'спец-удар';
     if (this.combo >= 0) return (['удар 1', 'удар 2', 'удар 3'] as const)[this.combo];
     if (!this.grounded) return 'падает';
     return this.speed > 0.3 ? 'идёт' : 'стоит';
@@ -369,6 +485,8 @@ export class Knight {
     this.grounded = true;
     this.yaw = yaw;
     this.cancelSwing();
+    this.sp = null;
+    this.sword.visible = true;
   }
 
   /** Сменить модель оружия в руке (числа удара — applyWeapon из weapons.ts) */
@@ -378,6 +496,67 @@ export class Knight {
     for (const c of [...g.children]) this.sword.add(c);
     this.bladeBase = g.userData.bladeBase as number;
     this.bladeTip = g.userData.bladeTip as number;
+    for (const c of [...this.offhand.children]) { this.offhand.remove(c); disposeWeaponModel(c); }
+    if (def.offhand?.length) {
+      const o = buildWeaponModel(def, true);
+      for (const c of [...o.children]) this.offhand.add(c);
+      this.offBase = o.userData.bladeBase as number;
+      this.offTip = o.userData.bladeTip as number;
+    }
+    this.weaponTrail = def.trail ? new THREE.Color(def.trail).multiplyScalar(2.4) : null;
+    this.style = STYLE_OF[def.category] ?? 'sword';
+    const oc = new THREE.Color(def.offTrail ?? def.trail ?? '#b98cff').multiplyScalar(2.4);
+    this.offTrail.color.copy(oc); this.offTrail.color2.copy(oc).multiplyScalar(0.6);
+  }
+
+  /** Есть оружие во второй руке */
+  get dual(): boolean { return this.offhand.children.length > 0; }
+
+  /**
+   * Закалка красит клинок: светящиеся грани и свечение стали — в цвет color (HDR), яркость ×glow; позолота и рукоять
+   * не меняются. null — исходные цвета модели
+   */
+  setBladeTint(color: THREE.Color | null, glow = 1): void {
+    const peak = color ? Math.max(color.r, color.g, color.b, 1e-3) : 1;
+    for (const c of this.sword.children) {
+      if (!(c instanceof THREE.Mesh)) continue;
+      const m = c.material;
+      if (m instanceof THREE.MeshBasicMaterial) {
+        const c0 = (m.userData.c0 ??= m.color.clone()) as THREE.Color;
+        if (!color) { m.color.copy(c0); continue; }
+        const b0 = Math.max(c0.r, c0.g, c0.b);
+        m.color.copy(_tint.copy(color).multiplyScalar((b0 / peak) * glow));
+      } else if (m instanceof THREE.MeshLambertMaterial && m.map && m.emissiveIntensity > 0) {
+        const e0 = (m.userData.e0 ??= { c: m.emissive.clone(), i: m.emissiveIntensity }) as { c: THREE.Color; i: number };
+        if (!color) { m.emissive.copy(e0.c); m.emissiveIntensity = e0.i; continue; }
+        m.emissive.copy(_tint.copy(color).multiplyScalar(1 / peak));
+        m.emissiveIntensity = e0.i + 0.35 * glow;
+      }
+    }
+  }
+
+  /** Начать спец-удар: dur секунд, в сторону yaw. Не начнётся в перекате, без сил и во время другого */
+  startSpecial(move: SpecialMove, dur: number, yaw: number): boolean {
+    if (this.down || this.rolling || this.sp) return false;
+    this.cancelSwing();
+    this.sp = { move, t: 0, prev: 0, dur, yaw };
+    this.yaw = yaw;
+    this.trail.cut();
+    this.lookTrail(3, SWINGS[2].trail, 1);
+    if (move === 'spin' || move === 'reap') { this.trail.life = 0.24; this.trail.core *= 0.5; }
+    return true;
+  }
+
+  private lookTrail(i: number, color: THREE.Color, width: number): void {
+    const L = this.swingLooks?.[i];
+    const base = this.weaponTrail ?? color;
+    this.trail.color.copy(L?.color ?? base);
+    this.trail.color2.copy(L?.color2 ?? base);
+    this.offTrail.cut();
+    // у длинных клинков след не шире 1,1 м — иначе лента сливается в стену
+    this.trail.width = Math.min(L?.width ?? width, 1.1 / Math.max(0.3, this.bladeTip - this.bladeBase));
+    this.trail.life = L?.life ?? 0.2;
+    this.trail.core = L?.core ?? 0.25;
   }
 
   /** Основание и кончик клинка в мире */
@@ -413,7 +592,7 @@ export class Knight {
     const aimYaw = toAim.lengthSq() > 0.04 ? Math.atan2(toAim.x, toAim.z) : this.yaw;
 
     // перекат: отменяет удар, неуязвимость в начале
-    if (input.roll && !this.rolling && this.rollCdT <= 0) {
+    if (input.roll && !this.rolling && this.rollCdT <= 0 && !this.sp) {
       this.rollDir.copy(moveDir ?? new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)));
       this.rollT = H.rollTime;
       this.rollCdT = H.rollCd * this.rollCdMul;
@@ -421,10 +600,26 @@ export class Knight {
       this.onRoll?.();
     }
 
-    this.updateSword(dt, input, aimYaw);
+    if (this.sp) this.updateSpecial(dt); else this.updateSword(dt, input, aimYaw);
 
     const prev = this.pos.clone();
-    if (this.rolling) {
+    const sp = this.sp;
+    if (sp) {
+      // спец-удар: рывок по своей кривой, обороты вокруг себя, во вихре можно идти
+      const S = SPECIALS[sp.move], k0 = sp.prev / sp.dur, k1 = sp.t / sp.dur;
+      const fwd = new THREE.Vector3(Math.sin(sp.yaw), 0, Math.cos(sp.yaw));
+      if (S.dash) {
+        const [d, a, b] = S.dash;
+        const step = (smooth((k1 - a) / (b - a)) - smooth((k0 - a) / (b - a))) * d;
+        this.pos.addScaledVector(fwd, step);
+        this.vel.copy(fwd).multiplyScalar(dt > 0 ? step / dt : 0);
+      } else {
+        const want = moveDir && S.walk ? moveDir.clone().multiplyScalar(H.walk * this.speedMul * S.walk * (1 - this.slow)) : new THREE.Vector3();
+        this.vel.lerp(want, damp(10, dt));
+        this.pos.addScaledVector(this.vel, dt);
+      }
+      this.yaw = S.turns ? wrap(sp.yaw + S.turns * Math.PI * 2 * smooth((k1 - S.a) / (S.b - S.a))) : sp.yaw;
+    } else if (this.rolling) {
       const step = Math.min(dt, this.rollT);
       this.vel.copy(this.rollDir).multiplyScalar(H.rollDist / H.rollTime);
       this.pos.addScaledVector(this.vel, step);
@@ -501,9 +696,20 @@ export class Knight {
     this.swings++;
     this.yaw = aimYaw; // удар — туда, куда смотрит курсор
     this.trail.cut();
-    this.trail.color.copy(SWINGS[step].trail);
-    this.trail.width = SWINGS[step].width;
+    this.lookTrail(step, SWINGS[step].trail, SWINGS[step].width);
     this.onSwing?.(step);
+  }
+
+  private updateSpecial(dt: number): void {
+    const sp = this.sp!;
+    sp.prev = sp.t;
+    sp.t += dt;
+    if (sp.t >= sp.dur) {
+      this.sp = null;
+      this.lastCombo = -1;
+      this.sinceSwing = 99;
+      this.attackCd = 0.12;
+    }
   }
 
   private cancelSwing(): void {
@@ -544,26 +750,58 @@ export class Knight {
 
   /** Точки следа берутся, пока клинок летит: от конца замаха до чуть после удара */
   private sampleTrail(): void {
-    if (this.combo >= 0) {
+    const sp = this.sp;
+    if (sp && sp.move !== 'throw') {
+      const S = SPECIALS[sp.move], k = sp.t / sp.dur;
+      if (k >= S.a * 0.8 && k <= S.b + 0.08) {
+        const { base, tip } = this.blade();
+        this.trail.push(base, tip, this.simTime);
+        this.sampleOff();
+      }
+    } else if (this.combo >= 0) {
       const S = SWORD.swings[this.combo];
       const k = this.swingT / S.time;
       if (k >= S.windup * 0.8 && k <= S.windup + S.strike + 0.08) {
         const { base, tip } = this.blade();
         this.trail.push(base, tip, this.simTime);
+        this.sampleOff();
       }
     }
     this.trail.update(this.simTime);
+    this.offTrail.update(this.simTime);
+  }
+
+  /** След второго оружия */
+  private sampleOff(): void {
+    if (!this.dual || !this.offhand.visible) return;
+    const b = new THREE.Vector3(0, 0, this.offBase).applyMatrix4(this.offhand.matrixWorld);
+    const t = new THREE.Vector3(0, 0, this.offTip).applyMatrix4(this.offhand.matrixWorld);
+    this.offTrail.push(b.lerp(t, 1 - this.offTrail.width), t, this.simTime);
   }
 
   // ---------- анимация ----------
 
   /** Поза удара по доле k: замах → удар → возврат */
   private swingPose(step: number, k: number): Pose {
-    const S = SWORD.swings[step], Sw = SWINGS[step];
+    const S = SWORD.swings[step], [from, to] = STYLES[this.style][step];
     const a = S.windup, b = S.windup + S.strike;
-    if (k < a) return lerpPose(IDLE, Sw.from, smooth(k / a));
-    if (k < b) return lerpPose(Sw.from, Sw.to, outCubic((k - a) / (b - a)));
-    return lerpPose(Sw.to, IDLE, smooth((k - b) / (1 - b)));
+    if (k < a) return lerpPose(IDLE, from, smooth(k / a));
+    if (k < b) return lerpPose(from, to, outCubic((k - a) / (b - a)));
+    return lerpPose(to, IDLE, smooth((k - b) / (1 - b)));
+  }
+
+  /** Поза спец-удара по доле k: замах → удар → возврат */
+  private specialPose(move: SpecialMove, k: number): Pose {
+    const S = SPECIALS[move];
+    if (move === 'flurry' && k >= S.a && k < S.b) {
+      // руки по очереди: правая — укол, левая — замах, и наоборот, восемь ударов
+      const ph = Math.sin(((k - S.a) / (S.b - S.a)) * Math.PI * 8);
+      const r = Math.max(0, ph), l = Math.max(0, -ph);
+      return P(-0.9 - r * 0.8, -0.15 + r * 0.3, 0, 0.7 + r * 0.8, 0.35 * (r - l), 0.25, -0.9 - l * 0.8, -0.2 * l);
+    }
+    if (k < S.a) return lerpPose(IDLE, S.from, smooth(k / S.a));
+    if (k < S.b) return lerpPose(S.from, S.to, outCubic((k - S.a) / (S.b - S.a)));
+    return lerpPose(S.to, IDLE, smooth((k - S.b) / (1 - S.b)));
   }
 
   private animate(dt: number): void {
@@ -599,10 +837,17 @@ export class Knight {
       this.spin.rotation.x = 0;
       this.spin.position.y = 0.9;
     }
+    // прыжок спец-удара: тело взлетает и падает к моменту удара
+    const spc = this.sp, SP = spc ? SPECIALS[spc.move] : null;
+    if (spc && SP?.hop) {
+      const k = spc.t / spc.dur, a = 0.1;
+      this.spin.position.y += Math.sin(Math.PI * THREE.MathUtils.clamp((k - a) / (SP.b - a), 0, 1)) * SP.hop;
+    }
 
     // руки и корпус: удар или ходьба
     let pose: Pose;
-    if (this.combo >= 0) pose = this.swingPose(this.combo, this.swingT / SWORD.swings[this.combo].time);
+    if (spc) pose = this.specialPose(spc.move, spc.t / spc.dur);
+    else if (this.combo >= 0) pose = this.swingPose(this.combo, this.swingT / SWORD.swings[this.combo].time);
     else {
       pose = { ...IDLE };
       pose.ax += -s * 0.35;
@@ -613,6 +858,9 @@ export class Knight {
     const aiming = this.bowT > 0 && this.combo < 0 && !this.rolling && !this.down;
     if (aiming) { pose.lx = -1.55; pose.ly = 0.25; pose.ax = -1.5; pose.ay = -0.55; pose.az = 0; pose.twist = 0.25; }
     this.bow.visible = aiming && this.bow.children.length > 0;
+    this.offhand.visible = !this.bow.visible;
+    // второе оружие держится как первое: в стойке — вперёд-вверх, в ударе — вдоль руки
+    this.offhand.rotation.x = spc || this.combo >= 0 ? pose.wl ?? pose.w : -0.45;
     const R = this.arms[0], L = this.arms[1];
     R.rotation.set(pose.ax, pose.ay, pose.az);
     L.rotation.set(pose.lx, pose.ly, aiming ? 0 : air && this.combo < 0 ? -0.35 : -0.08);
@@ -623,7 +871,7 @@ export class Knight {
     this.head.rotation.x = -pose.lean * 0.4;
 
     // плащ развевается от скорости и в падении
-    const capeWant = 0.12 + Math.min(sp, 7) * 0.09 + (air ? 0.25 + Math.max(0, -this.vy) * 0.04 : 0) + (this.combo === 2 ? 0.3 : 0);
+    const capeWant = 0.12 + Math.min(sp, 7) * 0.09 + (air ? 0.25 + Math.max(0, -this.vy) * 0.04 : 0) + (this.combo === 2 || spc ? 0.3 : 0);
     this.cape += (capeWant - this.cape) * damp(8, dt);
     this.capeG.rotation.x = this.cape + Math.sin(this.simTime * 7) * 0.03 * (0.3 + this.gait);
 

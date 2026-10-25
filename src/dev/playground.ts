@@ -28,8 +28,10 @@ import { Grimoire } from '../bosses/grimoire';
 import { Pack } from '../mobs/pack';
 import { MOB_PARTS, MOBS, SQUADS } from '../mobs/roster';
 import { HERO, SWORD, snapshotTuning } from '../tuning';
-import { onWeaponChange, pickWeapon } from '../weapons';
-import { itemDef, Profile } from '../items';
+import { getWeapon, onWeaponChange, pickWeapon, weapons } from '../weapons';
+import { MELEE_ENCHANTS, TEMPER_LOOK, type MeleeEnchant } from '../temper';
+import { weaponHit, weaponSwing } from '../weapon-audio';
+import { enchantDef, itemDef, Profile } from '../items';
 import { arrowsLootMesh, Gear, itemLootMesh } from '../gear';
 import { Hud } from '../hud/hud';
 import { Inventory } from '../hud/inventory';
@@ -298,12 +300,14 @@ export function runPlayground(): void {
     },
     toast: (t) => toast(t),
     banner: (h) => hud.banner(h),
+    quiet: () => scripted,
   }, profile);
   if (urlWeapon) { gear.weaponOverride = urlWeapon; gear.apply(); }
   snapshotTuning();
   onWeaponChange((w) => gear.refreshWeapon(w));
   hero.onStep = () => { if (!scripted && hero.grounded) sfx.step(); };
-  hero.onSwing = (step) => { if (!scripted) sfx.swing(step === 2 ? 0.7 : step === 1 ? 1.15 : 1, step === 2); };
+  // свист взмаха и звук попадания — свои у каждого вида оружия (src/weapon-audio.ts)
+  hero.onSwing = (step) => { if (!scripted) weaponSwing(gear.arts.category, step); };
   hero.onLand = (v) => {
     if (v > 5) fx.burst(hero.pos.clone().setY(hero.pos.y + 0.05), ['#d8cfa8', '#b9ad88', '#9a8f70'], Math.min(14, Math.round(v)), { speed: 2, up: 1.2, size: 0.1, life: 0.4, gravity: 5 });
     if (!scripted) sfx.land();
@@ -439,8 +443,9 @@ export function runPlayground(): void {
       const d = gear.meleeDamage(s.dmg);
       t.hit(d.dmg, dir, point, s.knock * gear.stats.knockMult);
       fx.text(point, d.crit ? `${d.dmg}!` : String(d.dmg), finisher || d.crit ? 'crit' : '');
-      fx.burst(point, finisher ? [new THREE.Color(3.4, 2.6, 1.1), '#e8c35a'] : [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 7, { speed: 3.5, up: 2.5, size: 0.08, life: 0.4, glow: true, gravity: 8 });
-      if (d.fire) fx.burst(point, [new THREE.Color(3.4, 1.4, 0.3), new THREE.Color(3.4, 2.4, 0.6)], 6, { speed: 1.5, up: 2.5, size: 0.07, life: 0.5, glow: true, gravity: -1 });
+      fx.burst(point, finisher ? [new THREE.Color(3.4, 2.6, 1.1), '#e8c35a'] : [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 10, { speed: 4, up: 2.5, size: 0.09, life: 0.45, glow: true, gravity: 8 });
+      // закалка: вспышка и эффект каждого зачарования (огонь, капли, души, разряд…) — src/weapon-arts.ts
+      gear.arts.onHitTarget(t, point, dir, d.crit, finisher);
       gear.onHit(d.dmg, true, t.pos);
       smite ||= !finisher && gear.stats.smiteChance > 0 && Math.random() < gear.stats.smiteChance;
     }
@@ -454,6 +459,8 @@ export function runPlayground(): void {
         fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
       }
     }
+    // серп удара, шкала спец-удара, синергии закалки на добивающем
+    gear.arts.onStrike(s, [...hit], impact);
     if (finisher) {
       // ударная волна: кольцо по земле, пыль и тряска
       fx.shock(impact.clone().setY(impact.y + 0.05), SWORD.shockR * gear.stats.waveMult, new THREE.Color(3.2, 2.4, 1.0), 0.4, 0.18);
@@ -461,7 +468,7 @@ export function runPlayground(): void {
       fx.shake = Math.max(fx.shake, 0.55);
       if (!scripted) sfx.quake();
     } else if (hit.size) fx.shake = Math.max(fx.shake, 0.18);
-    if (hit.size && !scripted) sfx.hit();
+    if (hit.size && !scripted) weaponHit(gear.arts.category, finisher);
     return hit.size;
   }
 
@@ -555,6 +562,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       case 'Digit1': case 'Digit2': case 'Digit3': gear.pressArtifact(Number(e.code.slice(5)) - 1, aimPoint()); break;
       case 'KeyE': gear.potion(); break;
       case 'KeyR': gear.flareAura(); break;
+      case 'KeyQ': gear.special(aimPoint()); break;
       case 'KeyF': interactReq = true; break;
       case 'KeyI': openInventory(); break;
       case 'KeyM': hud.toggleMap(); break;
@@ -810,6 +818,18 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const r of MOB_ROOMS) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
     // масштаб стражей: уровень и число игроков
     refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
+    // закалка для проверки: любое оружие и до трёх зачарований на III (вид, синергии, спец-удар)
+    const tempPick: (MeleeEnchant | '')[] = ['', '', ''];
+    const applyTemper = (): void => {
+      const ids = [...new Set(tempPick.filter((x): x is MeleeEnchant => !!x))];
+      gear.temperOverride = ids.length ? ids.map((id) => ({ id, tier: 3 })) : null;
+      gear.apply();
+    };
+    refreshers.push(select(c, 'Оружие', [['', 'надетое'], ...weapons().map((w): [string, string] => [w.id, `${w.title} (${w.category})`])], () => gear.weaponOverride?.id ?? '', (v) => {
+      gear.weaponOverride = v ? getWeapon(v) ?? null : null;
+      gear.apply();
+    }));
+    for (let i = 0; i < 3; i++) refreshers.push(select<MeleeEnchant | ''>(c, `Закалка ${i + 1}`, [['', '—'], ...MELEE_ENCHANTS.map((id): [MeleeEnchant, string] => [id, `${enchantDef(id).title} · ${TEMPER_LOOK[id].name}`])], () => tempPick[i], (v) => { tempPick[i] = v; applyTemper(); }));
     refreshers.push(select(c, 'Игроков', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']], () => String(bossPlayers), (v) => { bossPlayers = Number(v); rescaleBosses(); }));
   }
 
@@ -823,6 +843,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   hud.onPotion = () => gear.potion();
   hud.onArtifact = (i) => gear.useArtifact(i, aimPoint());
   hud.onAura = () => gear.flareAura();
+  hud.onSpecial = () => gear.special(aimPoint());
   // карта с туманом войны: мини в углу, Tab — поверх игры, M — полная (src/hud/automap.ts)
   const automap = new AutoMap(level, !STREAM);
   hud.setMap(automap, new URLSearchParams(window.location.search).has('map') ? level.name : 'Плейграунд');
@@ -863,7 +884,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     <div class="pg-fps" id="pgFps"></div>
     <div class="pg-toast" id="pgToast"></div>
     <div class="pg-prompt" id="pgPrompt"></div>
-    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — заклинания и артефакты (держи — заряд) · R — вспышка ауры · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры<br>
+    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — заклинания и артефакты (держи — заряд) · Q — спец-удар оружия · R — вспышка ауры · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры<br>
     F1 параметры · F2 коллайдеры · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · F9 звук · B bloom · U свет · L день/ночь · N сброс · F10 редактор · H — скрыть подсказку</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(dev);
@@ -1082,6 +1103,12 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     get berries() { return profile.data.berries; },
     /** Снаряжение и прокачка: профиль (src/items.ts), бой (src/gear.ts), HUD и инвентарь (src/hud/) */
     profile, gear, hud, inventory, shop, merchants, automap,
+    /** Закалка и спец-удар (src/weapon-arts.ts): шкала, синергии, счётчики */
+    arts: gear.arts,
+    special(x: number, z: number) { return gear.special(new THREE.Vector3(x, hero.pos.y, z)); },
+    /** Оружие для отладки поверх надетого (id из src/weapons.ts; пусто — надетое) и закалка на III */
+    weapon(id = '') { gear.weaponOverride = id ? getWeapon(id) ?? null : null; gear.apply(); return gear.weaponOverride?.category ?? null; },
+    temper(ids: MeleeEnchant[] = []) { gear.temperOverride = ids.length ? ids.map((id) => ({ id, tier: 3 })) : null; gear.apply(); return gear.arts.synergies.map((x) => x.id); },
     /** Страж и его арена (src/bosses/): boss.state, arena.state, гримуары после победы */
     bosses, arenas, bossIds, grimoires, bossBar,
     /** Встать у ворот стража (id арены: cauldron, boar, …) */

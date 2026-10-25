@@ -73,6 +73,11 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 
 /* гнездо ауры: шкала цветом ауры снизу вверх, полная — светится и ждёт R */
 .hud-aura { margin-left: 0.35em; outline-color: #7a6a9a; overflow: hidden; }
+/* спец-удар оружия (Q): шкала как у ауры */
+.hud-spec { overflow: hidden; outline-color: #9a7a4a; }
+.hud-spec .hud-ico { position: relative; }
+.hud-spec.ready { outline-color: #fff; animation: hud-aura-ready 0.6s ease-in-out infinite alternate; }
+.hud-spec.flaring { outline-color: var(--mcd-gold); animation: hud-glow 0.35s ease-in-out infinite alternate; }
 .hud-aurafill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(to top, var(--c), transparent); opacity: 0.75; pointer-events: none; transition: height 0.15s; }
 .hud-aura.empty .hud-ico { display: none; }
 .hud-aura.empty .hud-plus { display: block; }

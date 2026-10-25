@@ -104,6 +104,9 @@ body { font-family: 'Rubik', system-ui, sans-serif; color: var(--ink); user-sele
 .fx-title.show { animation: fx-title 1.8s ease-out forwards; }
 @keyframes fx-title { 0% { opacity: 0; transform: scale(1.4); letter-spacing: 0.2em; } 12% { opacity: 1; transform: scale(1); letter-spacing: 0.08em; } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(0.96); } }
 .dmg.bleed { color: #ff2a3a; font-size: 12px; }
+/* название синергии закалки над добивающим (src/weapon-arts.ts) */
+.dmg.syn { color: #fff; font-size: 11px; white-space: nowrap; text-shadow: 0 0 10px #ffd27a, 2px 2px 0 #000; }
+.dmg.syn.res { color: #ffe27a; font-size: 14px; text-shadow: 0 0 14px #ff9a3a, 2px 2px 0 #000; }
 
 /* Над грядками */
 .plot-ui { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; will-change: transform; }

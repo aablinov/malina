@@ -7,6 +7,7 @@ import {
 import { emptyInput, Knight } from '../knight';
 import { rng, type Textures } from '../textures';
 import { DEFAULT_WEAPONS, getWeapon, weaponMetrics } from '../weapons';
+import { RESONANCE, synergiesOf, TEMPER_LOOK, temperOf, WEAPON_SPECIAL } from '../temper';
 import './inventory.css';
 
 /**
@@ -392,6 +393,14 @@ export class Inventory {
       line('e-clock', `Перезарядка ${fmt(a.cd * p.stats().artifactCdMult)} с`);
     }
     for (const s of it.enchants) if (s.chosen >= 0 && s.tier > 0) { const e = enchantDef(s.options[s.chosen]); line(e.icon, `${e.title} ${ROMAN[s.tier]}: ${e.text(e.tiers[s.tier - 1])}`); }
+    // закалка: спец-удар вида оружия, облик клинка и синергии пар (src/temper.ts)
+    if (d.slot === 'melee') {
+      const w = getWeapon(d.weapon ?? ''), tp = temperOf(it);
+      if (w) line('e-bolt', `<b>Q — ${WEAPON_SPECIAL[w.category].title}:</b> ${WEAPON_SPECIAL[w.category].text}`);
+      if (tp.length) line('e-blade', `Клинок: ${tp.map((t) => TEMPER_LOOK[t.id].name).join(' · ')}`);
+      for (const x of synergiesOf(tp)) line('e-swirl', `<b>${x.title}</b> (добивающий): ${x.text}`);
+      if (tp.length >= 3) line('e-star', `<b>${RESONANCE.title}:</b> ${RESONANCE.text}`);
+    }
 
     const equipped = p.isEquipped(it.uid);
     const head = `<div class="d-head"><span class="d-pw">${it.power}${iconImg(SLOT_ICON[d.slot], '', '#fff')}</span><span class="d-rar" style="--c:${R.color}">${R.title}</span>${equipped ? '<span class="d-on">Надето</span>' : ''}</div>
