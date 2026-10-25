@@ -7,6 +7,7 @@ import { paletteTextures, type BlockDef, type Layer } from './palette.ts';
 import { decorTextures } from './decor.ts';
 import { DecorRenderer } from './decor-render.ts';
 import { getShape } from './shapes';
+import type { Shape } from './obj';
 
 /**
  * Рендер уровня: на каждый чанк — по одной сетке на слой (opaque / cutout / water / fire).
@@ -206,21 +207,58 @@ function hash(x: number, y: number, z: number, s = 0): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
+/**
+ * Вершины слоя чанка (wiki/dev-performance.md): геометрия индексированная — квад это 4 вершины и 6 индексов,
+ * у форм блоков вершины общих рёбер тоже не дублируются. Атрибуты — только нужные слою: shore и flow есть у
+ * жидкостей, bake — когда рядом есть запечённый свет (шейдер читает отсутствующий атрибут как ноль).
+ */
 class Bucket {
-  pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = []; flow: number[] = []; bake: number[] = [];
-  get empty(): boolean { return this.pos.length === 0; }
+  pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = []; flow: number[] = []; bake: number[] = []; idx: number[] = [];
+  constructor(readonly liquid: boolean, readonly lit: boolean) {}
+  get empty(): boolean { return this.idx.length === 0; }
+  /** Номер следующей вершины */
+  get count(): number { return this.pos.length / 3; }
   geometry(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nrm, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
-    g.setAttribute('shore', new THREE.Float32BufferAttribute(this.shore, 1));
-    g.setAttribute('flow', new THREE.Float32BufferAttribute(this.flow, 2));
-    g.setAttribute('bake', new THREE.Float32BufferAttribute(this.bake, 3));
+    if (this.liquid) {
+      g.setAttribute('shore', new THREE.Float32BufferAttribute(this.shore, 1));
+      g.setAttribute('flow', new THREE.Float32BufferAttribute(this.flow, 2));
+    }
+    if (this.lit) g.setAttribute('bake', new THREE.Float32BufferAttribute(this.bake, 3));
+    g.setIndex(this.idx);
     return g;
   }
 }
+
+const LIQUID_LAYERS = new Set<Layer>(['water', 'acid', 'river']);
+
+/** Форма с общими вершинами: грани ссылаются на номера вершин; совпадают только вершины одной группы и одного cull */
+interface IndexedShape { verts: { p: [number, number, number]; n: [number, number, number]; uv: [number, number]; group: string; cull: number }[]; tris: { v: [number, number, number]; cull: number; group: string }[] }
+const indexedShapes = new WeakMap<Shape, IndexedShape>();
+function indexedOf(shape: Shape): IndexedShape {
+  let ix = indexedShapes.get(shape);
+  if (ix) return ix;
+  const verts: IndexedShape['verts'] = [], tris: IndexedShape['tris'] = [], seen = new Map<string, number>();
+  for (const t of shape.tris) {
+    const v: number[] = [];
+    for (let k = 0; k < 3; k++) {
+      const p: [number, number, number] = [t.pos[k * 3], t.pos[k * 3 + 1], t.pos[k * 3 + 2]], uv: [number, number] = [t.uv[k * 2], t.uv[k * 2 + 1]];
+      const key = `${p[0]},${p[1]},${p[2]}|${t.nrm[0]},${t.nrm[1]},${t.nrm[2]}|${uv[0]},${uv[1]}|${t.group}|${t.cull}`;
+      let i = seen.get(key);
+      if (i === undefined) { i = verts.length; seen.set(key, i); verts.push({ p, n: t.nrm, uv, group: t.group, cull: t.cull }); }
+      v.push(i);
+    }
+    tris.push({ v: v as [number, number, number], cull: t.cull, group: t.group });
+  }
+  indexedShapes.set(shape, ix = { verts, tris });
+  return ix;
+}
+/** Соответствие вершин формы вершинам слоя в текущем блоке (−1 — ещё не выпущена) */
+let shapeMap = new Int32Array(64);
 
 export class LevelRenderer {
   readonly group = new THREE.Group();
@@ -338,37 +376,39 @@ export class LevelRenderer {
     if (!chunk) return;
     const [cx, cy, cz] = key.split(',').map(Number);
     const L = this.level;
-    const buckets: Record<Layer, Bucket> = { opaque: new Bucket(), cutout: new Bucket(), water: new Bucket(), acid: new Bucket(), fire: new Bucket(), glow: new Bucket(), detail: new Bucket(), river: new Bucket(), falls: new Bucket(), portal: new Bucket() };
-    const spots: LightSpot[] = [];
-    const isFull = (x: number, y: number, z: number) => L.defAt(x, y, z).full;
     // запечённый свет: только источники, достающие до этого чанка
     const near = this.baked.filter((l) => l.x + l.dist >= cx * CH - 0.5 && l.x - l.dist <= cx * CH + CH - 0.5 && l.z + l.dist >= cz * CH - 0.5 && l.z - l.dist <= cz * CH + CH - 0.5 && l.y + l.dist >= cy * CH && l.y - l.dist <= cy * CH + CH);
-    const lit: [number, number, number] = [0, 0, 0];
+    const lit = near.length > 0;
+    const buckets = Object.fromEntries(LAYERS.map((l) => [l, new Bucket(LIQUID_LAYERS.has(l), lit)])) as Record<Layer, Bucket>;
+    const spots: LightSpot[] = [];
+    const isFull = (x: number, y: number, z: number) => L.defAt(x, y, z).full;
+    const lit3: [number, number, number] = [0, 0, 0];
     /** Запечённый свет в вершине: тёплое свечение, к краю радиуса сходит на нет (добавляется к излучению) */
     const bake = (x: number, y: number, z: number): [number, number, number] => {
-      lit[0] = lit[1] = lit[2] = 0;
+      lit3[0] = lit3[1] = lit3[2] = 0;
       for (const l of near) {
         const d = Math.hypot(x - l.x, y - l.y, z - l.z);
         if (d >= l.dist) continue;
         const f = (1 - d / l.dist) ** 2 * l.k;
-        lit[0] += l.r * f; lit[1] += l.g * f; lit[2] += l.b * f;
+        lit3[0] += l.r * f; lit3[1] += l.g * f; lit3[2] += l.b * f;
       }
-      return lit;
+      return lit3;
     };
     /** Четырёхугольник в слой: 4 точки мира, uv в долях тайла атласа, нормаль, яркость */
     const quad = (b: Bucket, p: number[][], uv: number[][], n: readonly number[], tex: string, c: number) => {
       const r = this.atlas.uv(tex);
-      for (const k of [0, 1, 2, 0, 2, 3]) {
+      const base = b.count;
+      for (let k = 0; k < 4; k++) {
         b.pos.push(p[k][0], p[k][1], p[k][2]);
         b.nrm.push(n[0], n[1], n[2]);
         b.uv.push(r.u0 + (r.u1 - r.u0) * uv[k][0], r.v0 + (r.v1 - r.v0) * uv[k][1]);
         // трава поверх блока — того же оттенка, что земля под ней
         const [tr, tg, tb] = macroTint(p[k][0], p[k][2]);
         b.col.push(c * tr, c * tg, c * tb);
-        if (near.length) b.bake.push(...bake(p[k][0], p[k][1], p[k][2])); else b.bake.push(0, 0, 0);
-        b.shore.push(0);
-        b.flow.push(0, 0);
+        if (lit) b.bake.push(...bake(p[k][0], p[k][1], p[k][2]));
+        if (b.liquid) { b.shore.push(0); b.flow.push(0, 0); }
       }
+      b.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     };
     /** Плотность пучков: плавный шум с шагом 5 м — трава растёт пятнами */
     const density = (x: number, z: number) => {
@@ -400,10 +440,11 @@ export class LevelRenderer {
         } else placements.push(yaw);
         const bucket = buckets[part.layer ?? 'opaque'];
         const atlasUV = (part.layer ?? 'opaque') === 'opaque' || part.layer === 'cutout' || part.layer === 'glow' || part.layer === 'portal';
-        const isLiquid = part.layer === 'water' || part.layer === 'acid' || part.layer === 'river';
         const flowX = def.flow ? DIRS[rot][0] * def.flow : 0, flowZ = def.flow ? DIRS[rot][2] * def.flow : 0;
         for (const r of placements) {
-          const shape = getShape(part.obj, r);
+          const shape = indexedOf(getShape(part.obj, r));
+          if (shapeMap.length < shape.verts.length) shapeMap = new Int32Array(shape.verts.length * 2);
+          shapeMap.fill(-1, 0, shape.verts.length);
           for (const t of shape.tris) {
             if (t.cull >= 0) {
               const nx = x + DIRS[t.cull][0], ny = y + DIRS[t.cull][1], nz = z + DIRS[t.cull][2];
@@ -414,10 +455,15 @@ export class LevelRenderer {
             const tex = Array.isArray(texName) ? texName[Math.floor(hash(x, y, z, 7) * texName.length)] : texName;
             const uvRect = atlasUV ? this.atlas.uv(tex) : null;
             for (let k = 0; k < 3; k++) {
-              const px = t.pos[k * 3], py = t.pos[k * 3 + 1], pz = t.pos[k * 3 + 2];
+              const vi = t.v[k];
+              if (shapeMap[vi] >= 0) { bucket.idx.push(shapeMap[vi]); continue; }
+              const vt = shape.verts[vi];
+              const px = vt.p[0], py = vt.p[1], pz = vt.p[2];
+              shapeMap[vi] = bucket.count;
+              bucket.idx.push(bucket.count);
               bucket.pos.push(x + (px - 0.5) * scale + ox, y + py * scale, z + (pz - 0.5) * scale + oz);
-              bucket.nrm.push(t.nrm[0], t.nrm[1], t.nrm[2]);
-              const u = t.uv[k * 2], v = t.uv[k * 2 + 1];
+              bucket.nrm.push(vt.n[0], vt.n[1], vt.n[2]);
+              const u = vt.uv[0], v = vt.uv[1];
               if (uvRect) bucket.uv.push(uvRect.u0 + (uvRect.u1 - uvRect.u0) * u, uvRect.v0 + (uvRect.v1 - uvRect.v0) * v);
               else bucket.uv.push(u, v);
               let ao = 1;
@@ -439,15 +485,15 @@ export class LevelRenderer {
               const wx = x + (px - 0.5) * scale + ox, wz = z + (pz - 0.5) * scale + oz;
               const [tr, tg, tb] = def.natural ? macroTint(wx, wz) : [1, 1, 1];
               bucket.col.push(cv * tr, cv * tg, cv * tb);
-              if (near.length) bucket.bake.push(...bake(wx, y + py * scale, wz)); else bucket.bake.push(0, 0, 0);
-              // берег: в этом углу рядом нет той же жидкости
-              let shore = 0;
-              if (isLiquid) {
+              if (lit) bucket.bake.push(...bake(wx, y + py * scale, wz));
+              if (bucket.liquid) {
+                // берег: в этом углу рядом нет той же жидкости
+                let shore = 0;
                 const sx = px < 0.5 ? -1 : 1, sz = pz < 0.5 ? -1 : 1;
                 if (L.idAt(x + sx, y, z) !== id || L.idAt(x, y, z + sz) !== id || L.idAt(x + sx, y, z + sz) !== id) shore = 1;
+                bucket.shore.push(shore);
+                bucket.flow.push(flowX, flowZ);
               }
-              bucket.shore.push(shore);
-              bucket.flow.push(flowX, flowZ);
             }
           }
         }
@@ -525,7 +571,7 @@ export class LevelRenderer {
   /** Сколько треугольников в слое по всем чанкам (для тестов и замеров) */
   triangles(layer: Layer): number {
     let n = 0;
-    for (const list of this.meshes.values()) for (const m of list) if (m.material === this.mats[layer]) n += m.geometry.getAttribute('position').count / 3;
+    for (const list of this.meshes.values()) for (const m of list) if (m.material === this.mats[layer]) n += (m.geometry.index?.count ?? m.geometry.getAttribute('position').count) / 3;
     return n;
   }
 

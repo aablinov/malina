@@ -5,6 +5,8 @@ import type { WeatherKind } from './world';
  * Погода: частицы в коробке вокруг точки интереса (камеры или героя) — дождь штрихами, снег хлопьями, листопад,
  * искры с пеплом; гроза — сильный дождь и вспышки молний (подсветка неба). Без физики и столкновений: частица,
  * упавшая ниже коробки, возвращается наверх — дёшево и не зависит от размера карты.
+ * Положение каждой частицы считает вершинный шейдер по сиду и времени (wiki/dev-performance.md): буфер заливается
+ * один раз при смене погоды, с кадра в кадр меняются только uniform-ы (время, центр коробки, ветер).
  */
 
 const BOX = 36, H = 22;
@@ -26,9 +28,8 @@ export class Weather {
   /** Вспышка молнии 0..1 — добавь к свету неба (гроза) */
   flash = 0;
   private obj: THREE.Points | THREE.LineSegments | null = null;
-  private pos: Float32Array = new Float32Array(0);
-  private seed: Float32Array = new Float32Array(0);
   private look: Look | null = null;
+  private readonly u = { uTime: { value: 0 }, uFocus: { value: new THREE.Vector3() }, uWind: { value: 0 }, uFall: { value: 0 }, uStreak: { value: 0 }, uSway: { value: 0 } };
   private nextBolt = 3;
   private t = 0;
 
@@ -51,22 +52,31 @@ export class Weather {
     const L = this.look;
     if (!L) return;
     const n = L.count;
-    this.seed = new Float32Array(n * 4);
-    for (let i = 0; i < n * 4; i++) this.seed[i] = Math.random();
+    // на вершину: сид (4 случайных числа, у штриха — одинаковый на оба конца) и признак конца штриха
+    const per = L.streak > 0 ? 2 : 1;
+    const seed = new Float32Array(n * per * 4), end = new Float32Array(n * per);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random(), b = Math.random(), c = Math.random(), d = Math.random();
+      for (let k = 0; k < per; k++) { const o = (i * per + k) * 4; seed[o] = a; seed[o + 1] = b; seed[o + 2] = c; seed[o + 3] = d; end[i * per + k] = k; }
+    }
     const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * per * 3), 3));
+    g.setAttribute('seed', new THREE.BufferAttribute(seed, 4));
+    g.setAttribute('end', new THREE.BufferAttribute(end, 1));
+    this.u.uFall.value = L.fall; this.u.uStreak.value = L.streak; this.u.uSway.value = L.sway;
+    let mat: THREE.Material;
     if (L.streak > 0) {
-      this.pos = new Float32Array(n * 6);
-      g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-      this.obj = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: L.color, transparent: true, opacity: L.opacity, depthWrite: false, fog: true }));
+      mat = new THREE.LineBasicMaterial({ color: L.color, transparent: true, opacity: L.opacity, depthWrite: false, fog: true });
+      this.obj = new THREE.LineSegments(g, mat);
     } else {
-      this.pos = new Float32Array(n * 3);
-      g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
       const tex = dotTexture(this.kind === 'leaves');
-      this.obj = new THREE.Points(g, new THREE.PointsMaterial({
+      mat = new THREE.PointsMaterial({
         color: L.color, size: L.size, map: tex, transparent: true, opacity: L.opacity, depthWrite: false, sizeAttenuation: true,
         blending: L.up ? THREE.AdditiveBlending : THREE.NormalBlending, alphaTest: 0.05,
-      }));
+      });
+      this.obj = new THREE.Points(g, mat);
     }
+    this.gpu(mat);
     this.obj.frustumCulled = false;
     this.obj.name = this.kind;
     this.group.add(this.obj);
@@ -79,6 +89,33 @@ export class Weather {
     this.obj.geometry.setDrawRange(0, this.look.streak > 0 ? n * 2 : n);
   }
 
+  /** Положение частицы в вершинном шейдере — та же формула, что раньше считалась на CPU */
+  private gpu(m: THREE.Material): void {
+    const u = this.u;
+    m.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', `#include <common>
+attribute vec4 seed; attribute float end;
+uniform float uTime; uniform vec3 uFocus; uniform float uWind; uniform float uFall; uniform float uStreak; uniform float uSway;`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+{
+  const float BOX = ${BOX.toFixed(1)}, H = ${H.toFixed(1)}, hb = BOX * 0.5;
+  float t = uTime, idx = seed.x * 1000.0, sp = 0.7 + seed.w * 0.6;
+  // высота — по кругу сверху вниз (или снизу вверх у искр), скорость у каждой своя
+  float h = fract(seed.y - (t * uFall * sp) / H);
+  float y = uFocus.y - 4.0 + h * H;
+  float sway = sin(t * 1.3 + idx) * uSway;
+  float drift = uWind * (1.0 - h) * (uFall > 0.0 ? H / max(1.0, uFall) : 4.0);
+  float x = uFocus.x + mod(seed.x * BOX + drift + sway - mod(uFocus.x, BOX) + BOX * 10.0, BOX) - hb;
+  float z = uFocus.z + mod(seed.z * BOX + cos(t + idx) * uSway * 0.6 - mod(uFocus.z, BOX) + BOX * 10.0, BOX) - hb;
+  float len = uStreak * sp * end;
+  transformed = vec3(x - uWind * 0.03 * len, y + len, z);
+}`);
+    };
+    m.customProgramCacheKey = () => 'weather';
+  }
+
   /** Сдвинуть частицы; focus — центр коробки (камера смотрит сюда) */
   update(dt: number, focus: THREE.Vector3): void {
     this.t += dt;
@@ -87,27 +124,10 @@ export class Weather {
       this.nextBolt -= dt;
       if (this.nextBolt <= 0) { this.flash = 1; this.nextBolt = 2 + Math.random() * 7 * (1.2 - this.intensity); }
     }
-    const L = this.look;
-    if (!L || !this.obj) return;
-    const n = L.count, s = this.seed, p = this.pos, t = this.t;
-    const half = BOX / 2;
-    for (let i = 0; i < n; i++) {
-      const sx = s[i * 4], sz = s[i * 4 + 2], sp = 0.7 + s[i * 4 + 3] * 0.6;
-      // высота — по кругу сверху вниз (или снизу вверх у искр), скорость у каждой своя
-      let h = (s[i * 4 + 1] - (t * L.fall * sp) / H) % 1;
-      if (h < 0) h += 1;
-      const y = focus.y - 4 + h * H;
-      const sway = L.sway ? Math.sin(t * 1.3 + i) * L.sway : 0;
-      const drift = this.wind * (1 - h) * (L.fall > 0 ? H / Math.max(1, L.fall) : 4);
-      const x = focus.x + ((sx * BOX + drift + sway - (focus.x % BOX) + BOX * 10) % BOX) - half;
-      const z = focus.z + ((sz * BOX + Math.cos(t + i) * L.sway * 0.6 - (focus.z % BOX) + BOX * 10) % BOX) - half;
-      if (L.streak > 0) {
-        const k = i * 6, len = L.streak * sp;
-        p[k] = x; p[k + 1] = y; p[k + 2] = z;
-        p[k + 3] = x - this.wind * 0.03 * len; p[k + 4] = y + len; p[k + 5] = z;
-      } else { p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z; }
-    }
-    (this.obj.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    if (!this.look || !this.obj) return;
+    this.u.uTime.value = this.t;
+    this.u.uFocus.value.copy(focus);
+    this.u.uWind.value = this.wind;
   }
 
   dispose(): void {
