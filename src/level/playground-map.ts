@@ -251,6 +251,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
 
   buildBossArena(L, labels, W);
   buildBarracks(L, labels, W, dec);
+  buildGarden(L, labels, dec);
 
   L.spawn = [0, 0, 0];
   L.meta = { labels };
@@ -367,24 +368,56 @@ function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
 }
 
 /**
- * Казарма Ордена за западной стеной (wiki/design-mobs.md): комната с рядовыми мобами. Проход — в западной стене
- * плейграунда (z −1…1); гарнизон стоит группами на постах и просыпается, когда герой подходит (src/mobs/, playground.ts).
+ * Комнаты мобов за западной стеной (wiki/design-mobs.md): казарма Ордена (проход в западной стене плейграунда, z −1…1)
+ * и Терновый сад южнее (проход из казармы). Гарнизон стоит группами на постах и просыпается, когда герой подходит
+ * (src/mobs/, playground.ts). Группы — дальше 8 м друг от друга: соседи в 8 м просыпаются вместе.
  */
-export const BARRACKS = { x0: -46, x1: -26, z0: -10, z1: 10 };
-/** Посты гарнизона: моб и где стоит; группы — дальше 8 м друг от друга (соседи в 8 м просыпаются вместе), чтобы просыпались по одной */
-export const BARRACKS_POSTS: { kind: string; x: number; z: number }[] = [
-  // у входа — мелочь: малинёныши и садовники
-  ...[[-30, -7], [-31, -5.6], [-29.6, -5], [-31.2, -7.6]].map(([x, z]) => ({ kind: 'berryling', x, z })),
-  ...[[-30, 5], [-31.5, 6.8], [-29.5, 7.4]].map(([x, z]) => ({ kind: 'gardener', x, z })),
-  // дальше — волки и рыцари; за рыцарями — целительница, за волками — маги
-  ...[[-40, -6], [-41.5, -7.5], [-41.5, -4.5]].map(([x, z]) => ({ kind: 'wolf', x, z })),
-  { kind: 'shield', x: -40.5, z: 6 }, { kind: 'squire', x: -41.5, z: 4.2 }, { kind: 'squire', x: -41.5, z: 7.8 },
-  { kind: 'healer', x: -45, z: 6 },
-  { kind: 'pyro', x: -44, z: -3.5 }, { kind: 'summoner', x: -44, z: -8 },
+export interface MobRoomSpec {
+  id: string;
+  title: string;
+  x0: number; x1: number; z0: number; z1: number;
+  posts: { kind: string; x: number; z: number }[];
+  /** Куда встать у входа (кнопка в F1) */
+  enter: { x: number; z: number; yaw: number };
+}
+
+const at = (kind: string, pts: number[][]) => pts.map(([x, z]) => ({ kind, x, z }));
+
+export const MOB_ROOMS: MobRoomSpec[] = [
+  {
+    id: 'barracks', title: 'Казарма Ордена', x0: -58, x1: -26, z0: -10, z1: 10,
+    enter: { x: -22, z: 0, yaw: -Math.PI / 2 },
+    posts: [
+      // у входа — мелочь: малинёныши и садовники
+      ...at('berryling', [[-30, -7], [-31, -5.6], [-29.6, -5], [-31.2, -7.6]]),
+      ...at('gardener', [[-30, 5], [-31.5, 6.8], [-29.5, 7.4]]),
+      // дальше — волки и рыцари; за рыцарями — целительница, за волками — маги
+      ...at('wolf', [[-40, -6], [-41.5, -7.5], [-41.5, -4.5]]),
+      ...at('shield', [[-40.5, 6]]), ...at('squire', [[-41.5, 4.2], [-41.5, 7.8]]),
+      ...at('healer', [[-45, 6]]),
+      ...at('pyro', [[-44, -3.5]]), ...at('summoner', [[-44, -8]]),
+      // в глубине — гвардия со знаменем: молотобоец впереди, копейщики, арбалетчики у стены
+      ...at('hammer', [[-52.5, 0]]), ...at('spear', [[-53.5, -2.5], [-53.5, 2.5]]),
+      ...at('banner', [[-56, 0]]), ...at('crossbow', [[-57, -4], [-57, 4]]),
+    ],
+  },
+  {
+    id: 'garden', title: 'Терновый сад', x0: -50, x1: -27, z0: 12, z1: 35,
+    enter: { x: -35, z: 9, yaw: 0 },
+    posts: [
+      // у входа — лозы стерегут дорожку; справа слизни, слева клубки, в глубине — чудище и бутоны
+      ...at('vine', [[-37, 15], [-33, 15], [-35, 17]]),
+      ...at('slime', [[-28.5, 24], [-29, 27.5]]),
+      ...at('hedgehog', [[-46, 22], [-47, 25.5]]),
+      ...at('horror', [[-39, 32]]), ...at('bud', [[-42, 34], [-36, 34]]),
+    ],
+  },
 ];
 
-function buildBarracks(L: Level, labels: PgLabel[], W: number, dec: (name: string, x: number, y: number, z: number, rot?: number, on?: [number, number, number]) => void): void {
-  const B = BARRACKS;
+type Dec = (name: string, x: number, y: number, z: number, rot?: number, on?: [number, number, number]) => void;
+
+function buildBarracks(L: Level, labels: PgLabel[], W: number, dec: Dec): void {
+  const B = MOB_ROOMS[0];
   const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
   // пол: плиты с булыжником, дорожка от входа
   for (let x = B.x0; x <= B.x1; x++) for (let z = B.z0; z <= B.z1; z++) {
@@ -402,11 +435,11 @@ function buildBarracks(L: Level, labels: PgLabel[], W: number, dec: (name: strin
     L.set(x, 0, B.z1 + 1, 'bricks_mossy');
   }
   // знамёна Ордена и факелы на дальних стенах, стойки и ящики по углам
-  for (const x of [-42, -34]) dec('banner', x, 2.6, B.z0 - 0.5, 0, [x, 2, B.z0 - 1]);
+  for (const x of [-54, -42, -34]) dec('banner', x, 2.6, B.z0 - 0.5, 0, [x, 2, B.z0 - 1]);
   for (const z of [-5, 5]) dec('banner', B.x0 - 0.5, 2.6, z, -90, [B.x0 - 1, 2, z]);
-  for (const x of [-46, -38, -30]) L.set(x, 0, B.z0, 'torch');
+  for (const x of [-58, -50, -46, -38, -30]) L.set(x, 0, B.z0, 'torch');
   L.set(B.x0, 0, 0, 'torch');
-  dec('crates_tilted', -45, 0, 9, 20);
+  dec('crates_tilted', -57, 0, 9, 20);
   dec('bones', -27.5, 0, -9, 40);
   dec('lantern_post', -27, 0, 2.6, 90);
   dec('lantern_post', -27, 0, -2.6, 90);
@@ -416,4 +449,38 @@ function buildBarracks(L: Level, labels: PgLabel[], W: number, dec: (name: strin
   labels.push({ text: 'волки', x: -40, z: -9.2, size: 0.55 });
   labels.push({ text: 'рыцари и целительница', x: -41, z: 9.2, size: 0.55 });
   labels.push({ text: 'маги', x: -44, z: -1.6, size: 0.55 });
+  labels.push({ text: 'гвардия со знаменем', x: -54, z: 8.6, size: 0.55 });
+  labels.push({ text: 'Терновый сад ↓', x: -35, z: 8.4, size: 0.6 });
+}
+
+/** Терновый сад: трава и мох, кусты малины по краю, живая изгородь вместо стен; проход — из казармы */
+function buildGarden(L: Level, labels: PgLabel[], dec: Dec): void {
+  const G = MOB_ROOMS[1];
+  const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
+  for (let x = G.x0; x <= G.x1; x++) for (let z = G.z0 - 1; z <= G.z1; z++) {
+    const n = hash(x, z);
+    L.set(x, -1, z, Math.abs(x + 35) <= 1 && z <= 20 ? 'path' : n < 0.78 ? 'grass' : 'dirt');
+    L.set(x, -2, z, 'stone');
+  }
+  // проход в южной стене казармы
+  for (let x = -36; x <= -34; x++) { L.set(x, 0, G.z0 - 1, 'air'); L.set(x, -1, G.z0 - 1, 'path'); }
+  // стены: запад — 3 блока скалы, юг и восток (к камере) — 1 блок
+  for (let z = G.z0 - 1; z <= G.z1 + 1; z++) {
+    L.set(G.x0 - 1, -1, z, 'stone'); for (let y = 0; y < 3; y++) L.set(G.x0 - 1, y, z, 'cliff_dark');
+    L.set(G.x1 + 1, -1, z, 'stone'); L.set(G.x1 + 1, 0, z, 'bricks_mossy');
+  }
+  for (let x = G.x0 - 1; x <= G.x1 + 1; x++) { L.set(x, -1, G.z1 + 1, 'stone'); L.set(x, 0, G.z1 + 1, 'bricks_mossy'); }
+  // кусты малины и цветы вдоль стен
+  for (let j = 0; j < 26; j++) {
+    const side = j % 3, t = hash(j, 7);
+    const x = side === 0 ? G.x0 : Math.round(G.x0 + 1 + t * (G.x1 - G.x0 - 2)), z = side === 0 ? Math.round(G.z0 + 1 + t * (G.z1 - G.z0 - 2)) : side === 1 ? G.z1 : G.z0;
+    if (L.nameAt(x, 0, z) === 'air' && L.nameAt(x, -1, z) !== 'path') L.set(x, 0, z, ['berry_bush', 'berry_bush', 'flower_red', 'tall_grass'][j % 4]);
+  }
+  dec('mushrooms_glow', -48.5, 0, 30, 30);
+  dec('roots', G.x0 - 0.5, 2.5, 20, -90, [G.x0 - 1, 2, 20]);
+  dec('roots', G.x0 - 0.5, 2.5, 30, -90, [G.x0 - 1, 2, 30]);
+  labels.push({ text: 'лозы', x: -35, z: 13.2, size: 0.5 });
+  labels.push({ text: 'слизни', x: -29, z: 21.6, size: 0.5 });
+  labels.push({ text: 'клубки', x: -46.5, z: 19.6, size: 0.5 });
+  labels.push({ text: 'чудище и бутоны', x: -39, z: 29.4, size: 0.5 });
 }

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { pixelTex } from '../textures';
 import { boom, hiss, voice } from '../spell-audio';
-import { C, rand, RASP } from '../bosses/kit';
+import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit';
+import type { Target } from '../target';
 import { Mob, type MobHooks } from './mob';
 
 /**
@@ -102,6 +103,7 @@ const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x
 /** 4. Оруженосец — толпа: короткий меч, два взмаха; слабая броня */
 export class Squire extends Mob {
   readonly kind = 'squire';
+  override readonly knight = true;
   readonly title = 'Оруженосец';
   readonly cost = 3;
   readonly radius = 0.45;
@@ -150,6 +152,7 @@ export class Squire extends Mob {
 /** 5. Щитоносец — стена: башенный щит держит удары спереди, удар щитом отбрасывает; после удара щит опущен */
 export class ShieldKnight extends Mob {
   readonly kind = 'shield';
+  override readonly knight = true;
   readonly title = 'Щитоносец';
   readonly cost = 6;
   readonly radius = 0.55;
@@ -218,5 +221,324 @@ export class ShieldKnight extends Mob {
     lerpTo(r.arms[0], bash, k);
     lerpTo(r.arms[1], walk ? -0.4 + this.stride(7) * 0.2 : -0.5, k);
     this.body.rotation.x = this.state === 'attack' && this.st < 0.6 ? -0.12 : this.state === 'attack' && this.st < 0.8 ? 0.2 : 0;
+  }
+}
+
+/** 6. Копейщик — дистанция: выпад копьём на 4 м по полосе; после выпада открыт */
+export class Spearman extends Mob {
+  readonly kind = 'spear';
+  override readonly knight = true;
+  readonly title = 'Копейщик';
+  readonly cost = 4;
+  readonly radius = 0.45;
+  override readonly topY = 2;
+  private readonly rig: Rig;
+  private readonly lunge = new THREE.Vector3();
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 50, at);
+    this.speed = 2.8;
+    this.keep = 3.4;
+    this.rig = buildKnight(this, this.body, 701, true);
+    // длинное копьё в правой руке: древко, малиновый флажок, наконечник
+    const wood = this.lam('#7a5232'), steel = this.lam('#d8dde4'), flag = this.lam('#c8245a');
+    const B = this.box.bind(this);
+    const arm = this.rig.arms[1];
+    B(arm, wood, 0.07, 0.07, 2.4, 0, -0.6, 0.6);
+    B(arm, steel, 0.1, 0.14, 0.4, 0, -0.6, 1.95);
+    B(arm, flag, 0.03, 0.22, 0.3, 0.04, -0.46, 1.55);
+    this.place();
+  }
+
+  protected choose(dist: number, rel: number): string | null { return dist < 4.6 && Math.abs(rel) < 0.4 ? 'thrust' : null; }
+  protected override rest(): number { return rand(1.2, 1.8); }
+
+  protected act(_name: string, t: number, dt: number): boolean {
+    if (t - dt <= 0) {
+      const from = this.pos.clone();
+      this.lunge.copy(this.fwd());
+      this.field.markLine(from, this.lunge, 4.2, 0.9, 0.6, () => {
+        if (this.dead) return;
+        if (!this.quiet) sfx.swing();
+        if (this.inLine(from, this.lunge, 4.2, 0.9)) this.hurt(8, from, 5);
+      });
+    }
+    // выпад: шаг вперёд вслед за копьём, потом 0,8 с вытаскивает его — окно
+    if (t > 0.6 && t < 0.75) this.move(this.lunge, 4 * dt);
+    return t > 1.55;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const k = Math.min(1, dt * 12), r = this.rig;
+    walkPose(r, this.stride(), walk, dt);
+    // копьё отведено назад — выброшено вперёд — медленно возвращается
+    const spear = this.state === 'attack' ? (this.st < 0.6 ? -1.2 : this.st < 0.75 ? -1.65 : -1.65 + (this.st - 0.75) * 0.5) : -1.4;
+    r.arms[1].position.z = this.state === 'attack' ? (this.st < 0.6 ? -0.3 : this.st < 0.75 ? 0.5 : 0.5 - (this.st - 0.75) * 0.6) : 0;
+    lerpTo(r.arms[1], spear, this.state === 'attack' ? 1 : k);
+    lerpTo(r.arms[0], walk ? -this.stride() * 0.4 : -0.3, k);
+  }
+}
+
+/** 7. Арбалетчик — стрелок: болт по линии-метке; перезаряжается 2 с — беззащитен */
+export class Crossbowman extends Mob {
+  readonly kind = 'crossbow';
+  override readonly knight = true;
+  readonly title = 'Арбалетчик';
+  readonly cost = 4;
+  readonly radius = 0.45;
+  override readonly topY = 2;
+  private readonly rig: Rig;
+  private readonly bow = new THREE.Group();
+  private readonly bolt: THREE.Mesh;
+  private readonly aim = new THREE.Vector3();
+  private boltT = -1;
+  private readonly boltFrom = new THREE.Vector3();
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 40, at);
+    this.speed = 2.6;
+    this.keep = 9;
+    this.aggro = 16;
+    this.rig = buildKnight(this, this.body, 711, false);
+    // арбалет держат обе руки перед грудью: ложе, дуга, тетива
+    const wood = this.lam('#7a5232'), steel = this.lam('#a8b0b8'), str = this.lam('#f4ecd8');
+    const B = this.box.bind(this);
+    this.bow.position.set(0, 1.2, 0.5);
+    this.body.add(this.bow);
+    B(this.bow, wood, 0.1, 0.1, 0.8, 0, 0, 0);
+    B(this.bow, steel, 0.9, 0.08, 0.08, 0, 0.02, 0.3);
+    B(this.bow, str, 0.86, 0.02, 0.02, 0, 0.06, 0.1);
+    this.bolt = new THREE.Mesh(UNIT, glowMat(C(3.4, 2.6, 1.4)));
+    this.bolt.scale.set(0.06, 0.06, 0.7);
+    this.bolt.visible = false;
+    h.scene.add(this.bolt);
+    this.place();
+  }
+
+  override dispose(): void {
+    super.dispose();
+    this.h.scene.remove(this.bolt);
+    (this.bolt.material as THREE.Material).dispose();
+  }
+
+  protected choose(dist: number, rel: number): string | null { return dist < 15 && Math.abs(rel) < 0.3 ? 'shoot' : null; }
+  protected override rest(): number { return rand(0.6, 1); }
+
+  override update(dt: number): void {
+    super.update(dt);
+    // болт летит по полосе за 0,25 с
+    if (this.boltT >= 0) {
+      this.boltT += dt;
+      const k = this.boltT / 0.25;
+      this.bolt.visible = k < 1;
+      this.bolt.position.copy(this.boltFrom).addScaledVector(this.aim, k * 15).setY(1.2);
+      this.bolt.rotation.y = Math.atan2(this.aim.x, this.aim.z);
+      if (k >= 1) this.boltT = -1;
+    }
+  }
+
+  protected act(_name: string, t: number, dt: number): boolean {
+    if (t - dt <= 0) {
+      const from = this.pos.clone();
+      this.aim.copy(this.fwd());
+      this.field.markLine(from, this.aim, 15, 0.5, 0.75, () => {
+        if (this.dead) return;
+        if (!this.quiet) { voice({ type: 'triangle', f: 220, f1: 90, dur: 0.12, vol: 0.06 }); hiss({ dur: 0.2, vol: 0.1, f: 3000, f1: 1200, q: 1, type: 'bandpass' }); }
+        this.boltFrom.copy(from);
+        this.boltT = 0;
+        if (this.inLine(from, this.aim, 15, 0.5)) this.hurt(8, from, 3);
+      });
+    }
+    // перезарядка 2 с: крутит ворот — окно
+    return t > 2.8;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const k = Math.min(1, dt * 12), r = this.rig;
+    walkPose(r, this.stride(), walk, dt);
+    const reload = this.state === 'attack' && this.st > 0.8;
+    // руки на арбалете; в перезарядке он опущен, правая рука крутит ворот
+    lerpTo(r.arms[0], reload ? -0.5 : -1.3, k);
+    lerpTo(r.arms[1], reload ? -0.6 + Math.sin(this.st * 14) * 0.4 : -1.3, reload ? 1 : k);
+    this.bow.rotation.x = reload ? 0.7 : 0;
+    this.bow.position.y = reload ? 0.95 : 1.2;
+  }
+}
+
+/** Воткнутое знамя: цель для меча, падает с трёх ударов; пока стоит — рыцари в 6 м воодушевлены */
+class Standard implements Target {
+  readonly pos = new THREE.Vector3();
+  readonly radius = 0.35;
+  readonly topY = 2.6;
+  hits = 0;
+  up = false;
+  readonly group = new THREE.Group();
+
+  constructor(private readonly owner: Mob, private readonly scene: THREE.Scene, mats: { pole: THREE.Material; cloth: THREE.Material; trim: THREE.Material; berry: THREE.Material }) {
+    const B = owner.box.bind(owner);
+    B(this.group, mats.pole, 0.1, 2.8, 0.1, 0, 1.4, 0);
+    B(this.group, mats.trim, 0.9, 0.08, 0.08, 0.38, 2.7, 0);
+    B(this.group, mats.cloth, 0.8, 1.1, 0.04, 0.38, 2.12, 0);
+    berry(owner, this.group, mats.berry, mats.berry, 0.08, 0.38, 2.12, 0.03);
+    this.group.visible = false;
+    scene.add(this.group);
+  }
+
+  get alive(): boolean { return this.up && !this.owner.dead; }
+
+  plant(at: THREE.Vector3): void { this.pos.copy(at).setY(0); this.group.position.copy(this.pos); this.group.visible = true; this.up = true; this.hits = 0; }
+
+  hit(_dmg: number, dir: THREE.Vector3): void {
+    if (!this.alive) return;
+    this.hits++;
+    this.group.rotation.z = -dir.x * 0.15 * this.hits;
+    if (this.hits >= 3) this.fall();
+  }
+
+  fall(): void { this.up = false; this.group.visible = false; this.group.rotation.set(0, 0, 0); }
+
+  dispose(): void { this.scene.remove(this.group); }
+}
+
+/** 8. Знаменосец — поддержка: втыкает знамя, рыцари рядом +25 % урона и скорости; сломать знамя (3 удара) */
+export class BannerBearer extends Mob {
+  readonly kind = 'banner';
+  override readonly knight = true;
+  readonly title = 'Знаменосец';
+  readonly cost = 7;
+  readonly radius = 0.45;
+  override readonly topY = 2;
+  private readonly rig: Rig;
+  private readonly carried = new THREE.Group();
+  readonly standard: Standard;
+  private plantCd = 0;
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 55, at);
+    this.speed = 2.6;
+    this.keep = 4.5;
+    this.loot = 2;
+    this.rig = buildKnight(this, this.body, 721, true);
+    const mats = { pole: this.lam('#5a3a24'), cloth: this.lam('#b3122e', pixelTex('#b3122e', 6, 722)), trim: this.lam('#e8b84a'), berry: this.lam('#fff6ee') };
+    // знамя в руке, пока не воткнуто
+    const B = this.box.bind(this);
+    this.carried.position.set(0, -0.6, 0.1);
+    this.rig.arms[1].add(this.carried);
+    B(this.carried, mats.pole, 0.08, 2.4, 0.08, 0, 0.6, 0);
+    B(this.carried, mats.cloth, 0.6, 0.8, 0.04, 0.3, 1.4, 0);
+    berry(this, this.carried, mats.berry, mats.berry, 0.06, 0.3, 1.4, 0.03);
+    this.standard = new Standard(this, h.scene, mats);
+    this.place();
+  }
+
+  override extras(): Target[] { return this.standard.alive ? [this.standard] : []; }
+
+  override dispose(): void { super.dispose(); this.standard.dispose(); }
+
+  protected override die(): void { super.die(); this.standard.fall(); }
+
+  protected choose(dist: number): string | null {
+    if (!this.standard.up && this.plantCd <= 0) return 'plant';
+    return dist < 2.2 ? 'poke' : null;
+  }
+
+  override update(dt: number): void {
+    this.plantCd -= dt;
+    const was = this.standard.up;
+    super.update(dt);
+    if (was && !this.standard.up && !this.dead) { this.plantCd = 6; this.h.fx.burst(this.standard.pos.clone().setY(1.5), ['#b3122e', '#e8b84a'], 12, { speed: 3, up: 2, size: 0.1, life: 0.6, gravity: 6 }); }
+    this.carried.visible = !this.standard.up;
+    // знамя воодушевляет рыцарей в 6 м, и самого знаменосца
+    if (this.standard.alive) {
+      for (const m of this.mh.allies()) if (m.knight && Math.hypot(m.pos.x - this.standard.pos.x, m.pos.z - this.standard.pos.z) < 6) m.rally = 0.3;
+      this.standard.group.children[2].rotation.y = Math.sin(this.time * 2) * 0.15;
+    }
+  }
+
+  protected act(name: string, t: number, dt: number): boolean {
+    if (name === 'plant') {
+      // поднял знамя — и с размаху в землю, по кругу на 6 м — малиновая волна
+      if (t >= 0.6 && t - dt < 0.6) {
+        const at = this.pos.clone().addScaledVector(this.fwd(), 0.9);
+        this.standard.plant(at);
+        if (!this.quiet) { boom(140, 60, 0.4, 0.4); voice({ type: 'triangle', f: 392, f1: 523, dur: 0.6, vol: 0.05, verb: 0.5 }); }
+        this.h.fx.shock(at.clone().setY(0.1), 6, RASP.clone().multiplyScalar(0.4), 0.5, 0.12);
+      }
+      return t > 0.9;
+    }
+    if (t - dt <= 0) this.field.markCircle(this.pos.clone().addScaledVector(this.fwd(), 1), 1.1, 0.45, () => { if (!this.dead && this.inCircle(this.pos.clone().addScaledVector(this.fwd(), 1), 1.1)) this.hurt(5, this.pos, 4); });
+    return t > 0.7;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const k = Math.min(1, dt * 12), r = this.rig;
+    walkPose(r, this.stride(), walk, dt);
+    const plant = this.state === 'attack' && this.attack === 'plant';
+    lerpTo(r.arms[1], plant ? (this.st < 0.6 ? -2.6 : -0.6) : this.standard.up ? -0.5 : -0.2, plant ? k * 1.5 : k);
+    lerpTo(r.arms[0], this.state === 'attack' && !plant ? -1.4 : walk ? -this.stride() * 0.4 : 0, k);
+  }
+}
+
+/** 9. Молотобоец — танк: двуручный молот по кругу-метке; медленный, после удара оглушён */
+export class Hammerer extends Mob {
+  readonly kind = 'hammer';
+  override readonly knight = true;
+  readonly title = 'Молотобоец';
+  readonly cost = 9;
+  readonly radius = 0.65;
+  override readonly topY = 2.5;
+  private readonly rig: Rig;
+  private readonly big = new THREE.Group();
+  private readonly smashAt = new THREE.Vector3();
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 120, at);
+    this.speed = 1.8;
+    this.turn = 2.5;
+    this.keep = 2;
+    this.mass = 3;
+    this.loot = 3;
+    // крупнее остальных рыцарей
+    this.big.scale.setScalar(1.25);
+    this.body.add(this.big);
+    this.rig = buildKnight(this, this.big, 731, true);
+    // молот двумя руками: длинная рукоять, боёк с малиновой полосой
+    const wood = this.lam('#5a3a24'), steel = this.lam('#c8ccd2', pixelTex('#c8ccd2', 6, 732)), trim = this.lam('#c8245a');
+    const B = this.box.bind(this);
+    const arm = this.rig.arms[1];
+    B(arm, wood, 0.09, 0.09, 1.3, 0, -0.62, 0.35);
+    B(arm, steel, 0.5, 0.4, 0.4, 0, -0.62, 1.05);
+    B(arm, trim, 0.52, 0.1, 0.42, 0, -0.62, 1.05);
+    this.place();
+  }
+
+  protected choose(dist: number, rel: number): string | null { return dist < 3.6 && Math.abs(rel) < 0.5 ? 'smash' : null; }
+  protected override rest(): number { return rand(1.4, 2); }
+
+  protected act(_name: string, t: number, dt: number): boolean {
+    if (t - dt <= 0) {
+      this.smashAt.copy(this.pos).addScaledVector(this.fwd(), 1.8);
+      this.field.markCircle(this.smashAt, 2.2, 1, () => {
+        if (this.dead) return;
+        if (!this.quiet) { boom(70, 25, 0.8, 0.8, 0, 0.4); hiss({ dur: 0.4, vol: 0.15, f: 800, f1: 150, q: 0.5, type: 'lowpass' }); }
+        this.h.fx.shake = Math.max(this.h.fx.shake, 0.5);
+        this.h.fx.shock(this.smashAt.clone().setY(0.1), 2.4, C(1.6, 1.4, 1.2), 0.35, 0.15);
+        this.h.fx.burst(this.smashAt.clone().setY(0.2), ['#8a8a8a', '#c8b89a'], 14, { speed: 4, up: 3, size: 0.12, life: 0.5, gravity: 8 });
+        if (this.inCircle(this.smashAt, 2.2)) this.hurt(16, this.smashAt, 9);
+      });
+    }
+    // молот увяз: оглушён 1,4 с
+    if (t >= 1.1) { this.daze(1.4); return false; }
+    return false;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const k = Math.min(1, dt * 8), r = this.rig;
+    walkPose(r, this.stride(6), walk, dt);
+    // молот над головой — и вниз; в оглушении лежит на земле
+    const a = this.state === 'attack' ? (this.st < 1 ? -2.9 * Math.min(1, this.st / 0.7) : 0.3) : this.state === 'daze' ? 0.4 : -0.7;
+    lerpTo(r.arms[1], a, this.state === 'attack' && this.st >= 1 ? 1 : k);
+    lerpTo(r.arms[0], a, this.state === 'attack' && this.st >= 1 ? 1 : k);
+    this.body.rotation.x = this.state === 'attack' && this.st >= 1 ? 0.25 : this.state === 'daze' ? 0.2 : 0;
   }
 }

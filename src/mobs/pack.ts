@@ -47,7 +47,7 @@ export class Pack {
     for (const m of this.mobs) m.setScale(level, players);
   }
 
-  targets(): Target[] { return this.mobs.filter((m) => m.alive); }
+  targets(): Target[] { return [...this.mobs.filter((m) => m.alive), ...this.mobs.flatMap((m) => m.extras())]; }
 
   update(dt: number): void {
     // призванные в этом кадре думают со следующего

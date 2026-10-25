@@ -19,14 +19,14 @@ import { surfaceAt } from '../level/kit.ts';
 import { worldSource } from '../world/gen.ts';
 import { RegionManager } from '../world/regions.ts';
 import { mapSource, STREAM_CHUNKS } from '../world/map-source.ts';
-import { BARRACKS, BARRACKS_POSTS, BOSS_ARENAS, type PgLabel } from '../level/playground-map.ts';
+import { BOSS_ARENAS, MOB_ROOMS, type MobRoomSpec, type PgLabel } from '../level/playground-map.ts';
 import { Arena } from '../bosses/arena';
 import { BossBar } from '../bosses/boss-bar';
 import { MINI_BOSSES } from '../bosses/roster';
 import type { MiniBoss } from '../bosses/mini';
 import { Grimoire } from '../bosses/grimoire';
 import { Pack } from '../mobs/pack';
-import { MOBS, SQUADS } from '../mobs/roster';
+import { MOB_PARTS, MOBS, SQUADS } from '../mobs/roster';
 import { HERO, SWORD, snapshotTuning } from '../tuning';
 import { onWeaponChange, pickWeapon } from '../weapons';
 import { itemDef, Profile } from '../items';
@@ -343,23 +343,24 @@ export function runPlayground(): void {
     const f = new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw));
     pack.squad(kinds, hero.pos.clone().setY(0).addScaledVector(f, 9), kinds.length > 4 ? 3.5 : 2);
   }
-  // казарма Ордена за западной стеной: гарнизон стоит на постах и просыпается, когда герой рядом (5 м);
-  // все пали, а герой вышел — казарма снова полна
-  const barracks = new Pack(bossHooks, (at, n) => props.berries(at, n));
-  /** Казарма есть только на карте плейграунда */
+  // комнаты мобов за западной стеной (казарма Ордена, Терновый сад): гарнизон стоит на постах и просыпается, когда
+  // герой рядом (5 м); весь гарнизон пал, а герой вышел — комната снова полна
+  /** Комнаты есть только на карте плейграунда */
   const garrison = !new URLSearchParams(window.location.search).has('map');
-  function fillBarracks(): void {
-    barracks.clear();
+  const mobRooms = MOB_ROOMS.map((spec) => ({ spec, pack: new Pack(bossHooks, (at, n) => props.berries(at, n)) }));
+  const inRoom = (r: MobRoomSpec, pad: number): boolean => hero.pos.x >= r.x0 - pad && hero.pos.x <= r.x1 + pad && hero.pos.z >= r.z0 - pad && hero.pos.z <= r.z1 + pad;
+  function fillRoom(room: (typeof mobRooms)[number]): void {
+    room.pack.clear();
     if (!garrison) return;
-    for (const p of BARRACKS_POSTS) {
-      const m = barracks.spawn(p.kind, new THREE.Vector3(p.x, 0, p.z));
+    for (const p of room.spec.posts) {
+      const m = room.pack.spawn(p.kind, new THREE.Vector3(p.x, 0, p.z));
       if (!m) continue;
       // смотрят на вход, видят героя вблизи
-      m.yaw = Math.PI / 2;
+      m.yaw = Math.atan2(room.spec.enter.x - p.x, room.spec.enter.z - p.z);
       m.aggro = 5;
     }
   }
-  fillBarracks();
+  for (const r of mobRooms) fillRoom(r);
   // масштаб стражей (src/bosses/scaling.ts): уровень — по уровню героя или из панели F1, число игроков — из панели
   let bossLevelPick: 'hero' | string = 'hero';
   let bossPlayers = 1;
@@ -372,7 +373,7 @@ export function runPlayground(): void {
     scaleKey = key;
     for (const b of bosses) b.setScale(bossLevel(), bossPlayers);
     pack.setScale(bossLevel(), bossPlayers);
-    barracks.setScale(bossLevel(), bossPlayers);
+    for (const r of mobRooms) r.pack.setScale(bossLevel(), bossPlayers);
   }
   rescaleBosses();
   const grimoires: Grimoire[] = [];
@@ -408,7 +409,8 @@ export function runPlayground(): void {
   const targets = (): Target[] => {
     const list: Target[] = [...dummies, ...props.targets];
     for (const b of bosses) if (b.awake) list.push(...b.targets());
-    list.push(...pack.targets(), ...barracks.targets());
+    list.push(...pack.targets());
+    for (const r of mobRooms) list.push(...r.pack.targets());
     return list;
   };
   let lastStrike: { s: Strike; t: number } | null = null;
@@ -771,7 +773,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const a of arenas) a.reset();
     for (const g of grimoires.splice(0)) g.dispose();
     pack.clear();
-    fillBarracks();
+    for (const r of mobRooms) fillRoom(r);
     toast('Чучела и склад на местах');
   }
 
@@ -800,9 +802,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     row3.className = 'pg-btnrow';
     c.appendChild(row3);
     button(row3, 'Мобы: первая партия', () => spawnSquad(SQUADS.first));
-    for (const [id, def] of Object.entries(MOBS)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
+    button(row3, 'Мобы: вторая партия', () => spawnSquad(SQUADS.second));
+    for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
     button(row3, 'Убрать мобов', () => pack.clear());
-    button(row3, 'Казарма Ордена', () => hero.place(BARRACKS.x1 + 4, 0, -Math.PI / 2));
+    for (const r of MOB_ROOMS) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
     // масштаб стражей: уровень и число игроков
     refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
     refreshers.push(select(c, 'Игроков', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']], () => String(bossPlayers), (v) => { bossPlayers = Number(v); rescaleBosses(); }));
@@ -956,9 +959,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
     pack.update(dt);
-    // казарма думает, когда герой рядом или гарнизон в бою
-    if (hero.pos.x < BARRACKS.x1 + 30 || barracks.mobs.some((m) => m.alerted)) barracks.update(dt);
-    if (garrison && hero.pos.x > BARRACKS.x1 + 3 && barracks.mobs.every((m) => m.dead)) fillBarracks();
+    // комната думает, когда герой рядом или гарнизон в бою; пал весь, а герой вышел — гарнизон снова на постах
+    for (const r of mobRooms) {
+      if (inRoom(r.spec, 30) || r.pack.mobs.some((m) => m.alerted)) r.pack.update(dt);
+      if (garrison && !inRoom(r.spec, 3) && r.pack.mobs.every((m) => m.dead)) fillRoom(r);
+    }
     if (arenas.length) {
       rescaleBosses();
       for (const a of arenas) a.update(dt, hero);
@@ -1079,8 +1084,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     bossScale(level: number | 'hero', players = bossPlayers) { bossLevelPick = String(level); bossPlayers = players; rescaleBosses(); return { level: bossLevel(), players: bossPlayers }; },
     /** Рядовые мобы (src/mobs/): pack.mobs; вызвать моба в точку */
     pack,
-    /** Казарма Ордена: гарнизон на постах (BARRACKS_POSTS), refill — заново */
-    barracks, fillBarracks,
+    /** Комнаты мобов: spec (посты, вход) и стая гарнизона; fillRoom — заново на постах */
+    mobRooms, fillRoom,
     spawnMob(kind: string, x: number, z: number) { return pack.spawn(kind, new THREE.Vector3(x, 0, z)); },
     toBoss(id: string) { const s = BOSS_ARENAS.find((a) => a.id === id); if (s) hero.place(s.exit.x, s.exit.z, s.exit.yaw); return !!s; },
     /** Эффекты: стоп-кадр, засветка, свет заклинаний */
