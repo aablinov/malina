@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { obstacle, type Obstacle } from './collision';
 import type { FX } from './fx';
-import { disposeOwned } from './fx';
+import { disposeOwned, markShared } from './fx';
 import type { Target } from './target';
 import type { Rand } from './textures';
 import { distToObstacle } from './nav';
@@ -44,7 +44,7 @@ const box = (w: number, h: number, d: number, m: THREE.Material, x = 0, y = 0, z
   return mesh;
 };
 
-const MAT = {
+const MAT = markSharedAll({
   barrel: new THREE.MeshLambertMaterial({ map: pixelTex('#b3261e', 7, 61) }),
   barrelRing: new THREE.MeshLambertMaterial({ color: '#5a1410' }),
   hazard: new THREE.MeshLambertMaterial({ color: '#e3bd1c' }),
@@ -57,11 +57,16 @@ const MAT = {
   wood: new THREE.MeshLambertMaterial({ map: pixelTex('#9a6a3a', 10, 64) }),
   woodDark: new THREE.MeshLambertMaterial({ map: pixelTex('#6e4824', 8, 65) }),
   terminal: new THREE.MeshLambertMaterial({ map: pixelTex('#3a3f48', 6, 66) }),
-};
+});
+function markSharedAll<T extends Record<string, THREE.Material>>(o: T): T { for (const m of Object.values(o)) markShared(m); return o; }
 
 // ---------- бочка ----------
 
-export class Barrel implements Target {
+/** Предмет из региона мира (src/world/regions.ts): id — стабильный, region — ключ, чтобы убрать с выгрузкой */
+export interface Placed { id?: string; region?: string }
+
+export class Barrel implements Target, Placed {
+  id?: string; region?: string;
   readonly pos: THREE.Vector3;
   readonly radius = 0.36;
   readonly topY = 0.95;
@@ -126,7 +131,8 @@ export class Barrel implements Target {
 
 // ---------- деревянный ящик ----------
 
-export class BreakCrate implements Target {
+export class BreakCrate implements Target, Placed {
+  id?: string; region?: string;
   readonly pos: THREE.Vector3;
   readonly radius = 0.56;
   readonly topY = 1.0;
@@ -196,7 +202,8 @@ const CHEST_POP_GAP = 0.08;
  * Открытие: сундук трясётся и втягивает искры (CHEST_CHARGE), потом крышка распахивается, бьёт столб света,
  * разлетаются конфетти и кольца, лут вылетает фонтаном по одному (Props.update).
  */
-export class SupplyCrate {
+export class SupplyCrate implements Placed {
+  id?: string; region?: string;
   readonly pos: THREE.Vector3;
   readonly group = new THREE.Group();
   readonly solid: Obstacle;
@@ -482,13 +489,13 @@ function berryGeometry(): THREE.BufferGeometry {
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setIndex(idx);
-  return berryGeo = g;
+  return berryGeo = markShared(g);
 }
 
 /** Малина на полу: крупная ягода, ореол, блик-звёздочка и розовое пятно света на земле */
 function berryMesh(): THREE.Group {
   const g = new THREE.Group();
-  berryMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#ff1a5e', emissiveIntensity: 0.35 });
+  berryMat ??= markShared(new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#ff1a5e', emissiveIntensity: 0.35 }));
   const body = new THREE.Mesh(berryGeometry(), berryMat);
   body.castShadow = true;
   g.add(body);
@@ -545,6 +552,8 @@ export interface PropsHooks {
   chestExtra?(): ChestLoot[];
   /** Звук; v — номер предмета в фонтане, серия малины или редкость трофея */
   sound(k: PropSound, v?: number): void;
+  /** Предмет региона исчерпан (бочка взорвалась, ящик разбит, сундук открыт) — запомнить по id */
+  changed?(id: string): void;
 }
 
 /**
@@ -608,6 +617,26 @@ export class Props {
     this.crates = this.layout.crates.map(([x, z, r]) => new BreakCrate(this.scene, x, z, r));
     this.supplies = this.layout.supplies.map(([x, z, r]) => new SupplyCrate(this.scene, x, z, r));
     this.terminals = this.layout.terminals.map(([x, z, r]) => new HealthTerminal(this.scene, x, z, r));
+    this.version++;
+  }
+
+  /** Поставить предметы региона мира (ключ key); у каждого — id для сохранения состояния */
+  addGroup(key: string, items: { id: string; kind: 'barrel' | 'crate' | 'chest'; x: number; z: number; rot: number }[]): void {
+    for (const it of items) {
+      const o = it.kind === 'barrel' ? new Barrel(this.scene, it.x, it.z) : it.kind === 'crate' ? new BreakCrate(this.scene, it.x, it.z, it.rot) : new SupplyCrate(this.scene, it.x, it.z, it.rot);
+      o.id = it.id; o.region = key;
+      if (o instanceof Barrel) this.barrels.push(o); else if (o instanceof BreakCrate) this.crates.push(o); else this.supplies.push(o);
+    }
+    this.version++;
+  }
+
+  /** Убрать предметы региона (выгрузка): из сцены и из памяти, кроме общих материалов */
+  removeGroup(key: string): void {
+    const gone = (o: Placed & { group: THREE.Group }) => { if (o.region !== key) return false; this.scene.remove(o.group); disposeOwned(o.group); return true; };
+    this.barrels = this.barrels.filter((b) => !gone(b));
+    this.crates = this.crates.filter((c) => !gone(c));
+    for (const s of this.supplies) if (s.region === key) this.chestLoot.delete(s);
+    this.supplies = this.supplies.filter((c) => !gone(c));
     this.version++;
   }
 
@@ -676,6 +705,7 @@ export class Props {
     if (it.kind === 'supply') {
       const s = it.target as SupplyCrate;
       if (!s.open()) return;
+      if (s.id) this.hooks.changed?.(s.id);
       this.hooks.sound('charge');
       // что выпадет — решено сразу, вылетит, когда крышка распахнётся (Props.update)
       this.chestLoot.set(s, { items: [...LOOT_TABLE.map(([kind, amount]): ChestLoot => ({ kind, amount })), ...(this.hooks.chestExtra?.() ?? [])], next: 0 });
@@ -694,6 +724,7 @@ export class Props {
       if (b.update(dt, this.fx, this.rand)) {
         b.remove(this.scene);
         this.version++;
+        if (b.id) this.hooks.changed?.(b.id);
         this.hooks.explode(b.pos.clone().setY(0.5), PROPS.barrelBlastR, PROPS.barrelBlastDmg);
       } else if (!wasBurning && b.fuse >= 0) this.hooks.sound('ignite');
     }
@@ -704,6 +735,7 @@ export class Props {
       if (c.hp <= 0) {
         c.shatter(this.scene, this.fx);
         this.version++;
+        if (c.id) this.hooks.changed?.(c.id);
         this.hooks.sound('break');
         // иногда в ящике малина
         if (this.rand() < 0.35) {

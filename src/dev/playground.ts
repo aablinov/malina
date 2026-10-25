@@ -15,6 +15,10 @@ import { ceilingAt, collideTop, decorSolids, obstaclesOf, raycastVoxels, terrain
 import { Pathfinder } from '../level/pathfind.ts';
 import { mapByName, ROOMS } from '../level/maps';
 import { buildFloor } from '../level/dungeon.ts';
+import { surfaceAt } from '../level/kit.ts';
+import { worldSource } from '../world/gen.ts';
+import { RegionManager } from '../world/regions.ts';
+import { mapSource, STREAM_CHUNKS } from '../world/map-source.ts';
 import { BOSS_ARENAS, type PgLabel } from '../level/playground-map.ts';
 import { Arena } from '../bosses/arena';
 import { BossBar } from '../bosses/boss-bar';
@@ -130,7 +134,15 @@ export function runPlayground(): void {
   const HALF = 24;
   // Арена и витрина — карта assets/maps/playground.json (генератор src/level/playground-map.ts, `npm run map:playground`,
   // правка — редактор ?dev=editor).
-  const level = Level.fromJSON(pickMap());
+  // Регионы 32 × 32 м (src/world/): в сцену попадают только регионы вокруг героя. Источник — карта целиком в памяти
+  // (большая карта стримится сама, любая — с ?stream=1) или процедурный генератор для отладки (?map=world&seed=N)
+  const query = new URLSearchParams(window.location.search);
+  const WORLD = query.get('map') === 'world';
+  const worldSeed = Number(query.get('seed')) || 1;
+  const sourceLevel = WORLD ? null : Level.fromJSON(pickMap());
+  const STREAM = WORLD || query.has('stream') || (sourceLevel !== null && sourceLevel.chunks.size > STREAM_CHUNKS);
+  const level = STREAM ? new Level(sourceLevel?.name ?? 'мир') : sourceLevel!;
+  if (STREAM && sourceLevel) { level.adoptPalette(sourceLevel); level.entities.push(...sourceLevel.entities); level.spawn = sourceLevel.spawn; Object.assign(level.meta, sourceLevel.meta); }
   // настройки мира из редактора (meta.world): солнце, небо, дымка, постобработка, погода; поставленный свет — сущности 'light'
   const weather = new Weather(scene);
   if (level.meta.world) {
@@ -177,23 +189,25 @@ export function runPlayground(): void {
     scene.add(m);
   }
   for (const l of (level.meta.labels as PgLabel[] | undefined) ?? []) floorLabel(l.text, l.x, l.z, l.size ?? 0.6);
-  floorLabel('укрытия', 6.5, -6.6, 0.9);
-  floorLabel('колонна', 9, -2.3, 0.9);
-  floorLabel('угол', 18, 7, 0.9);
-  floorLabel('коридор 3 м · проём 1 м', 7, 18.8, 0.9);
-  floorLabel('диагональ', 17, -0.4, 0.9);
+  if (!STREAM) {
+    floorLabel('укрытия', 6.5, -6.6, 0.9);
+    floorLabel('колонна', 9, -2.3, 0.9);
+    floorLabel('угол', 18, 7, 0.9);
+    floorLabel('коридор 3 м · проём 1 м', 7, 18.8, 0.9);
+    floorLabel('диагональ', 17, -0.4, 0.9);
+  }
 
   // ---------- Чучела ----------
   const dummies: Dummy[] = [];
   // кучка из четырёх — проверить, что широкий удар задевает нескольких, и одиночное в стороне
-  for (const [x, z, name] of [[-6, -3, 'чучело 1'], [-7.4, -3.7, 'чучело 2'], [-4.6, -3.7, 'чучело 3'], [-6, -5.2, 'чучело 4'], [-11, 0, 'одиночное']] as [number, number, string][]) {
+  if (!STREAM) for (const [x, z, name] of [[-6, -3, 'чучело 1'], [-7.4, -3.7, 'чучело 2'], [-4.6, -3.7, 'чучело 3'], [-6, -5.2, 'чучело 4'], [-11, 0, 'одиночное']] as [number, number, string][]) {
     dummies.push(new Dummy(scene, overlayEl, 'static', x, z, Math.PI / 4, name));
   }
-  floorLabel('чучела: ЛКМ — удар, держи — комбо', -6, -1.6, 0.85);
-  const rail = new Dummy(scene, overlayEl, 'rail', 0, -17, 0, 'на рельсе');
-  rail.railA = -9; rail.railB = 9;
-  dummies.push(rail);
-  {
+  if (!STREAM) {
+    floorLabel('чучела: ЛКМ — удар, держи — комбо', -6, -1.6, 0.85);
+    const rail = new Dummy(scene, overlayEl, 'rail', 0, -17, 0, 'на рельсе');
+    rail.railA = -9; rail.railB = 9;
+    dummies.push(rail);
     const r = new THREE.Mesh(new THREE.BoxGeometry(18.6, 0.05, 0.16), new THREE.MeshLambertMaterial({ color: '#7a5232' }));
     r.position.set(0, 0.025, -17);
     r.receiveShadow = true;
@@ -218,13 +232,15 @@ export function runPlayground(): void {
         pickup: () => sfx.pickup(), break: () => sfx.crateBreak(), heal: () => sfx.ready(), ignite: () => sfx.flame(),
       } as const)[k]();
     },
-  }, {
+    // предмет региона исчерпан — в сохранение мира, чтобы после выгрузки и перезагрузки он не вернулся
+    changed: (id) => regions?.kill(id),
+  }, STREAM ? { barrels: [], crates: [], supplies: [], terminals: [] } : {
     barrels: [[-11, 11], [-10.25, 11.6], [-10.9, 10.15], [-6, 12.2], [-3.4, 18]],
     crates: [[-8.6, 14, 0], [-7.6, 14, 0], [-6.6, 14, 0], [-4.2, 15.2, 15], [-12.8, 15.6, 0], [-12.8, 16.6, 0]],
     supplies: [[-9.6, 17.6, 145], [-5.4, 19, 160]],
     terminals: [[-2.6, 10.6, 50]],
   });
-  floorLabel('склад: бочки, сундуки (F), источник здоровья (F), ящики', -7.5, 21.3, 0.9);
+  if (!STREAM) floorLabel('склад: бочки, сундуки (F), источник здоровья (F), ящики', -7.5, 21.3, 0.9);
   // лавки кузнеца и торговца — на плейграунде, в северо-западном углу (src/merchants.ts)
   const merchants: Merchant[] = new URLSearchParams(window.location.search).has('map') ? [] : [
     new Merchant(scene, overlayEl, T, 'smith', -17, -13, 0),
@@ -764,8 +780,27 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   hud.onArtifact = (i) => gear.useArtifact(i, aimPoint());
   hud.onAura = () => gear.flareAura();
   // карта с туманом войны: мини в углу, Tab — поверх игры, M — полная (src/hud/automap.ts)
-  const automap = new AutoMap(level);
+  const automap = new AutoMap(level, !STREAM);
   hud.setMap(automap, new URLSearchParams(window.location.search).has('map') ? level.name : 'Плейграунд');
+  // открытый мир: регионы вокруг героя, их предметы — в склад, их колонны — в карту; состояние — в localStorage
+  const regions: RegionManager | null = STREAM ? new RegionManager(level, sourceLevel ? mapSource(sourceLevel) : worldSource(worldSeed), {
+    spawn: (key, rx, rz, entities) => {
+      props.addGroup(key, entities);
+      automap.addTile(rx, rz);
+      const seen = regions?.seenOf(key);
+      if (seen) automap.restoreSeen(rx, rz, seen);
+    },
+    despawn: (key) => props.removeGroup(key),
+    seenOf: (_key, rx, rz) => automap.seenOf(rx, rz),
+  }, `malina.world.${sourceLevel ? level.name : worldSeed}`) : null;
+  if (regions) {
+    // старт — точка появления карты, у процедурного мира — перекрёсток дорог у начала координат (там ровно)
+    const sp = level.spawn ?? [1, 0, 4];
+    regions.warm([{ x: sp[0], z: sp[2] }]);
+    const a = THREE.MathUtils.degToRad((level.meta.spawnYaw as number | undefined) ?? 0);
+    hero.place(sp[0], sp[2], level.spawn ? Math.atan2(Math.cos(a), Math.sin(a)) : Math.PI, Math.max(sp[1], surfaceAt(level, sp[0], sp[2])));
+    view.sync();
+  }
   hud.onMap = () => hud.toggleMap();
   let revealAt = '';
   let mapT = 0;
@@ -930,8 +965,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   }
 
   /** Уровень: перестроить изменённые чанки, вода и огонь, ближайшие факелы, рентген и срез — раз в кадр, не в каждом тике */
-  function syncView(): void {
-    view.sync();
+  function syncView(dt: number): void {
+    if (regions) regions.update(dt, [hero.pos]);
+    // в мире мешер работает с бюджетом: остальные чанки — в следующих кадрах, ближние к герою первыми
+    view.sync(regions ? 4 : Infinity, hero.pos);
     view.update(simTime, night ? 1 : 0.4, hero.pos);
     view.setXray(_xray.copy(hero.pos).setY(hero.pos.y + 0.9), camera.position, 2.0);
     view.setCut(cutY - 0.01);
@@ -940,7 +977,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   /** Камера, оверлеи, HUD и кадр; real — сколько прошло реального времени */
   function render(real: number): void {
-    syncView();
+    syncView(real);
     // камера следит за героем; по высоте — плавно, чтобы падение не дёргало кадр
     const want = hero.pos.clone();
     if (camOverride) camTarget.copy(camOverride); else if (scripted) camTarget.copy(want); else {
@@ -1006,6 +1043,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     ready,
     /** Погода (src/weather.ts): set(kind, intensity, wind) */
     weather,
+    /** Регионы открытого мира (?map=world): loaded, stats, kill(id), save() */
+    regions,
     /** Подойти к торговцу и нажать F */
     trade(kind: 'smith' | 'merchant') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
     /** ПКМ: выстрел к точке */
@@ -1027,7 +1066,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Ввод из теста: клавиатура и мышь перестают влиять на героя */
     script(on = true) { scripted = on; if (on) { input.move.set(0, 0); input.attack = false; pointer.down = false; goal = null; chase = null; path = []; } },
     /** Прогнать симуляцию sec секунд без реального времени */
-    step(sec: number) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) tick(STEP); syncView(); },
+    step(sec: number) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) tick(STEP); syncView(sec); },
     /** Нарисовать кадр сейчас (вкладка в фоне не получает requestAnimationFrame) */
     render() { render(0); },
     /** Нажатие пробела: перекат */

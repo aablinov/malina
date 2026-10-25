@@ -321,25 +321,31 @@ export class LevelRenderer {
 
   private baked: Baked[] = [];
   private bakedKey = '';
-  private blockBaked: Baked[] = [];
-  private blockBakedVer = -1;
+  /** Блоки с запечённым светом — по чанкам: пересчитываются только у изменённых, не обходом всего уровня */
+  private readonly blockBaked = new Map<string, Baked[]>();
   /**
    * Запечённый свет: источники — декор со свечами (light.baked) и блоки с bakedLight. Если набор поменялся,
    * помечаем чанки вокруг старых и новых источников — их вершины пересчитаются.
    */
   private refreshBaked(): void {
     const L = this.level;
-    if (this.blockBakedVer !== L.version) {
-      this.blockBakedVer = L.version;
-      this.blockBaked = [];
-      L.forEach((x, y, z, id) => {
-        const b = L.defOf(id).bakedLight;
-        if (!b) return;
-        const c = new THREE.Color(b.color);
-        this.blockBaked.push({ x, y: y + 0.5, z, r: c.r, g: c.g, b: c.b, k: b.intensity, dist: b.dist });
-      });
+    for (const key of L.dirty) {
+      const c = L.chunks.get(key);
+      if (!c) { this.blockBaked.delete(key); continue; }
+      const [cx, cy, cz] = key.split(',').map(Number);
+      let list: Baked[] | null = null;
+      for (let i = 0; i < c.length; i++) {
+        const code = c[i];
+        if (!code) continue;
+        const b = L.defOf(code >> 2).bakedLight;
+        if (!b) continue;
+        const col = new THREE.Color(b.color);
+        (list ??= []).push({ x: cx * CH + (i & 15), y: cy * CH + (i >> 8) + 0.5, z: cz * CH + ((i >> 4) & 15), r: col.r, g: col.g, b: col.b, k: b.intensity, dist: b.dist });
+      }
+      if (list) this.blockBaked.set(key, list); else this.blockBaked.delete(key);
     }
-    const list: Baked[] = [...this.blockBaked, ...this.decor.baked.map((l) => ({ x: l.x, y: l.y, z: l.z, r: l.color.r, g: l.color.g, b: l.color.b, k: l.intensity, dist: l.dist }))];
+    const list: Baked[] = [...this.decor.baked.map((l) => ({ x: l.x, y: l.y, z: l.z, r: l.color.r, g: l.color.g, b: l.color.b, k: l.intensity, dist: l.dist }))];
+    for (const l of this.blockBaked.values()) list.push(...l);
     const key = list.map((l) => `${l.x.toFixed(2)},${l.y.toFixed(2)},${l.z.toFixed(2)},${l.k},${l.dist}`).join('|');
     if (key === this.bakedKey) return;
     for (const l of [...this.baked, ...list]) {
@@ -353,15 +359,31 @@ export class LevelRenderer {
     this.bakedKey = key;
   }
 
-  /** Перестроить чанки, помеченные в level.dirty */
-  sync(): void {
+  /**
+   * Перестроить чанки, помеченные в level.dirty. budgetMs — сколько миллисекунд можно потратить за вызов
+   * (стриминг: остальные подождут следующего кадра), focus — ближние к этой точке идут первыми
+   */
+  sync(budgetMs = Infinity, focus?: { x: number; z: number }): void {
     this.decor.maxY = this.maxY;
     this.decor.sync();
     this.refreshBaked();
-    if (!this.level.dirty.size) return;
-    for (const key of this.level.dirty) this.rebuild(key);
-    this.level.dirty.clear();
+    const dirty = this.level.dirty;
+    if (!dirty.size) return;
+    let keys = [...dirty];
+    if (focus && budgetMs !== Infinity) {
+      const d2 = (k: string) => { const [cx, , cz] = k.split(',').map(Number); return (cx * CH + CH / 2 - focus.x) ** 2 + (cz * CH + CH / 2 - focus.z) ** 2; };
+      keys = keys.map((k) => [k, d2(k)] as const).sort((a, b) => a[1] - b[1]).map((e) => e[0]);
+    }
+    const t0 = performance.now();
+    for (const key of keys) {
+      this.rebuild(key);
+      dirty.delete(key);
+      if (performance.now() - t0 > budgetMs) break;
+    }
   }
+
+  /** Сколько чанков ещё ждут перестройки */
+  get pending(): number { return this.level.dirty.size; }
 
   private drop(key: string): void {
     const old = this.meshes.get(key);

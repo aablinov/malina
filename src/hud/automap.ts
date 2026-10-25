@@ -8,6 +8,8 @@ import type { Level } from '../level/level.ts';
  * Три вида: мини-карта в углу, прозрачная карта поверх игры (Tab, как в Diablo II) и полная карта (M).
  *
  * Клетка — колонна блоков: «пол», если на неё можно встать (верх выше соседей меньше чем на 1,5 м), «вода», иначе «стена».
+ * Хранится тайлами 32 × 32 клетки (регион мира, src/world/regions.ts): карта растёт вместе с миром, тайл
+ * создаётся, когда регион впервые появляется, а разведка тайла сохраняется и восстанавливается (base64).
  */
 
 export interface MapMarker { x: number; z: number; icon: string; /** Серый (сундук уже открыт) */ dim?: boolean; /** Виден и без разведки */ always?: boolean }
@@ -16,108 +18,174 @@ export interface MapView { x: number; z: number; yaw: number }
 const FLOOR = 1, WATER = 2, WALL = 3;
 /** Пикселей холста на клетку */
 const S = 6;
+/** Клеток в тайле */
+const T = 32;
 /** Сжатие по вертикали: камера смотрит сверху под ≈ 44° */
 const SQUASH = 0.7;
 const C = Math.SQRT1_2;
 const FILL = '#2c3a50', WATER_FILL = '#2c4f74', EDGE = '#f2f4f8';
 
+interface Tile {
+  tx: number; tz: number;
+  kind: Uint8Array;
+  seen: Uint8Array;
+  art: HTMLCanvasElement; g: CanvasRenderingContext2D;
+  lines: HTMLCanvasElement; lg: CanvasRenderingContext2D;
+  walkable: number; opened: number;
+}
+
+const tileKey = (tx: number, tz: number): string => `${tx},${tz}`;
+
 export class AutoMap {
-  readonly minX: number;
-  readonly minZ: number;
-  readonly w: number;
-  readonly h: number;
-  private readonly kind: Uint8Array;
-  private readonly seen: Uint8Array;
-  /** Разведанное, клетка — S × S пикселей */
-  readonly art: HTMLCanvasElement;
-  private readonly g: CanvasRenderingContext2D;
-  /** Только контур разведанного — для прозрачной карты поверх игры */
-  private readonly lines: HTMLCanvasElement;
-  private readonly lg: CanvasRenderingContext2D;
-  private walkable = 0;
-  private opened = 0;
+  private readonly tiles = new Map<string, Tile>();
   private readonly icons = new Map<string, HTMLCanvasElement>();
 
-  constructor(level: Level) {
-    const b = level.getBounds() ?? { minX: 0, maxX: 0, minZ: 0, maxZ: 0, minY: 0, maxY: 0 };
-    this.minX = b.minX; this.minZ = b.minZ;
-    this.w = b.maxX - b.minX + 1; this.h = b.maxZ - b.minZ + 1;
-    const N = this.w * this.h;
-    const top = new Float32Array(N).fill(-Infinity);
-    const water = new Uint8Array(N);
-    level.forEach((x, y, z, id) => {
-      const d = level.defOf(id);
-      const k = (z - b.minZ) * this.w + (x - b.minX);
-      const wet = /water|acid/.test(d.name);
-      if (!d.collide && !wet) return;
-      const H = y + (wet ? 0.5 : d.collide);
-      if (H > top[k]) { top[k] = H; water[k] = wet ? 1 : 0; }
-    });
-    this.kind = new Uint8Array(N);
-    for (let z = 0; z < this.h; z++) for (let x = 0; x < this.w; x++) {
-      const k = z * this.w + x;
-      if (top[k] === -Infinity) continue;
-      let lo = Infinity;
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = x + dx, nz = z + dz;
-        if (nx < 0 || nz < 0 || nx >= this.w || nz >= this.h) continue;
-        const t = top[nz * this.w + nx];
-        if (t > -Infinity) lo = Math.min(lo, t);
-      }
-      this.kind[k] = water[k] ? WATER : top[k] - (lo === Infinity ? top[k] : lo) >= 1.5 ? WALL : FLOOR;
-      if (this.kind[k] !== WALL) this.walkable++;
+  /** level — чтобы читать колонны; для статичной карты тайлы создаются сразу на всех границах */
+  constructor(private readonly level: Level, whole = true) {
+    if (!whole) return;
+    const b = level.getBounds();
+    if (!b) return;
+    for (let tz = Math.floor(b.minZ / T); tz <= Math.floor(b.maxZ / T); tz++) for (let tx = Math.floor(b.minX / T); tx <= Math.floor(b.maxX / T); tx++) this.addTile(tx, tz);
+  }
+
+  /** Тайл региона (rx, rz): создать и прочитать колонны уровня; уже есть — пересчитать проходимость заново */
+  addTile(tx: number, tz: number): Tile {
+    const key = tileKey(tx, tz);
+    let t = this.tiles.get(key);
+    if (!t) {
+      const art = document.createElement('canvas'), lines = document.createElement('canvas');
+      art.width = art.height = lines.width = lines.height = T * S;
+      t = { tx, tz, kind: new Uint8Array(T * T), seen: new Uint8Array(T * T), art, g: art.getContext('2d') as CanvasRenderingContext2D, lines, lg: lines.getContext('2d') as CanvasRenderingContext2D, walkable: 0, opened: 0 };
+      this.tiles.set(key, t);
     }
-    this.seen = new Uint8Array(N);
-    this.art = document.createElement('canvas');
-    this.art.width = this.w * S; this.art.height = this.h * S;
-    this.g = this.art.getContext('2d') as CanvasRenderingContext2D;
-    this.lines = document.createElement('canvas');
-    this.lines.width = this.art.width; this.lines.height = this.art.height;
-    this.lg = this.lines.getContext('2d') as CanvasRenderingContext2D;
+    this.classify(t);
+    // у соседей край этого тайла был «пустотой» — пересчитать их контуры
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = this.tiles.get(tileKey(tx + dx, tz + dz)); if (n) this.classify(n); }
+    return t;
+  }
+
+  /** Верх колонны (x, z) и вода ли это; −Infinity — пусто */
+  private column(x: number, z: number): [number, boolean] {
+    const L = this.level, b = L.getBounds();
+    if (!b) return [-Infinity, false];
+    for (let y = b.maxY; y >= b.minY; y--) {
+      const id = L.idAt(x, y, z);
+      if (!id) continue;
+      const d = L.defOf(id);
+      const wet = /water|acid/.test(d.name);
+      if (!d.collide && !wet) continue;
+      return [y + (wet ? 0.5 : d.collide), wet];
+    }
+    return [-Infinity, false];
+  }
+
+  private classify(t: Tile): void {
+    const x0 = t.tx * T, z0 = t.tz * T;
+    // колонны с полем в одну клетку вокруг — чтобы сравнивать с соседями через край тайла
+    const W = T + 2;
+    const top = new Float32Array(W * W), water = new Uint8Array(W * W);
+    for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) { const [h, wet] = this.column(x0 + i - 1, z0 + j - 1); top[j * W + i] = h; water[j * W + i] = wet ? 1 : 0; }
+    t.walkable = 0;
+    for (let z = 0; z < T; z++) for (let x = 0; x < T; x++) {
+      const k = (z + 1) * W + (x + 1), h = top[k];
+      if (h === -Infinity) { t.kind[z * T + x] = 0; continue; }
+      let lo = Infinity;
+      for (const n of [k + 1, k - 1, k + W, k - W]) if (top[n] > -Infinity) lo = Math.min(lo, top[n]);
+      const kind = water[k] ? WATER : h - (lo === Infinity ? h : lo) >= 1.5 ? WALL : FLOOR;
+      t.kind[z * T + x] = kind;
+      if (kind !== WALL) t.walkable++;
+    }
+    // уже разведанное перерисовать по новой классификации
+    t.opened = 0;
+    t.g.clearRect(0, 0, T * S, T * S); t.lg.clearRect(0, 0, T * S, T * S);
+    for (let z = 0; z < T; z++) for (let x = 0; x < T; x++) if (t.seen[z * T + x] && this.open(t, x, z)) { t.opened++; this.paint(t, x, z); }
   }
 
   /** Доля разведанного, 0..1 */
-  get explored(): number { return this.walkable ? this.opened / this.walkable : 0; }
+  get explored(): number {
+    let w = 0, o = 0;
+    for (const t of this.tiles.values()) { w += t.walkable; o += t.opened; }
+    return w ? o / w : 0;
+  }
 
-  private open(i: number, j: number): boolean { const k = this.kind[j * this.w + i]; return k === FLOOR || k === WATER; }
+  private tileAt(x: number, z: number): Tile | undefined { return this.tiles.get(tileKey(Math.floor(x / T), Math.floor(z / T))); }
+
+  private kindAt(x: number, z: number): number {
+    const t = this.tileAt(x, z);
+    return t ? t.kind[(z - t.tz * T) * T + (x - t.tx * T)] : 0;
+  }
+
+  private open(t: Tile, i: number, j: number): boolean {
+    const k = i < 0 || j < 0 || i >= T || j >= T ? this.kindAt(t.tx * T + i, t.tz * T + j) : t.kind[j * T + i];
+    return k === FLOOR || k === WATER;
+  }
 
   /** Открыть клетки в радиусе r вокруг точки; true — открылось новое */
   reveal(x: number, z: number, r = 13): boolean {
-    const cx = Math.round(x) - this.minX, cz = Math.round(z) - this.minZ;
+    const cx = Math.round(x), cz = Math.round(z);
     let any = false;
-    for (let j = Math.max(0, cz - r); j <= Math.min(this.h - 1, cz + r); j++) for (let i = Math.max(0, cx - r); i <= Math.min(this.w - 1, cx + r); i++) {
-      const k = j * this.w + i;
-      if (this.seen[k] || (i - cx) ** 2 + (j - cz) ** 2 > r * r) continue;
-      this.seen[k] = 1;
+    for (let zz = cz - r; zz <= cz + r; zz++) for (let xx = cx - r; xx <= cx + r; xx++) {
+      if ((xx - cx) ** 2 + (zz - cz) ** 2 > r * r) continue;
+      const t = this.tileAt(xx, zz);
+      if (!t) continue;
+      const i = xx - t.tx * T, j = zz - t.tz * T, k = j * T + i;
+      if (t.seen[k]) continue;
+      t.seen[k] = 1;
       any = true;
-      if (this.kind[k] === FLOOR || this.kind[k] === WATER) { this.opened++; this.paint(i, j); }
+      if (this.open(t, i, j)) { t.opened++; this.paint(t, i, j); }
     }
     return any;
   }
 
   /** Открыть всё (для проверки) */
-  revealAll(): void { for (let j = 0; j < this.h; j++) for (let i = 0; i < this.w; i++) { const k = j * this.w + i; if (!this.seen[k]) { this.seen[k] = 1; if (this.open(i, j)) { this.opened++; this.paint(i, j); } } } }
+  revealAll(): void {
+    for (const t of this.tiles.values()) for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) {
+      const k = j * T + i;
+      if (!t.seen[k]) { t.seen[k] = 1; if (this.open(t, i, j)) { t.opened++; this.paint(t, i, j); } }
+    }
+  }
 
   isSeen(x: number, z: number): boolean {
-    const i = Math.round(x) - this.minX, j = Math.round(z) - this.minZ;
-    return i >= 0 && j >= 0 && i < this.w && j < this.h && this.seen[j * this.w + i] === 1;
+    const xx = Math.round(x), zz = Math.round(z), t = this.tileAt(xx, zz);
+    return !!t && t.seen[(zz - t.tz * T) * T + (xx - t.tx * T)] === 1;
+  }
+
+  /** Разведка тайла как строка (base64 битов), чтобы сохранить; undefined — ничего не разведано */
+  seenOf(tx: number, tz: number): string | undefined {
+    const t = this.tiles.get(tileKey(tx, tz));
+    if (!t || !t.opened && !t.seen.some((v) => v)) return undefined;
+    const bytes = new Uint8Array(T * T / 8);
+    for (let k = 0; k < T * T; k++) if (t.seen[k]) bytes[k >> 3] |= 1 << (k & 7);
+    return btoa(String.fromCharCode(...bytes));
+  }
+
+  /** Восстановить разведку тайла из seenOf */
+  restoreSeen(tx: number, tz: number, packed: string): void {
+    const t = this.tiles.get(tileKey(tx, tz));
+    if (!t) return;
+    const bin = atob(packed);
+    for (let k = 0; k < T * T; k++) if ((bin.charCodeAt(k >> 3) >> (k & 7)) & 1 && !t.seen[k]) {
+      t.seen[k] = 1;
+      if (this.open(t, k % T, (k / T) | 0)) { t.opened++; this.paint(t, k % T, (k / T) | 0); }
+    }
   }
 
   /** Клетка: заливка и белый контур там, где сосед — стена или пустота */
-  private paint(i: number, j: number): void {
-    const g = this.g, k = this.kind[j * this.w + i], px = i * S, py = j * S;
+  private paint(t: Tile, i: number, j: number): void {
+    const g = t.g, k = t.kind[j * T + i], px = i * S, py = j * S;
     g.fillStyle = k === WATER ? WATER_FILL : FILL;
     g.fillRect(px, py, S, S);
     const L = 2;
-    for (const c of [g, this.lg]) {
+    for (const c of [g, t.lg]) {
       c.fillStyle = EDGE;
-      if (i === 0 || !this.open(i - 1, j)) c.fillRect(px, py, L, S);
-      if (i === this.w - 1 || !this.open(i + 1, j)) c.fillRect(px + S - L, py, L, S);
-      if (j === 0 || !this.open(i, j - 1)) c.fillRect(px, py, S, L);
-      if (j === this.h - 1 || !this.open(i, j + 1)) c.fillRect(px, py + S - L, S, L);
+      if (!this.open(t, i - 1, j)) c.fillRect(px, py, L, S);
+      if (!this.open(t, i + 1, j)) c.fillRect(px + S - L, py, L, S);
+      if (!this.open(t, i, j - 1)) c.fillRect(px, py, S, L);
+      if (!this.open(t, i, j + 1)) c.fillRect(px, py + S - L, S, L);
     }
     // редкие белые ромбики по полу, как камешки на карте MCD
-    if (k === FLOOR && ((i * 73856093) ^ (j * 19349663)) % 61 === 0) { g.fillRect(px + 2, py + 1, 2, 1); g.fillRect(px + 1, py + 2, 4, 2); g.fillRect(px + 2, py + 4, 2, 1); }
+    const gx = t.tx * T + i, gz = t.tz * T + j;
+    if (k === FLOOR && (((gx * 73856093) ^ (gz * 19349663)) % 61 + 61) % 61 === 0) { g.fillRect(px + 2, py + 1, 2, 1); g.fillRect(px + 1, py + 2, 4, 2); g.fillRect(px + 2, py + 4, 2, 1); }
   }
 
   /** Мир → экран: центр (cx, cy), k пикселей на клетку, вокруг точки (ox, oz) */
@@ -138,9 +206,17 @@ export class AutoMap {
     ctx.scale(1, SQUASH);
     ctx.rotate(Math.PI / 4);
     ctx.scale(k / S, k / S);
-    ctx.translate(-(ox - this.minX + 0.5) * S, -(oz - this.minZ + 0.5) * S);
-    if (lines) { ctx.globalAlpha = alpha * 0.22; ctx.drawImage(this.art, 0, 0); ctx.globalAlpha = alpha; ctx.drawImage(this.lines, 0, 0); }
-    else ctx.drawImage(this.art, 0, 0);
+    ctx.translate(-(ox + 0.5) * S, -(oz + 0.5) * S);
+    // тайлы, которые могут попасть в холст: радиус вида в клетках с запасом на поворот
+    const reach = Math.hypot(ctx.canvas.width, ctx.canvas.height) / k + T;
+    for (const t of this.tiles.values()) {
+      if (!t.opened) continue;
+      const tcx = t.tx * T + T / 2, tcz = t.tz * T + T / 2;
+      if (Math.abs(tcx - ox) > reach || Math.abs(tcz - oz) > reach) continue;
+      const px = t.tx * T * S, pz = t.tz * T * S;
+      if (lines) { ctx.globalAlpha = alpha * 0.22; ctx.drawImage(t.art, px, pz); ctx.globalAlpha = alpha; ctx.drawImage(t.lines, px, pz); }
+      else ctx.drawImage(t.art, px, pz);
+    }
     ctx.restore();
     // значки и герой — в экранных координатах, не сжимаются
     const sz = Math.max(14, Math.min(26, k * 2.2));
@@ -171,11 +247,15 @@ export class AutoMap {
   /** Подобрать k, чтобы разведанное (или вся карта) влезло в w × h */
   fit(w: number, h: number): { ox: number; oz: number; k: number } {
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    for (let j = 0; j < this.h; j++) for (let i = 0; i < this.w; i++) if (this.seen[j * this.w + i] && this.open(i, j)) {
-      x0 = Math.min(x0, i); x1 = Math.max(x1, i); z0 = Math.min(z0, j); z1 = Math.max(z1, j);
+    for (const t of this.tiles.values()) for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) if (t.seen[j * T + i] && this.open(t, i, j)) {
+      const x = t.tx * T + i, z = t.tz * T + j;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
     }
-    if (x0 === Infinity) { x0 = 0; x1 = this.w - 1; z0 = 0; z1 = this.h - 1; }
-    const ox = this.minX + (x0 + x1) / 2, oz = this.minZ + (z0 + z1) / 2;
+    if (x0 === Infinity) {
+      for (const t of this.tiles.values()) { x0 = Math.min(x0, t.tx * T); x1 = Math.max(x1, t.tx * T + T - 1); z0 = Math.min(z0, t.tz * T); z1 = Math.max(z1, t.tz * T + T - 1); }
+      if (x0 === Infinity) { x0 = x1 = z0 = z1 = 0; }
+    }
+    const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2;
     // размах повёрнутого прямоугольника: по ширине (dx + dz)·C, по высоте (dx + dz)·C·SQUASH
     const dx = x1 - x0 + 2, dz = z1 - z0 + 2, span = (dx + dz) * C;
     return { ox, oz, k: Math.min(w / span, h / (span * SQUASH)) * 0.92 };
