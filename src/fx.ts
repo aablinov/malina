@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { Textures } from './textures';
+import { FxPool } from './pool';
+import { Bolts, Cubes } from './fx-bolts';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -21,20 +23,6 @@ export interface SpawnOptions {
   spin?: number;
   drag?: number;
   shrink?: boolean;
-}
-
-interface Particle {
-  pos: THREE.Vector3;
-  vel: THREE.Vector3;
-  life: number;
-  maxLife: number;
-  size: number;
-  color: THREE.Color;
-  gravity: number;
-  rot: THREE.Vector3;
-  spin: number;
-  drag: number;
-  shrink: boolean;
 }
 
 export interface BurstOptions {
@@ -63,58 +51,90 @@ interface FloatText {
   dur: number;
   dx: number;
 }
+/** Сколько цифр урона на экране одновременно: дальше самая старая уступает место */
+const MAX_TEXTS = 48;
 
-/** Пул кубиков-частиц, рисуется одним InstancedMesh */
+/**
+ * Пул кубиков-частиц, рисуется одним InstancedMesh. Данные — в типизированных массивах (структура массивов), живые
+ * частицы лежат плотно в начале; смерть — свап с последней. Спавн ничего не выделяет; при переполнении самая старая
+ * частица уступает место (wiki/dev-performance.md)
+ */
+const F = 20; // полей на частицу
+const P_POS = 0, P_VEL = 3, P_LIFE = 6, P_MAX = 7, P_SIZE = 8, P_COL = 9, P_GRAV = 12, P_ROT = 13, P_SPIN = 16, P_DRAG = 17, P_SHRINK = 18;
 class Pool {
   readonly mesh: THREE.InstancedMesh;
-  private readonly items: Particle[] = [];
+  private readonly d: Float32Array;
+  private n = 0;
+  private oldest = 0;
 
   constructor(scene: THREE.Scene, private readonly max: number, material: THREE.Material, private readonly ground = true) {
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, max);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     for (let i = 0; i < max; i++) this.mesh.setColorAt(i, _c.set(1, 1, 1));
+    this.mesh.instanceColor!.setUsage(THREE.DynamicDrawUsage);
     this.mesh.count = 0;
+    this.d = new Float32Array(max * F);
     scene.add(this.mesh);
   }
 
+  get count(): number { return this.n; }
+
   spawn(p: SpawnOptions): void {
-    if (this.items.length >= this.max) this.items.shift();
-    this.items.push({
-      pos: p.pos.clone(), vel: p.vel ? p.vel.clone() : new THREE.Vector3(),
-      life: p.life ?? 1, maxLife: p.life ?? 1, size: p.size ?? 0.15,
-      color: new THREE.Color(p.color ?? '#fff'), gravity: p.gravity ?? 12,
-      rot: new THREE.Vector3(Math.random() * 6, Math.random() * 6, Math.random() * 6),
-      spin: p.spin ?? 6, drag: p.drag ?? 0, shrink: p.shrink ?? true,
-    });
+    let i: number;
+    if (this.n < this.max) i = this.n++;
+    else { i = this.oldest; this.oldest = (this.oldest + 1) % this.max; }
+    const d = this.d, o = i * F;
+    d[o + P_POS] = p.pos.x; d[o + P_POS + 1] = p.pos.y; d[o + P_POS + 2] = p.pos.z;
+    if (p.vel) { d[o + P_VEL] = p.vel.x; d[o + P_VEL + 1] = p.vel.y; d[o + P_VEL + 2] = p.vel.z; } else d[o + P_VEL] = d[o + P_VEL + 1] = d[o + P_VEL + 2] = 0;
+    d[o + P_LIFE] = d[o + P_MAX] = p.life ?? 1;
+    d[o + P_SIZE] = p.size ?? 0.15;
+    _c.set(p.color ?? '#fff');
+    d[o + P_COL] = _c.r; d[o + P_COL + 1] = _c.g; d[o + P_COL + 2] = _c.b;
+    d[o + P_GRAV] = p.gravity ?? 12;
+    d[o + P_ROT] = Math.random() * 6; d[o + P_ROT + 1] = Math.random() * 6; d[o + P_ROT + 2] = Math.random() * 6;
+    d[o + P_SPIN] = p.spin ?? 6;
+    d[o + P_DRAG] = p.drag ?? 0;
+    d[o + P_SHRINK] = p.shrink ?? true ? 1 : 0;
   }
 
   update(dt: number): void {
-    const it = this.items;
-    for (let i = it.length - 1; i >= 0; i--) {
-      const p = it[i];
-      p.life -= dt;
-      if (p.life <= 0) { it.splice(i, 1); continue; }
-      p.vel.y -= p.gravity * dt;
-      if (p.drag) p.vel.multiplyScalar(Math.max(0, 1 - p.drag * dt));
-      p.pos.addScaledVector(p.vel, dt);
-      if (this.ground && p.pos.y < p.size / 2) {
-        p.pos.y = p.size / 2; p.vel.y *= -0.3; p.vel.x *= 0.6; p.vel.z *= 0.6; p.spin *= 0.5;
+    const d = this.d;
+    for (let i = this.n - 1; i >= 0; i--) {
+      const o = i * F;
+      d[o + P_LIFE] -= dt;
+      if (d[o + P_LIFE] <= 0) {
+        // свап с последней живой
+        const last = --this.n;
+        if (i !== last) d.copyWithin(o, last * F, last * F + F);
+        continue;
       }
-      p.rot.x += p.spin * dt; p.rot.y += p.spin * dt * 0.7;
+      d[o + P_VEL + 1] -= d[o + P_GRAV] * dt;
+      const drag = d[o + P_DRAG];
+      if (drag) { const k = Math.max(0, 1 - drag * dt); d[o + P_VEL] *= k; d[o + P_VEL + 1] *= k; d[o + P_VEL + 2] *= k; }
+      d[o + P_POS] += d[o + P_VEL] * dt; d[o + P_POS + 1] += d[o + P_VEL + 1] * dt; d[o + P_POS + 2] += d[o + P_VEL + 2] * dt;
+      const size = d[o + P_SIZE];
+      if (this.ground && d[o + P_POS + 1] < size / 2) {
+        d[o + P_POS + 1] = size / 2; d[o + P_VEL + 1] *= -0.3; d[o + P_VEL] *= 0.6; d[o + P_VEL + 2] *= 0.6; d[o + P_SPIN] *= 0.5;
+      }
+      const spin = d[o + P_SPIN];
+      d[o + P_ROT] += spin * dt; d[o + P_ROT + 1] += spin * dt * 0.7;
     }
-    for (let i = 0; i < it.length; i++) {
-      const p = it[i];
-      const k = p.shrink ? Math.min(1, (p.life / p.maxLife) * 2.5) : 1;
-      _s.setScalar(p.size * k);
-      _q.setFromEuler(_e.set(p.rot.x, p.rot.y, p.rot.z));
-      _m.compose(p.pos, _q, _s);
-      this.mesh.setMatrixAt(i, _m);
-      this.mesh.setColorAt(i, p.color);
+    if (this.oldest >= this.n) this.oldest = 0;
+    const m = this.mesh, mat = m.instanceMatrix.array as Float32Array, col = m.instanceColor!.array as Float32Array;
+    for (let i = 0; i < this.n; i++) {
+      const o = i * F;
+      const k = d[o + P_SHRINK] ? Math.min(1, (d[o + P_LIFE] / d[o + P_MAX]) * 2.5) : 1;
+      _s.setScalar(d[o + P_SIZE] * k);
+      _q.setFromEuler(_e.set(d[o + P_ROT], d[o + P_ROT + 1], d[o + P_ROT + 2]));
+      _v.set(d[o + P_POS], d[o + P_POS + 1], d[o + P_POS + 2]);
+      _m.compose(_v, _q, _s);
+      _m.toArray(mat, i * 16);
+      col[i * 3] = d[o + P_COL]; col[i * 3 + 1] = d[o + P_COL + 1]; col[i * 3 + 2] = d[o + P_COL + 2];
     }
-    this.mesh.count = it.length;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    m.count = this.n;
+    m.instanceMatrix.needsUpdate = true;
+    m.instanceColor!.needsUpdate = true;
   }
 }
 
@@ -122,14 +142,57 @@ const additive = (color: THREE.Color, opacity = 1, map?: THREE.Texture) => new T
   color, map, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
 });
 
+/** Общие ресурсы: их не трогает дефолтный dispose в FX.custom (wiki/dev-performance.md) */
+const SHARED = new WeakSet<THREE.Material | THREE.BufferGeometry>();
+export function markShared<T extends THREE.Material | THREE.BufferGeometry>(r: T): T { SHARED.add(r); return r; }
+/** Освободить геометрию и материалы тела, кроме общих */
+export function disposeOwned(obj: THREE.Object3D): void {
+  obj.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) && !(o instanceof THREE.Sprite) && !(o instanceof THREE.Line) && !(o instanceof THREE.Points)) return;
+    const g = (o as THREE.Mesh).geometry;
+    if (g && !SHARED.has(g)) g.dispose();
+    const mats = (o as THREE.Mesh).material;
+    for (const m of Array.isArray(mats) ? mats : [mats]) if (m && !SHARED.has(m)) m.dispose();
+  });
+}
+
+/** Квантованные общие геометрии колец и дуг: ключ — толщина или размах с шагом 0,05 */
+const ringGeos = new Map<string, THREE.RingGeometry>();
+const ringGeo = (inner: number, segments: number, start = 0, length = Math.PI * 2): THREE.RingGeometry => {
+  const q = Math.round(inner * 20) / 20, qs = Math.round(start * 20) / 20, ql = Math.round(length * 20) / 20;
+  const key = `${q},${segments},${qs},${ql}`;
+  let g = ringGeos.get(key);
+  if (!g) ringGeos.set(key, g = markShared(new THREE.RingGeometry(q, 1, segments, 1, qs, ql)));
+  return g;
+};
+/** Единичная плоскость: от (0,0) вверх до (0,1) — для черт; и центрированная — для декалей */
+let planeUp: THREE.PlaneGeometry | null = null, planeC: THREE.PlaneGeometry | null = null;
+const PLANE_UP = (): THREE.PlaneGeometry => planeUp ??= markShared(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0) as THREE.PlaneGeometry);
+const PLANE_C = (): THREE.PlaneGeometry => planeC ??= markShared(new THREE.PlaneGeometry(1, 1));
+
+/** Слот пула временных тел: материал свой на слот (цвет и прозрачность правятся), геометрия общая */
+interface Slot<M extends THREE.Material> { obj: THREE.Mesh<THREE.BufferGeometry, M> | THREE.Sprite; mat: M; gen: number }
+
 /** Вспышка настоящего света: точечный источник из пула */
+const SHOCK_COLOR = new THREE.Color(3, 0.6, 1.2);
+
 interface LightFlash { light: THREE.PointLight; t: number; dur: number; peak: number }
 
 export class FX {
   private readonly solid: Pool;
   private readonly glow: Pool;
+  /** Молнии и светящиеся кубы — экземплярами (src/fx-bolts.ts) */
+  private readonly bolts: Bolts;
+  private readonly cubes: Cubes;
+  private readonly cubesSolid: Cubes;
   private readonly transients: Transient[] = [];
+  /** Пулы временных тел: кольца, вспышки, дуги, черты, декали — ничего не создаётся в бою */
+  private readonly shocks: FxPool<Slot<THREE.MeshBasicMaterial>>;
+  private readonly flashes: FxPool<Slot<THREE.SpriteMaterial>>;
+  private readonly planes: FxPool<Slot<THREE.MeshBasicMaterial>>;
+  private readonly decals: FxPool<Slot<THREE.MeshBasicMaterial>>;
   private readonly texts: FloatText[] = [];
+  private readonly freeTexts: FloatText[] = [];
   /** Пул света заклинаний: источники всегда в сцене (с нулевой силой), чтобы число огней не менялось и шейдеры не пересобирались */
   private readonly lights: LightFlash[] = [];
   private readonly flashEl: HTMLDivElement;
@@ -156,8 +219,30 @@ export class FX {
     private readonly overlay: HTMLElement,
   ) {
     this.solid = new Pool(scene, 900, new THREE.MeshLambertMaterial());
+    const meshSlot = (): Slot<THREE.MeshBasicMaterial> => {
+      const mat = markShared(additive(new THREE.Color('#fff')));
+      const obj = new THREE.Mesh(PLANE_C(), mat);
+      obj.matrixAutoUpdate = true;
+      return { obj, mat, gen: 0 };
+    };
+    this.shocks = new FxPool(meshSlot, 48, 'drop');
+    this.planes = new FxPool(meshSlot, 64, 'drop');
+    this.decals = new FxPool(() => {
+      const mat = markShared(new THREE.MeshBasicMaterial({ map: T.glow, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+      const obj = new THREE.Mesh(PLANE_C(), mat);
+      obj.rotation.x = -Math.PI / 2;
+      obj.renderOrder = 1;
+      return { obj, mat, gen: 0 };
+    }, 48, 'drop');
+    this.flashes = new FxPool(() => {
+      const mat = markShared(new THREE.SpriteMaterial({ map: T.glow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      return { obj: new THREE.Sprite(mat), mat, gen: 0 };
+    }, 64, 'drop');
     this.solid.mesh.castShadow = true;
     this.glow = new Pool(scene, 800, new THREE.MeshBasicMaterial({ toneMapped: false }), true);
+    this.bolts = new Bolts(scene);
+    this.cubes = new Cubes(scene, 512, true);
+    this.cubesSolid = new Cubes(scene, 256, false);
     for (let i = 0; i < 3; i++) {
       const light = new THREE.PointLight('#ffffff', 0, 10, 1.4);
       light.position.set(0, -50, 0);
@@ -206,17 +291,17 @@ export class FX {
 
   /** След на полу: выжженное пятно, иней. additive — светится; иначе затемняет */
   decal(pos: THREE.Vector3, map: THREE.Texture, color: ColorLike, size: number, dur: number, additive = false, opacity = 1): void {
-    const mat = new THREE.MeshBasicMaterial({
-      map, color, transparent: true, opacity, depthWrite: false, toneMapped: !additive,
-      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, polygonOffset: true, polygonOffsetFactor: -2,
-    });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
-    m.rotation.x = -Math.PI / 2;
+    const s = this.decals.acquire();
+    if (!s) return;
+    const { mat, obj: m } = s;
+    if (mat.map !== map || mat.toneMapped === additive) { mat.map = map; mat.toneMapped = !additive; mat.needsUpdate = true; }
+    mat.blending = additive ? THREE.AdditiveBlending : THREE.NormalBlending;
+    mat.color.set(color); mat.opacity = 0;
+    m.scale.setScalar(size);
     m.rotation.z = Math.random() * Math.PI * 2;
     m.position.copy(pos); m.position.y += 0.03 + Math.random() * 0.01;
-    m.renderOrder = 1;
     // плавно проявляется, держится и тает в последней трети
-    this.add(m, dur, (k) => { mat.opacity = opacity * Math.min(1, k * 12) * Math.min(1, (1 - k) * 3); }, () => { m.geometry.dispose(); mat.dispose(); });
+    this.pooled(this.decals, s, dur, (k) => { mat.opacity = opacity * Math.min(1, k * 12) * Math.min(1, (1 - k) * 3); });
   }
 
   // ---------- частицы ----------
@@ -254,58 +339,80 @@ export class FX {
     }
   }
 
+  /** Ломаная молния из светящихся брусков: ядро и мягкий ореол, мерцает и тает; branches — отростки */
+  bolt(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color, width: number, branches: number, dur = 0.32): void {
+    this.bolts.bolt(from, to, color, width, branches, dur);
+  }
+
+  /** Светящиеся кубы разлетаются от mid на R, раздуваются и гаснут; additive — складываются светом */
+  fireCubes(mid: THREE.Vector3, R: number, n: number, colors: THREE.Color[], size: number, additive = true, life: [number, number] = [0.35, 0.6]): void {
+    (additive ? this.cubes : this.cubesSolid).burst(mid, R, n, colors, size, life);
+  }
+
   // ---------- временные фигуры ----------
   private add(obj: THREE.Object3D, dur: number, tick: (k: number) => void, dispose: () => void): void {
     this.scene.add(obj);
     this.transients.push({ obj, t: 0, dur, tick, dispose });
   }
 
+  /** Тело из пула живёт dur секунд, затем возвращается в пул (если слот не был перехвачен) */
+  private pooled<M extends THREE.Material>(pool: FxPool<Slot<M>>, s: Slot<M>, dur: number, tick: (k: number) => void): void {
+    const gen = ++s.gen;
+    this.add(s.obj, dur, tick, () => { if (s.gen === gen) pool.release(s); });
+  }
+
   /** Плоская светящаяся дуга удара */
   arc(pos: THREE.Vector3, angle: number, color: THREE.Color, radius = 2.4, spread = 1.15, y = 0.75): void {
-    const geo = new THREE.RingGeometry(radius * 0.38, radius, 32, 1, -spread, spread * 2);
-    const mat = additive(color, 0.85);
-    const m = new THREE.Mesh(geo, mat);
-    m.rotation.x = -Math.PI / 2;
-    m.rotation.z = angle - Math.PI / 2;
+    const s = this.planes.acquire();
+    if (!s) return;
+    const { mat, obj: m } = s;
+    m.geometry = ringGeo(0.38, 32, -spread, spread * 2);
+    mat.color.copy(color); mat.opacity = 0.85;
+    m.rotation.set(-Math.PI / 2, 0, angle - Math.PI / 2);
     m.position.copy(pos); m.position.y = y;
-    this.add(m, 0.22, (k) => { mat.opacity = 0.85 * (1 - k); m.scale.setScalar(0.85 + k * 0.3); }, () => { geo.dispose(); mat.dispose(); });
+    this.pooled(this.planes, s, 0.22, (k) => { mat.opacity = 0.85 * (1 - k); m.scale.setScalar(radius * (0.85 + k * 0.3)); });
   }
 
   /** Узкая прямая черта — укол или разрез */
   line(from: THREE.Vector3, angle: number, len: number, color: THREE.Color, width = 0.45, dur = 0.18, y = 0.9): void {
-    const geo = new THREE.PlaneGeometry(width, len);
-    geo.translate(0, len / 2, 0);
-    const mat = additive(color, 0.95);
-    const m = new THREE.Mesh(geo, mat);
+    const s = this.planes.acquire();
+    if (!s) return;
+    const { mat, obj: m } = s;
+    m.geometry = PLANE_UP();
+    mat.color.copy(color); mat.opacity = 0.95;
     m.rotation.order = 'YXZ';
     m.rotation.set(Math.PI / 2, angle, 0);
     m.position.copy(from); m.position.y = y;
-    this.add(m, dur, (k) => { mat.opacity = 0.95 * (1 - k); m.scale.set(1 - k * 0.7, 0.8 + k * 0.3, 1); }, () => { geo.dispose(); mat.dispose(); });
+    this.pooled(this.planes, s, dur, (k) => { mat.opacity = 0.95 * (1 - k); m.scale.set(width * (1 - k * 0.7), len * (0.8 + k * 0.3), 1); });
   }
 
   /** Кольцо, расходящееся по земле */
-  shock(pos: THREE.Vector3, radius: number, color: THREE.Color = new THREE.Color(3, 0.6, 1.2), dur = 0.45, thick = 0.15): void {
-    const geo = new THREE.RingGeometry(1 - thick, 1, 64);
-    const mat = additive(color.clone().multiplyScalar(0.6));
-    const m = new THREE.Mesh(geo, mat);
-    m.rotation.x = -Math.PI / 2;
+  shock(pos: THREE.Vector3, radius: number, color: THREE.Color = SHOCK_COLOR, dur = 0.45, thick = 0.15): void {
+    const s = this.shocks.acquire();
+    if (!s) return;
+    const { mat, obj: m } = s;
+    m.geometry = ringGeo(1 - thick, 64);
+    mat.color.copy(color).multiplyScalar(0.6); mat.opacity = 1;
+    m.rotation.set(-Math.PI / 2, 0, 0);
     m.position.copy(pos); m.position.y = 0.15;
-    this.add(m, dur, (k) => { m.scale.setScalar(0.3 + radius * Math.sqrt(k)); mat.opacity = 1 - k; }, () => { geo.dispose(); mat.dispose(); });
+    m.scale.setScalar(0.3);
+    this.pooled(this.shocks, s, dur, (k) => { m.scale.setScalar(0.3 + radius * Math.sqrt(k)); mat.opacity = 1 - k; });
   }
 
   /** Круглая вспышка-ореол */
   flash(pos: THREE.Vector3, color: THREE.Color, size = 1.4, dur = 0.18): void {
+    const sl = this.flashes.acquire();
+    if (!sl) return;
+    const { mat, obj: s } = sl;
     // вспышки приглушены, чтобы несколько попаданий подряд не слепили
-    const mat = new THREE.SpriteMaterial({ map: this.T.glow, color: color.clone().multiplyScalar(0.35), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-    const s = new THREE.Sprite(mat);
+    mat.color.copy(color).multiplyScalar(0.35); mat.opacity = 1;
     s.position.copy(pos);
-    this.add(s, dur, (k) => { s.scale.setScalar(size * (0.6 + k * 0.8)); mat.opacity = 1 - k; }, () => mat.dispose());
+    s.scale.setScalar(size * 0.6);
+    this.pooled(this.flashes, sl, dur, (k) => { s.scale.setScalar(size * (0.6 + k * 0.8)); mat.opacity = 1 - k; });
   }
 
-  /** Добавить своё временное тело (для особых эффектов) */
-  custom(obj: THREE.Object3D, dur: number, tick: (k: number) => void, dispose: () => void = () => obj.traverse((o) => {
-    if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
-  })): void {
+  /** Добавить своё временное тело (для особых эффектов); по умолчанию освобождает его геометрию и материалы, кроме общих (markShared) */
+  custom(obj: THREE.Object3D, dur: number, tick: (k: number) => void, dispose: () => void = () => disposeOwned(obj)): void {
     this.add(obj, dur, tick, dispose);
   }
 
@@ -345,16 +452,23 @@ export class FX {
 
   /** Всплывающая надпись над точкой мира */
   text(worldPos: THREE.Vector3, str: string, cls = ''): void {
-    const el = document.createElement('div');
-    el.className = 'dmg ' + cls;
-    el.textContent = str;
-    this.overlay.appendChild(el);
-    this.texts.push({ el, pos: worldPos.clone(), t: 0, dur: 0.9, dx: (Math.random() - 0.5) * 30 });
+    // div-ы переиспользуются: создание и удаление узлов на каждое попадание дёргает раскладку
+    let tx: FloatText;
+    if (this.texts.length >= MAX_TEXTS) { tx = this.texts.shift()!; tx.pos.copy(worldPos); }
+    else if (this.freeTexts.length) { tx = this.freeTexts.pop()!; tx.pos.copy(worldPos); this.overlay.appendChild(tx.el); }
+    else { const el = document.createElement('div'); this.overlay.appendChild(el); tx = { el, pos: worldPos.clone(), t: 0, dur: 0.9, dx: 0 }; }
+    tx.el.className = 'dmg ' + cls;
+    tx.el.textContent = str;
+    tx.t = 0; tx.dur = 0.9; tx.dx = (Math.random() - 0.5) * 30;
+    this.texts.push(tx);
   }
 
   update(dt: number, w: number, h: number): void {
     this.solid.update(dt);
     this.glow.update(dt);
+    this.bolts.update(dt);
+    this.cubes.update(dt);
+    this.cubesSolid.update(dt);
     for (let i = this.transients.length - 1; i >= 0; i--) {
       const tr = this.transients[i];
       tr.t += dt;
@@ -370,12 +484,12 @@ export class FX {
     for (let i = this.texts.length - 1; i >= 0; i--) {
       const tx = this.texts[i];
       tx.t += dt;
-      if (tx.t >= tx.dur) { tx.el.remove(); this.texts.splice(i, 1); continue; }
+      if (tx.t >= tx.dur) { tx.el.remove(); this.texts.splice(i, 1); this.freeTexts.push(tx); continue; }
       _v.copy(tx.pos); _v.y += 1.2 + tx.t * 1.4;
       _v.project(this.camera);
       const x = (_v.x * 0.5 + 0.5) * w + tx.dx * tx.t, y = (-_v.y * 0.5 + 0.5) * h;
       const pop = tx.t < 0.1 ? 0.6 + tx.t * 6 : 1.2 - Math.min(0.2, (tx.t - 0.1));
-      tx.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%) scale(${pop})`;
+      tx.el.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) translate(-50%,-50%) scale(${pop.toFixed(3)})`;
       tx.el.style.opacity = String(Math.min(1, (tx.dur - tx.t) * 4));
     }
     this.shake = Math.max(0, this.shake - dt * 3);

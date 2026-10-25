@@ -41,19 +41,7 @@ function burnSpots(kit: Spells, spots: THREE.Vector3[], dur: number, rate = 0.35
 
 /** Огненные кубы разлетаются от центра, раздуваются и гаснут */
 function fireCubes(kit: Spells, mid: THREE.Vector3, R: number, n: number): void {
-  for (let i = 0; i < n; i++) {
-    const mat = glowMat((Math.random() < 0.5 ? FIRE_A : FIRE_B).clone().multiplyScalar(0.45));
-    const m = new THREE.Mesh(UNIT, mat);
-    const v = new THREE.Vector3(rand(-1, 1), rand(0.2, 1.1), rand(-1, 1)).normalize().multiplyScalar(R * rand(0.5, 1));
-    const spin = new THREE.Vector3(rand(-6, 6), rand(-6, 6), rand(-6, 6));
-    m.position.copy(mid);
-    kit.h.fx.custom(m, rand(0.35, 0.65), (t) => {
-      m.position.copy(mid).addScaledVector(v, 1 - (1 - t) ** 3);
-      m.rotation.set(spin.x * t, spin.y * t, spin.z * t);
-      m.scale.setScalar((0.25 + R * 0.16) * (0.6 + t * 1.2) * (1 - t * 0.6));
-      mat.opacity = 1 - t * t;
-    }, () => mat.dispose());
-  }
+  kit.h.fx.fireCubes(mid, R, n, [FIRE_A.clone().multiplyScalar(0.45), FIRE_B.clone().multiplyScalar(0.45)], 0.25 + R * 0.16, false, [0.35, 0.65]);
 }
 
 /** Ледяные осколки-кубики веером от центра: летят, кувыркаются, тают */

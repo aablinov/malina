@@ -71,7 +71,7 @@ const canvasTex = (size: number, draw: (g: CanvasRenderingContext2D, s: number) 
 let scorchT: THREE.Texture | null = null, frostT: THREE.Texture | null = null;
 
 /** Выжженное пятно: тёмный неровный круг с рваным краем */
-const scorchTex = (): THREE.Texture => scorchT ??= canvasTex(128, (g, s) => {
+export const scorchTex = (): THREE.Texture => scorchT ??= canvasTex(128, (g, s) => {
   const c = s / 2;
   for (let i = 0; i < 26; i++) {
     const a = Math.random() * Math.PI * 2, d = Math.random() * c * 0.45, r = c * (0.25 + Math.random() * 0.35);
@@ -83,7 +83,7 @@ const scorchTex = (): THREE.Texture => scorchT ??= canvasTex(128, (g, s) => {
 });
 
 /** Иней: белые лучи-кристаллы от центра */
-const frostTex = (): THREE.Texture => frostT ??= canvasTex(256, (g, s) => {
+export const frostTex = (): THREE.Texture => frostT ??= canvasTex(256, (g, s) => {
   const c = s / 2;
   const gr = g.createRadialGradient(c, c, 0, c, c, c);
   gr.addColorStop(0, 'rgba(255,255,255,0.5)'); gr.addColorStop(0.7, 'rgba(255,255,255,0.18)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
@@ -363,38 +363,7 @@ export class Spells {
 
   /** Ломаная молния из светящихся брусков: ядро и мягкий ореол, мерцает и тает; branches — отростки */
   bolt(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color, width: number, branches: number, dur = 0.32): void {
-    const g = new THREE.Group();
-    const core = new THREE.MeshBasicMaterial({ color: C(3.6, 3.8, 4).lerp(color, 0.25), toneMapped: false, transparent: true });
-    const halo = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(0.5), toneMapped: false, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
-    const seg = (a: THREE.Vector3, b: THREE.Vector3, w: number): void => {
-      const len = a.distanceTo(b);
-      if (len < 1e-3) return;
-      for (const [m, k] of [[core, 1], [halo, 3.5]] as const) {
-        const o = new THREE.Mesh(UNIT, m);
-        o.position.copy(a).lerp(b, 0.5);
-        o.lookAt(b);
-        o.scale.set(w * k, w * k, len);
-        g.add(o);
-      }
-    };
-    const path = (a: THREE.Vector3, b: THREE.Vector3, n: number, jag: number, w: number): THREE.Vector3[] => {
-      const pts = [a.clone()];
-      for (let i = 1; i < n; i++) pts.push(a.clone().lerp(b, i / n).add(new THREE.Vector3(rand(-jag, jag), rand(-jag, jag) * 0.5, rand(-jag, jag))));
-      pts.push(b.clone());
-      for (let i = 0; i < pts.length - 1; i++) seg(pts[i], pts[i + 1], w);
-      return pts;
-    };
-    const len = from.distanceTo(to);
-    const pts = path(from, to, Math.max(3, Math.round(len * 1.2)), Math.min(0.9, len * 0.07), width);
-    for (let i = 0; i < branches; i++) {
-      const p = pts[1 + Math.floor(Math.random() * (pts.length - 2))];
-      path(p, p.clone().add(new THREE.Vector3(rand(-1.6, 1.6), rand(-1.8, -0.4), rand(-1.6, 1.6))), 3, 0.3, width * 0.55);
-    }
-    this.h.fx.custom(g, dur, (k) => {
-      g.visible = k > 0.5 || Math.random() > 0.25; // мерцание
-      core.opacity = 1 - k * k; halo.opacity = 0.5 * (1 - k);
-      g.children.forEach((o) => { o.scale.x *= 0.97; o.scale.y *= 0.97; });
-    }, () => { core.dispose(); halo.dispose(); });
+    this.h.fx.bolt(from, to, color, width, branches, dur);
   }
 
   private spark(a: ArtifactStats, dmg: number, at: THREE.Vector3, k: number): void {
@@ -520,20 +489,7 @@ export class Spells {
     fx.flash(mid, s.b.clone().multiplyScalar(0.5), Math.min(6, R * 1.5), 0.3);
     for (let i = 0; i < 5; i++) fx.flash(mid.clone().add(new THREE.Vector3(rand(-R, R) * 0.5, rand(0, R * 0.5), rand(-R, R) * 0.5)), (i % 2 ? s.a : s.b).clone().multiplyScalar(0.5), R * rand(0.5, 0.8), rand(0.3, 0.45));
     // огненные кубы разлетаются от центра, раздуваются и гаснут
-    const n = 10 + Math.round(k * 10);
-    for (let i = 0; i < n; i++) {
-      const m = new THREE.Mesh(UNIT, new THREE.MeshBasicMaterial({ color: (Math.random() < 0.5 ? s.a : s.b).clone().multiplyScalar(0.8), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-      const v = new THREE.Vector3(rand(-1, 1), rand(0.2, 1.1), rand(-1, 1)).normalize().multiplyScalar(R * rand(0.5, 1));
-      const spin = new THREE.Vector3(rand(-6, 6), rand(-6, 6), rand(-6, 6));
-      m.position.copy(mid);
-      fx.custom(m, rand(0.35, 0.6), (t) => {
-        const e = 1 - (1 - t) ** 3;
-        m.position.copy(mid).addScaledVector(v, e);
-        m.rotation.set(spin.x * t, spin.y * t, spin.z * t);
-        m.scale.setScalar((0.25 + R * 0.18) * (0.6 + t * 1.2) * (1 - t * 0.6));
-        (m.material as THREE.MeshBasicMaterial).opacity = 1 - t * t;
-      }, () => (m.material as THREE.Material).dispose());
-    }
+    fx.fireCubes(mid, R, 10 + Math.round(k * 10), [s.a.clone().multiplyScalar(0.8), s.b.clone().multiplyScalar(0.8)], 0.25 + R * 0.18);
     fx.burst(mid, [s.a, s.b, C(4, 3.6, 2.4)], 30 + Math.round(k * 30), { speed: R * 3, up: R * 1.6, size: 0.08, life: 0.7, glow: true, gravity: 5 });
     fx.shock(c, R * 1.1, s.a, 0.4, 0.25);
     fx.shock(c, R * 0.7, s.b, 0.3, 0.18);
@@ -665,7 +621,7 @@ export class Spells {
         beam.group.position.copy(hero.pos);
         beam.group.scale.set(1 - t * 0.6, Math.min(1, t * 8), 1 - t * 0.6);
         beam.mats.forEach((m) => { m.opacity = (1 - t) ** 1.5; });
-      }, () => { beam.group.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); }); beam.mats.forEach((m) => m.dispose()); });
+      }, () => beam.mats.forEach((m) => m.dispose()));
       fx.shock(c.clone().setY(c.y + 0.05), 3 + k * 1.5, s.a, 0.5, 0.15);
       fx.shock(c.clone().setY(c.y + 0.05), 2 + k, s.b, 0.4, 0.1);
       fx.flash(c.clone().setY(c.y + 1), s.a.clone().multiplyScalar(0.6), 2.4 + k, 0.35);

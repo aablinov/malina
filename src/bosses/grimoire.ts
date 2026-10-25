@@ -14,6 +14,28 @@ import { C, glowMat, RASP, UNIT } from './kit';
 const RISE = 1.6;
 const PAGES = 5;
 
+/** Переплёт общий для всех книг: материалы и обложки живут весь сеанс (прогреваются в src/fx-zoo.ts) */
+let book: { leather: THREE.MeshLambertMaterial; gold: THREE.MeshLambertMaterial; paper: THREE.MeshLambertMaterial; spine: THREE.MeshBasicMaterial } | null = null;
+export function bookMats(): NonNullable<typeof book> {
+  return book ??= {
+    leather: new THREE.MeshLambertMaterial({ color: '#5a1430' }),
+    gold: new THREE.MeshLambertMaterial({ color: '#e8b84a', emissive: '#6a4a10' }),
+    paper: new THREE.MeshLambertMaterial({ color: '#f4ead2', side: THREE.DoubleSide }),
+    spine: glowMat(RASP),
+  };
+}
+const covers = new Map<string, THREE.MeshBasicMaterial>();
+/** Обложка с иконкой заклинания: одна текстура на иконку */
+export function coverMat(icon: string): THREE.MeshBasicMaterial {
+  let m = covers.get(icon);
+  if (!m) {
+    const tex = new THREE.CanvasTexture(iconCanvas(icon));
+    tex.magFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
+    covers.set(icon, m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }));
+  }
+  return m;
+}
+
 export class Grimoire {
   readonly group = new THREE.Group();
   readonly pos: THREE.Vector3;
@@ -28,7 +50,6 @@ export class Grimoire {
   private readonly beam: ReturnType<typeof lightBeam>;
   private readonly floor: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly rays: THREE.Sprite;
-  private readonly mats: THREE.Material[] = [];
 
   constructor(private readonly scene: THREE.Scene, private readonly fx: FX, at: THREE.Vector3, readonly item: string, readonly power: number, private readonly quiet: () => boolean) {
     this.pos = at.clone();
@@ -36,14 +57,8 @@ export class Grimoire {
     const c = new THREE.Color(RARITY[def.rarity].color);
     this.group.position.copy(at);
     // переплёт: тёмно-малиновая кожа, золотые уголки, на обложке — иконка заклинания, корешок светится
-    const leather = new THREE.MeshLambertMaterial({ color: '#5a1430' });
-    const gold = new THREE.MeshLambertMaterial({ color: '#e8b84a', emissive: '#6a4a10' });
-    const paper = new THREE.MeshLambertMaterial({ color: '#f4ead2', side: THREE.DoubleSide });
-    const spine = glowMat(RASP);
-    const tex = new THREE.CanvasTexture(iconCanvas(def.icon));
-    tex.magFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
-    const cover = new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false });
-    this.mats.push(leather, gold, paper, spine, cover);
+    const { leather, gold, paper, spine } = bookMats();
+    const cover = coverMat(def.icon);
     const add = (m: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, parent: THREE.Object3D = this.book) => {
       const b = new THREE.Mesh(UNIT, m); b.scale.set(w, h, d); b.position.set(x, y, z); parent.add(b); return b;
     };
@@ -145,7 +160,6 @@ export class Grimoire {
 
   dispose(): void {
     this.scene.remove(this.group);
-    for (const m of this.mats) m.dispose();
     for (const m of this.beam.mats) m.dispose();
   }
 }

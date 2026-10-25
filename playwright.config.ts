@@ -8,8 +8,10 @@ export default defineConfig({
   reporter: 'list',
   use: {
     viewport: { width: 1280, height: 800 },
+    // PERF_GPU=1 — настоящий GPU в окне браузера (перф-тесты: время рендера имеет смысл только так)
+    headless: !process.env.PERF_GPU,
     launchOptions: {
-      args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+      args: process.env.PERF_GPU ? ['--use-angle=metal', '--ignore-gpu-blocklist'] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
       // свой Chromium, если не ставили браузеры Playwright: PW_CHROMIUM=/путь/к/chrome
       executablePath: process.env.PW_CHROMIUM || undefined,
     },

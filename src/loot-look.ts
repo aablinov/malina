@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { markShared } from './fx';
 
 /**
  * Общий вид сокровищ: мягкое свечение, лучи-звезда за трофеем и столб света. Текстуры рисуются кодом один раз.
@@ -75,6 +76,11 @@ export const additiveSprite = (map: THREE.Texture, color: THREE.Color, opacity =
   map, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
 });
 
+/** Общие единичные плоскости: центрированная и от низа вверх (размер — через scale) */
+let plane: THREE.PlaneGeometry | null = null, planeUp: THREE.PlaneGeometry | null = null;
+const PLANE = (): THREE.PlaneGeometry => plane ??= markShared(new THREE.PlaneGeometry(1, 1));
+const PLANE_UP = (): THREE.PlaneGeometry => planeUp ??= markShared(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0) as THREE.PlaneGeometry);
+
 /** Столб света из двух скрещённых плоскостей: широкий мягкий и узкий яркий */
 export function lightBeam(color: THREE.Color, height: number, width: number): { group: THREE.Group; mats: THREE.MeshBasicMaterial[] } {
   const group = new THREE.Group();
@@ -83,8 +89,8 @@ export function lightBeam(color: THREE.Color, height: number, width: number): { 
     const m = additive(beamTex(), color.clone().multiplyScalar(k));
     mats.push(m);
     for (const r of [0, Math.PI / 2]) {
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(w, height), m);
-      p.position.y = height / 2;
+      const p = new THREE.Mesh(PLANE_UP(), m);
+      p.scale.set(w, height, 1);
       p.rotation.y = r + Math.PI / 4;
       p.renderOrder = 3;
       group.add(p);
@@ -95,7 +101,8 @@ export function lightBeam(color: THREE.Color, height: number, width: number): { 
 
 /** Ореол на земле (плоский, смотрит вверх) */
 export function groundGlow(color: THREE.Color, size: number, opacity = 1): THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), additive(glowTex(), color, opacity));
+  const m = new THREE.Mesh(PLANE(), additive(glowTex(), color, opacity));
+  m.scale.setScalar(size);
   m.rotation.x = -Math.PI / 2;
   m.renderOrder = 2;
   return m;

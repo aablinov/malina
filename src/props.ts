@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { obstacle, type Obstacle } from './collision';
 import type { FX } from './fx';
+import { disposeOwned } from './fx';
 import type { Target } from './target';
 import type { Rand } from './textures';
 import { distToObstacle } from './nav';
@@ -569,6 +570,10 @@ export interface PropsLayout {
   terminals: [number, number, number][];
 }
 
+/** Фонтан малины: не больше кучек на полу и сколько вылетает за тик (волна ≈ 0,13 с на 60 кучек) */
+const MAX_FOUNTAIN = 60;
+const FOUNTAIN_PER_TICK = 8;
+
 const LOOT_TABLE: [LootKind, number][] = [['berry', 3], ['berry', 3], ['berry', 5], ['berry', 5], ['med', 25], ['med', 15]];
 
 export class Props {
@@ -586,7 +591,12 @@ export class Props {
   /** Серия малины: сколько подобрано подряд (звук всё выше) */
   private berryCombo = 0;
   private lastBerry = -10;
+  /** Последняя вспышка подбора малины: эффекты не чаще раза в 0,1 с, иначе десяток ягод за кадр ослепляет и грузит */
+  private lastBerryFx = -10;
   private clock = 0;
+  private frame = 0;
+  /** Фонтан малины: ягоды, ещё не вылетевшие — выпускаются волнами по FOUNTAIN_PER_TICK за тик */
+  private readonly fountainQueue: { at: THREE.Vector3; amount: number; i: number; n: number }[] = [];
 
   constructor(
     private readonly scene: THREE.Scene, private readonly fx: FX, private readonly rand: Rand,
@@ -606,9 +616,10 @@ export class Props {
     for (const c of this.crates) if (!c.broken) this.scene.remove(c.group);
     for (const s of this.supplies) this.scene.remove(s.group);
     for (const t of this.terminals) this.scene.remove(t.group);
-    for (const p of this.pickups) this.scene.remove(p.mesh);
+    for (const p of this.pickups) { this.scene.remove(p.mesh); disposeOwned(p.mesh); }
     this.pickups.length = 0;
     this.chestLoot.clear();
+    this.fountainQueue.length = 0;
     this.spawn();
   }
 
@@ -726,6 +737,14 @@ export class Props {
       }
       t.update(dt);
     }
+    // фонтан: очередная волна ягод
+    this.frame++;
+    for (let k = 0; k < FOUNTAIN_PER_TICK && this.fountainQueue.length; k++) {
+      const q = this.fountainQueue.shift()!;
+      const a = (q.i / q.n) * Math.PI * 2 * 3 + this.rand() * 0.6, sp = 1.5 + this.rand() * 4;
+      const vel = new THREE.Vector3(Math.cos(a) * sp, 5 + this.rand() * 5, Math.sin(a) * sp);
+      this.drop('berry', q.amount, q.at.clone().setY(1.2 + this.rand() * 0.6), vel, 0.7 + q.i * 0.01);
+    }
     // лут: летит, падает, крутится; подбирается проходя мимо, вблизи притягивается (малина — издалека)
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       const p = this.pickups[i];
@@ -740,8 +759,8 @@ export class Props {
         if (Math.abs(p.vel.y) > 1.5) { p.vel.y = -p.vel.y * 0.3; p.vel.x *= 0.5; p.vel.z *= 0.5; }
         else { p.vel.y = 0; const k = Math.exp(-6 * dt); p.vel.x *= k; p.vel.z *= k; }
       }
-      // низко над полом лут не лежит на сундуках и бочках — соскальзывает в сторону
-      if (p.pos.y < 1) for (const o of this.solids) {
+      // низко над полом лут не лежит на сундуках и бочках — соскальзывает в сторону (пока ещё движется)
+      if (p.pos.y < 1 && Math.abs(p.vel.x) + Math.abs(p.vel.z) > 0.05) for (const o of this.solids) {
         if (distToObstacle(p.pos.x, p.pos.z, o) > 0.2) continue;
         const dx = p.pos.x - o.x, dz = p.pos.z - o.z, l = Math.hypot(dx, dz) || 1;
         p.pos.x += (dx / l) * 4 * dt; p.pos.z += (dz / l) * 4 * dt;
@@ -749,7 +768,7 @@ export class Props {
       const grounded = p.pos.y <= 0.15 && p.vel.lengthSq() < 0.3;
       // в полёте — светящийся хвост, на земле — искры вокруг
       if (ud.glow) {
-        if (!grounded) this.fx.particle({ pos: p.pos.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.35, size: 0.07, color: ud.glow, gravity: 0 });
+        if (!grounded) { if ((this.frame + i) & 1) this.fx.particle({ pos: p.pos.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.35, size: 0.07, color: ud.glow, gravity: 0 }); }
         else if (this.rand() < dt * (ud.rarity !== undefined ? 10 + ud.rarity * 6 : 3)) {
           const a = this.rand() * Math.PI * 2, r = 0.2 + this.rand() * 0.3;
           this.fx.particle({ pos: p.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, this.rand() * 0.3, Math.sin(a) * r)), vel: new THREE.Vector3(0, 0.7 + this.rand() * 0.6, 0), life: 0.9, size: 0.05, color: this.rand() < 0.3 ? new THREE.Color(3, 3, 3) : ud.glow, gravity: -0.4, spin: 3 });
@@ -763,6 +782,7 @@ export class Props {
         p.pos.add(pull);
         if (d < 0.6) {
           this.scene.remove(p.mesh);
+          disposeOwned(p.mesh);
           this.pickups.splice(i, 1);
           this.hooks.give(p.kind, p.amount, p.pos, p.data);
           this.collect(p);
@@ -785,12 +805,12 @@ export class Props {
    * волнами по 0,05 с; подобрать — пройти рядом (малину тянет издалека)
    */
   fountain(at: THREE.Vector3, total: number, per = 5): void {
+    // не больше MAX_FOUNTAIN кучек: у сильного стража кучки крупнее, малины столько же
+    per = Math.max(per, Math.ceil(total / MAX_FOUNTAIN));
     const n = Math.max(1, Math.ceil(total / per));
     for (let i = 0; i < n; i++) {
       const amount = i === n - 1 ? total - per * (n - 1) : per;
-      const a = (i / n) * Math.PI * 2 * 3 + this.rand() * 0.6, sp = 1.5 + this.rand() * 4;
-      const vel = new THREE.Vector3(Math.cos(a) * sp, 5 + this.rand() * 5, Math.sin(a) * sp);
-      this.drop('berry', amount, at.clone().setY(1.2 + this.rand() * 0.6), vel, 0.7 + i * 0.01);
+      this.fountainQueue.push({ at: at.clone(), amount, i, n });
     }
     this.fx.flash(at.clone().setY(1.2), BERRY_GLOW, 3, 0.4);
     this.fx.burst(at.clone().setY(1.2), ['#ff4a7e', '#c8124a', '#ffd0e0'], 30, { speed: 5, up: 6, size: 0.1, life: 1, glow: true, gravity: 6 });
@@ -881,13 +901,17 @@ export class Props {
     if (p.kind === 'berry') {
       this.berryCombo = this.clock - this.lastBerry < 0.9 ? this.berryCombo + 1 : 0;
       this.lastBerry = this.clock;
-      fx.flash(at, BERRY_GLOW, 2.4, 0.25);
-      fx.shock(at.clone().setY(0.1), 1.3, BERRY_GLOW, 0.35, 0.3);
+      // вспышка, кольцо и звезда — не чаще раза в 0,1 с; брызги — у каждой ягоды
+      if (this.clock - this.lastBerryFx >= 0.1) {
+        this.lastBerryFx = this.clock;
+        fx.flash(at, BERRY_GLOW, 2.4, 0.25);
+        fx.shock(at.clone().setY(0.1), 1.3, BERRY_GLOW, 0.35, 0.3);
+        const st = new THREE.Sprite(additiveSprite(starTex(), new THREE.Color(3.4, 2, 2.6)));
+        st.position.copy(at).setY(at.y + 0.3);
+        fx.custom(st, 0.4, (k) => { st.scale.setScalar(Math.sin(k * Math.PI) * 1.4); st.material.rotation = k * 3; });
+      }
       fx.burst(at, [BERRY_GLOW, new THREE.Color(3.4, 2.4, 2.8), new THREE.Color(3.2, 1.2, 1.8)], 22, { speed: 2.8, up: 3.5, size: 0.08, life: 0.6, glow: true, gravity: 5 });
       fx.burst(at, ['#e8245a', '#ff4a7e', '#a80e3c'], 10, { speed: 2.2, up: 3, size: 0.09, life: 0.6, gravity: 10 });
-      const st = new THREE.Sprite(additiveSprite(starTex(), new THREE.Color(3.4, 2, 2.6)));
-      st.position.copy(at).setY(at.y + 0.3);
-      fx.custom(st, 0.4, (k) => { st.scale.setScalar(Math.sin(k * Math.PI) * 1.4); st.material.rotation = k * 3; });
       this.hooks.sound('berry', this.berryCombo);
     } else if (p.kind === 'item' && ud.glow) {
       const r = ud.rarity ?? 0;

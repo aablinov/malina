@@ -27,20 +27,25 @@ import { sunOffset, tintVec, type WorldSettings } from './world';
  * Спрайты (вспышки заклинаний и взрывов, лут на полу) и точки тоже прячем: в проходе нормалей они рисовались
  * непрозрачными квадратами, и AO давал вокруг них чёрные квадраты.
  */
+/** Качество AO: делитель разрешения буфера, сэмплов на пиксель, сэмплов шумоподавления (wiki/dev-performance.md) */
+export const AO_QUALITY = { div: 2, samples: 6, denoise: 8 };
+
 class SolidAOPass extends GTAOPass {
-  // в типах three метода нет, в самом GTAOPass он есть и вызывается перед проходом нормалей
+  // в типах three метода нет, в самом GTAOPass он есть и вызывается перед проходом нормалей. Свой обход вместо
+  // базового (он прятал только точки и линии): один проход по сцене за кадр вместо двух
   overrideVisibility(): void {
-    (GTAOPass.prototype as unknown as { overrideVisibility(this: GTAOPass): void }).overrideVisibility.call(this);
+    const cache = (this as unknown as { _visibilityCache: Map<THREE.Object3D, boolean> })._visibilityCache;
     this.scene.traverse((o) => {
+      cache.set(o, o.visible);
+      if ((o as THREE.Sprite).isSprite || (o as THREE.Points).isPoints || (o as THREE.Line).isLine) { o.visible = false; return; }
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
-      if ((o as THREE.Sprite).isSprite || (o as THREE.Points).isPoints) { o.visible = false; return; }
       if (!(o as THREE.Mesh).isMesh || !m || Array.isArray(m)) return;
       if (m.alphaTest > 0 || m.transparent || (m as THREE.MeshBasicMaterial).isMeshBasicMaterial) o.visible = false;
     });
   }
-  /** AO мягкий и так — считаем в половине разрешения буфера (в полном он один стоил ~15 мс на 2048 × 1536) */
+  /** AO мягкий и так — считаем в части разрешения буфера (в полном он один стоил ~15 мс на 2048 × 1536) */
   setSize(width: number, height: number): void {
-    super.setSize(Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(height / 2)));
+    super.setSize(Math.max(1, Math.round(width / AO_QUALITY.div)), Math.max(1, Math.round(height / AO_QUALITY.div)));
   }
 }
 
@@ -128,13 +133,16 @@ export class Lighting {
     this.sun.shadow.bias = -0.0005;
     this.sun.shadow.normalBias = 0.03;
     scene.add(this.hemi, this.ambient, this.sun, this.sun.target);
+    // карту теней рисуем один раз за кадр: иначе three перерисовывает её на каждый renderer.render, а GTAO
+    // делает второй проход по сцене за нормалями — тени стоили вдвое
+    renderer.shadowMap.autoUpdate = false;
 
     this.composer = new EffectComposer(renderer);
     this.composer.setPixelRatio(Math.min(renderer.getPixelRatio(), POST_MAX_DPR));
     this.composer.addPass(new RenderPass(scene, camera));
     this.ao = new SolidAOPass(scene, camera, 512, 512);
-    this.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.2, thickness: 1.2, scale: 1, samples: 10 });
-    this.ao.updatePdMaterial({ samples: 12 });
+    this.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.2, thickness: 1.2, scale: 1, samples: AO_QUALITY.samples });
+    this.ao.updatePdMaterial({ samples: AO_QUALITY.denoise });
     this.ao.blendIntensity = 0.85;
     this.composer.addPass(this.ao);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), DAY.bloom, 0.4, 0.85);
@@ -213,5 +221,15 @@ export class Lighting {
     this.fog.far = this.world ? this.world.fog.far * k : camDist * 4.2;
   }
 
-  render(): void { this.composer.render(); }
+  /** Кадр через композер (AO, bloom, цветокоррекция); тени обновляются один раз, перед первым проходом */
+  render(): void {
+    this.renderer.shadowMap.needsUpdate = true;
+    this.composer.render();
+  }
+
+  /** Кадр без постобработки (B в плейграунде, прочие вьюпорты редактора) — тени тоже обновляются */
+  renderPlain(camera: THREE.Camera): void {
+    this.renderer.shadowMap.needsUpdate = true;
+    this.renderer.render(this.scene, camera);
+  }
 }
