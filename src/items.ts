@@ -144,6 +144,14 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'dagger', slot: 'melee', weapon: 'dagger', title: 'Кинжал тени', rarity: 'rare', icon: 'dagger', description: 'Быстрый, как мысль, и тихий, как тень.', traits: ['Быстрые удары', 'Частые криты'] },
   { id: 'hammer', slot: 'melee', weapon: 'hammer', title: 'Великий молот', rarity: 'rare', icon: 'hammer', description: 'Каждый удар отзывается гулом в камне.', traits: ['Огромная ударная волна'] },
   { id: 'scythe', slot: 'melee', weapon: 'scythe', title: 'Коса жнеца', rarity: 'unique', icon: 'scythe', description: 'Говорят, коса сама выбирает, кого жать.', traits: ['Очень широкие взмахи', 'Круговой вихрь'] },
+  { id: 'katana', slot: 'melee', weapon: 'katana', title: 'Катана', rarity: 'rare', icon: 'katana', description: 'Тонкий изогнутый клинок: режет раньше, чем враг поймёт, что бой начался.', traits: ['Быстрые длинные разрезы', 'Частые криты'] },
+  { id: 'nagakiba', slot: 'melee', weapon: 'nagakiba', title: 'Нагакиба', rarity: 'unique', icon: 'nagakiba', description: 'Катана длиной с шест для сушки белья. Носить неудобно, зато враги кончаются ещё на подходе.', traits: ['Дальность больше копья', 'Двуручная'] },
+  { id: 'dragonslayer', slot: 'melee', weapon: 'dragonslayer', title: 'Убийца драконов', rarity: 'unique', icon: 'dragonslayer', description: 'Слишком большой, слишком толстый, слишком тяжёлый и слишком грубый. Настоящая груда железа.', traits: ['Самый сильный удар', 'Очень медленный'] },
+  { id: 'pontiff', slot: 'melee', weapon: 'pontiff', title: 'Клинки понтифика', rarity: 'unique', icon: 'pontiff', description: 'Пламя в правой руке, звёздный свет в левой. Понтифик Маливин не любил ждать.', traits: ['Парное оружие', 'Огонь и свет по очереди'] },
+  { id: 'staff', slot: 'melee', weapon: 'staff', title: 'Посох звездочёта', rarity: 'rare', icon: 'staff', description: 'Кристалл на навершии помнит каждую звезду, на которую смотрел хозяин.', traits: ['Дальние удары', 'Большая волна'] },
+  { id: 'halberd', slot: 'melee', weapon: 'halberd', title: 'Алебарда стражи', rarity: 'rare', icon: 'halberd', description: 'Стража Малины держит ворота именно такими.', traits: ['Длинное древко', 'Широкая дуга'] },
+  { id: 'rapier', slot: 'melee', weapon: 'rapier', title: 'Рапира дуэлянта', rarity: 'common', icon: 'rapier', description: 'Укол, ещё укол — и вежливый поклон.', traits: ['Молниеносные уколы', 'Частые криты'] },
+  { id: 'knuckles', slot: 'melee', weapon: 'knuckles', title: 'Кастеты кузнеца', rarity: 'common', icon: 'knuckles', description: 'Кузнец ковал их для себя — на случай, если молот далеко.', traits: ['Парное оружие', 'Самые быстрые удары'] },
   // дальний бой
   { id: 'bow', slot: 'ranged', title: 'Лук', rarity: 'common', icon: 'bow', description: 'Простой лук из гибкого тиса.', ranged: { dmg: 8, cd: 0.55, speed: 26, range: 20, knock: 0.3, look: { kind: 'bow', wood: '#8a5a32', string: '#e8e2d0' } } },
   { id: 'longbow', slot: 'ranged', title: 'Длинный лук', rarity: 'rare', icon: 'longbow', description: 'Стрелы летят дальше и бьют сильнее, но тетиву тянуть дольше.', ranged: { dmg: 14, cd: 0.85, speed: 34, range: 28, knock: 0.5, look: { kind: 'bow', wood: '#4f7a3a', string: '#e8e2d0', size: 1.25 } } },
@@ -346,15 +354,12 @@ export function spentPoints(it: Item): number {
   return n;
 }
 
-/** Цены торговцев (src/hud/shop.ts): случайный предмет, перековка, конкретный товар */
+/** Цены лавок (src/hud/shop.ts): перековка, стрелы, обычное заклинание; остальное — по характеристикам (src/prices.ts) */
 export const PRICE = {
-  gear: (power: number): number => 40 + power * 12,
-  artifact: (power: number): number => 55 + power * 14,
   arrows: 20,
   reforge: (power: number): number => 30 + power * 15,
   /** Обычное заклинание у торговца */
   spell: (power: number): number => 110 + power * 12,
-  offer: (it: { def: string; power: number }): number => Math.round((50 + it.power * 15) * ({ common: 1, rare: 1.6, unique: 3 } as const)[itemDef(it.def).rarity]),
 };
 
 /** Малина за разбор */
@@ -420,14 +425,15 @@ export class Profile {
     const have = new Set(this.data.items.map((i) => i.def));
     const add = STARTER_SPELLS.filter((d) => !have.has(d));
     // пока боссов нет — ауры и заклинания с боссов кладём в инвентарь, чтобы их можно было примерить
-    const extra = [...AURAS, ...BOSS_SPELL_IDS()].filter((d) => !have.has(d));
+    // плейграунд: всё оружие ближнего боя — в инвентаре, новое оружие тоже доходит до старых сохранений
+    const extra = [...AURAS, ...BOSS_SPELL_IDS(), ...ITEMS.filter((d) => d.slot === 'melee').map((d) => d.id)].filter((d) => !have.has(d));
     if (!add.length && !extra.length) return;
     for (const d of add) {
       const it = this.add(d, 1);
       const free = this.data.equip.artifacts.indexOf(null);
       if (free >= 0) this.data.equip.artifacts[free] = it.uid;
     }
-    for (const d of extra) this.add(d, 1);
+    for (const d of extra) this.add(d, itemDef(d).rarity === 'unique' ? 3 : itemDef(d).rarity === 'rare' ? 2 : 1);
     if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* закрытое хранилище */ }
   }
 
@@ -440,6 +446,7 @@ export class Profile {
       ['icerain', 1], ['firework', 1], ['totem', 1], ['pact', 1], ['bastion', 1], ['rage', 1], ['clarity', 1], ['thorns', 1],
       ...BOSS_SPELL_IDS().map((id): [string, number] => [id, 1]),
       ['claymore', 3], ['axe', 2], ['dagger', 2], ['hammer', 3], ['scythe', 4], ['mace', 1], ['spear', 2],
+      ['katana', 3], ['nagakiba', 4], ['dragonslayer', 4], ['pontiff', 4], ['staff', 3], ['halberd', 3], ['rapier', 2], ['knuckles', 2],
       ['crossbow', 2], ['longbow', 3], ['twinbow', 4],
       ['soulrobe', 2], ['wolf', 2], ['mercenary', 1], ['scale', 3], ['champion', 4],
       ['boots', 2], ['horn', 2], ['lightning', 3], ['harvester', 3],

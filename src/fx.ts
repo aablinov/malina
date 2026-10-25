@@ -139,7 +139,7 @@ class Pool {
 }
 
 const additive = (color: THREE.Color, opacity = 1, map?: THREE.Texture) => new THREE.MeshBasicMaterial({
-  color, map, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+  color, ...(map ? { map } : {}), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
 });
 
 /** Общие ресурсы: их не трогает дефолтный dispose в FX.custom (wiki/dev-performance.md) */
@@ -361,12 +361,12 @@ export class FX {
     this.add(s.obj, dur, tick, () => { if (s.gen === gen) pool.release(s); });
   }
 
-  /** Плоская светящаяся дуга удара */
-  arc(pos: THREE.Vector3, angle: number, color: THREE.Color, radius = 2.4, spread = 1.15, y = 0.75): void {
+  /** Плоская светящаяся дуга удара; inner — доля внутреннего радиуса (0,38 — веер, 0,75 — тонкий серп) */
+  arc(pos: THREE.Vector3, angle: number, color: THREE.Color, radius = 2.4, spread = 1.15, y = 0.75, inner = 0.38): void {
     const s = this.planes.acquire();
     if (!s) return;
     const { mat, obj: m } = s;
-    m.geometry = ringGeo(0.38, 32, -spread, spread * 2);
+    m.geometry = ringGeo(inner, 32, -spread, spread * 2);
     mat.color.copy(color); mat.opacity = 0.85;
     m.rotation.set(-Math.PI / 2, 0, angle - Math.PI / 2);
     m.position.copy(pos); m.position.y = y;

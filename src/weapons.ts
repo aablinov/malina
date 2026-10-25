@@ -9,10 +9,11 @@ import { SWORD, type SwingTuning } from './tuning';
  * Правки из редактора хранятся в localStorage поверх стандартных (по id).
  */
 
-export type WeaponCategory = 'меч' | 'топор' | 'булава' | 'кинжал' | 'копьё' | 'молот' | 'посох' | 'коса';
+export type WeaponCategory = 'меч' | 'топор' | 'булава' | 'кинжал' | 'копьё' | 'молот' | 'посох' | 'коса'
+  | 'катана' | 'великий меч' | 'парные клинки' | 'алебарда' | 'рапира' | 'кастеты';
 export type WeaponRarity = 'обычное' | 'редкое' | 'уникальное';
 
-export const CATEGORIES: readonly WeaponCategory[] = ['меч', 'топор', 'булава', 'кинжал', 'копьё', 'молот', 'посох', 'коса'];
+export const CATEGORIES: readonly WeaponCategory[] = ['меч', 'топор', 'булава', 'кинжал', 'копьё', 'молот', 'посох', 'коса', 'катана', 'великий меч', 'парные клинки', 'алебарда', 'рапира', 'кастеты'];
 export const RARITIES: readonly WeaponRarity[] = ['обычное', 'редкое', 'уникальное'];
 /** Цвет редкости, как в Minecraft Dungeons */
 export const RARITY_COLOR: Record<WeaponRarity, string> = { 'обычное': '#c9cbd0', 'редкое': '#45d39a', 'уникальное': '#f5a524' };
@@ -64,6 +65,11 @@ export interface WeaponDef {
   /** След клинка: от base до tip по Z кисти; без них — 0,22 и дальний край модели */
   bladeBase?: number;
   bladeTip?: number;
+  /** Второе оружие в левой руке (парные клинки, кастеты): та же система кисти, свой след */
+  offhand?: WeaponPart[];
+  /** Свой цвет следа без закалки (пламя, звёздный свет); у второго оружия — offTrail */
+  trail?: string;
+  offTrail?: string;
   stats: WeaponStats;
 }
 
@@ -234,6 +240,181 @@ export const DEFAULT_WEAPONS: readonly WeaponDef[] = [
       critChance: 0.12, critMult: 1.8, speed: 1, weight: 3.2,
     },
   },
+  // ---------- вторая партия (wiki/design-weapon-arts.md, раздел 1) ----------
+  {
+    id: 'katana', title: 'Катана', category: 'катана', rarity: 'редкое',
+    description: 'Изогнутый клинок: быстрые длинные разрезы и выпад добивающего. Спец-удар — иайдо.',
+    bladeBase: 0.3, bladeTip: 1.28,
+    model: [
+      part('Рукоять', 0.06, 0.07, 0.3, 0, 0, 0.02, '#2a2230'),
+      part('Оплётка', 0.065, 0.075, 0.04, 0, 0, -0.06, '#c03a4a', { flat: true }),
+      part('Оплётка 2', 0.065, 0.075, 0.04, 0, 0, 0.06, '#c03a4a', { flat: true }),
+      part('Кашира', 0.07, 0.08, 0.04, 0, 0, -0.14, '#f2c040', GOLD),
+      part('Цуба', 0.16, 0.16, 0.03, 0, 0, 0.19, '#2b2b33', { emissive: '#f2a020', ei: 0.1, flat: true }),
+      part('Хабаки', 0.05, 0.1, 0.05, 0, 0, 0.23, '#f2c040', GOLD),
+      part('Клинок 1', 0.035, 0.09, 0.26, 0, 0, 0.38, '#e6edf5', { emissive: '#bfe2ff', ei: 0.15 }),
+      part('Клинок 2', 0.035, 0.085, 0.26, 0, 0.015, 0.63, '#e6edf5', { emissive: '#bfe2ff', ei: 0.15 }),
+      part('Клинок 3', 0.035, 0.08, 0.26, 0, 0.035, 0.88, '#e6edf5', { emissive: '#bfe2ff', ei: 0.15 }),
+      part('Клинок 4', 0.035, 0.07, 0.22, 0, 0.06, 1.11, '#e6edf5', { emissive: '#bfe2ff', ei: 0.15 }),
+      part('Хамон', 0.02, 0.03, 0.92, 0, -0.04, 0.72, '#cfeaff', { glow: 2.2 }),
+      part('Кончик', 0.03, 0.05, 0.08, 0, 0.075, 1.25, '#e6edf5', { emissive: '#bfe2ff', ei: 0.15 }),
+    ],
+    stats: {
+      comboWindow: 0.32, chainFrom: 0.58, finisherCd: 0.18, hitStop: 0.045, shockR: 2,
+      swings: [sw(11, 0.3, 0.2, 0.3, 2.3, 150, 0.45, 0.5), sw(11, 0.3, 0.18, 0.3, 2.3, 150, 0.45, 0.5), sw(26, 0.5, 0.32, 0.18, 2.6, 80, 0.9, 1.2)],
+      critChance: 0.15, critMult: 1.8, speed: 1, weight: 1.6,
+    },
+  },
+  {
+    id: 'nagakiba', title: 'Нагакиба', category: 'катана', rarity: 'уникальное',
+    description: 'Катана длиной с шест для сушки белья: двуручная, достаёт дальше копья и режет широкой дугой.',
+    bladeBase: 0.5, bladeTip: 2.28,
+    model: [
+      part('Рукоять', 0.065, 0.075, 0.46, 0, 0, 0.05, '#1e1a26'),
+      part('Оплётка', 0.07, 0.08, 0.05, 0, 0, -0.08, '#3a5ab8', { flat: true }),
+      part('Оплётка 2', 0.07, 0.08, 0.05, 0, 0, 0.1, '#3a5ab8', { flat: true }),
+      part('Кашира', 0.075, 0.085, 0.05, 0, 0, -0.2, '#c9d2dc'),
+      part('Цуба', 0.2, 0.2, 0.035, 0, 0, 0.3, '#2b2b33', { emissive: '#7ad8ff', ei: 0.15, flat: true }),
+      part('Хабаки', 0.055, 0.11, 0.06, 0, 0, 0.35, '#c9d2dc'),
+      part('Клинок 1', 0.035, 0.09, 0.46, 0, 0, 0.6, '#e6edf5', { emissive: '#a8d8ff', ei: 0.15 }),
+      part('Клинок 2', 0.035, 0.085, 0.46, 0, 0.02, 1.05, '#e6edf5', { emissive: '#a8d8ff', ei: 0.15 }),
+      part('Клинок 3', 0.035, 0.08, 0.46, 0, 0.05, 1.5, '#e6edf5', { emissive: '#a8d8ff', ei: 0.15 }),
+      part('Клинок 4', 0.035, 0.07, 0.4, 0, 0.09, 1.93, '#e6edf5', { emissive: '#a8d8ff', ei: 0.15 }),
+      part('Хамон', 0.02, 0.03, 1.72, 0, -0.035, 1.25, '#bfe2ff', { glow: 2.3 }),
+      part('Кончик', 0.03, 0.05, 0.1, 0, 0.12, 2.18, '#e6edf5', { emissive: '#a8d8ff', ei: 0.15 }),
+    ],
+    stats: {
+      comboWindow: 0.38, chainFrom: 0.64, finisherCd: 0.28, hitStop: 0.06, shockR: 2.6,
+      swings: [sw(15, 0.48, 0.24, 0.26, 3.3, 140, 0.4, 0.7), sw(15, 0.48, 0.22, 0.26, 3.3, 140, 0.4, 0.7), sw(34, 0.7, 0.36, 0.18, 3.6, 70, 0.9, 1.4)],
+      critChance: 0.15, critMult: 1.8, speed: 1, weight: 4,
+    },
+  },
+  {
+    id: 'dragonslayer', title: 'Убийца драконов', category: 'великий меч', rarity: 'уникальное',
+    description: 'Слишком большой, чтобы зваться мечом: кусок железа в рост героя. Медленный, но сносит всё перед собой.',
+    bladeBase: 0.4, bladeTip: 2.05, trail: '#e8705a',
+    model: [
+      part('Рукоять', 0.08, 0.08, 0.44, 0, 0, 0.02, '#3a2a1e'),
+      part('Обмотка', 0.09, 0.09, 0.08, 0, 0, -0.1, '#5a4030'),
+      part('Навершие', 0.12, 0.12, 0.08, 0, 0, -0.22, '#4a4e56'),
+      part('Гарда', 0.16, 0.42, 0.1, 0, 0, 0.26, '#4a4e56'),
+      part('Клинок', 0.11, 0.36, 1.72, 0, 0, 1.17, '#6e737c', { emissive: '#3a1a10', ei: 0.15 }),
+      part('Дол', 0.115, 0.06, 1.5, 0, 0.04, 1.12, '#4a4e56'),
+      part('Зарубки', 0.116, 0.05, 0.2, 0, -0.16, 0.9, '#3a3e46'),
+      part('Кромка', 0.03, 0.04, 1.6, 0, -0.19, 1.15, '#c9a090', { glow: 1.4 }),
+      part('Кромка 2', 0.03, 0.04, 1.6, 0, 0.19, 1.15, '#c9a090', { glow: 1.4 }),
+      part('Торец', 0.11, 0.36, 0.06, 0, 0, 2.06, '#5d626c'),
+    ],
+    stats: {
+      comboWindow: 0.48, chainFrom: 0.72, finisherCd: 0.5, hitStop: 0.1, shockR: 3.6,
+      swings: [sw(26, 0.85, 0.4, 0.22, 3, 200, 0.35, 2.2), sw(28, 0.85, 0.38, 0.22, 3, 200, 0.35, 2.2), sw(60, 1.2, 0.48, 0.16, 3.2, 120, 0.6, 3.4)],
+      critChance: 0.08, critMult: 2, speed: 1, weight: 14,
+    },
+  },
+  {
+    id: 'pontiff', title: 'Клинки понтифика', category: 'парные клинки', rarity: 'уникальное',
+    description: 'Два меча Понтифика Маливина: в правой — пламя, в левой — холодный звёздный свет. Шквал быстрых ударов обеими руками.',
+    bladeBase: 0.2, bladeTip: 1.15, trail: '#ff6a1a', offTrail: '#8a6aff',
+    model: [
+      part('Рукоять', 0.06, 0.06, 0.22, 0, 0, 0.02, '#2a1a14'),
+      part('Навершие', 0.08, 0.08, 0.08, 0, 0, -0.13, '#f2c040', GOLD),
+      part('Гарда', 0.3, 0.07, 0.07, 0, 0, 0.16, '#8a2a1a', { emissive: '#ff5a1a', ei: 0.4, flat: true }),
+      part('Клинок', 0.05, 0.12, 0.9, 0, 0, 0.65, '#ffd2a0', { emissive: '#ff7a2a', ei: 0.6 }),
+      part('Пламя', 0.025, 0.14, 0.86, 0, 0, 0.64, '#ff6a1a', { glow: 3 }),
+      part('Кончик', 0.04, 0.07, 0.07, 0, 0, 1.13, '#ffb060', { glow: 2.6 }),
+    ],
+    offhand: [
+      part('Рукоять', 0.06, 0.06, 0.22, 0, 0, 0.02, '#1a1a2a'),
+      part('Навершие', 0.08, 0.08, 0.08, 0, 0, -0.13, '#c9d2dc'),
+      part('Гарда', 0.3, 0.07, 0.07, 0, 0, 0.16, '#3a2a8a', { emissive: '#8a5cff', ei: 0.4, flat: true }),
+      part('Клинок', 0.05, 0.12, 0.9, 0, 0, 0.65, '#d8d0ff', { emissive: '#8a6aff', ei: 0.6 }),
+      part('Свет', 0.025, 0.14, 0.86, 0, 0, 0.64, '#8a6aff', { glow: 3 }),
+      part('Кончик', 0.04, 0.07, 0.07, 0, 0, 1.13, '#b8a8ff', { glow: 2.6 }),
+    ],
+    stats: {
+      comboWindow: 0.32, chainFrom: 0.56, finisherCd: 0.18, hitStop: 0.04, shockR: 2.2,
+      swings: [sw(9, 0.28, 0.18, 0.32, 2.0, 170, 0.35, 0.4), sw(9, 0.28, 0.16, 0.32, 2.0, 170, 0.35, 0.4), sw(22, 0.5, 0.3, 0.2, 2.3, 140, 0.6, 1.2)],
+      critChance: 0.12, critMult: 1.6, speed: 1, weight: 3,
+    },
+  },
+  {
+    id: 'staff', title: 'Посох звездочёта', category: 'посох', rarity: 'редкое',
+    description: 'Длинный посох с кристаллом: бьёт издалека, добивающий выпускает волну света. Спец-удар — звёздная волна.',
+    bladeBase: 1.1, bladeTip: 1.5,
+    model: [
+      part('Древко', 0.06, 0.06, 1.6, 0, 0, 0.4, '#7a5230'),
+      part('Обмотка', 0.07, 0.07, 0.14, 0, 0, 0, '#3a5ab8'),
+      part('Подток', 0.08, 0.08, 0.06, 0, 0, -0.42, '#f2c040', GOLD),
+      part('Оправа', 0.14, 0.14, 0.06, 0, 0, 1.2, '#f2c040', GOLD),
+      part('Лапка ←', 0.03, 0.03, 0.22, 0.08, 0, 1.33, '#f2c040', GOLD),
+      part('Лапка →', 0.03, 0.03, 0.22, -0.08, 0, 1.33, '#f2c040', GOLD),
+      part('Кристалл', 0.12, 0.12, 0.24, 0, 0, 1.36, '#7ad8ff', { glow: 3 }),
+      part('Звезда', 0.05, 0.05, 0.05, 0, 0, 1.52, '#fff2a0', { glow: 3.4 }),
+    ],
+    stats: {
+      comboWindow: 0.38, chainFrom: 0.62, finisherCd: 0.25, hitStop: 0.05, shockR: 3,
+      swings: [sw(10, 0.4, 0.24, 0.3, 2.6, 160, 0.3, 0.8), sw(10, 0.4, 0.22, 0.3, 2.6, 160, 0.3, 0.8), sw(24, 0.6, 0.36, 0.2, 2.8, 100, 0.5, 1.6)],
+      critChance: 0.08, critMult: 1.6, speed: 1, weight: 2.2,
+    },
+  },
+  {
+    id: 'halberd', title: 'Алебарда стражи', category: 'алебарда', rarity: 'редкое',
+    description: 'Топор на длинном древке с пикой: рубит издалека широкой дугой. Спец-удар — мельница с шагом вперёд.',
+    bladeBase: 1.45, bladeTip: 2.0,
+    model: [
+      part('Древко', 0.065, 0.065, 2, 0, 0, 0.6, '#6e4a2a'),
+      part('Обмотка', 0.075, 0.075, 0.16, 0, 0, 0, '#3a2414'),
+      part('Подток', 0.08, 0.08, 0.08, 0, 0, -0.42, '#8a8f99'),
+      part('Втулка', 0.1, 0.1, 0.14, 0, 0, 1.55, '#f2c040', GOLD),
+      part('Лезвие', 0.05, 0.36, 0.38, 0, -0.22, 1.72, '#c9d2dc', { emissive: '#9ac8ff', ei: 0.1 }),
+      part('Кромка', 0.02, 0.06, 0.4, 0, -0.42, 1.72, '#bfe2ff', { glow: 2.2 }),
+      part('Клюв', 0.05, 0.16, 0.1, 0, 0.15, 1.72, '#8e97a3'),
+      part('Пика', 0.05, 0.08, 0.36, 0, 0, 2.02, '#dfe8f2', { emissive: '#7ad8ff', ei: 0.15 }),
+    ],
+    stats: {
+      comboWindow: 0.4, chainFrom: 0.66, finisherCd: 0.3, hitStop: 0.07, shockR: 2.6,
+      swings: [sw(14, 0.5, 0.26, 0.28, 3.1, 120, 0.4, 1.1), sw(14, 0.5, 0.24, 0.28, 3.1, 120, 0.4, 1.1), sw(32, 0.72, 0.38, 0.2, 3.3, 90, 0.7, 2.0)],
+      critChance: 0.08, critMult: 1.6, speed: 1, weight: 5,
+    },
+  },
+  {
+    id: 'rapier', title: 'Рапира дуэлянта', category: 'рапира', rarity: 'обычное',
+    description: 'Тонкий длинный клинок: молниеносные уколы в узкий конус и частые криты. Спец-удар — шквал уколов.',
+    bladeBase: 0.24, bladeTip: 1.26,
+    model: [
+      part('Рукоять', 0.05, 0.05, 0.2, 0, 0, 0, '#3a2a40'),
+      part('Навершие', 0.07, 0.07, 0.07, 0, 0, -0.12, '#f2c040', GOLD),
+      part('Чашка', 0.18, 0.18, 0.05, 0, 0, 0.13, '#f2c040', GOLD),
+      part('Дужка', 0.03, 0.03, 0.16, 0, -0.1, 0.06, '#f2c040', GOLD),
+      part('Клинок', 0.025, 0.04, 1.06, 0, 0, 0.7, '#e6edf5', { emissive: '#bfe2ff', ei: 0.2 }),
+      part('Лезвие', 0.012, 0.045, 0.98, 0, 0, 0.7, '#cfeaff', { glow: 2.2 }),
+    ],
+    stats: {
+      comboWindow: 0.3, chainFrom: 0.55, finisherCd: 0.15, hitStop: 0.035, shockR: 1.6,
+      swings: [sw(8, 0.26, 0.2, 0.3, 2.6, 40, 0.5, 0.3), sw(8, 0.26, 0.18, 0.3, 2.6, 40, 0.5, 0.3), sw(20, 0.42, 0.3, 0.2, 2.9, 30, 1.0, 0.8)],
+      critChance: 0.25, critMult: 2, speed: 1, weight: 1,
+    },
+  },
+  {
+    id: 'knuckles', title: 'Кастеты кузнеца', category: 'кастеты', rarity: 'обычное',
+    description: 'По кастету на каждую руку: очень быстрые удары вплотную, добивающий — апперкот с волной.',
+    bladeBase: 0.02, bladeTip: 0.2, trail: '#ffb347', offTrail: '#ffb347',
+    model: [
+      part('Обхват', 0.24, 0.16, 0.16, 0, 0, 0.06, '#8a8f99'),
+      part('Костяшки', 0.26, 0.08, 0.08, 0, 0, 0.17, '#c9d2dc', { emissive: '#ffb347', ei: 0.3 }),
+      part('Руна', 0.06, 0.04, 0.03, 0, 0, 0.22, '#ffb347', { glow: 2.6 }),
+    ],
+    offhand: [
+      part('Обхват', 0.24, 0.16, 0.16, 0, 0, 0.06, '#8a8f99'),
+      part('Костяшки', 0.26, 0.08, 0.08, 0, 0, 0.17, '#c9d2dc', { emissive: '#ffb347', ei: 0.3 }),
+      part('Руна', 0.06, 0.04, 0.03, 0, 0, 0.22, '#ffb347', { glow: 2.6 }),
+    ],
+    stats: {
+      comboWindow: 0.3, chainFrom: 0.52, finisherCd: 0.15, hitStop: 0.04, shockR: 2,
+      swings: [sw(7, 0.22, 0.2, 0.3, 1.5, 110, 0.35, 0.6), sw(7, 0.22, 0.18, 0.3, 1.5, 110, 0.35, 0.6), sw(18, 0.42, 0.3, 0.2, 1.7, 90, 0.6, 1.8)],
+      critChance: 0.1, critMult: 1.6, speed: 1, weight: 1.2,
+    },
+  },
 ];
 
 // ---------- хранение ----------
@@ -386,11 +567,11 @@ function materialOf(p: WeaponPart): THREE.Material {
   return new THREE.MeshLambertMaterial(o);
 }
 
-/** Модель из коробок в системе кисти: рукоять в 0, клинок вдоль +Z */
-export function buildWeaponModel(def: WeaponDef): THREE.Group {
+/** Модель из коробок в системе кисти: рукоять в 0, клинок вдоль +Z; offhand — второе оружие (левая рука) */
+export function buildWeaponModel(def: WeaponDef, offhand = false): THREE.Group {
   const g = new THREE.Group();
   g.name = def.id;
-  for (const p of def.model) {
+  for (const p of (offhand ? def.offhand : def.model) ?? []) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(p.w, p.h, p.d), materialOf(p));
     m.position.set(p.x, p.y, p.z);
     m.castShadow = true;
@@ -398,7 +579,7 @@ export function buildWeaponModel(def: WeaponDef): THREE.Group {
     m.name = p.name ?? '';
     g.add(m);
   }
-  const b = bladeOf(def);
+  const b = offhand ? { base: def.bladeBase ?? 0.22, tip: (def.offhand ?? []).reduce((m, p) => Math.max(m, p.z + p.d / 2), 0.2) - 0.04 } : bladeOf(def);
   g.userData.bladeBase = b.base;
   g.userData.bladeTip = b.tip;
   return g;

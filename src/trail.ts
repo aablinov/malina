@@ -3,7 +3,8 @@ import * as THREE from 'three';
 /**
  * Светящийся след клинка (light trail): лента между основанием и кончиком клинка за последние доли секунды.
  * Точки берутся раз в кадр и сглаживаются сплайном Катмулла — Рома, поэтому быстрый взмах даёт ровную дугу.
- * Цвет HDR (> 1) — ленту подхватывает bloom. Яркость падает с возрастом точки и к основанию клинка.
+ * Цвет HDR (> 1) — ленту подхватывает bloom. Яркость падает с возрастом точки и к основанию клинка; свежий край —
+ * color, хвост перетекает в color2 (две закалки — два цвета), у самого кончика — белое ядро (core).
  */
 
 const MAX = 96;
@@ -27,6 +28,10 @@ export class SwordTrail {
   /** Сколько живёт точка следа, с */
   life = 0.16;
   readonly color = new THREE.Color(2.2, 2.6, 3.2);
+  /** Цвет хвоста следа: к нему перетекает color с возрастом точки */
+  readonly color2 = new THREE.Color(2.2, 2.6, 3.2);
+  /** Белое ядро у кончика: 0 — нет, 1 — свежий край почти белый */
+  core = 0.35;
   /** Ширина следа: доля клинка от кончика (1 — весь клинок) */
   width = 0.85;
   private readonly samples: Sample[] = [];
@@ -76,11 +81,15 @@ export class SwordTrail {
     this.mesh.visible = true;
     let v = 0;
     const put = (base: THREE.Vector3, tip: THREE.Vector3, t: number): void => {
-      const fade = Math.max(0, 1 - (now - t) / this.life);
+      const age = Math.min(1, (now - t) / this.life), fade = 1 - age;
       const k = fade * fade;
+      const a = this.color, b = this.color2, w = Math.min(1, age * 1.6);
+      // свежий край раскалён добела, к хвосту — второй цвет
+      const hot = this.core * fade * fade * fade * 2.4;
+      const r = (a.r + (b.r - a.r) * w) * k + hot, g = (a.g + (b.g - a.g) * w) * k + hot, bl = (a.b + (b.b - a.b) * w) * k + hot;
       this.pos.set([base.x, base.y, base.z, tip.x, tip.y, tip.z], v * 6);
       // к основанию след гаснет, у кончика самый яркий
-      this.col.set([this.color.r * k * 0.08, this.color.g * k * 0.08, this.color.b * k * 0.08, this.color.r * k, this.color.g * k, this.color.b * k], v * 6);
+      this.col.set([r * 0.08, g * 0.08, bl * 0.08, r, g, bl], v * 6);
       v++;
     };
     for (let i = 0; i < S.length - 1; i++) {
