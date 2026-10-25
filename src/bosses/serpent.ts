@@ -104,7 +104,8 @@ export class CrimsonSerpent extends MiniBoss {
   override readonly topY = 3.2;
   readonly drop = 'flameserpent';
   override readonly tier = 'boss' as const;
-  override readonly aura = 'pact';
+  /** Ауры на выбор после победы, шанс % — огонь: жжение или кровь */
+  override readonly auras = [['inferno', 50], ['pact', 50]] as const;
   private readonly head = new THREE.Group();
   private readonly jaw = new THREE.Group();
   private readonly heart = new THREE.Group();

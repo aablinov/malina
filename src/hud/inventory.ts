@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { isOffense, OFF } from '../aura-offense';
+import { auraLines } from '../aura-offense';
 import { iconImg, iconURL } from '../icons';
 import {
   armorHealth, enchantDef, itemDef, PERK_TEXT, powerMult, RARITY, salvageValue, SLOT_TITLE, spentPoints, xpToNext,
@@ -369,27 +369,7 @@ export class Inventory {
       line('heart', `+${armorHealth(it)} к здоровью`);
       for (const pk of d.armor.perks) line('e-star', PERK_TEXT[pk.kind](pk.value));
     } else if (d.aura) {
-      const a = d.aura, v = Math.round(a.value * k);
-      const what: Record<string, string> = {
-        pact: `${v}% урона возвращается здоровьем`, bastion: `−${v}% получаемого урона`, rage: `+${v}% урона и +10% шанс крита`,
-        clarity: `−${v}% перезарядки заклинаний и артефактов, +50% душ`, thorns: `${v}% урона от ближнего удара — обратно врагу`,
-        inferno: `Жжёт всех в ${OFF.inferno.reach} м: ${v} урона каждые ${fmt(OFF.inferno.every)} с`,
-        frost: `${v} урона каждые ${fmt(OFF.frost.every)} с и −${OFF.frost.slow * 100}% скорости врагам в ${OFF.frost.reach} м`,
-        storm: `Молния каждые ${fmt(OFF.storm.every)} с: ${v} урона и ${OFF.storm.jumps} перескока`,
-        halo: `Каждый ${OFF.halo.nth}-й удар — луч с неба: ${v} урона`,
-        shade: `Враги в ${OFF.shade.reach} м получают +${v}% урона`,
-        quake: `Толчок каждые ${OFF.quake.every} с: ${v} урона и отброс в ${OFF.quake.reach} м`,
-        blades: `${OFF.blades.n} клинка кружат и режут: ${v} урона`,
-      };
-      const flareText: Partial<Record<string, string>> = {
-        inferno: `радиус ${OFF.inferno.flareReach} м, урон ×3`, frost: `заморозка на ${fmt(OFF.frost.freeze)} с, урон ×3`,
-        storm: `молния каждые ${fmt(OFF.storm.flareEvery)} с`, halo: 'луч на каждый удар', shade: 'ослабление ×3, тень пьёт жизнь',
-        quake: `толчок каждую секунду, каменные шипы`, blades: `${OFF.blades.flareN} клинков, круг шире`,
-      };
-      line(d.icon, what[a.kind]);
-      if (isOffense(a.kind)) line('e-star', `Вспышка: ${flareText[a.kind]}`);
-      else line('e-star', `Союзники в радиусе ${a.radius} м тоже под аурой`);
-      line('e-clock', 'Урон копит шкалу ауры; полная — <b>R</b>: вспышка ×3 на 5 с');
+      for (const [icon, text] of auraLines(d.aura, k, d.icon)) line(icon, text);
     } else if (d.artifact) {
       const a = d.artifact, v = Math.round(a.power * k);
       const what: Record<string, string> = {

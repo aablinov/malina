@@ -108,10 +108,22 @@ export abstract class MiniBoss extends Boss {
   abstract readonly drop: string;
   /** Ступень: мини-босс, босс этажа (выбор из двух гримуаров), финальный */
   readonly tier: 'mini' | 'boss' | 'final' = 'mini';
-  /** Аура — второй гримуар у боссов этажа (выбор: заклинание или аура) */
-  readonly aura: string | null = null;
+  /** Ауры — второй гримуар у боссов этажа (выбор: заклинание или аура): [id ауры, шанс %], в сумме 100 */
+  readonly auras: readonly (readonly [string, number])[] = [];
+  /** Выпавшая аура этой победы: тянется один раз, сброс стража тянет заново */
+  private auraPick: string | null = null;
+  /** Аура этой победы по шансам */
+  get aura(): string | null {
+    if (!this.auras.length) return null;
+    if (!this.auraPick) {
+      let r = Math.random() * this.auras.reduce((a, [, w]) => a + w, 0);
+      this.auraPick = this.auras[this.auras.length - 1][0];
+      for (const [id, w] of this.auras) if ((r -= w) < 0) { this.auraPick = id; break; }
+    }
+    return this.auraPick;
+  }
   /** Гримуары после победы: один, у боссов — пара на выбор */
-  get drops(): string[] { return this.aura ? [this.drop, this.aura] : [this.drop]; }
+  get drops(): string[] { const a = this.aura; return a ? [this.drop, a] : [this.drop]; }
   /** Малина из лопнувшего сердца: чем сильнее страж, тем больше — от здоровья, ступени, уровня и числа игроков */
   get berries(): number { return Math.round(this.baseHp / ({ mini: 20, boss: 10, final: 6 } as const)[this.tier] * this.lootMult); }
   readonly minions: Minion[] = [];
@@ -159,7 +171,7 @@ export abstract class MiniBoss extends Boss {
 
   reset(): void {
     this.hp = this.maxHp;
-    this.dead = false; this.awake = false; this.heartOpen = false; this.enraged = false;
+    this.dead = false; this.awake = false; this.heartOpen = false; this.enraged = false; this.auraPick = null;
     this.pos.copy(this.home); this.yaw = this.homeYaw; this.flyY = 0; this.deathT = 0; this.taken = 0; this.cd = 1.2;
     this.group.visible = true;
     this.body.scale.setScalar(1);

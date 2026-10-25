@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { FX } from './fx';
-import type { OffenseKind } from './items';
+import type { AuraStats, OffenseKind } from './items';
 import type { Knight } from './knight';
 import { spellSfx } from './spell-audio';
 import type { Target } from './target';
@@ -44,6 +44,34 @@ export const offenseReach = (k: OffenseKind): number => {
     case 'blades': return OFF.blades.r;
   }
 };
+
+const fmt = (v: number): string => String(Math.round(v * 10) / 10).replace('.', ',');
+
+/** Строки карточки ауры (инвентарь, лавка): [иконка, текст]; k — множитель силы предмета */
+export function auraLines(a: AuraStats, k: number, icon: string): [string, string][] {
+  const v = Math.round(a.value * k);
+  const what: Record<string, string> = {
+    pact: `${v}% урона возвращается здоровьем`, bastion: `−${v}% получаемого урона`, rage: `+${v}% урона и +10% шанс крита`,
+    clarity: `−${v}% перезарядки заклинаний и артефактов, +50% душ`, thorns: `${v}% урона от ближнего удара — обратно врагу`,
+    inferno: `Жжёт всех в ${fmt(OFF.inferno.reach)} м: ${v} урона каждые ${fmt(OFF.inferno.every)} с`,
+    frost: `${v} урона каждые ${fmt(OFF.frost.every)} с и −${OFF.frost.slow * 100}% скорости врагам в ${OFF.frost.reach} м`,
+    storm: `Молния каждые ${fmt(OFF.storm.every)} с: ${v} урона и ${OFF.storm.jumps} перескока`,
+    halo: `Каждый ${OFF.halo.nth}-й удар — луч с неба: ${v} урона`,
+    shade: `Враги в ${OFF.shade.reach} м получают +${v}% урона`,
+    quake: `Толчок каждые ${OFF.quake.every} с: ${v} урона и отброс в ${fmt(OFF.quake.reach)} м`,
+    blades: `${OFF.blades.n} клинка кружат и режут: ${v} урона`,
+  };
+  const flare: Partial<Record<string, string>> = {
+    inferno: `радиус ${OFF.inferno.flareReach} м, урон ×3`, frost: `заморозка на ${fmt(OFF.frost.freeze)} с, урон ×3`,
+    storm: `молния каждые ${fmt(OFF.storm.flareEvery)} с`, halo: 'луч на каждый удар', shade: 'ослабление ×3, тень пьёт жизнь',
+    quake: 'толчок каждую секунду, каменные шипы', blades: `${OFF.blades.flareN} клинков, круг шире`,
+  };
+  return [
+    [icon, what[a.kind]],
+    isOffense(a.kind) ? ['e-star', `Вспышка: ${flare[a.kind]}`] : ['e-star', `Союзники в радиусе ${a.radius} м тоже под аурой`],
+    ['e-clock', 'Урон копит шкалу ауры; полная — <b>R</b>: вспышка ×3 на 5 с'],
+  ];
+}
 
 export interface OffenseHooks {
   scene: THREE.Scene;
