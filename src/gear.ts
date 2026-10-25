@@ -98,7 +98,7 @@ export class Gear {
       hitTarget: (t, v, dir, knock, melee) => {
         t.hit(v, dir, t.pos.clone().setY(1), knock);
         h.fx.text(t.pos.clone().setY(1.1), String(v), melee ? 'crit' : '');
-        this.onHit(v, melee, t.pos);
+        this.onHit(v, melee, t.pos, t);
       },
       heal: (v) => { if (!h.hero.down) h.hero.hp = Math.min(h.hero.maxHp, h.hero.hp + v); },
       souls: (n) => { if (n > 0) this.profile.addSouls(n); },
@@ -173,8 +173,9 @@ export class Gear {
   }
 
   /** Попали по цели (мечом, стрелой, артефактом): души, опыт, вампиризм, шкала ауры; at — где цель */
-  onHit(dmg: number, melee: boolean, at?: THREE.Vector3): void {
+  onHit(dmg: number, melee: boolean, at?: THREE.Vector3, target?: Target): void {
     const s = this.stats, hero = this.h.hero;
+    if (melee && target) for (const b of this.spells.buffs) b.onMelee?.(target, dmg);
     const pact = this.auras.onDealt(dmg, at);
     if (pact > 0 && !hero.down) hero.hp = Math.min(hero.maxHp, hero.hp + pact);
     this.soulAcc += (melee ? s.soulsPerHit : 1) * s.soulsMult;

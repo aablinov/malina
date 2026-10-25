@@ -120,6 +120,14 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     L.set(x, 0, z, FLORA[(h >>> 8) % FLORA.length]);
   }
 
+  // Солнечная поляна (MOB_ROOMS, glade): кольцо жёлтых цветов вокруг поста Соллера
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2, x = Math.round(18.5 + Math.cos(a) * 2.8), z = Math.round(18.5 + Math.sin(a) * 2.8);
+    if (L.nameAt(x, -1, z) === 'grass') L.set(x, 0, z, i % 3 ? 'flower_yellow' : 'flower_white');
+  }
+  for (let x = 17; x <= 20; x++) for (let z = 17; z <= 20; z++) if (L.nameAt(x, 0, z) !== 'air' && !String(L.nameAt(x, 0, z)).startsWith('flower')) L.set(x, 0, z, 'air');
+  labels.push({ text: 'Солнечная поляна', x: 18.5, z: 22.6, size: 0.7 });
+
   // ---------- витрина ----------
   const Z0 = W + 1, Z1 = W + 30;
   for (let x = -W; x <= W; x++) for (let z = Z0; z <= Z1; z++) L.set(x, -1, z, Math.abs(x) <= 1 && z <= Z0 + 3 ? 'gravel' : 'grass');
@@ -447,6 +455,12 @@ export const MOB_ROOMS: MobRoomSpec[] = [
       ...at('obelisk', [[-41, 57]]), ...at('druseling', [[-38, 58.5], [-44, 58.5]]),
       ...at('mimic', [[-44, 43], [-28, 59.5]]),
     ],
+  },
+  {
+    // не комната, а поляна в юго-восточном углу арены: один Соллер под лучом солнца, вокруг жёлтые цветы
+    id: 'glade', title: 'Солнечная поляна', x0: 14, x1: 23, z0: 12, z1: 23,
+    enter: { x: 13, z: 11, yaw: Math.PI / 4 },
+    posts: at('soller', [[18.5, 18.5]]),
   },
 ];
 

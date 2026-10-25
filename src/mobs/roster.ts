@@ -6,6 +6,7 @@ import { Berryling, RaspWolf, WitheredGardener } from './critters';
 import { Reaper, BoneArcher, Wisp, Crow, Scarecrow } from './fallen';
 import { Boarlet, BurrowBeetle, VineSpider, Bee, Hive } from './beasts';
 import { BasketMimic, DruseGolemling, HopPot, JamKeg, WardObelisk } from './constructs';
+import { SunKnight } from './soller';
 import { BerrySlime, BerrySlimeMid, BerrySlimeSmall, BudSpitter, ThornBall, ThornHorror, VineWhip } from './bush';
 
 /** Рядовые мобы (wiki/design-mobs.md): id → имя и класс. Номера — из списка тридцати */
@@ -49,6 +50,8 @@ export const MOBS: Record<string, { title: string; make: MobCtor }> = {
   obelisk: { title: 'Обелиск-хранитель', make: WardObelisk },
   mimic: { title: 'Корзина-мимик', make: BasketMimic },
   keg: { title: 'Бочонок варенья', make: JamKeg },
+  // одиночки: редкие сильные воины
+  soller: { title: 'Соллер, Рыцарь Солнца', make: SunKnight },
 };
 
 /** Осколки слизня, вороны пугала, шмели улья — в стае есть, в кнопках витрины не нужны */

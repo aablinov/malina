@@ -22,7 +22,7 @@ const STARTERS = new Set<string>(['spark', 'fireball', 'icerain', 'heal']);
 export const isSpell = (k: ArtifactKind): boolean => STARTERS.has(k) || k in BOSS_SPELLS;
 
 /** Школа: цвета, узор круга (src/sigils.ts) и звук заряда (src/spell-audio.ts). Стартовые названы по своему заклинанию */
-export type School = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane';
+export type School = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane' | 'summon' | 'blood';
 /** Школа заклинания */
 export const schoolOf = (k: ArtifactKind): School => (STARTERS.has(k) ? (k as School) : BOSS_SPELLS[k]?.school ?? 'arcane');
 
@@ -54,6 +54,9 @@ const SCHOOL: Record<School, SchoolLook> = {
   void: { a: C(2, 0.8, 4), b: C(0.6, 3, 3.4), css: '#b890ff' },
   earth: { a: C(3.6, 2.2, 0.7), b: C(1.4, 3.2, 0.8), css: '#ffd890' },
   arcane: { a: C(3.4, 0.9, 4), b: C(4, 1.6, 2.6), css: '#ff9ae8' },
+  // призыв — бирюза и мятная зелень порталов; малиновая кровь — густой малиновый и алый сок
+  summon: { a: C(0.5, 3.4, 2.6), b: C(1.6, 4, 1.8), css: '#90ffd8' },
+  blood: { a: C(3.6, 0.25, 0.9), b: C(4, 0.9, 1.4), css: '#ff5a8a' },
 };
 const PINK = C(3.8, 1, 1.8);
 
@@ -113,7 +116,11 @@ interface Charging { slot: number; kind: ArtifactKind; school: School; max: numb
 interface Job { t: number; fn: () => void }
 
 /** Временное усиление героя от заклинания (облик титана): множители урона, получаемого урона, скорости и размер */
-export interface HeroBuff { id: string; t: number; melee?: number; taken?: number; speed?: number; scale?: number }
+export interface HeroBuff {
+  id: string; t: number; melee?: number; taken?: number; speed?: number; scale?: number;
+  /** Удар мечом по цели, пока идёт усиление (малиновый клинок — кровотечение) */
+  onMelee?: (t: Target, dmg: number) => void;
+}
 
 export class Spells {
   private charge: Charging | null = null;

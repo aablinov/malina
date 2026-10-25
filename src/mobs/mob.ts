@@ -5,6 +5,7 @@ import { boom, hiss } from '../spell-audio';
 import { Boss, C, rand, RASP, wrap, type BossHooks } from '../bosses/kit';
 import { Field } from '../bosses/field';
 import type { Target } from '../target';
+import { pickDecoy, type Decoy } from '../decoys';
 
 /**
  * Рядовой моб Ордена Малины (wiki/design-mobs.md): облегчённый мозг мини-босса — без арены, ярости и сердца.
@@ -31,7 +32,7 @@ export abstract class Mob extends Boss {
   abstract readonly kind: string;
   /** Стоимость в бюджете орды (wiki/design-dungeon.md, раздел 5) */
   abstract readonly cost: number;
-  override readonly subtitle = 'воин Ордена';
+  override readonly subtitle: string = 'воин Ордена';
   state: MobState = 'spawn';
   attack = '';
   st = 0;
@@ -67,6 +68,8 @@ export abstract class Mob extends Boss {
   protected readonly field: Field;
   protected readonly mh: MobHooks;
   protected hitDone = false;
+  /** Призванный, в которого целится моб (null — герой) */
+  protected focus: Decoy | null = null;
   protected flyY = 0;
   private dazeFor = 0;
   private deathT = 0;
@@ -76,6 +79,17 @@ export abstract class Mob extends Boss {
 
   constructor(h: MobHooks, hp: number, at: THREE.Vector3, yaw = Math.random() * Math.PI * 2) {
     super(h, hp, at.clone().setY(0), yaw);
+    // приманки (src/decoys.ts): пока моб целится в призванного, «герой» для него — приманка, и его удары идут ей
+    const base = this.h, me = this;
+    const hero = new Proxy(base.hero, {
+      get(t, p) {
+        const f = me.focus;
+        if (f?.alive) { if (p === 'pos') return f.pos; if (p === 'down') return false; }
+        const v = Reflect.get(t, p, t) as unknown;
+        return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(t) : v;
+      },
+    });
+    (this as unknown as { h: typeof base }).h = { ...base, hero, hurtHero: (dmg, from, knock) => { const f = me.focus; if (f?.alive) f.hurt(dmg, from); else base.hurtHero(dmg, from, knock); } };
     this.mh = h;
     this.field = new Field(this.h);
     this.awake = true;
@@ -188,6 +202,8 @@ export abstract class Mob extends Boss {
       this.rally -= dt;
       if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
     }
+    // цель: ближайшая из героя и приманок; меняем только вне атаки, чтобы удар не перескочил на полпути
+    if (this.state !== 'attack') { this.focus = null; this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro); }
     const hero = this.h.hero.pos;
     const dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, dist = Math.hypot(dx, dz);
     const rel = wrap(Math.atan2(dx, dz) - this.yaw);

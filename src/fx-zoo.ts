@@ -36,6 +36,8 @@ function variants(T: Textures): THREE.Material[] {
     B({ color: '#888', toneMapped: false }),
     B({ color: '#888', toneMapped: false, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
     B({ color: '#888', toneMapped: false, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    // следы клинков и ленты-шлейфы (src/trail.ts, src/fx-streaks.ts): цвет в вершинах
+    B({ vertexColors: true, toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
     B({ map, toneMapped: false }),
     B({ map, toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
     B({ map, transparent: true, depthWrite: false }),

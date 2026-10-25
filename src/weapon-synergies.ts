@@ -53,8 +53,8 @@ function boom(A: WeaponArts, at: THREE.Vector3, r: number, a: THREE.Color, b: TH
   fx.flash(c, a.clone().multiplyScalar(1.3), Math.min(6, r * 1.6), 0.3);
   fx.fireCubes(c, r * 0.8, Math.round(10 + r * 6), [a, b, new THREE.Color(3.4, 3, 2.4)], 0.3);
   fx.burst(c, [a, b], Math.round(12 + r * 6), { speed: r * 2.6, up: r * 1.4, size: 0.08, life: 0.6, glow: true, gravity: 3 });
-  fx.shock(at1(A, at, 0.06), r, a, 0.4, 0.22);
-  fx.shock(at1(A, at, 0.06), r * 0.6, b, 0.3, 0.16);
+  fx.ring(at1(A, at, 0.06), r, a, 0.4, 0.22);
+  fx.ring(at1(A, at, 0.06), r * 0.6, b, 0.3, 0.16);
   fx.light(at1(A, at, 1.2), a.clone().multiplyScalar(0.35), 5, 10, 0.4);
   fx.shake = Math.max(fx.shake, 0.6);
 }
@@ -62,10 +62,13 @@ function boom(A: WeaponArts, at: THREE.Vector3, r: number, a: THREE.Color, b: TH
 export const SYNERGY_FX: Record<string, SynergyFx> = {
   // ---------- острота ----------
   starCross(A, c) {
-    const at = at1(A, c.at), angles = [0, 1, 2, 3].map((i) => c.yaw + Math.PI / 4 + (i * Math.PI) / 2);
-    angles.forEach((a, i) => A.later(i * 0.04, () => {
-      A.fx.line(at, a, 3.5, mix(c.a, c.b, i / 3, 0.85), 0.55, 0.32, at.y);
-      A.fx.spray(at, A.dir(a), [c.a, new THREE.Color(3.4, 3.4, 3)], 6, { speed: 8, spread: 0.08, life: 0.35 });
+    // крест каждый раз повёрнут по-своему, лучи разной длины вылетают лентами по слегка кривой
+    const turn = R(0.9), at = at1(A, c.at), angles = [0, 1, 2, 3].map((i) => c.yaw + Math.PI / 4 + turn + (i * Math.PI) / 2 + R(0.25));
+    angles.forEach((a, i) => A.later(i * (0.02 + Math.random() * 0.05), () => {
+      const L = 3 + Math.random() * 1.4;
+      A.fx.line(at, a, L, mix(c.a, c.b, i / 3, 0.85), 0.55, 0.32, at.y);
+      A.fx.streak({ path: A.curve(at, at.clone().addScaledVector(A.dir(a), L), 0.1, 0.05, 0.03), dur: 0.12, color: mix(c.a, c.b, i / 3, 1.2), width: 0.35, tail: 0.25, halo: 2.6 });
+      A.sparks(at.clone().addScaledVector(A.dir(a), L), A.dir(a), c.a, 3, 1);
     }));
     A.fx.flash(at, c.b.clone().multiplyScalar(1.4), 2.6, 0.25);
     for (const t of onRays(A, c.at, angles, 3.5, 0.6)) A.hurt(t, c.dmg, c.at, 0.8);
@@ -99,10 +102,13 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
       piv.add(b);
       g.add(piv);
     }
-    const cd = new Map<Target, number>();
+    const cd = new Map<Target, number>(), dir = Math.random() < 0.5 ? -1 : 1, sp = 7 + Math.random() * 3, ph = Math.random() * 6.28;
     A.body(g, 2, (k, dt) => {
-      g.position.copy(at1(A, A.hero.pos));
-      g.rotation.y += dt * 8;
+      g.position.copy(at1(A, A.hero.pos, 0.9 + Math.sin(ph + k * 14) * 0.15));
+      g.rotation.y += dt * sp * dir;
+      // клинки дышат: радиус и наклон плывут
+      g.rotation.x = Math.sin(ph + k * 9) * 0.18; g.rotation.z = Math.cos(ph + k * 7) * 0.18;
+      g.scale.setScalar(0.85 + Math.sin(ph + k * 11) * 0.15);
       for (const m of mats) m.opacity = Math.min(1, k * 8, (1 - k) * 6);
       for (const [t, v] of cd) cd.set(t, v - dt);
       for (const t of A.near(A.hero.pos, 2.5)) {
@@ -115,28 +121,34 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     A.sound('dash');
   },
   fireLine(A, c) {
-    const from = A.hero.pos.clone(), fwd = A.dir(c.yaw), L = 6;
-    A.fx.line(at1(A, from, 0.1), c.yaw, L, mix(c.a, c.b, 0.5, 0.9), 0.7, 0.4, A.ground + 0.1);
+    // полоса огня змеится: каждый раз своя кривая, огонь бежит по ней от героя
+    const from = at1(A, A.hero.pos, 0.1), L = 5 + Math.random() * 2.5;
+    const path = A.curve(from, from.clone().addScaledVector(A.dir(c.yaw + R(0.4)), L), 0.3, 0, 0.06);
+    const pts = [0, 0.25, 0.5, 0.75, 1].map((k) => path(k, new THREE.Vector3()));
+    A.fx.streak({ path, dur: 0.35, color: mix(c.a, c.b, 0.5, 1.1), color2: c.b, width: 0.6, tail: 0.6, halo: 2, core: 0.25 });
     A.ent(2.5, (dt) => {
-      if (Math.random() < dt * 30) {
-        const p = from.clone().addScaledVector(fwd, Math.random() * L).add(_v.set(R(0.5), 0, R(0.5)));
-        A.fx.fireCubes(at1(A, p, 0.25), 0.25, 2, [c.b, new THREE.Color(3.4, 2.4, 0.5), c.a], 0.22, true, [0.4, 0.7]);
+      if (Math.random() < dt * 34) {
+        const p = path(Math.random(), new THREE.Vector3()).add(_v.set(R(0.5), 0, R(0.5)));
+        A.fx.fireCubes(at1(A, p, 0.25), 0.25, 2, [c.b, new THREE.Color(3.4, 2.4, 0.5), c.a], 0.22 + Math.random() * 0.12, true, [0.4, 0.8]);
       }
     });
     A.repeat(8, 0.3, () => {
-      for (const t of A.onSegment(from, from.clone().addScaledVector(fwd, L), 0.8)) A.hurt(t, part(c.dmg * 0.25), t.pos, 0);
+      const hit = new Set<Target>();
+      for (let i = 0; i < 4; i++) for (const t of A.onSegment(pts[i], pts[i + 1], 0.8)) hit.add(t);
+      for (const t of hit) A.hurt(t, part(c.dmg * 0.25), t.pos, 0);
     });
     A.sound('boom');
   },
   phantomEcho(A, c) {
     const g = A.ghost(c.b, 1.7), hero = A.hero;
     const mat = (g.children[0].children[0] as THREE.Mesh | undefined)?.material as THREE.MeshBasicMaterial | undefined;
-    const y0 = c.yaw, from = y0 - 1.4, to = y0 + 1.4;
+    // эхо машет то слева, то справа, с наклоном и разным размахом
+    const y0 = c.yaw + R(0.4), sw = (1.1 + Math.random() * 0.6) * (Math.random() < 0.5 ? -1 : 1), from = y0 - sw, to = y0 + sw, tilt = R(0.7);
     let struck = false;
     A.body(g, 0.6, (k) => {
-      g.position.copy(at1(A, hero.pos, 1));
+      g.position.copy(at1(A, hero.pos, 1 + tilt * 0.3));
       const s = THREE.MathUtils.smoothstep(k, 0.25, 0.65);
-      g.rotation.set(0, from + (to - from) * s, 0);
+      g.rotation.set(0, from + (to - from) * s, tilt);
       if (mat) mat.opacity = Math.min(0.9, k * 6, (1 - k) * 4);
       if (!struck && k > 0.45) {
         struck = true;
@@ -151,11 +163,15 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     const p = (t0 ? t0.pos : c.at).clone().setY(A.ground);
     const g = A.ghost(mix(c.a, c.b, 0.5), 3);
     const len = (g.userData.bladeTip as number) ?? 3;
-    g.rotation.set(Math.PI / 2, c.yaw, 0, 'YXZ');
+    // падает каждый раз под своим углом и с своей стороны
+    const tilt = R(0.5), side = A.dir(Math.random() * 6.28).multiplyScalar(2 + Math.random() * 3);
+    g.rotation.set(Math.PI / 2 + tilt, Math.random() * 6.28, 0, 'YXZ');
+    A.fx.ring(at1(A, p, 0.06), 2.6, c.a, 0.4, 0.06, 0);
     let landed = false;
     A.body(g, 0.95, (k) => {
-      const f = Math.min(1, k / 0.32);
-      g.position.set(p.x, A.ground + len * 0.85 + (1 - f * f) * 10, p.z);
+      const f = Math.min(1, k / 0.32), up = 1 - f * f;
+      g.position.set(p.x + side.x * up, A.ground + len * 0.85 + up * 10, p.z + side.z * up);
+      if (!landed) A.fx.particle({ pos: g.position.clone().add(_v.set(R(0.6), -len * 0.4, R(0.6))), life: 0.3, size: 0.1, color: c.b, gravity: 0 });
       if (!landed && f >= 1) {
         landed = true;
         A.skyBolt(p, c.b, 0.2);
@@ -173,7 +189,9 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   heartStar(A, c) {
     A.forcedCrits = 3;
     const at = at1(A, A.hero.pos, 1);
-    for (let i = 0; i < 10; i++) A.fx.line(at, (i / 10) * Math.PI * 2, 2 + (i % 2) * 0.8, mix(c.a, c.b, i % 2, 0.7), 0.22, 0.35, at.y);
+    const n = 8 + Math.floor(Math.random() * 5), off = Math.random() * 6.28;
+    for (let i = 0; i < n; i++) A.fx.line(at, off + (i / n) * Math.PI * 2 + R(0.2), 1.6 + Math.random() * 1.4, mix(c.a, c.b, i % 2, 0.7), 0.22, 0.35, at.y + R(0.3));
+    A.orbs(at.clone().add(_v.set(R(2), 1, R(2))), c.b, 4, 1.2);
     A.fx.flash(at, c.a.clone().multiplyScalar(1.4), 3, 0.3);
     A.fx.burst(at, [c.b, new THREE.Color(3.4, 1.2, 1.6)], 18, { speed: 1.4, up: 3, size: 0.09, life: 0.9, glow: true, gravity: -1 });
     const v = pct(A, 0.08);
@@ -184,6 +202,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     const [t] = c.hits.length ? A.nearest(c.at, 3, 1, new Set(A.near(c.at, 9).filter((x) => !c.hits.includes(x)))) : A.nearest(c.at, 3, 1);
     if (!t) { A.fx.burst(at1(A, c.at), [c.a], 12, { speed: 3, up: 2, size: 0.07, life: 0.5, glow: true }); return; }
     A.hurt(t, part(c.dmg * 0.5), A.hero.pos, 4.5);
+    A.fx.streak({ path: (_k, out) => out.copy(t.pos).setY(A.ground + 1), dur: 0.5, color: c.a.clone().multiplyScalar(1.2), color2: c.b, width: 0.5, tail: 0.35, halo: 2.4 });
     A.ent(0.5, () => A.fx.particle({ pos: at1(A, t.pos, 1).add(_v.set(R(0.4), R(0.4), R(0.4))), vel: _v.set(0, 0.5, 0).clone(), life: 0.4, size: 0.12, color: Math.random() < 0.5 ? c.a : c.b, gravity: 0 }),
       () => {
         boom(A, t.pos.clone(), 2.2, c.a, new THREE.Color(3.4, 3.2, 2.4));
@@ -193,14 +212,17 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
       });
   },
   starSpiral(A, c) {
-    const center = c.at.clone();
+    // спираль каждый раз закручена в свою сторону и с разной густотой, у каждой звезды — свой разлёт и хвост
+    const center = c.at.clone(), dir = Math.random() < 0.5 ? -1 : 1, twist = 1.6 + Math.random() * 1.8;
     for (let i = 0; i < 8; i++) {
-      const a0 = c.yaw + (i / 8) * Math.PI * 2;
+      const a0 = c.yaw + (i / 8) * Math.PI * 2 + R(0.3), reach = 4.5 + Math.random() * 2;
       const m = glowCube(i % 2 ? c.a : c.b, 0.2);
       let done = false;
+      m.position.set(center.x + Math.sin(a0) * 0.6, A.ground + 0.9, center.z + Math.cos(a0) * 0.6);
+      A.fx.streak({ path: (_k, out) => out.copy(m.position), dur: 0.9, color: i % 2 ? c.a : c.b, width: 0.16, tail: 0.3 });
       A.body(m, 0.9, (k) => {
         if (done) return;
-        const r = 0.6 + k * 5.5, a = a0 + k * 2.4;
+        const r = 0.6 + k * reach, a = a0 + k * twist * dir;
         m.position.set(center.x + Math.sin(a) * r, A.ground + 0.9 + Math.sin(k * 9 + i) * 0.15, center.z + Math.cos(a) * r);
         m.rotation.set(k * 12, k * 9, 0);
         if (Math.random() < 0.6) A.fx.particle({ pos: m.position.clone(), life: 0.25, size: 0.06, color: c.a, gravity: 0 });
@@ -224,14 +246,16 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   starfall(A, c) {
     for (let i = 0; i < 5; i++) A.later(i * 0.12, () => {
       const p = c.at.clone().add(_v.set(R(5), 0, R(5)));
-      const m = glowCube(c.a, 0.3);
+      const m = glowCube(c.a, 0.3), from = A.dir(Math.random() * 6.28).multiplyScalar(1.5 + Math.random() * 3), hgt = 6 + Math.random() * 3;
+      m.position.set(p.x + from.x, A.ground + 0.2 + hgt, p.z + from.z);
+      A.fx.streak({ path: (_k, out) => out.copy(m.position), dur: 0.3, color: c.a.clone().multiplyScalar(1.3), color2: c.b, width: 0.3, tail: 0.25, halo: 2.8 });
       A.body(m, 0.3, (k) => {
-        m.position.set(p.x - (1 - k) * 2, A.ground + 0.2 + (1 - k) * 7, p.z - (1 - k) * 2);
+        m.position.set(p.x + from.x * (1 - k), A.ground + 0.2 + (1 - k) * hgt, p.z + from.z * (1 - k));
         m.rotation.set(k * 8, k * 5, 0);
         A.fx.particle({ pos: m.position.clone(), life: 0.3, size: 0.12, color: Math.random() < 0.5 ? c.a : c.b, gravity: 0 });
       }, () => {
         A.fx.flash(at1(A, p, 0.4), c.a.clone().multiplyScalar(1.2), 1.8, 0.2);
-        A.fx.shock(at1(A, p, 0.06), 1.3, c.a, 0.25, 0.25);
+        A.fx.ring(at1(A, p, 0.06), 1.3, c.a, 0.25, 0.25);
         A.fx.burst(at1(A, p, 0.3), [c.a, c.b], 10, { speed: 2.5, up: 3, size: 0.07, life: 0.5, glow: true, gravity: 5 });
         A.area(p, 1.3, part(c.dmg * 0.4), 0.8);
         A.souls(1);
@@ -257,9 +281,14 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   },
   crimsonVortex(A, c) {
     const at = c.at.clone();
+    // кровавые сгустки кружат и затягиваются в центр по своим спиралям
+    for (let i = 0; i < 5; i++) {
+      const a0 = Math.random() * 6.28, r0 = 2.5 + Math.random() * 1.2, dir = Math.random() < 0.5 ? -1 : 1, sp = 5 + Math.random() * 4;
+      A.fx.streak({ path: (k, out) => { const r = r0 * (1 - k * 0.85), a = a0 + k * sp * dir; return out.set(at.x + Math.sin(a) * r, A.ground + 0.5 + Math.sin(k * 8 + i) * 0.3, at.z + Math.cos(a) * r); }, dur: 1.4, color: i % 2 ? c.a : c.b, width: 0.18, tail: 0.35 });
+    }
     A.ent(1.5, (dt, k) => {
       if (Math.random() < dt * 40) A.swirl(at1(A, at, 0.3 + Math.random() * 0.8), Math.random() < 0.5 ? c.a : c.b, 1 + Math.random() * 2.5, 2, true);
-      if (Math.random() < dt * 4) A.fx.shock(at1(A, at, 0.06), 3.5 * (1 - k * 0.3), c.a, 0.5, 0.08);
+      if (Math.random() < dt * 4) A.fx.ring(at1(A, at, 0.06), 3.5 * (1 - k * 0.3), c.a, 0.5, 0.08);
     });
     A.repeat(6, 0.25, () => {
       const hit = A.near(at, 3.5);
@@ -271,11 +300,17 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   lifeFlame(A, c) {
     const r = 2.6;
     const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.25, r, 48).rotateX(-Math.PI / 2), glowMat(c.b.clone().multiplyScalar(0.5), 0.8));
-    let spin = 0;
+    let spin = Math.random() * 6.28;
+    const dir = Math.random() < 0.5 ? -1 : 1, ph = Math.random() * 6.28;
+    // три языка пламени бегут по кольцу, кольцо дышит
+    for (let i = 0; i < 3; i++) A.fx.streak({ path: (k, out) => { const a = spin + (i / 3) * Math.PI * 2, rr = r * (1 + Math.sin(ph + k * 12 + i) * 0.06); return out.set(A.hero.pos.x + Math.sin(a) * rr, A.ground + 0.35 + Math.sin(k * 20 + i * 2) * 0.15, A.hero.pos.z + Math.cos(a) * rr); }, dur: 2.4, color: c.b.clone().multiplyScalar(1.1), color2: c.a, width: 0.35, tail: 0.3, halo: 2.4, core: 0.25 });
     A.body(ring, 2.5, (k, dt) => {
       ring.position.copy(at1(A, A.hero.pos, 0.06));
+      ring.scale.setScalar(1 + Math.sin(ph + k * 12) * 0.06);
       (ring.material as THREE.MeshBasicMaterial).opacity = Math.min(0.8, k * 8, (1 - k) * 4);
-      spin += dt * 3;
+      spin += dt * 3 * dir;
+      // густые языки пламени по всему кольцу
+      if (Math.random() < 0.9) { const a = Math.random() * 6.28; A.fx.fireCubes(at1(A, A.hero.pos.clone().add(_v.set(Math.sin(a) * r, 0, Math.cos(a) * r)), 0.3), 0.25, 2, [c.b, new THREE.Color(3.4, 1.6, 0.25), new THREE.Color(3, 0.5, 0.2)], 0.24 + Math.random() * 0.12, true, [0.35, 0.6]); }
       for (let i = 0; i < 3; i++) {
         const a = spin + (i / 3) * Math.PI * 2 + Math.random() * 0.4;
         const p = A.hero.pos.clone().add(_v.set(Math.sin(a) * r, 0.2, Math.cos(a) * r)).setY(A.ground + 0.2);
@@ -292,8 +327,8 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   },
   harvest(A, c) {
     const hit = A.near(c.at, 4);
-    A.fx.shock(at1(A, c.at, 0.06), 4, c.a, 0.45, 0.18);
-    A.fx.shock(at1(A, c.at, 0.06), 3, c.b, 0.35, 0.14);
+    A.fx.ring(at1(A, c.at, 0.06), 4, c.a, 0.45, 0.18);
+    A.fx.ring(at1(A, c.at, 0.06), 3, c.b, 0.35, 0.14);
     for (const t of hit) {
       A.hurt(t, part(c.dmg * 0.4), c.at, 0.2);
       A.orbs(at1(A, t.pos, 1), c.a, 2);
@@ -325,10 +360,14 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
       m.position.y = i * 0.45;
       g.add(m);
     }
-    const fwd = A.dir(c.yaw), p0 = A.hero.pos.clone().addScaledVector(fwd, 1);
+    // смерч бредёт сам по себе: петляет змейкой со своей частотой и уходом в сторону
+    const yaw = c.yaw + R(0.5), fwd = A.dir(yaw), side = new THREE.Vector3(fwd.z, 0, -fwd.x), p0 = A.hero.pos.clone().addScaledVector(fwd, 1);
+    const amp = 1 + Math.random() * 1.2, fq = 1.5 + Math.random() * 2, ph = Math.random() * 6.28, far = 7 + Math.random() * 4, drift = R(3);
     const cd = new Map<Target, number>();
+    A.fx.streak({ path: (k, out) => out.copy(p0).addScaledVector(fwd, k * far).addScaledVector(side, Math.sin(ph + k * fq * 6.28) * amp * Math.min(1, k * 3) + drift * k).setY(A.ground + 0.2), dur: 2.2, color: c.a.clone().multiplyScalar(0.7), width: 1.2, tail: 0.5, halo: 1.6 });
     A.body(g, 2.2, (k, dt) => {
-      const p = p0.clone().addScaledVector(fwd, k * 9);
+      const p = p0.clone().addScaledVector(fwd, k * far).addScaledVector(side, Math.sin(ph + k * fq * 6.28) * amp * Math.min(1, k * 3) + drift * k);
+      g.rotation.z = Math.sin(ph + k * 11) * 0.15;
       g.position.copy(at1(A, p, 0.05));
       g.children.forEach((m, i) => { m.rotation.y += dt * (9 + i * 2); });
       for (const m of mats) m.opacity = Math.min(0.7, k * 8, (1 - k) * 5);
@@ -345,7 +384,9 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   },
   flameRam(A, c) {
     const h = A.hero.pos;
-    A.fx.spray(at1(A, h, 0.9), A.dir(c.yaw), [c.b, new THREE.Color(3.4, 2.4, 0.5), c.a], 40, { speed: 10, spread: 0.55, life: 0.4, size: 0.1, gravity: -1 });
+    A.fx.spray(at1(A, h, 0.9), A.dir(c.yaw), [c.b, new THREE.Color(3.4, 2.4, 0.5), c.a], 40, { speed: 9 + Math.random() * 3, spread: 0.4 + Math.random() * 0.3, life: 0.4, size: 0.1, gravity: -1 });
+    // языки пламени: каждый по своей дуге
+    for (let i = 0; i < 5; i++) A.fx.streak({ path: A.curve(at1(A, h, 0.9), at1(A, h.clone().addScaledVector(A.dir(c.yaw + R(1)), 3.5 + Math.random() * 1.5), 0.6 + Math.random() * 0.6), 0.25, 0.2, 0.08), dur: 0.25 + Math.random() * 0.1, color: c.b.clone().multiplyScalar(1.2), color2: c.a, width: 0.4, tail: 0.25, halo: 2.2, core: 0.25 });
     for (let i = 1; i <= 4; i++) A.later(i * 0.04, () => A.fx.fireCubes(at1(A, h.clone().addScaledVector(A.dir(c.yaw), i * 1.1), 0.7), 0.3 + i * 0.15, 4, [c.b, new THREE.Color(3.4, 2.4, 0.5)], 0.22));
     for (const t of inCone(A, c.yaw, 4.5, 0.6)) {
       A.hurt(t, part(c.dmg * 0.7), h, 2.5);
@@ -360,11 +401,15 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     for (let i = 0; i < 4; i++) { const f = glowCube(col, 0.16, 0.9); f.position.set(-0.21 + i * 0.14, 0.12, 0.34); g.add(f); }
     const thumb = glowCube(col, 0.16, 0.9); thumb.position.set(0.32, -0.08, 0.15); g.add(thumb);
     const fwd = A.dir(c.yaw), p0 = A.hero.pos.clone().addScaledVector(fwd, 0.8);
-    g.rotation.y = c.yaw;
+    // кулак летит по своей дуге — то загибает, то идёт прямее
+    const path = A.curve(p0, p0.clone().addScaledVector(fwd, 7), 0.25, 0, 0.04), q = new THREE.Vector3(), q0 = new THREE.Vector3();
+    A.fx.streak({ path: (k, out) => path(k, out).setY(A.ground + 1), dur: 0.6, color: col.clone().multiplyScalar(1.3), width: 0.6, tail: 0.3, halo: 2 });
     let done = false;
     A.body(g, 0.6, (k) => {
       if (done) return;
-      const p = p0.clone().addScaledVector(fwd, k * 7);
+      const p = path(k, q).clone();
+      path(Math.max(0, k - 0.03), q0);
+      g.rotation.y = Math.atan2(p.x - q0.x, p.z - q0.z) || c.yaw;
       g.position.copy(at1(A, p, 1));
       A.fx.particle({ pos: g.position.clone().add(_v.set(R(0.5), R(0.5), R(0.5))), vel: fwd.clone().multiplyScalar(-3), life: 0.3, size: 0.08, color: c.b, gravity: 0 });
       if (A.near(p, 0.9).length || k > 0.97) {
@@ -380,8 +425,8 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   thunderclap(A, c) {
     A.skyBolt(c.at.clone(), c.b, 0.22);
     A.later(0.05, () => {
-      A.fx.shock(at1(A, c.at, 0.06), 3.5, c.a, 0.45, 0.25);
-      A.fx.shock(at1(A, c.at, 0.06), 2.4, c.b, 0.35, 0.2);
+      A.fx.ring(at1(A, c.at, 0.06), 3.5, c.a, 0.45, 0.25);
+      A.fx.ring(at1(A, c.at, 0.06), 2.4, c.b, 0.35, 0.2);
       A.fx.burst(at1(A, c.at, 0.1), ['#d8cfa8', '#b9ad88'], 16, { speed: 5, up: 2, size: 0.12, life: 0.5, gravity: 6 });
       A.area(c.at, 3.5, Math.round(c.dmg * 0.9), 3.5);
       A.fx.shake = Math.max(A.fx.shake, 0.8);
@@ -392,9 +437,15 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
 
   // ---------- вихрь ----------
   fireTornado(A, c) {
-    let a = 0;
+    let a = Math.random() * 6.28;
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    // четыре огненных потока кружат вокруг героя на разной высоте и радиусе
+    for (let i = 0; i < 4; i++) {
+      const r0 = 1.1 + Math.random() * 1, h0 = 0.3 + Math.random() * 1.1, sp = (6 + Math.random() * 3) * dir, ph = Math.random() * 6.28;
+      A.fx.streak({ path: (k, out) => { const an = ph + k * 2 * sp; return out.set(A.hero.pos.x + Math.sin(an) * r0, A.ground + h0 + Math.sin(k * 15 + i) * 0.25, A.hero.pos.z + Math.cos(an) * r0); }, dur: 2, color: i % 2 ? c.b.clone().multiplyScalar(1.1) : c.a, color2: c.b, width: 0.3, tail: 0.25, halo: 2.4, core: 0.25 });
+    }
     A.ent(2, (dt) => {
-      a += dt * 7;
+      a += dt * 7 * dir;
       for (let i = 0; i < 4; i++) {
         const ang = a + (i / 4) * Math.PI * 2, r = 1.2 + (i % 2) * 0.8;
         const p = A.hero.pos.clone().add(_v.set(Math.sin(ang) * r, 0, Math.cos(ang) * r)).setY(A.ground + 0.3 + (i % 2) * 0.6);
@@ -408,18 +459,21 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   soulWheel(A, c) {
     const wisps = [0, 1, 2, 3, 4, 5].map((i) => glowCube(i % 2 ? c.b : c.a, 0.18));
     const taken = new Set<Target>();
+    const dir = Math.random() < 0.5 ? -1 : 1, rad = 1.3 + Math.random() * 0.5;
     wisps.forEach((m, i) => {
-      let target: Target | null = null, from: THREE.Vector3 | null = null;
+      let target: Target | null = null, from: THREE.Vector3 | null = null, fly: ((k: number, out: THREE.Vector3) => THREE.Vector3) | null = null;
+      m.position.copy(at1(A, A.hero.pos.clone().add(_v.set(Math.sin((i / 6) * Math.PI * 2) * rad, 0, Math.cos((i / 6) * Math.PI * 2) * rad))));
+      A.fx.streak({ path: (_k, out) => out.copy(m.position), dur: 1.6, color: i % 2 ? c.b : c.a, width: 0.14, tail: 0.25 });
       A.body(m, 1.6, (k) => {
-        const a = (i / 6) * Math.PI * 2 + k * 9;
+        const a = (i / 6) * Math.PI * 2 + k * 9 * dir;
         if (k < 0.6) {
-          m.position.copy(at1(A, A.hero.pos.clone().add(_v.set(Math.sin(a) * 1.5, 0, Math.cos(a) * 1.5)), 1 + Math.sin(k * 12 + i) * 0.2));
+          m.position.copy(at1(A, A.hero.pos.clone().add(_v.set(Math.sin(a) * rad, 0, Math.cos(a) * rad)), 1 + Math.sin(k * 12 + i) * 0.2));
           return;
         }
-        if (!from) { from = m.position.clone(); [target] = A.nearest(A.hero.pos, 7, 1, taken); if (target) taken.add(target); }
-        if (!target) { m.scale.setScalar(0.18 * (1 - (k - 0.6) / 0.4)); return; }
+        if (!from) { from = m.position.clone(); [target] = A.nearest(A.hero.pos, 7, 1, taken); if (target) { taken.add(target); const tg = target; fly = A.curve(from, () => at1(A, tg.pos, 1), 0.5, 0.4, 0.05); } }
+        if (!target || !fly) { m.scale.setScalar(0.18 * (1 - (k - 0.6) / 0.4)); return; }
         const q = (k - 0.6) / 0.4;
-        m.position.copy(from).lerp(at1(A, target.pos, 1), Math.min(1, q * 2.5));
+        fly(Math.min(1, q * 2.5), m.position);
         A.fx.particle({ pos: m.position.clone(), life: 0.25, size: 0.07, color: c.b, gravity: 0 });
         if (q * 2.5 >= 1 && m.visible) {
           m.visible = false;
@@ -430,9 +484,10 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     A.sound('souls');
   },
   stormRing(A, c) {
-    for (let i = 0; i < 6; i++) A.later(i * 0.1, () => {
-      const a = c.yaw + (i / 6) * Math.PI * 2;
-      const p = A.hero.pos.clone().add(_v.set(Math.sin(a) * 2.6, 0, Math.cos(a) * 2.6)).setY(A.ground);
+    const a0 = Math.random() * 6.28, dir = Math.random() < 0.5 ? -1 : 1, n = 5 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) A.later(i * (0.07 + Math.random() * 0.06), () => {
+      const a = a0 + dir * (i / n) * Math.PI * 2 + R(0.3), r = 2.1 + Math.random() * 1;
+      const p = A.hero.pos.clone().add(_v.set(Math.sin(a) * r, 0, Math.cos(a) * r)).setY(A.ground);
       A.skyBolt(p, i % 2 ? c.b : c.a, 0.12);
       A.area(p, 1.3, part(c.dmg * 0.4), 1);
       A.swirl(at1(A, p, 0.3), c.a, 0.6, 5);
@@ -456,9 +511,12 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     const p = (t0 ? t0.pos : c.at).clone().setY(A.ground);
     const m = new THREE.Group();
     m.add(glowCube(c.a, 0.8, 0.95), glowCube(new THREE.Color(3.4, 2.4, 0.6), 0.55));
-    const from = p.clone().add(_v.set(-3, 12, -3));
+    // каждый раз прилетает с другой стороны неба, с толстым огненным хвостом
+    const from = p.clone().add(A.dir(Math.random() * 6.28).multiplyScalar(2 + Math.random() * 4)).setY(A.ground + 10 + Math.random() * 4);
+    m.position.copy(from);
+    A.fx.streak({ path: (_k, out) => out.copy(m.position), dur: 0.45, color: new THREE.Color(3.4, 2.2, 0.5), color2: c.a, width: 0.9, tail: 0.35, halo: 2.2, core: 0.25 });
     // круг на земле: куда упадёт
-    A.fx.shock(at1(A, p, 0.06), 3, c.a, 0.45, 0.06);
+    A.fx.ring(at1(A, p, 0.06), 3, c.a, 0.45, 0.06);
     A.body(m, 0.45, (k) => {
       m.position.copy(from).lerp(at1(A, p, 0.4), k * k);
       m.rotation.set(k * 7, k * 5, 0);

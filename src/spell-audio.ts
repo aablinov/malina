@@ -8,7 +8,7 @@ import { audioCore, busy, claimVoice } from './audio';
  */
 
 /** Школа звука — совпадает со школой заклинания (src/spells.ts School) */
-export type SpellSound = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane';
+export type SpellSound = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane' | 'summon' | 'blood';
 
 /** Мажорная пентатоника: ступень i → полутоны от корня */
 const PENTA = [0, 2, 4, 7, 9];
@@ -28,6 +28,8 @@ const PAL: Record<SpellSound, { root: number; chord: number[]; wave: OscillatorT
   void: { root: 130.81, chord: [0, 3, 7, 10], wave: 'triangle', lp: 1400 },
   earth: { root: 98, chord: [0, 7, 12, 16], wave: 'triangle', lp: 1100 },
   arcane: { root: 349.23, chord: [0, 4, 8, 12], wave: 'triangle', lp: 4000 },
+  summon: { root: 293.66, chord: [0, 5, 7, 12], wave: 'triangle', lp: 2600 },
+  blood: { root: 146.83, chord: [0, 3, 7, 10], wave: 'sawtooth', lp: 900 },
 };
 
 let shaper: Float32Array | null = null;

@@ -12,7 +12,7 @@ import { markShared } from './fx';
  */
 
 export type SigilSchool = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane' | 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns'
-  | 'inferno' | 'frost' | 'storm' | 'halo' | 'shade' | 'quake' | 'blades';
+  | 'inferno' | 'frost' | 'storm' | 'halo' | 'shade' | 'quake' | 'blades' | 'summon' | 'blood';
 
 type Draw = (g: CanvasRenderingContext2D, c: number, r: number, w: number) => void;
 
@@ -202,6 +202,53 @@ const DRAW: Record<string, Draw> = {
       g.restore();
     }
   },
+  portal(g, c, r, w) {
+    // портал призыва: вложенные овалы-витки, будто воронка вглубь земли
+    for (let i = 0; i < 4; i++) {
+      const k = 1 - i * 0.2;
+      g.lineWidth = w * (1.8 - i * 0.3);
+      g.beginPath(); g.ellipse(c, c + r * 0.08 * i, r * k, r * k * 0.92, 0, 0, TAU); g.stroke();
+    }
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU;
+      g.lineWidth = w; g.beginPath();
+      g.arc(c, c, r * 0.9, a, a + 0.25); g.stroke();
+      g.beginPath(); g.moveTo(c + Math.cos(a) * r * 0.42, c + Math.sin(a) * r * 0.42); g.lineTo(c + Math.cos(a + 0.4) * r * 0.62, c + Math.sin(a + 0.4) * r * 0.62); g.stroke();
+    }
+  },
+  paws(g, c, r, w) {
+    // венок из отпечатков лап — стая
+    g.lineWidth = w * 0.8; circle(g, c, c, r * 0.86);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU, x = c + Math.cos(a) * r * 0.86, y = c + Math.sin(a) * r * 0.86, h = r * 0.05;
+      g.save(); g.translate(x, y); g.rotate(a + Math.PI / 2);
+      g.beginPath(); g.arc(0, h * 0.6, h, 0, TAU); g.fill();
+      for (const [dx, dy] of [[-1.2, -0.9], [-0.4, -1.5], [0.4, -1.5], [1.2, -0.9]]) { g.beginPath(); g.arc(dx * h, dy * h, h * 0.42, 0, TAU); g.fill(); }
+      g.restore();
+    }
+  },
+  drops(g, c, r, w) {
+    // кольцо капель малинового сока остриём к центру
+    g.lineWidth = w * 0.8; circle(g, c, c, r * 0.9);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU, x = c + Math.cos(a) * r * 0.9, y = c + Math.sin(a) * r * 0.9, h = r * 0.09;
+      g.save(); g.translate(x, y); g.rotate(a - Math.PI / 2);
+      g.lineWidth = w * 1.3; g.beginPath();
+      g.moveTo(0, -h * 1.6); g.quadraticCurveTo(h, 0, 0, h); g.quadraticCurveTo(-h, 0, 0, -h * 1.6); g.stroke();
+      if (i % 3 === 0) g.fill();
+      g.restore();
+    }
+  },
+  fangs(g, c, r, w) {
+    // клыки-когти внутрь: кровавая пасть
+    g.lineWidth = w; circle(g, c, c, r);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU, l = i % 2 ? 0.22 : 0.34, b = 0.09;
+      g.lineWidth = w * 1.3; g.beginPath();
+      g.moveTo(c + Math.cos(a - b) * r, c + Math.sin(a - b) * r); g.lineTo(c + Math.cos(a) * r * (1 - l), c + Math.sin(a) * r * (1 - l)); g.lineTo(c + Math.cos(a + b) * r, c + Math.sin(a + b) * r);
+      g.stroke();
+    }
+  },
   thorns(g, c, r, w) {
     // лоза волной по кругу и шипы наружу и внутрь
     g.lineWidth = w * 1.6; g.beginPath();
@@ -332,6 +379,18 @@ const STYLE: Record<SigilSchool, Layer[]> = {
     { key: 'stones', r: 1.16, speed: -0.2, at: 0.25 },
     { key: 'hexagon', r: 0.55, speed: 0.35, at: 0.5, alt: true },
     { key: 'leaves', r: 0.36, speed: -0.6, at: 0.75 },
+  ],
+  summon: [
+    { key: 'ticks', r: 1, speed: 0.3, at: 0 },
+    { key: 'portal', r: 0.78, speed: -0.6, at: 0.25, alt: true },
+    { key: 'paws', r: 1.16, speed: 0.25, at: 0.5 },
+    { key: 'hexagram', r: 0.42, speed: 0.9, at: 0.75, alt: true },
+  ],
+  blood: [
+    { key: 'ticks', r: 1, speed: -0.35, at: 0 },
+    { key: 'drops', r: 1.16, speed: 0.3, at: 0.25, alt: true },
+    { key: 'fangs', r: 0.7, speed: -0.6, at: 0.5 },
+    { key: 'runes', r: 0.42, speed: 1.1, at: 0.75, alt: true },
   ],
   arcane: [
     { key: 'ticks', r: 1, speed: 0.4, at: 0 },
