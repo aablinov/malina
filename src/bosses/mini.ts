@@ -147,8 +147,8 @@ export abstract class MiniBoss extends Boss {
   readonly aura: string | null = null;
   /** Гримуары после победы: один, у боссов — пара на выбор */
   get drops(): string[] { return this.aura ? [this.drop, this.aura] : [this.drop]; }
-  /** Малина из лопнувшего сердца: чем сильнее страж, тем больше — от здоровья и ступени */
-  get berries(): number { return Math.round(this.baseHp / ({ mini: 20, boss: 10, final: 6 } as const)[this.tier]); }
+  /** Малина из лопнувшего сердца: чем сильнее страж, тем больше — от здоровья, ступени, уровня и числа игроков */
+  get berries(): number { return Math.round(this.baseHp / ({ mini: 20, boss: 10, final: 6 } as const)[this.tier] * this.lootMult); }
   readonly minions: Minion[] = [];
   protected flyY = 0;
   protected hitDone = false;

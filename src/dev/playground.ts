@@ -33,7 +33,7 @@ import { aimLight, lightData, makeLight, worldOf } from '../world';
 import { Dummy } from './dummies';
 import { Overlays } from './overlay';
 import { DEV_TOOLS, openEditor } from '../devflag';
-import { button, Panel, toggle } from './panel';
+import { button, Panel, select, toggle } from './panel';
 import '../style.css';
 import './playground.css';
 
@@ -312,6 +312,19 @@ export function runPlayground(): void {
     arenas.push(arena);
     bossIds.push(spec.id);
   }
+  // масштаб стражей (src/bosses/scaling.ts): уровень — по уровню героя или из панели F1, число игроков — из панели
+  let bossLevelPick: 'hero' | string = 'hero';
+  let bossPlayers = 1;
+  const bossLevel = (): number => bossLevelPick === 'hero' ? profile.data.level : Number(bossLevelPick);
+  let scaleKey = '';
+  /** Пересчитать здоровье и урон всех стражей, если уровень или число игроков сменились */
+  function rescaleBosses(): void {
+    const key = `${bossLevel()}/${bossPlayers}`;
+    if (key === scaleKey) return;
+    scaleKey = key;
+    for (const b of bosses) b.setScale(bossLevel(), bossPlayers);
+  }
+  rescaleBosses();
   const grimoires: Grimoire[] = [];
   arenas.forEach((arena, i) => {
     arena.onWin = (at) => {
@@ -718,6 +731,9 @@ export function runPlayground(): void {
     row2.className = 'pg-btnrow';
     c.appendChild(row2);
     for (const spec of BOSS_ARENAS) button(row2, `Страж: ${spec.title}`, () => hero.place(spec.exit.x, spec.exit.z, spec.exit.yaw));
+    // масштаб стражей: уровень и число игроков
+    refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
+    refreshers.push(select(c, 'Игроков', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']], () => String(bossPlayers), (v) => { bossPlayers = Number(v); rescaleBosses(); }));
   }
 
   // ---------- HUD и инвентарь как в Minecraft Dungeons (src/hud/) ----------
@@ -850,6 +866,7 @@ export function runPlayground(): void {
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
     if (arenas.length) {
+      rescaleBosses();
       for (const a of arenas) a.update(dt, hero);
       // спящие стражи дальних арен не думают — только тот, чья арена рядом или в бою
       for (const b of bosses) if (b.awake || b.dead || Math.hypot(b.pos.x - hero.pos.x, b.pos.z - hero.pos.z) < 30) b.update(dt);
@@ -944,6 +961,8 @@ export function runPlayground(): void {
     /** Страж и его арена (src/bosses/): boss.state, arena.state, гримуары после победы */
     bosses, arenas, bossIds, grimoires, bossBar,
     /** Встать у ворот стража (id арены: cauldron, boar, …) */
+    /** Масштаб стражей: уровень (число или 'hero') и число игроков */
+    bossScale(level: number | 'hero', players = bossPlayers) { bossLevelPick = String(level); bossPlayers = players; rescaleBosses(); return { level: bossLevel(), players: bossPlayers }; },
     toBoss(id: string) { const s = BOSS_ARENAS.find((a) => a.id === id); if (s) hero.place(s.exit.x, s.exit.z, s.exit.yaw); return !!s; },
     /** Эффекты: стоп-кадр, засветка, свет заклинаний */
     fx,
