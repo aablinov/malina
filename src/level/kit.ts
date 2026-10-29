@@ -200,7 +200,17 @@ function settle(heights: Int8Array, w: number, d: number, passes = 3): void {
 /** Подъём ландшафта в точке: эллипс полуосей rx × rz, высота h слоёв, к краю спадает плавно */
 export interface Bump { x: number; z: number; rx: number; rz: number; h: number }
 
+/** Земля ландшафта: верх, полублок, бок (земля под верхом), скала с этим верхом; flora — расти ли сухой траве и ромашкам */
+export interface Ground { top: string; slab: string; side: string; rockTop: string; flora?: boolean }
+export const GROUNDS: Record<string, Ground> = {
+  grass: { top: 'grass', slab: 'grass_slab', side: 'dirt', rockTop: 'cliff_grass', flora: true },
+  snow: { top: 'snow', slab: 'snow_slab', side: 'dirt', rockTop: 'cliff_snow', flora: false },
+};
+export const GROUND_TITLES: Record<string, string> = { grass: 'Трава', snow: 'Снег' };
+
 export interface LandscapeOpts extends HillOpts {
+  /** Земля: трава по умолчанию (GROUNDS) */
+  ground?: Ground;
   /** Сколько слоёв по 0,5 м даёт шум (3–4 — холмистая местность MCD) */
   layers?: number;
   /** Масштаб шума, клеток: чем больше, тем шире плиты (24–32) */
@@ -221,7 +231,7 @@ export interface LandscapeOpts extends HillOpts {
  * одного слоя: по ландшафту можно пройти везде. Слой — полный блок травы (чётный) или полублок травы сверху (нечётный).
  */
 export function landscape(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, o: LandscapeOpts = {}): void {
-  const seed = o.seed ?? 0, scale = o.scale ?? 28, layers = o.layers ?? 4, fade = o.fade ?? 6, stoneK = o.stone ?? 0.3;
+  const seed = o.seed ?? 0, scale = o.scale ?? 28, layers = o.layers ?? 4, fade = o.fade ?? 6, stoneK = o.stone ?? 0.3, G = o.ground ?? GROUNDS.grass;
   const w = x1 - x0 + 1, d = z1 - z0 + 1;
   // расстояние до ровных клеток (поиск в ширину, 8 соседей)
   const dist = new Float32Array(w * d).fill(1e9);
@@ -276,15 +286,15 @@ export function landscape(L: Level, x0: number, z0: number, x1: number, z1: numb
     const x = x0 + i, z = z0 + j, full = n >> 1, half = n & 1, rock = stoneAt(x, z);
     for (let k = 0; k < full; k++) {
       const topBlock = k === full - 1 && !half;
-      L.set(x, y + k, z, topBlock ? (rock ? 'cliff_grass' : 'grass') : rock ? (hash2(x, z, seed + 2) < 0.22 ? 'cliff_dark' : 'cliff') : 'dirt');
+      L.set(x, y + k, z, topBlock ? (rock ? G.rockTop : G.top) : rock ? (hash2(x, z, seed + 2) < 0.22 ? 'cliff_dark' : 'cliff') : G.side);
     }
     if (half) {
-      if (full > 0) L.set(x, y + full - 1, z, rock ? 'cliff' : 'dirt');
-      L.set(x, y + full, z, 'grass_slab');
+      if (full > 0) L.set(x, y + full - 1, z, rock ? 'cliff' : G.side);
+      L.set(x, y + full, z, G.slab);
     }
   }
   // флора по верхушкам
-  if (o.dry || o.daisies) for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
+  if ((o.dry || o.daisies) && G.flora !== false) for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
     const n = heights[j * w + i];
     if (n <= 0) continue;
     const x = x0 + i, z = z0 + j, yy = y + (n >> 1) + (n & 1);

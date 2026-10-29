@@ -118,6 +118,17 @@ export const DECOR: DecorDef[] = [
   D('signpost', 'Указатель', 'поселение', 'floor', [p('signpost', { post: 'planksDark', board: 'planks' })]),
   D('cart_broken', 'Телега сломанная', 'поселение', 'floor', [p('cart_broken', { side: 'cartWood', top: 'cartWood', bottom: 'cartWood', wheel: 'planksDark', iron: 'ironDark' })], { solid: [{ w: 1.4, d: 1.4, h: 0.8 }] }),
 
+  // --- снег (биом «снег»): сугробы, сосульки, ледяные шипы, снеговик, брёвна и камни под снегом ---
+  D('snow_pile', 'Сугроб', 'снег', 'floor', [p('snow_pile', { side: 'snowTop', top: 'snowTop', bottom: 'snowTop' })]),
+  D('snowdrift', 'Сугроб у стены', 'снег', 'wall', [p('snowdrift', { side: 'snowTop', top: 'snowTop', bottom: 'snowTop' })]),
+  D('icicles', 'Сосульки', 'снег', 'ceiling', [p('icicles', { side: 'ice', top: 'ice', bottom: 'ice' })]),
+  D('icicles_wall', 'Сосульки на стене', 'снег', 'wall', [p('icicles_wall', { side: 'ice', top: 'ice', bottom: 'ice' })]),
+  D('ice_spikes', 'Ледяные шипы', 'снег', 'floor', [p('ice_spikes', { side: 'ice', top: 'ice', bottom: 'iceCracked' })], { solid: [{ w: 0.9, d: 0.9, h: 1.1 }] }),
+  D('frozen_bush', 'Куст обледенелый', 'снег', 'floor', [p('frozen_bush', { side: 'barkDead', top: 'snowTop', bottom: 'barkDead', snow: 'snowTop' })]),
+  D('snowman', 'Снеговик', 'снег', 'floor', [p('snowman', { side: 'snowTop', top: 'snowTop', bottom: 'snowTop', iron: 'ironDark', carrot: 'clay', stick: 'barkDead' })], { solid: [{ w: 0.7, d: 0.7, h: 1.6 }] }),
+  D('log_snow', 'Бревно под снегом', 'снег', 'floor', [p('log_snow', { side: 'logSide', end: 'logTop', snow: 'snowTop' })], { solid: [{ w: 1.3, d: 0.4, h: 0.4 }] }),
+  D('rock_snow', 'Камешки под снегом', 'снег', 'floor', [p('rock_snow', { side: 'cliff', top: 'snowTop', bottom: 'stone' })]),
+
   D('candles_group', 'Свечи кучкой', 'свечи', 'floor', [p('candles_group', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candles_group_flame', { side: 'fire' }, 'fire')],
     { light: { color: '#ffb25a', intensity: 0.9, dist: 2.6, at: [0, 0.4, 0], baked: true } }),
   D('candles_row', 'Свечи в ряд', 'свечи', 'floor', [p('candles_row', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candles_row_flame', { side: 'fire' }, 'fire')],

@@ -480,6 +480,60 @@ shape('cart_broken', (o) => {
   o.xf({ rot: [90, 0, 0], move: [-12 * P, 1.5 * P, 10 * P] }, () => wheel(o, 0, 0, 0));
 });
 
+// --- снег (биом «снег», референсы 13, 9) ---
+// сугроб: плоские пятна 2–4/16, как опавшие листья, но выше в середине
+shape('snow_pile', (o) => {
+  const r = rand(41);
+  for (let i = 0; i < 7; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.7, w = snap(0.3 + r() * 0.5), dd = snap(0.25 + r() * 0.45), hh = snap((2 + r() * 2) * P);
+    o.xf({ rot: [0, r() * 90, 0], move: [Math.cos(a) * d, 0, Math.sin(a) * d] }, () => cbox(o, w, hh, dd, { py: 'top', ny: 'bottom' }));
+  }
+  cbox(o, 0.5, 5 * P, 0.4, { py: 'top', ny: 'bottom' });
+});
+// сугроб у стены: ступенчатый клин от стены наружу (+Z), 1 м шириной
+shape('snowdrift', (o) => {
+  for (const [h, dz] of [[8 * P, 4 * P], [5 * P, 8 * P], [2 * P, 12 * P]]) o.tbox(-8 * P, 0, 0, 8 * P, h, dz, { py: 'top', ny: 'bottom' });
+});
+// сосульки с потолка: 5 конусов из двух боксов, 4–12/16
+const icicleAt = (o, x, z, len) => o.xf({ move: [x, 0, z] }, () => { o.tbox(-1.5 * P, -len * 0.5, -1.5 * P, 1.5 * P, 0, 1.5 * P); o.tbox(-0.5 * P, -len, -0.5 * P, 0.5 * P, -len * 0.5, 0.5 * P); });
+shape('icicles', (o) => { for (const [x, z, len] of [[-5 * P, -3 * P, 10 * P], [1 * P, -4 * P, 6 * P], [4 * P, 2 * P, 12 * P], [-2 * P, 4 * P, 5 * P], [-6 * P, 3 * P, 7 * P]]) icicleAt(o, x, z, len); });
+// сосульки на стене: от точки крепления вниз, выступают на 2/16
+shape('icicles_wall', (o) => { for (const [x, len] of [[-5 * P, 9 * P], [-1 * P, 5 * P], [3 * P, 11 * P], [6 * P, 6 * P]]) icicleAt(o, x, 2 * P, len); });
+// ледяные шипы: три наклонённых столбика 4–6/16, высота 0,5–1,1 м
+shape('ice_spikes', (o) => {
+  for (const [x, z, h, w, yaw, tilt] of [[-3 * P, -2 * P, 1.1, 6 * P, 20, 8], [4 * P, 1 * P, 0.7, 5 * P, 60, -10], [-1 * P, 5 * P, 0.5, 4 * P, 100, 6]]) {
+    o.xf({ rot: [0, yaw, tilt], move: [x, 0, z] }, () => { cbox(o, w, h * 0.6, w, { py: null, ny: 'bottom' }); o.tbox(-w / 4, h * 0.6, -w / 4, w / 4, h, w / 4, { py: 'top', ny: null }); });
+  }
+});
+// обледенелый куст: голые ветки из брусков и снежные шапки
+shape('frozen_bush', (o) => {
+  for (const [yaw, tilt, len] of [[0, 20, 0.5], [90, 25, 0.45], [180, 18, 0.55], [270, 28, 0.4], [45, 10, 0.35]]) {
+    o.xf({ rot: [0, yaw, 0] }, () => o.xf({ rot: [0, 0, -tilt] }, () => o.tbox(-P, 0, -P, P, len, P, 'side')));
+  }
+  for (const [x, z, y] of [[-3 * P, 2 * P, 0.4], [3 * P, -3 * P, 0.35], [0, 4 * P, 0.3]]) o.xf({ move: [x, y, z] }, () => cbox(o, 5 * P, 2 * P, 5 * P, 'snow'));
+});
+// снеговик: три шара 10 / 8 / 6 /16, ведро, морковка, руки-ветки, пуговицы
+shape('snowman', (o) => {
+  cbox(o, 10 * P, 10 * P, 10 * P, { py: 'top', ny: 'bottom' });
+  o.xf({ move: [0, 10 * P, 0] }, () => cbox(o, 8 * P, 8 * P, 8 * P, { py: 'top', ny: 'bottom' }));
+  o.xf({ move: [0, 18 * P, 0] }, () => cbox(o, 6 * P, 6 * P, 6 * P, { py: 'top', ny: 'bottom' }));
+  o.xf({ move: [0, 24 * P, 0] }, () => cbox(o, 5 * P, 3 * P, 5 * P, 'iron'));
+  o.tbox(-P / 2, 20 * P, 3 * P, P / 2, 21 * P, 6 * P, 'carrot');
+  for (const [x, y] of [[-1.5 * P, 21.5 * P], [1.5 * P, 21.5 * P], [0, 15 * P], [0, 12.5 * P]]) o.tbox(x - P / 2, y, 3.5 * P, x + P / 2, y + P, 4.5 * P, 'iron');
+  for (const sgn of [1, -1]) o.xf({ rot: [0, 0, sgn * 60], move: [sgn * 4 * P, 14 * P, 0] }, () => o.tbox(-P / 2, 0, -P / 2, P / 2, 0.4, P / 2, 'stick'));
+});
+// бревно под снегом: бревно 6/16 вдоль X, сверху снежная полоса
+shape('log_snow', (o) => {
+  o.xf({ rot: [0, 0, -90], move: [-0.6, 3 * P, 0] }, () => o.tbox(-3 * P, 0, -3 * P, 3 * P, 1.2, 3 * P, { py: 'end', ny: 'end', px: 'side', nx: 'side', pz: 'side', nz: 'side' }));
+  o.tbox(-0.55, 6 * P, -2.5 * P, 0.55, 8 * P, 2.5 * P, 'snow');
+});
+// камешки под снегом: как rock_small, верх белый
+shape('rock_snow', (o) => {
+  for (const [x, z, s, yaw] of [[-3 * P, -2 * P, 7 * P, 20], [4 * P, 1 * P, 5 * P, 65], [-1 * P, 5 * P, 4 * P, 40]]) {
+    o.xf({ rot: [0, yaw, 0], move: [x, 0, z] }, () => cbox(o, s, s * 0.8, s * 0.9, { py: 'top', ny: 'bottom' }));
+  }
+});
+
 mkdirSync(OUT, { recursive: true });
 for (const s of shapes) writeFileSync(join(OUT, `${s.name}.obj`), s.text());
 console.log(`${shapes.length} форм декора → ${OUT}`);

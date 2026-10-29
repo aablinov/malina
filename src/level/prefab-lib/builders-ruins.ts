@@ -10,44 +10,47 @@ import type { BuildCtx, Builder } from './build.ts';
 const pick = <T,>(c: BuildCtx, list: T[]): T => list[Math.floor(c.rnd() * list.length)];
 const yaw = (c: BuildCtx): number => Math.floor(c.rnd() * 360);
 
+/** Материал кладки руин: полный блок, низ (мшистый), треснутый, ступени, полублок — для руинного кирпича, песчаника, храмового камня */
+export interface Mat { full: string; low: string; cracked: string; stairs: string; slab: string }
+export const RUIN: Mat = { full: 'bricks_old', low: 'bricks_mossy', cracked: 'bricks_cracked', stairs: 'bricks_old_stairs', slab: 'bricks_old_slab' };
 /** Кирпич кладки: у земли чаще мшистый и треснутый, выше — руинный */
-const brick = (c: BuildCtx, y: number): string => {
+const brick = (c: BuildCtx, y: number, m: Mat = RUIN): string => {
   const v = c.rnd();
-  if (y === 0) return v < 0.25 ? 'bricks_mossy' : v < 0.35 ? 'bricks_cracked' : 'bricks_old';
-  return v < 0.08 ? 'bricks_cracked' : 'bricks_old';
+  if (y === 0) return v < 0.25 ? m.low : v < 0.35 ? m.cracked : m.full;
+  return v < 0.08 ? m.cracked : m.full;
 };
 /** Столб кладки высотой h с рваным верхом: иногда полублок или ступень сверху */
-function pillar(c: BuildCtx, x: number, z: number, h: number, ragged = true): void {
-  for (let y = 0; y < h; y++) c.L.set(x, y, z, brick(c, y));
-  if (ragged) { const v = c.rnd(); if (v < 0.35) c.L.set(x, h, z, 'bricks_old_slab'); else if (v < 0.5) c.L.set(x, h, z, 'bricks_old_stairs', Math.floor(c.rnd() * 4)); }
+export function pillar(c: BuildCtx, x: number, z: number, h: number, ragged = true, m: Mat = RUIN): void {
+  for (let y = 0; y < h; y++) c.L.set(x, y, z, brick(c, y, m));
+  if (ragged) { const v = c.rnd(); if (v < 0.35) c.L.set(x, h, z, m.slab); else if (v < 0.5) c.L.set(x, h, z, m.stairs, Math.floor(c.rnd() * 4)); }
 }
 /** Стена по отрезку клеток с гуляющей высотой hMin..hMax и рваным верхом */
-function wallRun(c: BuildCtx, cells: [number, number][], hMin: number, hMax: number): void {
+export function wallRun(c: BuildCtx, cells: [number, number][], hMin: number, hMax: number, m: Mat = RUIN): void {
   let h = hMin + Math.floor(c.rnd() * (hMax - hMin + 1));
   for (const [x, z] of cells) {
     h = Math.max(hMin, Math.min(hMax, h + (c.rnd() < 0.4 ? (c.rnd() < 0.5 ? -1 : 1) : 0)));
-    pillar(c, x, z, h);
+    pillar(c, x, z, h, true, m);
   }
 }
 /**
  * Настенный декор на грани клетки (x, y, z): face — куда смотрит грань ('+z' | '-z' | '+x' | '-x').
  * Рыск как у блоков: 0 — смотрит к +Z, 90 — к −X, 180 — к −Z, 270 — к +X.
  */
-function onWall(c: BuildCtx, name: string, x: number, y: number, z: number, face: '+z' | '-z' | '+x' | '-x'): void {
+export function onWall(c: BuildCtx, name: string, x: number, y: number, z: number, face: '+z' | '-z' | '+x' | '-x'): void {
   const [dx, dz, rot] = face === '+z' ? [0, 0.5, 0] : face === '-z' ? [0, -0.5, 180] : face === '+x' ? [0.5, 0, 270] : [-0.5, 0, 90];
   c.dec(name, x + dx, y, z + dz, rot, [x, Math.floor(y), z]);
 }
 /** Арка шириной 1 между столбами x0 и x1 (= x0 + 2) с перемычкой на высоте h и зубцами сверху */
-function arch(c: BuildCtx, x0: number, z: number, h: number, collapsed = false): void {
-  pillar(c, x0, z, h, false); pillar(c, x0 + 2, z, h, false);
+export function arch(c: BuildCtx, x0: number, z: number, h: number, collapsed = false, m: Mat = RUIN): void {
+  pillar(c, x0, z, h, false, m); pillar(c, x0 + 2, z, h, false, m);
   if (collapsed) { c.dec('rubble', x0 + 1, 0, z + 1, yaw(c)); c.dec('bricks_loose', x0 + 1, 0, z, yaw(c)); return; }
-  for (let x = x0; x <= x0 + 2; x++) c.L.set(x, h, z, brick(c, h));
+  for (let x = x0; x <= x0 + 2; x++) c.L.set(x, h, z, brick(c, h, m));
   // пята арки: ступени под перемычкой лицом внутрь проёма
-  c.L.set(x0, h - 1, z, 'bricks_old_stairs', 0); c.L.set(x0 + 2, h - 1, z, 'bricks_old_stairs', 2);
-  for (let x = x0; x <= x0 + 2; x++) { const v = c.rnd(); if (v < 0.4) c.L.set(x, h + 1, z, 'bricks_old_slab'); else if (v < 0.6) c.L.set(x, h + 1, z, brick(c, h + 1)); }
+  c.L.set(x0, h - 1, z, m.stairs, 0); c.L.set(x0 + 2, h - 1, z, m.stairs, 2);
+  for (let x = x0; x <= x0 + 2; x++) { const v = c.rnd(); if (v < 0.4) c.L.set(x, h + 1, z, m.slab); else if (v < 0.6) c.L.set(x, h + 1, z, brick(c, h + 1, m)); }
 }
 /** Пол из плит с выпавшими и заросшими местами в прямоугольнике */
-function ruinFloor(c: BuildCtx, x0: number, z0: number, x1: number, z1: number): void {
+export function ruinFloor(c: BuildCtx, x0: number, z0: number, x1: number, z1: number): void {
   for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
     const v = c.rnd();
     c.L.set(x, -1, z, v < 0.6 ? 'tiles' : v < 0.8 ? 'tiles_broken' : 'grass');

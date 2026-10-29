@@ -11,7 +11,7 @@ import { buildFloor } from '../level/dungeon.ts';
 import { DECOR, decorDef, decorEuler } from '../level/decor.ts';
 import { decorMatrix } from '../level/decor-render.ts';
 import { attachedTo, placeDecor, type DecorPlacement } from '../level/decor-place.ts';
-import { landscape } from '../level/kit.ts';
+import { GROUNDS, GROUND_TITLES, landscape } from '../level/kit.ts';
 import type { Layer } from '../level/palette.ts';
 import { Lighting } from '../lighting';
 import { Weather } from '../weather';
@@ -53,7 +53,7 @@ interface BlockEdit { x: number; y: number; z: number; was: [string, number]; no
 /** Правка декора: before null — предмет добавлен, after null — убран, иначе — изменён (снимки полей) */
 interface DecorEdit { decor: DecorItem; before: DecorItem | null; after: DecorItem | null }
 /** Кусок ландшафта на карте (meta.lands): центр, параметры и клетки, которые он поменял, — [x, y, z, было, поворот, стало, поворот] */
-interface LandPiece { x: number; y: number; z: number; w: number; d: number; layers: number; scale: number; stone: number; seed: number; cells: [number, number, number, string, number, string, number][] }
+interface LandPiece { x: number; y: number; z: number; w: number; d: number; layers: number; scale: number; stone: number; seed: number; /** Земля (GROUNDS): нет поля — трава */ ground?: string; cells: [number, number, number, string, number, string, number][] }
 type LandParams = Omit<LandPiece, 'cells'>;
 /** Правка куска ландшафта: снимки записи до и после (null — куска нет) */
 interface LandEdit { land: LandPiece; before: LandPiece | null; after: LandPiece | null }
@@ -155,7 +155,7 @@ export function runEditor(): void {
   let drag: 'place' | 'remove' | null = null;
   let dirtyAutosave = false;
   /** Ландшафт для нового куска: размеры, слои по 0,5 м, крупность плит, доля камня (%), зерно шума — от него изгибы краёв и углов */
-  const land = { w: 24, d: 18, layers: 4, scale: 22, stone: 30, seed: 1 };
+  const land: { w: number; d: number; layers: number; scale: number; stone: number; seed: number; ground: string } = { w: 24, d: 18, layers: 4, scale: 22, stone: 30, seed: 1, ground: 'grass' };
   /** Выбранный кусок — его правят ползунки, «Случайно», стрелки и Del; live — последняя правка куска, к ней сливаются следующие */
   let selLand: LandPiece | null = null, hoverLand: LandPiece | null = null;
   let live: { piece: LandPiece; batch: Edit[] } | null = null;
@@ -401,9 +401,11 @@ export function runEditor(): void {
       modeTools.append(head('land', selLand ? `Кусок в ${selLand.x}, ${selLand.y}, ${selLand.z}` : 'Новый кусок ландшафта', `${p.w} × ${p.d} м · ${p.layers} слоёв (${p.layers / 2} м) · зерно ${p.seed}`));
       const g = new PropGrid();
       g.section('Ландшафт — проходим отовсюду', 'land');
-      const ln = (label: string, key: keyof typeof land, min: number, max: number, step = 1) =>
+      const ln = (label: string, key: Exclude<keyof typeof land, 'ground'>, min: number, max: number, step = 1) =>
         g.num(label, () => (selLand ?? land)[key], (v) => setLandParam(key, Math.round(v)), { min, max, step, slider: true });
       ln('Размер X', 'w', 6, 64); ln('Размер Z', 'd', 6, 64); ln('Слои × 0,5 м', 'layers', 1, 10); ln('Крупность', 'scale', 8, 40); ln('Камень, %', 'stone', 0, 80, 5);
+      g.text('Земля', () => GROUND_TITLES[(selLand ?? land).ground ?? 'grass'] ?? 'Трава', () => {}, true);
+      g.buttons(...Object.keys(GROUNDS).map((k): [string, () => void, string?] => [GROUND_TITLES[k] ?? k, () => setLandGround(k), 'land']));
       g.buttons(['Случайно: края и углы', () => { randomizeLand(); toast('Новые края и углы'); }, 'turntable']);
       g.note('ЛКМ по земле — поставить, ЛКМ по куску — выбрать, Shift+ЛКМ — новый поверх. Стрелки — сдвиг, Del — убрать, Esc — снять выбор.');
       g.refresh();
@@ -413,9 +415,13 @@ export function runEditor(): void {
   }
   let landGrid: PropGrid | null = null;
   function syncSliders(): void { landGrid?.refresh(); }
-  function setLandParam(key: keyof typeof land, v: number): void {
+  function setLandParam(key: Exclude<keyof typeof land, 'ground'>, v: number): void {
     if (selLand) changeLand(selLand, { ...landParams(selLand), [key]: v });
     else { land[key] = v; refreshHud(); }
+  }
+  function setLandGround(ground: string): void {
+    if (selLand) changeLand(selLand, { ...landParams(selLand), ground });
+    else { land.ground = ground; refreshHud(); }
   }
   function randomizeLand(): void { setLandParam('seed', 1 + Math.floor(Math.random() * 1e6)); }
 
@@ -1386,7 +1392,7 @@ export function runEditor(): void {
     const was = new Map<string, [string, number]>();
     for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let yy = p.y - 1; yy <= y1; yy++) was.set(`${x},${yy},${z}`, [level.nameAt(x, yy, z), level.rotAt(x, yy, z)]);
     landscape(level, x0, z0, x1, z1, p.y, {
-      layers: p.layers, max: p.layers, scale: p.scale, stone: p.stone / 100, seed: p.seed, dry: 0.08, daisies: 0.04,
+      layers: p.layers, max: p.layers, scale: p.scale, stone: p.stone / 100, seed: p.seed, dry: 0.08, daisies: 0.04, ground: GROUNDS[p.ground ?? 'grass'] ?? GROUNDS.grass,
       fade: Math.max(2, Math.min(p.w, p.d) / 5),
       flat: (x, z) => x === x0 || x === x1 || z === z0 || z === z1,
       bumps: [{ x: p.x, z: p.z, rx: p.w * 0.38, rz: p.d * 0.38, h: p.layers * 0.55 }],

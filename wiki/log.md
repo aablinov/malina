@@ -280,3 +280,7 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-10-29] код | Библиотека пресетов, партия 5: композиции
 Вложенные пресеты: `stampInto` и `c.put` / `c.putEntity` в `build.ts` — средний пресет запекается своим строителем и вкладывается со сдвигом и поворотом, код не дублируется, JSON средних не меняется. Пять композиций (`builders-compositions.ts`, 10 пресетов): деревня с мельницей, хутор у дороги, лагерь разбойников (новый блок `stake_fence`), руины у кладбища, обрыв со статуей. В библиотеке 115 пресетов по 57 строителям.
 Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+
+## [2026-10-29] код | Библиотека пресетов, партия 6: биом «снег» и земля на выбор
+Земля ландшафта на выбор (`GROUNDS` в `kit.ts`: трава, снег; кнопки в инструменте «Ландшафт», `meta.lands[].ground`), витрина кладёт ряд биома на его землю. Блоки снега и льда (`snow`, `snow_slab`, `snow_layer`, `cliff_snow`, `ice`, `ice_cracked`, `ice_slab`, `frozen_water`, `leaves_snow`, `dead_bush_snow`), декор «снег» (сугробы, сосульки, шипы, снеговик, бревно и камни под снегом), набор «Зима». Пост-проход `snowCap` и `snowy(id)` — снежные варианты готовых пресетов без копий; `Mat` у помощников руин. 36 снежных пресетов (`builders-snow.ts`), в библиотеке 151.
+Страницы: [design-prefab-library.md](design-prefab-library.md), [style-world.md](style-world.md), [sources/refs-settlements.md](sources/refs-settlements.md).

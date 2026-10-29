@@ -204,6 +204,8 @@ export interface Textures {
   flowerOrange: THREE.Texture; tilesBroken0: THREE.Texture; tilesBroken1: THREE.Texture; reeds: THREE.Texture; leafLitter: THREE.Texture; barkDead: THREE.Texture;
   clay: THREE.Texture; ivy: THREE.Texture;
   crops: THREE.Texture; cropsRipe: THREE.Texture; thatch: THREE.Texture; shingles: THREE.Texture; barrel: THREE.Texture; barrelTop: THREE.Texture; burlap: THREE.Texture; tentCloth: THREE.Texture; stake: THREE.Texture; stakeTop: THREE.Texture;
+  snowTop: THREE.Texture; snowSide: THREE.Texture; snowFringe: THREE.Texture; cliffSnowSide: THREE.Texture; ice: THREE.Texture; iceCracked: THREE.Texture; frozenWater: THREE.Texture; leavesSnowCut: THREE.Texture; deadBushSnow: THREE.Texture;
+  snowEdge0: THREE.Texture; snowEdge1: THREE.Texture; snowEdge2: THREE.Texture; snowEdge3: THREE.Texture;
   // портал (скриншот 14)
   portal: THREE.Texture; portalFrame: THREE.Texture; portalTrim: THREE.Texture; portalFloor: THREE.Texture;
   // рваный край между травой и дорожкой (mesher.ts, bleed): 4 варианта маски у каждой
@@ -723,6 +725,41 @@ export function makeTextures(): Textures {
       for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? GRASS_DARK : GRASS_BASE, r, 3));
     }
   }, 172);
+  // ---------- снег и лёд (биом «снег», референсы 13, 9) ----------
+  const SNOW_BASE = '#eef3f8', SNOW_SHADE = '#d9e4ee', SNOW_LIGHT = '#fbfdff', ICE = '#bcdcec';
+  T.snowTop = canvasTex(16, (g, s, r) => softFill(g, s, r, SNOW_BASE, 2, [{ col: SNOW_SHADE, n: 3, rad: [2, 4], k: 0.5 }, { col: SNOW_LIGHT, n: 2, rad: [2, 3], k: 0.5 }]), 210);
+  // бок снежной земли: земля, сверху снежная кромка 3–6 px с голубой тенью под ней
+  T.snowSide = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, DIRT_BASE, 3, [{ col: DIRT_DARK, n: 3, rad: [2, 3.5], k: 0.6 }]);
+    for (let x = 0; x < s; x++) { const d = 3 + ((r() * 4) | 0); for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? SNOW_SHADE : SNOW_BASE, r, 3)); }
+  }, 211);
+  T.snowFringe = canvasTex(16, (g, s, r) => {
+    for (let x = 0; x < s; x++) { const len = 1 + Math.floor(r() * 4); for (let y = 0; y < len; y++) px(g, x, y, jitter(y === len - 1 ? SNOW_SHADE : SNOW_BASE, r, 3)); }
+  }, 212, { alpha: true });
+  T.cliffSnowSide = canvasTex(16, (g, s, r) => {
+    strata(CLIFF, r, g, s);
+    for (let x = 0; x < s; x++) { const d = 2 + ((r() * 4) | 0); for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? SNOW_SHADE : SNOW_BASE, r, 3)); }
+  }, 213);
+  [T.snowEdge0, T.snowEdge1, T.snowEdge2, T.snowEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(SNOW_BASE, GRASS_BASE, SNOW_LIGHT), 214 + i, { alpha: true }));
+  // лёд: светло-голубой с белыми трещинами-ломаными; треснутый — трещин больше и темнее
+  const icePaint = (cracks: number, col: string) => (g: Ctx, s: number, r: Rand) => {
+    softFill(g, s, r, ICE, 2, [{ col: '#cfe8f4', n: 3, rad: [2, 4], k: 0.5 }, { col: '#a9cfe3', n: 2, rad: [2, 3], k: 0.5 }]);
+    for (let i = 0; i < cracks; i++) {
+      let x = (r() * s) | 0, y = (r() * s) | 0;
+      for (let k = 0; k < 6 + ((r() * 6) | 0); k++) { px(g, x & 15, y & 15, jitter(col, r, 4)); if (r() < 0.5) x += r() < 0.5 ? -1 : 1; else y += r() < 0.5 ? -1 : 1; }
+    }
+  };
+  T.ice = canvasTex(16, icePaint(2, '#f4fbff'), 218);
+  T.iceCracked = canvasTex(16, icePaint(5, '#8fb8cf'), 219);
+  T.frozenWater = canvasTex(16, (g, s, r) => { icePaint(1, '#f4fbff')(g, s, r); for (let i = 0; i < 3; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#6aa6c8'); px(g, (x + 1) & 15, y, '#7db3d2'); } }, 220);
+  // хвоя под снегом: тёмная вырезная листва, верхние ряды белые
+  T.leavesSnowCut = canvasTex(16, (g, s, r) => {
+    softLeaves(g, s, r, ['#2f4a2a', '#3d5c33', '#4a6b3c', '#587a46'], true);
+    for (let y = 0; y < 5; y++) for (let x = 0; x < s; x++) if (r() < (y < 3 ? 0.9 : 0.4)) px(g, x, y, jitter(SNOW_BASE, r, 3));
+  }, 221, { alpha: true });
+  T.deadBushSnow = canvasTex(16, (g, s, r) => {
+    for (let i = 0; i < 5; i++) { let x = 3 + ((r() * 10) | 0); const h = 6 + ((r() * 8) | 0); for (let k = 0; k < h; k++) { px(g, x, s - 1 - k, jitter('#6a5440', r, 4)); if (r() < 0.3) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); if (k > h - 3 && r() < 0.7) px(g, x, s - 2 - k, SNOW_BASE); } }
+  }, 222, { alpha: true });
   T.foam = canvasTex(16, (g, s, r) => softFill(g, s, r, '#e9edf0', 2, [{ col: '#cfd8df', n: 3, rad: [2, 4], k: 0.7 }, { col: '#ffffff', n: 2, rad: [2, 3], k: 0.6 }]), 173);
   // настил моста: светлые доски по 4 px со щелями; столб — темнее, продольные волокна
   T.bridgePlank = canvasTex(16, (g, s, r) => {

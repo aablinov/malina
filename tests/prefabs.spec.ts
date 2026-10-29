@@ -26,7 +26,10 @@ test('витрина пресетов: все пресеты из assets/prefabs
   expect(errors).toEqual([]);
   expect(r.name).toBe('Витрина пресетов');
   expect(r.blocks).toBeGreaterThan(1000);
-  expect(r.decor).toBeGreaterThanOrEqual(FILES);
+  // витрина большая и стримится регионами — декор считаем по файлу карты, в странице лежат только регионы у героя
+  const mapDecor = (JSON.parse(readFileSync(resolve('assets/maps/prefabs.json'), 'utf8')) as { decor?: unknown[] }).decor?.length ?? 0;
+  expect(mapDecor).toBeGreaterThanOrEqual(FILES);
+  expect(r.decor).toBeGreaterThan(0);
   expect(r.labels).toBeGreaterThanOrEqual(FILES + CATS);
   expect(r.cats).toBeGreaterThanOrEqual(CATS);
 });
