@@ -534,6 +534,73 @@ shape('rock_snow', (o) => {
   }
 });
 
+// --- джунгли с кристаллами (биом «джунгли», референс 16) ---
+// призма кристалла: брусок и узкий кончик, наклонена вокруг основания (как у блока crystal)
+const prismAt = (o, x, z, w, h, yaw, tilt) => o.xf({ rot: [tilt, yaw, 0], move: [x, 0, z] }, () => {
+  cbox(o, w, h * 0.62, w, { py: null, ny: 'bottom' });
+  o.tbox(-w / 4, h * 0.62, -w / 4, w / 4, h, w / 4, { py: 'top', ny: null });
+});
+// гроздь: 6 призм разной высоты 0,5–1,6 м и наклона вокруг центра
+shape('crystal_cluster', (o) => {
+  for (const [x, z, w, h, yaw, tilt] of [[0, 0, 7 * P, 1.6, 10, 6], [-5 * P, 3 * P, 5 * P, 1.1, 60, -16], [5 * P, -2 * P, 5 * P, 0.9, 120, 14], [2 * P, 6 * P, 4 * P, 0.7, 200, 18], [-4 * P, -5 * P, 4 * P, 0.6, 280, -12], [7 * P, 4 * P, 3 * P, 0.5, 330, 20]]) prismAt(o, x, z, w, h, yaw, tilt);
+});
+// обломок: призма лежит на боку, рядом два осколка
+shape('crystal_shard', (o) => {
+  o.xf({ rot: [0, 25, 0] }, () => o.xf({ rot: [78, 0, 0], move: [0, 2.5 * P, -3 * P] }, () => prismAt(o, 0, 0, 5 * P, 0.8, 0, 0)));
+  prismAt(o, 5 * P, 4 * P, 3 * P, 4 * P, 40, 10);
+  prismAt(o, -6 * P, 2 * P, 2 * P, 3 * P, 100, -8);
+});
+// лианы с потолка: четыре вырезные полосы 1/16 свисают от точки крепления на 1–2,2 м, крест-накрест
+shape('vines_hanging', (o) => {
+  for (const [x, z, yaw, w, len] of [[-5 * P, 2 * P, 0, 7 * P, 1.9], [3 * P, -4 * P, 90, 6 * P, 1.4], [6 * P, 5 * P, 45, 5 * P, 2.2], [-2 * P, -6 * P, 135, 6 * P, 1.1]]) {
+    o.xf({ rot: [0, yaw, 0], move: [x, 0, z] }, () => o.tbox(-w / 2, -len, 0, w / 2, 0, 0, { pz: 'side', nz: 'side', px: null, nx: null, py: null, ny: null }));
+  }
+});
+// лианы на стене: как плющ, но полосы длиннее и шире, свисают от точки крепления
+shape('vines_wall', (o) => {
+  for (const [x, w, top, len] of [[-6 * P, 7 * P, 2 * P, 1.8], [1 * P, 8 * P, 1 * P, 1.2], [-1 * P, 5 * P, 3 * P, 2.2], [6 * P, 6 * P, 0, 1.5]]) {
+    o.tbox(x - w / 2, top - len, P, x + w / 2, top, P, { pz: 'side', nz: 'side', px: null, nx: null, py: null, ny: null });
+  }
+});
+// корни-контрфорсы: четыре клина от центра наружу — высокий у ствола, к концу сходят к земле
+shape('roots_big', (o) => {
+  for (const [yaw, len, h] of [[15, 1.3, 0.9], [110, 1.1, 0.7], [200, 1.4, 1.0], [300, 1.0, 0.6]]) o.xf({ rot: [0, yaw, 0] }, () => {
+    o.tbox(0, 0, -2 * P, len * 0.45, h, 2 * P, 'side');
+    o.tbox(len * 0.45, 0, -1.5 * P, len * 0.75, h * 0.5, 1.5 * P, 'side');
+    o.tbox(len * 0.75, 0, -P, len, h * 0.2, P, 'side');
+  });
+});
+// каменная голова-идол: куб 14/16 на плите, надбровье, нос, губы, уши; верх чуть обломан; смотрит к +Z
+shape('idol_head', (o) => {
+  cbox(o, 1, 3 * P, 1, { py: 'top', ny: 'bottom' });
+  o.tbox(-7 * P, 3 * P, -7 * P, 7 * P, 17 * P, 7 * P, { py: 'top', ny: null });
+  o.tbox(-7 * P, 17 * P, -7 * P, 3 * P, 19 * P, 7 * P, { py: 'top', ny: null });
+  o.tbox(-6 * P, 12 * P, 7 * P, 6 * P, 14 * P, 9 * P, 'carved'); // надбровье
+  o.tbox(-1.5 * P, 7 * P, 7 * P, 1.5 * P, 12 * P, 9 * P, 'side'); // нос
+  o.tbox(-4 * P, 5 * P, 7 * P, 4 * P, 6.5 * P, 8 * P, 'carved'); // губы
+  for (const x of [-5 * P, 2.5 * P]) o.tbox(x, 9.5 * P, 7 * P, x + 2.5 * P, 11 * P, 7.5 * P, 'dark'); // глаза
+  for (const s of [-1, 1]) o.tbox(s * 7 * P - (s < 0 ? 2 * P : 0), 8 * P, -2 * P, s * 7 * P + (s > 0 ? 2 * P : 0), 14 * P, 2 * P, 'carved'); // уши
+});
+// упавшее бревно во мху: бревно 8/16 вдоль X, мох полосой сверху и пятном сбоку, папоротник у торца
+shape('log_mossy_fallen', (o) => {
+  o.xf({ rot: [0, 0, -90], move: [-0.75, 4 * P, 0] }, () => o.tbox(-4 * P, 0, -4 * P, 4 * P, 1.5, 4 * P, { py: 'end', ny: 'end', px: 'side', nx: 'side', pz: 'side', nz: 'side' }));
+  o.tbox(-0.65, 8 * P, -3 * P, 0.5, 9 * P, 3 * P, 'moss');
+  o.tbox(-0.3, 2 * P, 4 * P, 0.3, 7 * P, 4.5 * P, 'moss');
+});
+shape('log_mossy_fallen_fern', (o) => o.xf({ rot: [0, 30, 0], move: [0.85, 0, 0.1] }, () => o.cross('side', -0.5, 0.5, 0, 0.7)));
+// куст папоротников: пять широких крестов 12/16 под разными углами
+shape('fern_cluster', (o) => {
+  for (const [x, z, yaw, h] of [[-4 * P, -3 * P, 10, 0.9], [4 * P, -4 * P, 55, 0.75], [0, 4 * P, 95, 1.0], [6 * P, 3 * P, 30, 0.7], [-6 * P, 4 * P, 70, 0.8]]) {
+    o.xf({ rot: [0, yaw, 0], move: [x, 0, z] }, () => o.cross('side', -6 * P, 6 * P, 0, h));
+  }
+});
+// кувшинки: четыре плоских листа 1/16 на воде, один с цветком (в текстуре)
+shape('lily_pad', (o) => {
+  for (const [x, z, s, yaw] of [[-5 * P, -3 * P, 9 * P, 20], [4 * P, 2 * P, 11 * P, 70], [-2 * P, 6 * P, 7 * P, 120], [6 * P, -6 * P, 6 * P, 200]]) {
+    o.xf({ rot: [0, yaw, 0], move: [x, 0, z] }, () => cbox(o, s, P, s, { py: 'top', ny: 'top', px: null, nx: null, pz: null, nz: null }));
+  }
+});
+
 mkdirSync(OUT, { recursive: true });
 for (const s of shapes) writeFileSync(join(OUT, `${s.name}.obj`), s.text());
 console.log(`${shapes.length} форм декора → ${OUT}`);

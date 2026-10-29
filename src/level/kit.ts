@@ -205,8 +205,20 @@ export interface Ground { top: string; slab: string; side: string; rockTop: stri
 export const GROUNDS: Record<string, Ground> = {
   grass: { top: 'grass', slab: 'grass_slab', side: 'dirt', rockTop: 'cliff_grass', flora: true },
   snow: { top: 'snow', slab: 'snow_slab', side: 'dirt', rockTop: 'cliff_snow', flora: false },
+  jungle: { top: 'jungle_floor', slab: 'jungle_floor_slab', side: 'dirt', rockTop: 'cliff_jungle', flora: false },
 };
-export const GROUND_TITLES: Record<string, string> = { grass: 'Трава', snow: 'Снег' };
+export const GROUND_TITLES: Record<string, string> = { grass: 'Трава', snow: 'Снег', jungle: 'Джунгли' };
+/**
+ * Земля джунглей — мозаика ровных блоков пятнами по шуму (референс 16): оранжевая земля, крупные пятна бирюзового мха,
+ * тёмно-красная земля, редкие островки зелёного мха. Общая для пресетов (builders-jungle.ts) и витрины (prefabs-map.ts).
+ */
+export function jungleGroundAt(x: number, z: number, seed = 0): string {
+  const a = noise2(x, z, 5, seed + 1), b = noise2(x, z, 3, seed + 2);
+  if (a > 0.6) return 'moss_teal';
+  if (a < 0.3) return 'jungle_floor_red';
+  if (b > 0.72) return 'moss_block';
+  return 'jungle_floor';
+}
 
 export interface LandscapeOpts extends HillOpts {
   /** Земля: трава по умолчанию (GROUNDS) */

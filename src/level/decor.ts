@@ -129,6 +129,19 @@ export const DECOR: DecorDef[] = [
   D('log_snow', 'Бревно под снегом', 'снег', 'floor', [p('log_snow', { side: 'logSide', end: 'logTop', snow: 'snowTop' })], { solid: [{ w: 1.3, d: 0.4, h: 0.4 }] }),
   D('rock_snow', 'Камешки под снегом', 'снег', 'floor', [p('rock_snow', { side: 'cliff', top: 'snowTop', bottom: 'stone' })]),
 
+  // --- джунгли (биом «джунгли», референс 16): кристаллы со светом, лианы, корни, идол, бревно во мху, папоротники, кувшинки ---
+  D('crystal_cluster', 'Гроздь кристаллов', 'джунгли', 'floor', [p('crystal_cluster', { side: 'crystal', top: 'crystal', bottom: 'crystal' }, 'glow')],
+    { solid: [{ w: 0.9, d: 0.9, h: 1.6 }], light: { color: '#6fe8e0', intensity: 1.4, dist: 5, at: [0, 0.8, 0], baked: true } }),
+  D('crystal_shard', 'Обломок кристалла', 'джунгли', 'floor', [p('crystal_shard', { side: 'crystal', top: 'crystal', bottom: 'crystal' }, 'glow')],
+    { light: { color: '#6fe8e0', intensity: 0.6, dist: 3, at: [0, 0.2, 0], baked: true } }),
+  D('vines_hanging', 'Лианы свисающие', 'джунгли', 'ceiling', [p('vines_hanging', { side: 'vine' }, 'cutout')]),
+  D('vines_wall', 'Лианы на стене', 'джунгли', 'wall', [p('vines_wall', { side: 'vine' }, 'cutout')]),
+  D('roots_big', 'Корни-контрфорсы', 'джунгли', 'floor', [p('roots_big', { side: 'logJungleSide', top: 'logJungleSide', bottom: 'logJungleSide' })]),
+  D('idol_head', 'Голова-идол', 'джунгли', 'floor', [p('idol_head', { side: 'templeStone', top: 'templeStoneTop', bottom: 'templeStoneTop', carved: 'templeStoneCarved', dark: 'ironDark' })], { solid: [{ w: 1, d: 1, h: 1.2 }] }),
+  D('log_mossy_fallen', 'Бревно во мху', 'джунгли', 'floor', [p('log_mossy_fallen', { side: 'logJungleSide', end: 'logJungleTop', moss: 'mossBlock' }), p('log_mossy_fallen_fern', { side: 'fernBig' }, 'cutout')], { solid: [{ w: 1.5, d: 0.5, h: 0.5 }] }),
+  D('fern_cluster', 'Папоротники', 'джунгли', 'floor', [p('fern_cluster', { side: 'fernBig' }, 'cutout')]),
+  D('lily_pad', 'Кувшинки', 'джунгли', 'floor', [p('lily_pad', { top: 'lilyPad' }, 'cutout')]),
+
   D('candles_group', 'Свечи кучкой', 'свечи', 'floor', [p('candles_group', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candles_group_flame', { side: 'fire' }, 'fire')],
     { light: { color: '#ffb25a', intensity: 0.9, dist: 2.6, at: [0, 0.4, 0], baked: true } }),
   D('candles_row', 'Свечи в ряд', 'свечи', 'floor', [p('candles_row', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candles_row_flame', { side: 'fire' }, 'fire')],

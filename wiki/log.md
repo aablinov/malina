@@ -284,3 +284,7 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-10-29] код | Библиотека пресетов, партия 6: биом «снег» и земля на выбор
 Земля ландшафта на выбор (`GROUNDS` в `kit.ts`: трава, снег; кнопки в инструменте «Ландшафт», `meta.lands[].ground`), витрина кладёт ряд биома на его землю. Блоки снега и льда (`snow`, `snow_slab`, `snow_layer`, `cliff_snow`, `ice`, `ice_cracked`, `ice_slab`, `frozen_water`, `leaves_snow`, `dead_bush_snow`), декор «снег» (сугробы, сосульки, шипы, снеговик, бревно и камни под снегом), набор «Зима». Пост-проход `snowCap` и `snowy(id)` — снежные варианты готовых пресетов без копий; `Mat` у помощников руин. 36 снежных пресетов (`builders-snow.ts`), в библиотеке 151.
 Страницы: [design-prefab-library.md](design-prefab-library.md), [style-world.md](style-world.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+
+## [2026-10-29] код | Библиотека пресетов, партия 7: биом «джунгли с кристаллами»
+`builders-jungle.ts` (14 строителей, 28 пресетов, композиция `temple_ruins_jungle`), 20 блоков (земля — мозаика ровных блоков по шуму: `jungle_floor`, `jungle_floor_red`, `moss_teal`, `moss_block` через `jungleGroundAt`, `temple_stone` с резьбой, `crystal` — форма из трёх призм в слое `glow` с запечённым бирюзовым светом), 9 предметов декора (гроздь кристаллов, лианы, корни, идол, кувшинки), земля `jungle` в ландшафте, набор окружения «Джунгли». Прежние JSON пресетов не изменились.
+Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
