@@ -5,22 +5,19 @@ import { BLOCKS, CATEGORIES } from '../../level/palette.ts';
 import { DECOR, DECOR_CATEGORIES } from '../../level/decor.ts';
 import { bridgeX, cliffMass, floorRect, hayStack, hill, portal, rampart, riverBed, rockOutcrop, stairway, steppedWall, tree, waterfall } from '../../level/kit.ts';
 import type { Textures } from '../../textures';
+import { LIBRARY, LIBRARY_CATEGORIES, stampPrefab, type LibraryPrefab, type PrefabData } from '../../level/prefab-lib/index.ts';
 
 /**
  * Префабы — всё, что можно поставить на карту из панели «Префабы» (как Place Actors / Content Browser в Unreal):
  * блоки палитры, декор, сборки (src/level/kit.ts — дерево, холм, скала, портал…), свет и служебные (точка появления),
+ * «Библиотека» — запечённые пресеты из assets/prefabs/ (wiki/design-prefab-library.md, поворот на 90° — R в режиме «Поставить»)
  * и «Мои префабы» — сохранённые выделения (клетки, декор и свет относительно опорной клетки, хранятся в localStorage).
  */
 
-export type PrefabKind = 'block' | 'decor' | 'kit' | 'light' | 'spawn' | 'user';
+export type PrefabKind = 'block' | 'decor' | 'kit' | 'light' | 'spawn' | 'lib' | 'user';
 
-export interface UserPrefab {
-  id: string; title: string;
-  /** [dx, dy, dz, блок, поворот] от опорной клетки (низ, центр выделения) */
-  cells: [number, number, number, string, number][];
-  decor: DecorItem[];
-  entities: LevelEntity[];
-}
+/** Свой префаб: клетки, декор и свет относительно опорной клетки (низ, центр выделения) — тот же формат, что у библиотеки */
+export type UserPrefab = PrefabData;
 
 export interface Prefab {
   id: string;
@@ -35,12 +32,14 @@ export interface Prefab {
   icon?: string;
   /** Сборка: строит себя в клетке (x, y, z) — y — первый слой воздуха над землёй */
   build?: (L: Level, x: number, y: number, z: number, seed: number) => void;
-  user?: UserPrefab;
+  /** Пресет библиотеки или свой префаб */
+  user?: PrefabData;
+  lib?: LibraryPrefab;
   /** Подсказка — что это и как ставится */
   hint?: string;
 }
 
-export const GROUPS = ['Все', 'Блоки', 'Декор', 'Сборки', 'Свет', 'Служебные', 'Мои префабы'] as const;
+export const GROUPS = ['Все', 'Блоки', 'Декор', 'Сборки', 'Свет', 'Служебные', 'Библиотека', 'Мои префабы'] as const;
 
 const KITS: [string, string, string, Prefab['build'], string][] = [
   ['tree_small', 'Дерево', 'природа', (L, x, y, z) => tree(L, x, y, z, 3, 2), 'ствол 3 блока, пышная крона'],
@@ -70,6 +69,7 @@ export function catalog(user: UserPrefab[]): Prefab[] {
     { id: 'light:spot', title: 'Прожектор', group: 'Свет', category: 'источники', kind: 'light', name: 'spot', icon: 'spot', hint: 'конус света вниз' },
     { id: 'spawn', title: 'Точка появления', group: 'Служебные', category: 'игрок', kind: 'spawn', icon: 'flag', hint: 'Player Start — откуда герой начинает' },
   );
+  for (const cat of LIBRARY_CATEGORIES) for (const p of LIBRARY) if (p.category === cat) out.push({ id: `lib:${p.id}`, title: p.title + (p.seed > 1 ? ` ${p.seed}` : ''), group: 'Библиотека', category: cat, kind: 'lib', user: p, lib: p, hint: `${p.hint ?? ''}${p.hint ? ' · ' : ''}${p.size[0]} × ${p.size[2]} м, ${p.decor.length} декора · R — повернуть` });
   for (const u of user) out.push({ id: `user:${u.id}`, title: u.title, group: 'Мои префабы', category: 'сохранённые', kind: 'user', user: u, hint: `${u.cells.length} блоков, ${u.decor.length} декора` });
   return out;
 }
@@ -82,12 +82,9 @@ export function saveUserPrefabs(list: UserPrefab[]): void {
   try { localStorage.setItem(USER_KEY, JSON.stringify(list)); } catch { /* нет места — префабы живут до перезагрузки */ }
 }
 
-/** Поставить префаб-заготовку в карту (через level.set — так редактор записывает правки в отмену) */
-export function stampUser(L: Level, u: UserPrefab, x: number, y: number, z: number): { decor: DecorItem[]; entities: LevelEntity[] } {
-  for (const [dx, dy, dz, n, r] of u.cells) L.set(x + dx, y + dy, z + dz, n, r);
-  const decor = u.decor.map((d) => ({ ...JSON.parse(JSON.stringify(d)) as DecorItem, pos: [d.pos[0] + x, d.pos[1] + y, d.pos[2] + z] as [number, number, number], ...(d.on ? { on: [d.on[0] + x, d.on[1] + y, d.on[2] + z] as [number, number, number] } : {}) }));
-  const entities = u.entities.map((e) => ({ ...JSON.parse(JSON.stringify(e)) as LevelEntity, x: e.x + x, y: e.y + y, z: e.z + z }));
-  return { decor, entities };
+/** Поставить префаб-заготовку (свой или из библиотеки) в карту с поворотом на quarter четвертей (через level.set — так редактор записывает правки в отмену) */
+export function stampUser(L: Level, u: PrefabData, x: number, y: number, z: number, quarter = 0): { decor: DecorItem[]; entities: LevelEntity[] } {
+  return stampPrefab(L, u, x, y, z, quarter);
 }
 
 /**
@@ -151,7 +148,7 @@ export class Thumbs {
     if (p.kind === 'block') { L.set(0, 0, 0, p.name!, 0); if (blockIsFlat(p.name!)) L.set(0, -1, 0, 'grass'); }
     else if (p.kind === 'decor') L.addDecor({ name: p.name!, pos: [0, 0, 0] });
     else if (p.kind === 'kit') { L.fill(-7, -1, -7, 7, -1, 7, 'grass'); p.build!(L, 0, 0, 0, 3); }
-    else if (p.kind === 'user') stampUser(L, p.user!, 0, 0, 0).decor.forEach((d) => L.addDecor(d));
+    else if (p.kind === 'user' || p.kind === 'lib') { if (p.kind === 'lib') L.fill(-7, -1, -7, 7, -1, 7, 'grass'); stampUser(L, p.user!, 0, 0, 0).decor.forEach((d) => L.addDecor(d)); }
     v.rebuildAll();
     v.sync();
     const box = new THREE.Box3().setFromObject(v.group);

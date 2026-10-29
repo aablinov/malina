@@ -1,0 +1,1 @@
+{"id":"tree_dead_2","title":"Мёртвое дерево","category":"природа","hint":"голый ствол с ветками, сухая трава и камни","size":[3,1,3],"seed":2,"cells":[[-1,0,-1,"dry_grass",0],[1,0,1,"dry_grass",0]],"decor":[{"name":"tree_dead","pos":[0,0,0],"rot":[264]},{"name":"rock_small","pos":[1,0,-1],"rot":[116]},{"name":"bones","pos":[-1,0,1],"rot":[193]}],"entities":[]}

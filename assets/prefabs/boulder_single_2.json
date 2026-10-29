@@ -1,0 +1,1 @@
+{"id":"boulder_single_2","title":"Валун","category":"природа","hint":"камень 1 × 1 с травой у подножия","size":[3,1,3],"seed":2,"cells":[[0,0,0,"cliff",0],[1,0,0,"cliff_slab",0],[0,0,1,"tall_grass",0]],"decor":[{"name":"rock_small","pos":[-1,0,-1],"rot":[227]}],"entities":[]}

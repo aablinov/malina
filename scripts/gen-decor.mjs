@@ -284,6 +284,202 @@ candleSet('candles_group', [[-4 * P, -3 * P, 7 * P], [2 * P, -1 * P, 5 * P], [-1
 candleSet('candles_row', [[-12 * P, 0, 5 * P], [-6 * P, P, 7 * P], [0, -P, 4 * P], [6 * P, 0, 6 * P], [12 * P, P, 5 * P]]);
 candleSet('candle_tall', [[0, 0, 11 * P]]);
 
+// --- природа (партия «Дорога и природа»): мёртвое дерево, тростник, пень, камешки, опавшие листья ---
+// мёртвое дерево: ствол 6/16 высотой 2,3 м с расширением у корней, четыре голые ветки под углом (референсы 1, 4, 10)
+shape('tree_dead', (o) => {
+  cbox(o, 6 * P, 2.3, 6 * P, 'side');
+  cbox(o, 10 * P, 4 * P, 10 * P, 'side');
+  for (const [h, yaw, tilt, len] of [[1.25, 20, 55, 0.85], [1.65, 140, 50, 0.7], [1.95, 260, 45, 0.6], [2.2, 70, 30, 0.45]]) {
+    o.xf({ rot: [0, yaw, 0] }, () => o.xf({ rot: [0, 0, -tilt], move: [0, h, 0] }, () => o.tbox(-1.5 * P, 0, -1.5 * P, 1.5 * P, len, 1.5 * P, 'side')));
+  }
+});
+// тростник: пять скрещённых стеблей 8/16 шириной, 14/16 высотой, под разными углами
+shape('reeds', (o) => {
+  for (const [x, z, yaw, h] of [[-4 * P, -3 * P, 10, 14 * P], [3 * P, -4 * P, 50, 12 * P], [0, 3 * P, 80, 15 * P], [5 * P, 3 * P, 25, 11 * P], [-5 * P, 4 * P, 65, 13 * P]]) {
+    o.xf({ rot: [0, yaw, 0], move: [x, 0, z] }, () => o.cross('side', -4 * P, 4 * P, 0, h));
+  }
+});
+// пень: кругляк 10/16 высотой 6/16 и три корня
+shape('stump', (o) => {
+  cbox(o, 10 * P, 6 * P, 10 * P, { py: 'top', ny: 'bottom' });
+  for (const yaw of [15, 140, 250]) o.xf({ rot: [0, yaw, 0] }, () => o.tbox(4 * P, 0, -1.5 * P, 9 * P, 2 * P, 1.5 * P, 'side'));
+});
+// камешки: три валунка 4–7/16 под разными углами
+shape('rock_small', (o) => {
+  for (const [x, z, s, yaw] of [[-3 * P, -2 * P, 7 * P, 20], [4 * P, 1 * P, 5 * P, 65], [-1 * P, 5 * P, 4 * P, 40]]) {
+    o.xf({ rot: [0, yaw, 0], move: [x, 0, z] }, () => cbox(o, s, s * 0.8, s * 0.9, { py: 'top', ny: 'bottom' }));
+  }
+});
+// опавшие листья: плоские пятна 1/16 на земле, как пена на воде
+shape('leaf_litter', (o) => {
+  const r = rand(37);
+  for (let i = 0; i < 7; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.75, w = snap(0.3 + r() * 0.5), dd = snap(0.25 + r() * 0.4);
+    o.xf({ rot: [0, r() * 90, 0], move: [Math.cos(a) * d, 0, Math.sin(a) * d] }, () => cbox(o, w, P, dd, 'top'));
+  }
+});
+
+// --- руины (партия «Руины»): надгробия, крест, статуя в капюшоне, чаша, горшки, плющ, череп (референсы 2, 8, 10) ---
+// надгробие: плита 8/16 × 14/16 × 3/16 со скруглённым верхом (ступенька), чуть наклонено
+shape('gravestone', (o) => {
+  o.xf({ rot: [0, 0, -4] }, () => {
+    o.tbox(-4 * P, 0, -1.5 * P, 4 * P, 12 * P, 1.5 * P, { py: 'top', ny: 'bottom' });
+    o.tbox(-3 * P, 12 * P, -1.5 * P, 3 * P, 14 * P, 1.5 * P, { py: 'top', ny: null });
+    o.tbox(-5 * P, 0, -2.5 * P, 5 * P, 2 * P, 2.5 * P, { py: 'top', ny: 'bottom' });
+  });
+});
+// широкое надгробие: 12/16 × 9/16, плоский верх с выщербиной
+shape('gravestone_wide', (o) => {
+  o.xf({ rot: [0, 0, 3] }, () => {
+    o.tbox(-6 * P, 0, -1.5 * P, 6 * P, 8 * P, 1.5 * P, { py: 'top', ny: 'bottom' });
+    o.tbox(-6 * P, 8 * P, -1.5 * P, 2 * P, 9 * P, 1.5 * P, { py: 'top', ny: null });
+  });
+});
+// упавшее надгробие: плита лежит на земле под углом, край приподнят
+shape('gravestone_fallen', (o) => {
+  o.xf({ rot: [8, 25, 0], move: [0, P, 0] }, () => o.tbox(-7 * P, 0, -4 * P, 7 * P, 3 * P, 4 * P, { py: 'top', ny: 'bottom' }));
+});
+// могильный крест: столбик 2/16 и перекладина, покосился
+shape('grave_cross', (o) => {
+  o.xf({ rot: [0, 0, 6] }, () => {
+    o.tbox(-P, 0, -P, P, 14 * P, P, { py: 'top', ny: 'bottom' });
+    o.tbox(-5 * P, 9 * P, -P, 5 * P, 11 * P, P, { py: 'top', ny: 'bottom' });
+  });
+});
+// статуя в капюшоне на постаменте (референс 2): постамент 14/16, тело сужается кверху, капюшон нависает, руки сложены
+shape('statue_hooded', (o) => {
+  cbox(o, 14 * P, 8 * P, 14 * P, { py: 'top', ny: 'bottom' });
+  o.tbox(-5 * P, 8 * P, -4 * P, 5 * P, 20 * P, 4 * P, { py: 'top', ny: null });
+  o.tbox(-4 * P, 20 * P, -3 * P, 4 * P, 27 * P, 3 * P, { py: 'top', ny: null });
+  o.tbox(-4 * P, 15 * P, 4 * P, 4 * P, 18 * P, 6 * P, { py: 'top', ny: 'bottom' });
+  o.tbox(-3 * P, 27 * P, -3 * P, 3 * P, 33 * P, 3 * P, { py: 'hood', ny: null, px: 'hood', nx: 'hood', pz: 'hood', nz: 'hood' });
+  o.tbox(-4 * P, 30 * P, -4 * P, 4 * P, 35 * P, 4 * P, { py: 'hood', ny: 'hood', px: 'hood', nx: 'hood', pz: 'hood', nz: 'hood' });
+});
+// каменная чаша: ножка 6/16, чаша 14/16 с углублением
+shape('stone_bowl', (o) => {
+  cbox(o, 6 * P, 3 * P, 6 * P, { py: 'top', ny: 'bottom' });
+  o.tbox(-7 * P, 3 * P, -7 * P, 7 * P, 5 * P, 7 * P, { py: 'inner', ny: 'bottom' });
+  for (const [x0, z0, x1, z1] of [[-7, -7, 7, -5], [-7, 5, 7, 7], [-7, -5, -5, 5], [5, -5, 7, 5]]) o.tbox(x0 * P, 5 * P, z0 * P, x1 * P, 9 * P, z1 * P, { py: 'top', ny: null });
+});
+// горшки: большой 8/16 с горлышком и малый 5/16, один накренён
+shape('pot_clay', (o) => {
+  o.xf({ move: [-3 * P, 0, -2 * P] }, () => {
+    cbox(o, 8 * P, 9 * P, 8 * P, { py: 'top', ny: 'bottom' });
+    o.tbox(-3 * P, 9 * P, -3 * P, 3 * P, 11 * P, 3 * P, { py: null, ny: null });
+    o.tbox(-3.5 * P, 11 * P, -3.5 * P, 3.5 * P, 12 * P, 3.5 * P, { py: 'top', ny: 'bottom' });
+  });
+  o.xf({ rot: [0, 30, 12], move: [4 * P, 0, 3 * P] }, () => {
+    cbox(o, 5 * P, 6 * P, 5 * P, { py: 'top', ny: 'bottom' });
+    o.tbox(-2 * P, 6 * P, -2 * P, 2 * P, 7 * P, 2 * P, { py: 'top', ny: null });
+  });
+});
+// плющ: три плоские полосы 1/16 от стены, свисают от точки крепления вниз (вырезная текстура)
+shape('ivy', (o) => {
+  for (const [x, w, top, len] of [[-5 * P, 6 * P, 2 * P, 1.3], [1 * P, 7 * P, 1 * P, 0.9], [-1 * P, 5 * P, 3 * P, 1.6]]) {
+    o.tbox(x - w / 2, top - len, P, x + w / 2, top, P, { pz: 'side', nz: 'side', px: null, nx: null, py: null, ny: null });
+  }
+});
+// череп: 5/16 с глазницами и челюстью, чуть повёрнут
+shape('skull', (o) => {
+  o.xf({ rot: [0, 35, 0] }, () => {
+    cbox(o, 5 * P, 5 * P, 5 * P, 'bone');
+    o.tbox(-2 * P, 2 * P, 2.5 * P, -0.5 * P, 3.5 * P, 2.6 * P, 'dark');
+    o.tbox(0.5 * P, 2 * P, 2.5 * P, 2 * P, 3.5 * P, 2.6 * P, 'dark');
+    o.tbox(-1.5 * P, 0, 2.5 * P, 1.5 * P, P, 2.7 * P, 'bone');
+  });
+});
+
+// --- поселение (партия «Поселение», референсы 6, 7, 11, 12, 15) ---
+// крылья мельницы: ступица на стене, четыре решётчатых крыла 3 м (брус + две рейки + перекладины); сломанные — три крыла, у одного обломок
+const sails = (name, arms) => shape(name, (o) => {
+  o.tbox(-3 * P, -3 * P, 0, 3 * P, 3 * P, 8 * P, 'iron');
+  for (const [ang, len] of arms) o.xf({ rot: [0, 0, ang], move: [0, 0, 5 * P] }, () => {
+    o.tbox(-1.5 * P, 0, -1.5 * P, 1.5 * P, len, 1.5 * P, 'side');
+    if (len > 1.5) {
+      o.tbox(2 * P, 0.4, -P / 2, 3 * P, len, P / 2, 'lattice');
+      o.tbox(9 * P, 0.4, -P / 2, 10 * P, len, P / 2, 'lattice');
+      for (let y = 0.5; y < len - 0.1; y += 0.3) o.tbox(1.5 * P, y, -P / 2, 10 * P, y + P, P / 2, 'lattice');
+    }
+  });
+});
+sails('windmill_sails', [[0, 4.2], [90, 4.2], [180, 4.2], [270, 4.2]]);
+sails('windmill_sails_broken', [[10, 4.2], [100, 4.2], [190, 4.2], [280, 1.1]]);
+// бочка: 12/16 × 14/16, обручи выступают на 1/16
+shape('barrel', (o) => {
+  cbox(o, 12 * P, 14 * P, 12 * P, { py: 'top', ny: 'bottom' });
+  for (const y of [2 * P, 11 * P]) o.tbox(-6.5 * P, y, -6.5 * P, 6.5 * P, y + 2 * P, 6.5 * P, { py: null, ny: null });
+});
+// разбитая бочка: лежит на боку, половина клёпок выпала, доски рядом
+shape('barrel_broken', (o) => {
+  o.xf({ rot: [0, 25, 90], move: [0, 6 * P, 0] }, () => {
+    o.tbox(-6 * P, -6 * P, -6 * P, 6 * P, 7 * P, 0, { py: 'top', ny: 'bottom' });
+    o.tbox(-6 * P, -6 * P, 0, -2 * P, 7 * P, 4 * P, { py: 'top', ny: 'bottom' });
+  });
+  for (const [x, z, a] of [[7 * P, 5 * P, 20], [-6 * P, 8 * P, -35]]) o.xf({ rot: [0, a, 0], move: [x, 0, z] }, () => cbox(o, 2 * P, P, 10 * P, 'side'));
+});
+// мешок 8/16 с перетянутым горлом
+const sackAt = (o, x, z, yaw, h = 9 * P) => o.xf({ rot: [0, yaw, 0], move: [x, 0, z] }, () => {
+  cbox(o, 8 * P, h, 7 * P);
+  o.tbox(-2 * P, h, -2 * P, 2 * P, h + 2 * P, 2 * P);
+  o.tbox(-3 * P, h + 2 * P, -3 * P, 3 * P, h + 3 * P, 3 * P);
+});
+shape('sack', (o) => sackAt(o, 0, 0, 15));
+shape('sacks_pile', (o) => { sackAt(o, -5 * P, -3 * P, 10); sackAt(o, 5 * P, 2 * P, -20); o.xf({ rot: [0, 40, 0], move: [0, 8 * P, 0] }, () => cbox(o, 9 * P, 6 * P, 7 * P)); });
+// навес колодца: два столба 2/16 высотой 1,5 м, ворот с ручкой, двускатная крыша 1,2 × 0,9
+shape('well_roof', (o) => {
+  for (const x of [-9 * P, 9 * P]) o.xf({ move: [x, 0, 0] }, () => cbox(o, 2 * P, 1.5, 2 * P, 'post'));
+  o.tbox(-9 * P, 1.15, -P, 9 * P, 1.15 + 2 * P, P, 'post');
+  o.tbox(-11 * P, 1.0, -P / 2, -9 * P, 1.15, P / 2, 'iron');
+  o.tbox(-0.5 * P, 0.7, -0.5 * P, 0.5 * P, 1.15, 0.5 * P, 'rope');
+  for (const [sgn] of [[1], [-1]]) o.xf({ rot: [0, 0, sgn * 35], move: [sgn * 8 * P, 1.5, 0] }, () => o.tbox(-9 * P, 0, -8 * P, 0, 2 * P, 8 * P, 'roof'));
+  o.tbox(-2 * P, 1.75, -8 * P, 2 * P, 1.75 + 2 * P, 8 * P, 'roof');
+});
+// ведро 6/16 с дужкой
+shape('bucket', (o) => {
+  cbox(o, 6 * P, 6 * P, 6 * P, { py: 'top', ny: 'bottom' });
+  o.tbox(-3.5 * P, 4 * P, -3.5 * P, 3.5 * P, 5 * P, 3.5 * P, { py: null, ny: null, px: 'iron', nx: 'iron', pz: 'iron', nz: 'iron' });
+  o.tbox(-P / 2, 6 * P, -3 * P, P / 2, 9 * P, 3 * P, 'iron');
+});
+// приставная лестница на стене: две тетивы 2/16 от точки крепления вниз на 2,4 м, перекладины через 5/16
+shape('ladder', (o) => {
+  for (const x of [-5 * P, 5 * P]) o.tbox(x - P, -2.4, 2 * P, x + P, 0.1, 4 * P);
+  for (let y = -2.3; y < 0; y += 5 * P) o.tbox(-5 * P, y, 2.5 * P, 5 * P, y + P, 3.5 * P);
+});
+// палатка: два ската ткани на коньке, две жерди, вход с +Z
+shape('tent', (o) => {
+  for (const sgn of [1, -1]) o.xf({ rot: [0, 0, sgn * 50], move: [sgn * 15 * P, 0, 0] }, () => o.tbox(0, 0, -16 * P, 2 * P, 1.45, 16 * P, 'cloth'));
+  o.tbox(-P, 1.1, -17 * P, P, 1.1 + 2 * P, 17 * P, 'pole');
+  for (const z of [-15 * P, 15 * P]) o.tbox(-P, 0, z - P, P, 1.1, z + P, 'pole');
+  o.tbox(-9 * P, 0, -16.5 * P, 9 * P, 0.9, -15.5 * P, 'cloth');
+});
+// пугало: шест, перекладина, тело и голова из сена, шляпа
+shape('scarecrow', (o) => {
+  cbox(o, 2 * P, 1.9, 2 * P, 'pole');
+  o.tbox(-9 * P, 1.25, -P, 9 * P, 1.25 + 2 * P, P, 'pole');
+  o.tbox(-5 * P, 0.75, -3 * P, 5 * P, 1.45, 3 * P, 'cloth');
+  o.tbox(-3 * P, 1.45, -3 * P, 3 * P, 1.8, 3 * P, { py: 'hayTop', ny: 'hayTop', px: 'hay', nx: 'hay', pz: 'hay', nz: 'hay' });
+  o.tbox(-5 * P, 1.8, -5 * P, 5 * P, 1.85, 5 * P, 'pole');
+  o.tbox(-3 * P, 1.85, -3 * P, 3 * P, 2.05, 3 * P, 'pole');
+});
+// дрова: поленница из брёвен 5/16 вдоль X в два ряда
+shape('firewood_pile', (o) => {
+  const log = (y, z, len) => o.xf({ rot: [0, 0, -90], move: [-len / 2, y, z] }, () => o.tbox(-2.5 * P, 0, -2.5 * P, 2.5 * P, len, 2.5 * P, { py: 'end', ny: 'end', px: 'side', nx: 'side', pz: 'side', nz: 'side' }));
+  for (const [z, len] of [[-4 * P, 0.9], [1 * P, 0.95], [6 * P, 0.8]]) log(2.5 * P, z, len);
+  for (const [z, len] of [[-1.5 * P, 0.85], [3.5 * P, 0.9]]) log(7.5 * P, z, len);
+  log(12.5 * P, 1 * P, 0.7);
+});
+// указатель: столб и две стрелки-доски
+shape('signpost', (o) => {
+  cbox(o, 2 * P, 2.0, 2 * P, 'post');
+  o.xf({ rot: [0, 10, 0], move: [0, 1.6, 0] }, () => o.tbox(-2 * P, 0, -P, 12 * P, 5 * P, P, 'board'));
+  o.xf({ rot: [0, 200, 0], move: [0, 1.2, 0] }, () => o.tbox(-2 * P, 0, -P, 10 * P, 5 * P, P, 'board'));
+});
+// сломанная телега: кузов завалился на бок без колеса, колесо лежит рядом
+shape('cart_broken', (o) => {
+  o.xf({ rot: [0, 20, -28], move: [2 * P, 0, 0] }, () => cartBody(o));
+  o.xf({ rot: [90, 0, 0], move: [-12 * P, 1.5 * P, 10 * P] }, () => wheel(o, 0, 0, 0));
+});
+
 mkdirSync(OUT, { recursive: true });
 for (const s of shapes) writeFileSync(join(OUT, `${s.name}.obj`), s.text());
 console.log(`${shapes.length} форм декора → ${OUT}`);

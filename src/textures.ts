@@ -67,6 +67,8 @@ const YARD_BASE = '#c39552', YARD_DASH = '#a7794a', WALL_STONE = '#a1a8b0';
 /** Мир: скалы, вода, мост (скриншоты 11, 12) */
 /** Мир: холмы (скриншоты 13, 15) — крона: тень, середина, свет, блик; сухая трава */
 const TREE = ['#4c6e2a', '#6a8c37', '#90b04e', '#a8c860'], DRY = ['#cdb862', '#c2ad58', '#d8c472'];
+/** Золотая осень (референсы 2, 3, 8 в wiki/sources/refs-settlements.md): жёлтая и оранжевая лиственницы — тень, середина, свет, блик */
+const GOLD = ['#9c6a1c', '#c8922a', '#e2b43e', '#f2d060'], ORANGE = ['#8a4a18', '#b86a22', '#d8862e', '#eca448'];
 /** Мир: портал (скриншот 14) */
 const PORTAL_GOLD = '#efb64a', PORTAL_LIGHT = '#ffe9a0', PORTAL_STONE = '#4c5155', PORTAL_INLAY = '#d9a640', PORTAL_FLOOR = '#b3a693';
 const CLIFF = '#9aa2ab', CLIFF_DARK = '#7b8996', BRIDGE_WOOD = '#c49458', BRIDGE_POST = '#8d6639', RIVER = '#356577', FALLS = '#1f88ab';
@@ -198,6 +200,10 @@ export interface Textures {
   bridgePlank: THREE.Texture; bridgePost: THREE.Texture; river: THREE.Texture; waterfall: THREE.Texture;
   // холмы (скриншоты 13, 15): пышная листва, сухая трава, ромашки
   leavesClump: THREE.Texture; leavesPuff: THREE.Texture; dryGrass: THREE.Texture; daisies: THREE.Texture;
+  leavesGold: THREE.Texture; leavesOrange: THREE.Texture; leavesGoldPuff: THREE.Texture; leavesOrangePuff: THREE.Texture;
+  flowerOrange: THREE.Texture; tilesBroken0: THREE.Texture; tilesBroken1: THREE.Texture; reeds: THREE.Texture; leafLitter: THREE.Texture; barkDead: THREE.Texture;
+  clay: THREE.Texture; ivy: THREE.Texture;
+  crops: THREE.Texture; cropsRipe: THREE.Texture; thatch: THREE.Texture; shingles: THREE.Texture; barrel: THREE.Texture; barrelTop: THREE.Texture; burlap: THREE.Texture; tentCloth: THREE.Texture; stake: THREE.Texture; stakeTop: THREE.Texture;
   // портал (скриншот 14)
   portal: THREE.Texture; portalFrame: THREE.Texture; portalTrim: THREE.Texture; portalFloor: THREE.Texture;
   // рваный край между травой и дорожкой (mesher.ts, bleed): 4 варианта маски у каждой
@@ -311,6 +317,7 @@ export function makeTextures(): Textures {
     px(g, cx, cy, '#ffd84a');
   }, seed, { alpha: true });
   T.flowers = [flower('#e2384d', 31), flower('#5aa7ff', 32), flower('#f4f4f4', 33), flower('#ffcf3a', 34)];
+  T.flowerOrange = flower('#f08a3c', 35);
 
   T.face = canvasTex(8, (g) => {
     g.fillStyle = '#e8b48c'; g.fillRect(0, 0, 8, 8);
@@ -359,7 +366,7 @@ export function makeTextures(): Textures {
     overlayBlobs(g, s, r, MOSS, 4, [2, 3.5], 0.85, 1);
   }, 58);
   // плиты мостовой: крупные, шов сверху-слева светлый, как на полу руин
-  T.tiles = canvasTex(16, (g, _s, r) => {
+  const tilesPaint = (g: Ctx, _s: number, r: Rand) => {
     for (let ty = 0; ty < 2; ty++) for (let tx = 0; tx < 2; tx++) {
       const t = (r() - 0.5) * 2, col = t > 0 ? mix(TILE_BASE, '#ffffff', t * 0.07) : mix(TILE_BASE, '#000000', -t * 0.06);
       for (let y = ty * 8; y < ty * 8 + 8; y++) for (let x = tx * 8; x < tx * 8 + 8; x++) {
@@ -368,7 +375,20 @@ export function makeTextures(): Textures {
         px(g, x, y, jitter(c, r, 2));
       }
     }
-  }, 57);
+  };
+  T.tiles = canvasTex(16, tilesPaint, 57);
+  // битые плиты (дорога Лимгрейва, референс 1): одна из четырёх плит выпала — под ней земля, по краю ямы трава
+  const tilesBroken = (seed: number, tx: number, ty: number) => canvasTex(16, (g, s, r) => {
+    tilesPaint(g, s, r);
+    for (let y = ty * 8; y < ty * 8 + 8; y++) for (let x = tx * 8; x < tx * 8 + 8; x++) {
+      const lx = x - tx * 8, ly = y - ty * 8, rim = lx === 0 || ly === 0 || lx === 7 || ly === 7;
+      px(g, x, y, jitter(rim && r() < 0.5 ? GRASS_DARK : r() < 0.15 ? DIRT_DARK : DIRT_BASE, r, 3));
+    }
+    const cx = tx * 8 + 2 + ((r() * 4) | 0), cy = ty * 8 + 2 + ((r() * 4) | 0);
+    px(g, cx, cy, mix(TILE_BASE, '#000000', 0.1)); px(g, cx + 1, cy, mix(TILE_BASE, '#000000', 0.1));
+  }, seed);
+  T.tilesBroken0 = tilesBroken(58, 1, 1);
+  T.tilesBroken1 = tilesBroken(59, 0, 1);
   T.planksDark = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) {
       const base = ['#5e4228', '#56391f', '#66482c', '#4f3519'][Math.floor(y / 4) % 4];
@@ -733,29 +753,107 @@ export function makeTextures(): Textures {
 
   // ---------- мир: холмы (скриншоты 13, 15) ----------
   /** Гроздь листьев: лопастный круг, светлый верх, тёмный низ-право — листва «кустится», а не рябит */
-  const clump = (g: Ctx, r: Rand, cx: number, cy: number, rad: number) => {
+  const clump = (g: Ctx, r: Rand, cx: number, cy: number, rad: number, tones: readonly string[] = TREE) => {
     for (let y = Math.floor(cy - rad - 1); y <= cy + rad + 1; y++) for (let x = Math.floor(cx - rad - 1); x <= cx + rad + 1; x++) {
       const a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx), d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
       const edge = rad * (0.82 + 0.18 * Math.cos(a * 5));
       if (d > edge || x < 0 || y < 0 || x > 15 || y > 15) continue;
-      const lit = (cx - x) + (cy - y) > rad * 0.3 ? TREE[2] : (x - cx) + (y - cy) > rad * 0.7 ? TREE[0] : TREE[1];
-      px(g, x, y, jitter(d > edge - 0.9 ? mix(lit, TREE[0], 0.4) : lit, r, 3));
+      const lit = (cx - x) + (cy - y) > rad * 0.3 ? tones[2] : (x - cx) + (y - cy) > rad * 0.7 ? tones[0] : tones[1];
+      px(g, x, y, jitter(d > edge - 0.9 ? mix(lit, tones[0], 0.4) : lit, r, 3));
     }
   };
-  T.leavesClump = canvasTex(16, (g, s, r) => {
+  const clumpTex = (tones: readonly string[], seed: number) => canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
       const edge = Math.min(x, y, s - 1 - x, s - 1 - y);
       if (r() < (edge === 0 ? 0.5 : 0.04)) continue;
-      px(g, x, y, jitter(TREE[0], r, 3));
+      px(g, x, y, jitter(tones[0], r, 3));
     }
-    for (let i = 0; i < 9; i++) clump(g, r, 1 + r() * 14, 1 + r() * 14, 2 + r() * 1.2);
-    for (let i = 0; i < 3; i++) clump(g, r, 2 + r() * 12, 1 + r() * 6, 1.6);
-    for (let i = 0; i < 2; i++) { const x = 2 + ((r() * 12) | 0), y = 2 + ((r() * 12) | 0); px(g, x, y, TREE[3]); }
-  }, 180, { alpha: true });
+    for (let i = 0; i < 9; i++) clump(g, r, 1 + r() * 14, 1 + r() * 14, 2 + r() * 1.2, tones);
+    for (let i = 0; i < 3; i++) clump(g, r, 2 + r() * 12, 1 + r() * 6, 1.6, tones);
+    for (let i = 0; i < 2; i++) { const x = 2 + ((r() * 12) | 0), y = 2 + ((r() * 12) | 0); px(g, x, y, tones[3]); }
+  }, seed, { alpha: true });
   // «шапки» над гранями: редкие грозди с пустотой по краю — силуэт кроны пушится за пределы куба
-  T.leavesPuff = canvasTex(16, (g, _s, r) => {
-    for (let i = 0; i < 7; i++) { const a = r() * Math.PI * 2, d = 3.5 + r() * 3.5; clump(g, r, 8 + Math.cos(a) * d, 8 + Math.sin(a) * d, 1.6 + r() * 1.2); }
-  }, 181, { alpha: true });
+  const puffTex = (tones: readonly string[], seed: number) => canvasTex(16, (g, _s, r) => {
+    for (let i = 0; i < 7; i++) { const a = r() * Math.PI * 2, d = 3.5 + r() * 3.5; clump(g, r, 8 + Math.cos(a) * d, 8 + Math.sin(a) * d, 1.6 + r() * 1.2, tones); }
+  }, seed, { alpha: true });
+  T.leavesClump = clumpTex(TREE, 180);
+  T.leavesPuff = puffTex(TREE, 181);
+  // золотая осень: та же пышная крона в жёлтом и оранжевом — блок leaves_gold берёт тон по хэшу клетки
+  T.leavesGold = clumpTex(GOLD, 184);
+  T.leavesGoldPuff = puffTex(GOLD, 185);
+  T.leavesOrange = clumpTex(ORANGE, 186);
+  T.leavesOrangePuff = puffTex(ORANGE, 187);
+  // тростник у воды (референс 14): высокие стебли, у части — бурые початки
+  T.reeds = canvasTex(16, (g, s, r) => {
+    for (let i = 0; i < 7; i++) {
+      let x = 1 + ((r() * 14) | 0); const h = 10 + ((r() * 6) | 0), col = pick(['#7fa04a', '#9cb45c', '#6f9040'], r), cob = r() < 0.45;
+      for (let k = 0; k < h; k++) { px(g, x, s - 1 - k, jitter(cob && k > h - 4 ? '#6b4a2a' : col, r, 3)); if (r() < 0.12) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); }
+    }
+  }, 188, { alpha: true });
+  // опавшие листья: пятно из листочков 2 × 2 золотых и бурых тонов, с пустотами
+  T.leafLitter = canvasTex(16, (g, s, r) => {
+    for (let cy = 0; cy < s; cy += 2) for (let cx = 0; cx < s; cx += 2) {
+      if (r() < 0.45) continue;
+      const col = pick([GOLD[1], GOLD[2], ORANGE[2], '#8c5a2a', GOLD[3]], r);
+      for (let y = cy; y < cy + 2; y++) for (let x = cx; x < cx + 2; x++) if (r() < 0.85) px(g, x, y, jitter(col, r, 4));
+    }
+  }, 189, { alpha: true });
+  // глина горшков (руины, референсы 8, 10): тёплая терракота с мягкими пятнами
+  T.clay = canvasTex(16, (g, s, r) => softFill(g, s, r, '#b5744c', 3, [{ col: '#c4845a', n: 2, rad: [2, 4], k: 0.5 }, { col: '#a2653f', n: 2, rad: [2, 3], k: 0.5 }]), 191);
+  // плющ на стене: тонкие стебли и листочки 2 × 2, пустоты между ними
+  T.ivy = canvasTex(16, (g, s, r) => {
+    for (let i = 0; i < 3; i++) { let x = 2 + ((r() * 12) | 0); for (let y = 0; y < s; y++) { px(g, x, y, jitter('#4a6a2e', r, 3)); if (r() < 0.3) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); } }
+    for (let i = 0; i < 14; i++) { const x = (r() * 15) | 0, y = (r() * 15) | 0, col = pick(['#5f8a3a', '#6f9c44', '#4f7a30'], r); for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) px(g, x + dx, y + dy, jitter(col, r, 4)); }
+  }, 192, { alpha: true });
+  // поселение (партия 4): ростки на грядке в двух стадиях, солома крыш, тёмная черепица, бочка, мешковина, палаточная ткань
+  T.crops = canvasTex(16, (g, s, r) => {
+    for (let i = 0; i < 6; i++) { const x = 1 + ((r() * 14) | 0), h = 4 + ((r() * 4) | 0); for (let k = 0; k < h; k++) px(g, x, s - 1 - k, jitter('#6fa23c', r, 5)); px(g, x - 1, s - h, '#86b84a'); px(g, x + 1, s - h + 1, '#86b84a'); }
+  }, 193, { alpha: true });
+  T.cropsRipe = canvasTex(16, (g, s, r) => {
+    for (let i = 0; i < 6; i++) {
+      const x = 1 + ((r() * 14) | 0), h = 8 + ((r() * 6) | 0);
+      for (let k = 0; k < h; k++) px(g, x, s - 1 - k, jitter(k > h - 4 ? '#d8b24a' : '#8fae44', r, 5));
+      px(g, x - 1, s - h + 1, '#e0c25a'); px(g, x + 1, s - h + 2, '#e0c25a');
+    }
+  }, 194, { alpha: true });
+  T.thatch = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, '#c9a24e', 3, [{ col: '#d9b863', n: 3, rad: [2, 3.5], k: 0.5 }, { col: '#b08a3c', n: 2, rad: [2, 3], k: 0.5 }]);
+    for (let i = 0; i < 12; i++) { const x = (r() * s) | 0, y = (r() * s) | 0, len = 3 + ((r() * 5) | 0); for (let k = 0; k < len; k++) px(g, (x + k) % s, y, jitter(r() < 0.5 ? '#a9843a' : '#dcbd6a', r, 3)); }
+  }, 195);
+  T.shingles = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const row = Math.floor(y / 4), off = row % 2 ? 2 : 0, seam = (x + off) % 4 === 3;
+      px(g, x, y, jitter(y % 4 === 3 ? '#3a2e2a' : seam ? '#4e4038' : pick(['#6a564c', '#5e4c44', '#73605a'], r), r, 5));
+    }
+  }, 196);
+  T.barrel = canvasTex(16, (g, s, r) => {
+    for (let x = 0; x < s; x++) { const base = ['#8d6a3f', '#9a7446', '#846238'][Math.floor(x / 3) % 3]; for (let y = 0; y < s; y++) px(g, x, y, jitter(x % 3 === 2 ? '#5e4526' : base, r, 5)); }
+    for (const y0 of [2, 11]) for (let x = 0; x < s; x++) { px(g, x, y0, jitter('#3a3734', r, 4)); px(g, x, y0 + 1, jitter('#4a4642', r, 4)); }
+  }, 197);
+  T.barrelTop = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, '#9a7446', 3, [{ col: '#846238', n: 2, rad: [2, 3], k: 0.5 }]);
+    for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, '#3a3734'); px(g, k, i, '#3a3734'); }
+    for (let y = 0; y < s; y += 5) for (let x = 1; x < s - 1; x++) px(g, x, y + 2, jitter('#6e5230', r, 4));
+  }, 198);
+  T.burlap = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, '#c4a97c', 3, [{ col: '#d2b98c', n: 2, rad: [2, 3.5], k: 0.5 }, { col: '#b2966a', n: 2, rad: [2, 3], k: 0.5 }]);
+    for (let y = 0; y < s; y += 2) for (let x = (y / 2) % 2; x < s; x += 4) px(g, x, y, jitter('#ad9268', r, 3));
+  }, 199);
+  T.tentCloth = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(Math.floor(y / 4) % 2 ? '#b89a6e' : '#8c3b2e', r, 5));
+  }, 200);
+  // кол частокола: тёмная кора с затёсами у верха (лагерь, референс 1); верх — светлый срез
+  T.stake = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, '#6b4e34', 3, [{ col: '#7a5a3c', n: 2, rad: [2, 4], k: 0.5 }]);
+    for (let x = 0; x < s; x += 4) for (let y = 0; y < s; y++) if (r() < 0.7) px(g, x, y, jitter('#523a26', r, 3));
+    for (let y = 0; y < 5; y++) for (let x = 0; x < s; x++) if (r() < 0.6) px(g, x, y, jitter('#c9a46a', r, 6));
+  }, 201);
+  T.stakeTop = canvasTex(16, (g, s, r) => softFill(g, s, r, '#d2b07a', 3, [{ col: '#bf9a62', n: 2, rad: [2, 3], k: 0.5 }]), 202);
+  // кора мёртвого дерева: серо-бурая, продольные тёмные борозды
+  T.barkDead = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, '#5e5046', 3, [{ col: '#6a5c50', n: 2, rad: [2, 4], k: 0.5 }]);
+    for (let x = 0; x < s; x += 3 + ((r() * 2) | 0)) for (let y = 0; y < s; y++) if (r() < 0.8) px(g, x, y, jitter('#4a3e34', r, 3));
+  }, 190);
   // сухая трава: высокие светло-жёлтые стебли (поле на скриншоте 15)
   T.dryGrass = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 10; i++) {

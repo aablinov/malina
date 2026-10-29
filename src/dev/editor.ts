@@ -170,6 +170,8 @@ export function runEditor(): void {
   let sel: Sel[] = [];
   /** Префаб для режима «Поставить» */
   let curPrefab: Prefab | null = null;
+  /** Поворот пресета в режиме «Поставить», четверти (R) */
+  let placeRot = 0;
   /** Шаг сетки и угла для гизмо */
   const snap = { grid: true, gridStep: 1, rotOn: true, rotStep: 15 };
   /** Флаги «Показать» */
@@ -363,6 +365,7 @@ export function runEditor(): void {
       tile.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         const items: MenuItem[] = [{ label: 'Выбрать', action: () => pickPrefab(p) }];
+        if (p.kind === 'user') items.push({ label: 'Сохранить в библиотеку (JSON)', icon: 'save', action: () => exportPrefab(p.user!) });
         if (p.kind === 'user') items.push({ label: 'Удалить префаб', icon: 'trash', action: () => { userPrefabs = userPrefabs.filter((u) => u !== p.user); saveUserPrefabs(userPrefabs); prefabs = catalog(userPrefabs); drawPrefabs(); } });
         popupMenu(e.clientX, e.clientY, items);
       });
@@ -392,7 +395,7 @@ export function runEditor(): void {
       const r = dRot.some(Boolean) ? ` · ${dRot.join('° / ')}°` : '';
       modeTools.append(head('decor', d.title, `${d.name}${r}${randomYaw ? ' · случайный поворот' : ''}${selected ? ` · выбран: ${decorDef(selected.name).title}` : ''}`, thumbs.get(prefabs.find((p) => p.id === `decor:${curDecor}`)!)));
     } else if (mode === 'place') {
-      modeTools.append(head(curPrefab?.icon ?? 'prefab', curPrefab?.title ?? 'Выбери префаб', curPrefab ? `${curPrefab.hint ?? ''} · ЛКМ — поставить` : 'клик по префабу ниже', curPrefab && !curPrefab.icon ? thumbs.get(curPrefab) : undefined));
+      modeTools.append(head(curPrefab?.icon ?? 'prefab', curPrefab?.title ?? 'Выбери префаб', curPrefab ? `${curPrefab.hint ?? ''}${curPrefab.kind === 'lib' || curPrefab.kind === 'user' ? ` · поворот ${placeRot * 90}°` : ''} · ЛКМ — поставить` : 'клик по префабу ниже', curPrefab && !curPrefab.icon ? thumbs.get(curPrefab) : undefined));
     } else {
       const p = selLand ?? land;
       modeTools.append(head('land', selLand ? `Кусок в ${selLand.x}, ${selLand.y}, ${selLand.z}` : 'Новый кусок ландшафта', `${p.w} × ${p.d} м · ${p.layers} слоёв (${p.layers / 2} м) · зерно ${p.seed}`));
@@ -1326,11 +1329,14 @@ export function runEditor(): void {
     else if (p.kind === 'kit') { recordSets(() => p.build!(level, x, y, z, Math.floor(Math.random() * 1e5))); toast(`Поставлено: ${p.title}`); }
     else if (p.kind === 'light') { const e = newLight(p.name as 'point' | 'spot', x, y + 1.5, z); select([{ t: 'light', e }]); }
     else if (p.kind === 'spawn') { setSpawn([x, y, z], spawnYaw()); select([{ t: 'spawn' }]); toast('Точка появления'); }
-    else if (p.kind === 'user') {
+    else if (p.kind === 'user' || p.kind === 'lib') {
       let res: ReturnType<typeof stampUser> | null = null;
-      recordSets(() => { res = stampUser(level, p.user!, x, y, z); });
+      const n0 = undo.length;
+      recordSets(() => { res = stampUser(level, p.user!, x, y, z, placeRot); });
       const r = res as ReturnType<typeof stampUser> | null;
       if (r) { beginBatch(); for (const d of r.decor) addDecor(d); for (const e of r.entities) addEnt(e); endBatch(); }
+      // блоки и декор пресета — одна запись в отмене
+      if (undo.length - n0 === 2) { const last = undo.pop()!; undo[undo.length - 1].push(...last); }
       toast(`Поставлено: ${p.title}`);
     }
     outliner.invalidate();
@@ -1359,6 +1365,18 @@ export function runEditor(): void {
     pfGroup = 'Мои префабы';
     drawPrefabs();
     toast(`Префаб «${title}» — в «Моих префабах»`);
+  }
+  /** Свой префаб → JSON в формате библиотеки (assets/prefabs/<id>.json): категория «мои», размер по содержимому */
+  function exportPrefab(u: UserPrefab): void {
+    const pts = [...u.cells.map((c) => [c[0], c[1], c[2]]), ...u.decor.map((d) => d.pos), ...u.entities.map((e) => [e.x, e.y, e.z])];
+    const span = (i: number) => pts.length ? Math.ceil(Math.max(...pts.map((p) => p[i]))) - Math.floor(Math.min(...pts.map((p) => p[i]))) + 1 : 1;
+    const id = u.title.replace(/[^\p{L}\p{N}_-]+/gu, '_').toLowerCase() || u.id;
+    const out = { id, title: u.title, category: 'мои', size: [span(0), span(1), span(2)], seed: 1, cells: u.cells, decor: u.decor, entities: u.entities };
+    const blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `${id}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('JSON скачан — положи в assets/prefabs/');
   }
   function blockCount(): number { let n = 0; level.forEach(() => n++); return n; }
 
@@ -1902,7 +1920,7 @@ export function runEditor(): void {
     if (mode === 'select') { selectKey(e, ctrl); return; }
     if (mode === 'decor') { decorKey(e, ctrl); return; }
     if (mode === 'land') { landKey(e); return; }
-    if (mode === 'place') { if (e.code === 'Escape') setMode('select'); else if (e.code === 'KeyG') show.grid = !show.grid; return; }
+    if (mode === 'place') { if (e.code === 'Escape') setMode('select'); else if (e.code === 'KeyG') show.grid = !show.grid; else if (e.code === 'KeyR') { placeRot = (placeRot + 1) % 4; refreshHud(); } return; }
     if (ctrl) return;
     const list = BLOCKS.filter((b) => b.name !== 'air');
     switch (e.code) {
@@ -2156,7 +2174,7 @@ export function runEditor(): void {
       commitGizmo();
     },
     /** Настройки мира и свет */
-    get world() { return world; }, changeWorld, newLight, setSpawn, placePrefab: (id: string, x: number, y: number, z: number) => { const p = prefabs.find((q) => q.id === id); if (p) placePrefab(p, x, y, z); },
+    get world() { return world; }, changeWorld, newLight, setSpawn, placePrefab: (id: string, x: number, y: number, z: number, quarter = 0) => { const p = prefabs.find((q) => q.id === id); placeRot = quarter; if (p) placePrefab(p, x, y, z); },
     get prefabs() { return prefabs; }, viewports: vps, setDoc, look, weather,
   };
 }
