@@ -3,7 +3,7 @@ import type { ArtifactStats, BossSpellKind } from '../items';
 import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio';
 import type { Spells } from '../spells';
 import { bleed, payHp } from './blood-core';
-import { rand, type BossSpell } from './kit';
+import { rand, type Spell } from './kit';
 
 /**
  * Базовые заклинания (wiki/design-spells.md, раздел «Базовые заклинания»). Малиновая кровь — как магия крови Elden Ring:
@@ -216,8 +216,8 @@ function bloodblade(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
   });
 }
 
-export const BASE_BLOOD: Partial<Record<BossSpellKind, BossSpell>> = {
+export const BASE_BLOOD = {
   bloodclaws: { school: 'blood', tier: 'common', title: 'Малиновые когти', cast: bloodclaws },
   bloodswarm: { school: 'blood', tier: 'common', title: 'Рой малинок', cast: bloodswarm },
   bloodblade: { school: 'blood', tier: 'common', title: 'Малиновый клинок', cast: bloodblade },
-};
+} satisfies Partial<Record<BossSpellKind, Spell>>;
