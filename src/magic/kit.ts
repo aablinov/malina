@@ -3,19 +3,27 @@ import type { ArtifactStats } from '../items';
 import type { School, Spells } from '../spells';
 
 /**
- * Общее для заклинаний с боссов (wiki/design-spells.md, раздел 3). Каждое — BossSpell: школа (цвета, круг, звук заряда),
- * ступень пафоса и cast. Инструменты каста — методы Spells (src/spells.ts): later, proc, impact, windup, pomp, groundSigil,
- * bolt, nearest, within, ground, face, hand, color, buff, aim, tex; хуки h — сцена, FX, герой, цели, урон.
+ * Общее для всех заклинаний (wiki/design-spells.md): стартовых (starters.ts), базовых у торговца (base-*.ts) и с боссов.
+ * Каждое — Spell: школа (цвета, круг, звук заряда), ступень пафоса, cast и, если надо, своя картинка заряда.
+ * Реестр по id предмета — SPELLS (registry.ts); заряд и каст ведёт Spells (src/spells.ts), чьи методы и есть
+ * инструменты каста: later, proc, impact, windup, pomp, groundSigil, bolt, nearest, within, ground, face, hand, color, buff, aim, tex;
+ * хуки h — сцена, FX, герой, цели, урон.
  */
 
 /** Ступень пафоса: обычное, редкое, легендарное, мифическое */
 export type Tier = 'common' | 'rare' | 'legendary' | 'mythic';
 
-export interface BossSpell {
+export interface Spell {
   school: School;
   tier: Tier;
   /** Название для крупной надписи мифических */
   title: string;
+  /** На себя: пока заряжается, герой смотрит вперёд, а не на курсор */
+  self?: boolean;
+  /** Размер сгустка в руке по заряду 0..1 (по умолчанию 0,35 + 0,7·k) */
+  orb?(k: number): number;
+  /** Каждый кадр заряда: своя картинка у ладони hand при заряде k */
+  charging?(kit: Spells, hand: THREE.Vector3, k: number): void;
   /** power — уже с зарядом (×1…×2,5) и силой предмета; k — заряд 0..1; at — точка курсора на земле */
   cast(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void;
 }
@@ -24,7 +32,7 @@ export const C = (r: number, g: number, b: number): THREE.Color => new THREE.Col
 export const rand = (a: number, b: number): number => a + Math.random() * (b - a);
 
 /** Заглушка, пока заклинание не сделано: замах, удар по площади у курсора, вспышка */
-export function placeholder(school: School, tier: Tier, title: string): BossSpell {
+export function placeholder(school: School, tier: Tier, title: string): Spell {
   return {
     school, tier, title,
     cast(kit, a, power, at, k) {

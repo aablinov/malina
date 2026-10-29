@@ -4,7 +4,7 @@ import { lightBeam } from '../loot-look';
 import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio';
 import type { Spells } from '../spells';
 import type { Target } from '../target';
-import { C, rand, type BossSpell } from './kit';
+import { C, rand, type Spell } from './kit';
 
 /**
  * Молния и свет (wiki/design-spells.md, раздел 3, 7–12): копьё громовержца, громовой прыжок, грозовая туча,
@@ -634,11 +634,11 @@ function judgement(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
 }
 
 /** Молния и свет: копьё громовержца, громовой прыжок, грозовая туча, звездопад, луч павшей звезды, небесный суд */
-export const STORM_LIGHT: Partial<Record<BossSpellKind, BossSpell>> = {
+export const STORM_LIGHT = {
   thunderspear: { school: 'spark', tier: 'rare', title: 'Копьё громовержца', cast: thunderspear },
   thunderleap: { school: 'spark', tier: 'legendary', title: 'Громовой прыжок', cast: thunderleap },
   stormcloud: { school: 'spark', tier: 'common', title: 'Грозовая туча', cast: stormcloud },
   starfall: { school: 'star', tier: 'legendary', title: 'Звездопад', cast: starfall },
   starbeam: { school: 'star', tier: 'mythic', title: 'Луч павшей звезды', cast: starbeam },
   judgement: { school: 'star', tier: 'legendary', title: 'Небесный суд', cast: judgement },
-};
+} satisfies Partial<Record<BossSpellKind, Spell>>;

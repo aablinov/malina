@@ -3,7 +3,7 @@ import type { BossSpellKind } from '../items';
 import { boom, deg, hiss, pluck, voice } from '../spell-audio';
 import type { Spells } from '../spells';
 import type { Target } from '../target';
-import { C, rand, type BossSpell } from './kit';
+import { C, rand, type Spell } from './kit';
 
 /**
  * Базовые заклинания огня (wiki/design-spells.md, «Базовые заклинания»): огненная стена, огненный ураган, малый армагеддон.
@@ -68,7 +68,7 @@ const sfx = {
 
 // ---------- огненная стена ----------
 
-const firewall: BossSpell = {
+const firewall: Spell = {
   school: 'fireball', tier: 'common', title: 'Огненная стена',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
@@ -150,7 +150,7 @@ const firewall: BossSpell = {
 
 // ---------- огненный ураган ----------
 
-const firestorm: BossSpell = {
+const firestorm: Spell = {
   school: 'fireball', tier: 'common', title: 'Огненный ураган',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
@@ -235,7 +235,7 @@ const firestorm: BossSpell = {
 
 // ---------- малый армагеддон ----------
 
-const armageddon: BossSpell = {
+const armageddon: Spell = {
   school: 'fireball', tier: 'common', title: 'Малый армагеддон',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
@@ -304,4 +304,4 @@ function ball(kit: Spells, p: THREE.Vector3, power: number, k: number, i: number
   });
 }
 
-export const BASE_FIRE: Partial<Record<BossSpellKind, BossSpell>> = { firewall, firestorm, armageddon };
+export const BASE_FIRE = { firewall, firestorm, armageddon } satisfies Partial<Record<BossSpellKind, Spell>>;

@@ -4,7 +4,7 @@ import { additiveSprite, glowTex } from '../loot-look';
 import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio';
 import type { Spells } from '../spells';
 import type { Target } from '../target';
-import { C, rand, type BossSpell } from './kit';
+import { C, rand, type Spell } from './kit';
 import { summon, type Minion } from './minions';
 
 /**
@@ -341,8 +341,8 @@ function golem(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
   });
 }
 
-export const BASE_SUMMON: Partial<Record<BossSpellKind, BossSpell>> = {
+export const BASE_SUMMON = {
   wolves: { school: 'summon', tier: 'common', title: 'Стая волков', cast: wolves },
   elemental: { school: 'summon', tier: 'common', title: 'Малый элементаль', cast: elemental },
   golem: { school: 'summon', tier: 'common', title: 'Каменный голем', cast: golem },
-};
+} satisfies Partial<Record<BossSpellKind, Spell>>;

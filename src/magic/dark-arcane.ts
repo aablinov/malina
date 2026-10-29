@@ -4,7 +4,7 @@ import { additiveSprite, glowTex } from '../loot-look';
 import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio';
 import type { Spells } from '../spells';
 import type { Target } from '../target';
-import { C, rand, type BossSpell } from './kit';
+import { C, rand, type Spell } from './kit';
 
 /**
  * Тьма, души и аркана (wiki/design-spells.md, раздел 3): хор мёртвых, гравитационный колодец, коса-череп, павшие стражи,
@@ -537,11 +537,11 @@ function blink(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
 }
 
 /** Тьма, души и аркана: хор мёртвых, гравитационный колодец, коса-череп, павшие стражи, фаланга клинков, разрыв */
-export const DARK_ARCANE: Partial<Record<BossSpellKind, BossSpell>> = {
+export const DARK_ARCANE = {
   deadchoir: { school: 'void', tier: 'rare', title: 'Хор мёртвых', cast: deadchoir },
   gravitywell: { school: 'void', tier: 'legendary', title: 'Гравитационный колодец', cast: gravitywell },
   skullscythe: { school: 'void', tier: 'common', title: 'Коса-череп', cast: skullscythe },
   fallenguards: { school: 'void', tier: 'rare', title: 'Павшие стражи', cast: fallenguards },
   bladephalanx: { school: 'arcane', tier: 'rare', title: 'Фаланга клинков', cast: bladephalanx },
   blink: { school: 'arcane', tier: 'rare', title: 'Разрыв', cast: blink },
-};
+} satisfies Partial<Record<BossSpellKind, Spell>>;

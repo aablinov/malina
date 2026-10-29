@@ -3,7 +3,7 @@ import type { BossSpellKind } from '../items';
 import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio';
 import type { Spells } from '../spells';
 import type { Target } from '../target';
-import { C, rand, type BossSpell } from './kit';
+import { C, rand, type Spell } from './kit';
 
 /** Земля и природа: разлом, малиновый куст, облик титана (wiki/design-spells.md, раздел 3) */
 
@@ -82,7 +82,7 @@ function debris(kit: Spells, at: THREE.Vector3, n: number, speed: number, up = 4
 
 // ---------- 17. Разлом ----------
 
-const rift: BossSpell = {
+const rift: Spell = {
   school: 'earth', tier: 'rare', title: 'Разлом',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('earth');
@@ -204,7 +204,7 @@ function makeBush(R: number): { g: THREE.Group; berries: THREE.Object3D[] } {
   return { g, berries };
 }
 
-const raspberrybush: BossSpell = {
+const raspberrybush: Spell = {
   school: 'earth', tier: 'common', title: 'Малиновый куст',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
@@ -288,7 +288,7 @@ const raspberrybush: BossSpell = {
 
 // ---------- 19. Облик титана ----------
 
-const titanform: BossSpell = {
+const titanform: Spell = {
   school: 'earth', tier: 'mythic', title: 'Облик титана',
   cast(kit, a, power, _at, k) {
     const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('earth');
@@ -392,4 +392,4 @@ function crumble(kit: Spells, skin: THREE.Group, plates: THREE.Mesh[]): void {
   sound.crumble();
 }
 
-export const EARTH: Partial<Record<BossSpellKind, BossSpell>> = { rift, raspberrybush, titanform };
+export const EARTH = { rift, raspberrybush, titanform } satisfies Partial<Record<BossSpellKind, Spell>>;

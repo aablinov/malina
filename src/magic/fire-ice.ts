@@ -5,7 +5,7 @@ import { additiveSprite, glowTex } from '../loot-look';
 import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio';
 import type { Spells } from '../spells';
 import type { Target } from '../target';
-import { C, rand, type BossSpell } from './kit';
+import { C, rand, type Spell } from './kit';
 
 /**
  * Огонь и лёд (wiki/design-spells.md, раздел 3): небесный молот, пламенный змей, пепельная корона,
@@ -148,7 +148,7 @@ const sfx = {
 
 // ---------- 1. Небесный молот ----------
 
-const meteor: BossSpell = {
+const meteor: Spell = {
   school: 'fireball', tier: 'rare', title: 'Небесный молот',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, c = kit.ground(at, 14), R = (a.radius ?? 3.5) + k * 1.5, fall = 0.95;
@@ -232,7 +232,7 @@ const meteor: BossSpell = {
 
 // ---------- 2. Пламенный змей ----------
 
-const flameserpent: BossSpell = {
+const flameserpent: Spell = {
   school: 'fireball', tier: 'legendary', title: 'Пламенный змей',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
@@ -356,7 +356,7 @@ const flameserpent: BossSpell = {
 
 // ---------- 3. Пепельная корона ----------
 
-const ashcrown: BossSpell = {
+const ashcrown: Spell = {
   school: 'fireball', tier: 'common', title: 'Пепельная корона',
   cast(kit, a, power, _at, k) {
     const fx = kit.h.fx, hero = kit.h.hero, R = (a.radius ?? 5) + k * 2;
@@ -432,7 +432,7 @@ function crystal(kit: Spells, p: THREE.Vector3, h: number, w: number): { g: THRE
   return { g, mat, edge };
 }
 
-const icetomb: BossSpell = {
+const icetomb: Spell = {
   school: 'icerain', tier: 'rare', title: 'Ледяная гробница',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hold = a.duration ?? 2, R = (a.radius ?? 3.5) + k * 1.5;
@@ -488,7 +488,7 @@ const icetomb: BossSpell = {
 
 // ---------- 5. Морозный гребень ----------
 
-const frostridge: BossSpell = {
+const frostridge: Spell = {
   school: 'icerain', tier: 'common', title: 'Морозный гребень',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero, L = (a.radius ?? 7) + k * 3;
@@ -557,7 +557,7 @@ const frostridge: BossSpell = {
 
 // ---------- 6. Абсолютный ноль ----------
 
-const absolutezero: BossSpell = {
+const absolutezero: Spell = {
   school: 'icerain', tier: 'mythic', title: 'Абсолютный ноль',
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, R = (a.radius ?? 8) + k * 2, hold = (a.duration ?? 4) + k, unfold = 0.8;
@@ -641,4 +641,4 @@ const absolutezero: BossSpell = {
   },
 };
 
-export const FIRE_ICE: Partial<Record<BossSpellKind, BossSpell>> = { meteor, flameserpent, ashcrown, icetomb, frostridge, absolutezero };
+export const FIRE_ICE = { meteor, flameserpent, ashcrown, icetomb, frostridge, absolutezero } satisfies Partial<Record<BossSpellKind, Spell>>;

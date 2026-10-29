@@ -30,7 +30,13 @@ export type BossSpellKind =
   | 'rift' | 'raspberrybush' | 'titanform' | 'bladephalanx' | 'blink'
   // базовые: огонь, призыв, малиновая кровь, свет — у торговца (src/magic/base-*.ts)
   | 'firewall' | 'firestorm' | 'armageddon' | 'wolves' | 'elemental' | 'golem' | 'bloodclaws' | 'bloodswarm' | 'bloodblade' | 'blindflash';
-export type ArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning' | 'spark' | 'fireball' | 'icerain' | 'heal' | BossSpellKind;
+/** Стартовые заклинания (src/magic/starters.ts) */
+export type StarterSpellKind = 'spark' | 'fireball' | 'icerain' | 'heal';
+/** Любое заклинание — есть в реестре SPELLS (src/magic/registry.ts) */
+export type SpellKind = StarterSpellKind | BossSpellKind;
+/** Артефакты без каста: срабатывают в src/gear.ts */
+export type PlainArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning';
+export type ArtifactKind = PlainArtifactKind | SpellKind;
 export type PerkKind = 'souls' | 'artifactDmg' | 'cooldown' | 'meleeDmg' | 'rangedDmg' | 'speed' | 'potion' | 'roll' | 'arrows';
 
 export interface Perk { kind: PerkKind; value: number }

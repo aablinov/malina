@@ -1,15 +1,19 @@
-import type { BossSpellKind } from '../items';
+import type { SpellKind } from '../items';
 import { DARK_ARCANE } from './dark-arcane';
 import { EARTH } from './earth';
 import { FIRE_ICE } from './fire-ice';
-import type { BossSpell } from './kit';
+import type { Spell } from './kit';
 import { STORM_LIGHT } from './storm-light';
 import { BASE_BLOOD } from './base-blood';
 import { BASE_FIRE } from './base-fire';
 import { BASE_LIGHT } from './base-light';
 import { BASE_SUMMON } from './base-summon';
+import { STARTERS } from './starters';
 
-export type { BossSpell, Tier } from './kit';
+export type { Spell, Tier } from './kit';
 
-/** Все заклинания, кроме стартовых, по id предмета (src/items.ts): с боссов и базовые у торговца */
-export const BOSS_SPELLS: Partial<Record<string, BossSpell>> = { ...FIRE_ICE, ...STORM_LIGHT, ...DARK_ARCANE, ...EARTH, ...BASE_FIRE, ...BASE_SUMMON, ...BASE_BLOOD, ...BASE_LIGHT } satisfies Partial<Record<BossSpellKind, BossSpell>>;
+/** Все заклинания по id предмета (src/items.ts): стартовые, базовые у торговца и с боссов */
+export const SPELLS: Record<SpellKind, Spell> = { ...STARTERS, ...FIRE_ICE, ...STORM_LIGHT, ...DARK_ARCANE, ...EARTH, ...BASE_FIRE, ...BASE_SUMMON, ...BASE_BLOOD, ...BASE_LIGHT };
+
+/** Заклинание по виду артефакта; обычный артефакт (огненная стрела, тотем…) — null */
+export const spellOf = (kind: string): Spell | null => (SPELLS as Partial<Record<string, Spell>>)[kind] ?? null;

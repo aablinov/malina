@@ -4,7 +4,7 @@ import { additive, additiveSprite, raysTex } from '../loot-look';
 import { bell, boom, deg, hiss, voice } from '../spell-audio';
 import type { Spells } from '../spells';
 import type { Target } from '../target';
-import { rand, type BossSpell } from './kit';
+import { rand, type Spell } from './kit';
 
 /** Базовые заклинания (wiki/design-spells.md, раздел «Базовые заклинания»). Свет: ослепляющая вспышка */
 
@@ -87,6 +87,6 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
   });
 }
 
-export const BASE_LIGHT: Partial<Record<BossSpellKind, BossSpell>> = {
+export const BASE_LIGHT = {
   blindflash: { school: 'star', tier: 'common', title: 'Ослепляющая вспышка', cast: blindflash },
-};
+} satisfies Partial<Record<BossSpellKind, Spell>>;

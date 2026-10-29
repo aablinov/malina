@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import type { FX } from './fx';
 import { iconCanvas } from './icons';
-import { itemDef, powerMult, RARITY, type GearStats, type Profile } from './items';
+import { itemDef, powerMult, RARITY, type ArtifactStats, type GearStats, type PlainArtifactKind, type Profile } from './items';
 import { additive, additiveSprite, glowTex, groundGlow, lightBeam, raysTex, type LootData } from './loot-look';
 import type { Knight } from './knight';
 import type { Terrain } from './level/collide.ts';
 import type { Target } from './target';
 import { AURA_COLOR, AURA_METER, Auras } from './auras';
-import { isSpell, Spells } from './spells';
+import { spellOf, Spells } from './spells';
 import { HERO } from './tuning';
 import { applyWeapon, getWeapon, type WeaponDef } from './weapons';
 import { temperOf, type TemperSlot } from './temper';
@@ -280,18 +280,17 @@ export class Gear {
     }
   }
 
-  // ---------- артефакты ----------
+  // ---------- артефакты: гнёзда 1/2/3, заклинания (src/spells.ts, реестр src/magic/registry.ts) и обычные ----------
 
-  /** Применить артефакт из гнезда i (0..2) к точке курсора */
   /**
    * Клавиша 1/2/3 нажата: заклинание с зарядом начинает заряжаться (каст — когда отпустят), остальное срабатывает сразу
    */
   pressArtifact(i: number, at: THREE.Vector3): boolean {
-    const it = this.profile.artifacts()[i];
-    const a = it ? itemDef(it.def).artifact : undefined;
-    if (!it || !a?.charge || !isSpell(a.kind)) return this.useArtifact(i, at);
+    const a = this.artifactAt(i)?.a;
+    const spell = a?.charge ? spellOf(a.kind) : null;
+    if (!a || !spell) return this.useArtifact(i, at);
     if (this.artT[i][0] > 0 || this.h.hero.down || this.spells.charging) return false;
-    this.spells.start(i, a.kind, a);
+    this.spells.start(i, spell, a);
     this.apply();
     return true;
   }
@@ -317,21 +316,36 @@ export class Gear {
   /** Бросить заряд без каста (окно открылось, фокус ушёл) */
   cancelCast(): void { if (this.spells.charging) { this.spells.cancel(); this.apply(); } }
 
-  /** Сработать сразу; charge 0..1 — заряд заклинания (клик по слоту и тесты — без удержания) */
-  useArtifact(i: number, at: THREE.Vector3, charge = 0): boolean {
+  /** Артефакт в гнезде i (0..2): характеристики и урон (лечение) с учётом силы предмета; гнездо пустое — null */
+  private artifactAt(i: number): { a: ArtifactStats; power: number } | null {
     const it = this.profile.artifacts()[i];
-    const hero = this.h.hero;
-    if (!it) { this.h.toast(`Гнездо ${i + 1} пустое — надень артефакт в инвентаре (I)`); return false; }
-    if (this.artT[i][0] > 0 || hero.down) return false;
-    const a = itemDef(it.def).artifact;
-    if (!a) return false;
+    const a = it ? itemDef(it.def).artifact : undefined;
+    return a ? { a, power: a.power * powerMult(it!.power) * this.stats.artifactMult } : null;
+  }
+
+  /**
+   * Сработать сразу; charge 0..1 — заряд заклинания (клик по слоту и тесты — без удержания).
+   * Общее для всех: гнездо, перезарядка, герой на ногах, плата душами; дальше заклинание творит реестр, обычный артефакт — plain
+   */
+  useArtifact(i: number, at: THREE.Vector3, charge = 0): boolean {
+    const art = this.artifactAt(i);
+    if (!art) { this.h.toast(`Гнездо ${i + 1} пустое — надень артефакт в инвентаре (I)`); return false; }
+    const { a, power } = art;
+    if (this.artT[i][0] > 0 || this.h.hero.down) return false;
     if (a.souls && this.profile.data.souls < a.souls) { this.h.toast(`Нужно ${a.souls} душ`); this.h.sound('empty'); return false; }
     if (a.souls) this.profile.data.souls -= a.souls;
-    const k = powerMult(it.power) * this.stats.artifactMult;
-    const power = a.power * k;
-    const R = a.radius ?? 3;
-    const me = hero.pos.clone();
-    switch (a.kind) {
+    const spell = spellOf(a.kind);
+    if (spell) this.spells.cast(spell, a, power, at, charge);
+    else this.plain(a.kind as PlainArtifactKind, a, power, at);
+    this.artT[i] = [a.cd * this.stats.artifactCdMult, a.cd * this.stats.artifactCdMult];
+    this.apply();
+    return true;
+  }
+
+  /** Обычный артефакт без каста: power — урон или лечение с силой предмета; сапоги берут множитель скорости как есть */
+  private plain(kind: PlainArtifactKind, a: ArtifactStats, power: number, at: THREE.Vector3): void {
+    const R = a.radius ?? 3, me = this.h.hero.pos.clone();
+    switch (kind) {
       case 'firework': this.firework(me, at, R, power); break;
       case 'totem': this.totem(me, R, power, a.duration ?? 8); break;
       case 'boots':
@@ -346,16 +360,12 @@ export class Gear {
         this.h.sound('horn');
         break;
       case 'lightning': this.lightning(me, R, power); break;
-      default: if (isSpell(a.kind)) this.spells.cast(a.kind, a, power, at, Math.max(0, Math.min(1, charge))); break;
       case 'harvester':
         this.aoe(me, R, power, 1.6, true);
         this.magicBoom(me, R, new THREE.Color(0.8, 2.6, 3.4), new THREE.Color(2.2, 1.2, 3.4));
         this.h.sound('souls');
         break;
     }
-    this.artT[i] = [a.cd * this.stats.artifactCdMult, a.cd * this.stats.artifactCdMult];
-    this.apply();
-    return true;
   }
 
   /**
