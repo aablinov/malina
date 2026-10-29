@@ -206,6 +206,15 @@ export interface Textures {
   crops: THREE.Texture; cropsRipe: THREE.Texture; thatch: THREE.Texture; shingles: THREE.Texture; barrel: THREE.Texture; barrelTop: THREE.Texture; burlap: THREE.Texture; tentCloth: THREE.Texture; stake: THREE.Texture; stakeTop: THREE.Texture;
   snowTop: THREE.Texture; snowSide: THREE.Texture; snowFringe: THREE.Texture; cliffSnowSide: THREE.Texture; ice: THREE.Texture; iceCracked: THREE.Texture; frozenWater: THREE.Texture; leavesSnowCut: THREE.Texture; deadBushSnow: THREE.Texture;
   snowEdge0: THREE.Texture; snowEdge1: THREE.Texture; snowEdge2: THREE.Texture; snowEdge3: THREE.Texture;
+  // джунгли с кристаллами (референс 16): влажная земля с мхом, храмовый камень, кристаллы, лианы
+  jungleTop: THREE.Texture; jungleRed: THREE.Texture; mossTeal: THREE.Texture; jungleSide: THREE.Texture; jungleFringe: THREE.Texture; cliffJungleSide: THREE.Texture; mossBlock: THREE.Texture;
+  jungleEdge0: THREE.Texture; jungleEdge1: THREE.Texture; jungleEdge2: THREE.Texture; jungleEdge3: THREE.Texture;
+  jungleRedEdge0: THREE.Texture; jungleRedEdge1: THREE.Texture; jungleRedEdge2: THREE.Texture; jungleRedEdge3: THREE.Texture;
+  mossTealEdge0: THREE.Texture; mossTealEdge1: THREE.Texture; mossTealEdge2: THREE.Texture; mossTealEdge3: THREE.Texture;
+  mossEdge0: THREE.Texture; mossEdge1: THREE.Texture; mossEdge2: THREE.Texture; mossEdge3: THREE.Texture;
+  leavesJungle: THREE.Texture; leavesJunglePuff: THREE.Texture; logJungleSide: THREE.Texture; logJungleTop: THREE.Texture;
+  vine: THREE.Texture; fernBig: THREE.Texture; flowerPink: THREE.Texture; lilyPad: THREE.Texture;
+  templeStone: THREE.Texture; templeStoneCarved: THREE.Texture; templeStoneMossy: THREE.Texture; templeStoneTop: THREE.Texture; crystal: THREE.Texture;
   // портал (скриншот 14)
   portal: THREE.Texture; portalFrame: THREE.Texture; portalTrim: THREE.Texture; portalFloor: THREE.Texture;
   // рваный край между травой и дорожкой (mesher.ts, bleed): 4 варианта маски у каждой
@@ -941,6 +950,97 @@ export function makeTextures(): Textures {
       }
     }
   }, 193);
+
+  // ---------- джунгли с кристаллами (биом «джунгли», референс 16 в wiki/sources/refs-settlements.md) ----------
+  // земля: тёмная влажная, мох пятнами и по кромке; храмовый камень — бирюзово-серый с мхом в швах; кристаллы — бирюза под bloom
+  // земля как на референсе — мозаика ровных блоков (раскладка пятнами по шуму — jungleGroundAt в kit.ts): оранжевая земля,
+  // тёмно-красная земля, бирюзовый мох; у каждого — ровная заливка с мягкими пятнами, без мелкого шума
+  const JUNGLE_BASE = '#b4663e', JUNGLE_DARK = '#9e5634', JUNGLE_LIGHT = '#c67c52', JUNGLE_RED = '#843e2c', MOSS_J = '#3e9a82', MOSS_LIGHT = '#56b498', TEMPLE = '#5c7a7a', CRYSTAL = '#2fb4ac', CRYSTAL_LIGHT = '#8cece4';
+  const JUNGLE_LEAF = ['#1f6a4e', '#2f8e5c', '#49b070', '#7fd48a'];
+  T.jungleTop = canvasTex(16, (g, s, r) => softFill(g, s, r, JUNGLE_BASE, 2, [{ col: JUNGLE_DARK, n: 2, rad: [2, 3.5], k: 0.5 }, { col: JUNGLE_LIGHT, n: 2, rad: [2.5, 4], k: 0.5 }]), 230);
+  T.jungleRed = canvasTex(16, (g, s, r) => softFill(g, s, r, JUNGLE_RED, 2, [{ col: mix(JUNGLE_RED, '#000000', 0.12), n: 2, rad: [2, 3.5], k: 0.5 }, { col: mix(JUNGLE_RED, '#ffffff', 0.1), n: 2, rad: [2, 3], k: 0.4 }]), 238);
+  T.mossTeal = canvasTex(16, (g, s, r) => softFill(g, s, r, MOSS_J, 2, [{ col: MOSS_LIGHT, n: 3, rad: [2, 4], k: 0.5 }, { col: mix(MOSS_J, '#000000', 0.12), n: 2, rad: [2, 3], k: 0.4 }]), 239);
+  T.jungleSide = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, JUNGLE_DARK, 3, [{ col: '#5e3a24', n: 3, rad: [2, 3.5], k: 0.6 }]);
+    for (let x = 0; x < s; x++) { const d = 2 + ((r() * 4) | 0); for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 && r() < 0.5 ? MOSS_J : JUNGLE_BASE, r, 3)); }
+  }, 231);
+  T.jungleFringe = canvasTex(16, (g, s, r) => {
+    for (let x = 0; x < s; x++) { const len = 1 + Math.floor(r() * 5); for (let y = 0; y < len; y++) px(g, x, y, jitter(y === len - 1 ? MOSS_J : MOSS_LIGHT, r, 3)); }
+  }, 232, { alpha: true });
+  T.cliffJungleSide = canvasTex(16, (g, s, r) => {
+    strata(mix(CLIFF, TEMPLE, 0.35), r, g, s);
+    for (let x = 0; x < s; x++) { const d = 2 + ((r() * 4) | 0); for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? MOSS_J : MOSS_LIGHT, r, 3)); }
+    overlayBlobs(g, s, r, MOSS_J, 2, [1.5, 2.5], 0.6, 1);
+  }, 233);
+  const MOSS_G = '#5f9a44', MOSS_G_LIGHT = '#7fb858';
+  T.mossBlock = canvasTex(16, (g, s, r) => softFill(g, s, r, MOSS_G, 3, [{ col: MOSS_G_LIGHT, n: 3, rad: [2, 4], k: 0.6 }, { col: '#4a7f36', n: 2, rad: [2, 3], k: 0.5 }]), 234);
+  // рваный край у каждого блока земли джунглей: заходит на любого природного соседа, полутон на кромке — смесь с общим средним тоном,
+  // оба соседа заходят друг на друга — стык мозаики мягкий (mesher.ts, bleed)
+  const JUNGLE_MID = mix(JUNGLE_BASE, MOSS_J, 0.5);
+  [T.jungleEdge0, T.jungleEdge1, T.jungleEdge2, T.jungleEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(JUNGLE_BASE, JUNGLE_MID, JUNGLE_LIGHT), 236 + i, { alpha: true }));
+  [T.jungleRedEdge0, T.jungleRedEdge1, T.jungleRedEdge2, T.jungleRedEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(JUNGLE_RED, mix(JUNGLE_RED, JUNGLE_BASE, 0.5), mix(JUNGLE_RED, '#ffffff', 0.1)), 256 + i, { alpha: true }));
+  [T.mossTealEdge0, T.mossTealEdge1, T.mossTealEdge2, T.mossTealEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(MOSS_J, JUNGLE_MID, MOSS_LIGHT), 260 + i, { alpha: true }));
+  [T.mossEdge0, T.mossEdge1, T.mossEdge2, T.mossEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(MOSS_G, mix(MOSS_G, JUNGLE_BASE, 0.5), MOSS_G_LIGHT), 264 + i, { alpha: true }));
+  // крупная бирюзово-зелёная листва, в «шапках» — розовые цветы
+  T.leavesJungle = clumpTex(JUNGLE_LEAF, 240);
+  T.leavesJunglePuff = canvasTex(16, (g, _s, r) => {
+    for (let i = 0; i < 7; i++) { const a = r() * Math.PI * 2, d = 3.5 + r() * 3.5; clump(g, r, 8 + Math.cos(a) * d, 8 + Math.sin(a) * d, 1.6 + r() * 1.2, JUNGLE_LEAF); }
+    for (let i = 0; i < 4; i++) { const x = 2 + ((r() * 12) | 0), y = 2 + ((r() * 12) | 0); px(g, x, y, '#f06ab0'); px(g, x + 1, y, '#ff9ed0'); px(g, x, y + 1, '#ff9ed0'); }
+  }, 241, { alpha: true });
+  T.logJungleSide = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 5 === 2 ? '#2a1e14' : pick(['#4a3524', '#3e2c1e', '#54402c'], r), r, 5));
+    overlayBlobs(g, s, r, MOSS_J, 3, [1.5, 2.5], 0.7);
+  }, 242);
+  T.logJungleTop = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, '#8a6a44', 3, [{ col: '#9c7a50', n: 2, rad: [2, 3], k: 0.5 }]);
+    for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, '#3e2c1e'); px(g, k, i, '#3e2c1e'); }
+    for (let k = 2; k < 7; k += 2) for (let i = k; i < s - k; i++) { px(g, i, k, '#6e5234'); px(g, i, s - 1 - k, '#6e5234'); px(g, k, i, '#6e5234'); px(g, s - 1 - k, i, '#6e5234'); }
+  }, 243);
+  // лиана: два стебля во всю высоту с листочками; большой папоротник — широкие перистые листья; розовый цветок; кувшинка
+  T.vine = canvasTex(16, (g, s, r) => {
+    for (let i = 0; i < 2; i++) { let x = 3 + i * 8 + ((r() * 3) | 0); for (let y = 0; y < s; y++) { px(g, x, y, jitter('#3f6a2a', r, 3)); if (r() < 0.25) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); if (r() < 0.35) { const d = r() < 0.5 ? -1 : 1; px(g, x + d, y, jitter('#5f9a44', r, 4)); px(g, x + 2 * d, y, jitter('#7fb858', r, 4)); } } }
+  }, 244, { alpha: true });
+  T.fernBig = canvasTex(16, (g, s, r) => {
+    for (const [x0, lean] of [[8, 0], [3, -1], [12, 1]] as [number, number][]) {
+      let x = x0;
+      for (let y = s - 1; y >= 1; y--) {
+        px(g, x, y, '#2f6a3a');
+        const len = Math.min(4, Math.max(1, ((s - y) / 2.5) | 0));
+        for (let d = 1; d <= len; d++) { if (x - d >= 0) px(g, x - d, y, jitter(d === len ? '#7fd48a' : '#49b070', r, 4)); if (x + d < s) px(g, x + d, y, jitter(d === len ? '#7fd48a' : '#49b070', r, 4)); }
+        if (y % 4 === 0) x = Math.max(0, Math.min(15, x + lean));
+      }
+    }
+  }, 245, { alpha: true });
+  T.flowerPink = flower('#f06ab0', 246);
+  T.lilyPad = canvasTex(16, (g, s, r) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 7 && !(x > 8 && y > 8 && Math.abs(x - y) < 2)) px(g, x, y, jitter(d > 5.5 ? '#3f8a44' : '#5fae52', r, 4)); }
+    px(g, 6, 6, '#f06ab0'); px(g, 7, 5, '#ff9ed0'); px(g, 5, 7, '#ff9ed0');
+  }, 247, { alpha: true });
+  // храмовый камень: кладка 8 × 4 бирюзово-серого камня, мох в швах; резной — меандр, как перемычка портала; мшистый — мох пятнами
+  const templeSeams = (g: Ctx, s: number, r: Rand) => { for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) if ((y % 4 === 0 || (x + (y >= 4 && y < 8 || y >= 12 ? 4 : 0)) % 8 === 0) && r() < 0.35) px(g, x, y, jitter(MOSS_J, r, 4)); };
+  T.templeStone = canvasTex(16, (g, s, r) => { softBricks(g, s, r, TEMPLE, 8, 4, 0.08, 0.16); templeSeams(g, s, r); }, 250);
+  T.templeStoneTop = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, TEMPLE, 2, [{ col: mix(TEMPLE, '#ffffff', 0.08), n: 2, rad: [3, 5], k: 0.5 }]);
+    for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, mix(TEMPLE, '#000000', 0.16)); px(g, k, i, mix(TEMPLE, '#000000', 0.16)); }
+    overlayBlobs(g, s, r, MOSS_J, 2, [1.2, 2], 0.6);
+  }, 251);
+  T.templeStoneCarved = canvasTex(16, (g, s, r) => {
+    softFill(g, s, r, TEMPLE, 2, []);
+    const inlay = mix(TEMPLE, '#ffffff', 0.22), shade = mix(TEMPLE, '#000000', 0.2);
+    for (let x = 0; x < s; x++) { px(g, x, 1, inlay); px(g, x, 2, shade); px(g, x, 13, shade); px(g, x, 14, inlay); }
+    for (let x = 0; x < s; x += 4) for (let y = 5; y <= 10; y++) px(g, x + (y < 8 ? 0 : 2), y, inlay);
+    for (let x = 0; x < s; x += 4) { px(g, x + 1, 5, inlay); px(g, x + 3, 10, inlay); px(g, x + 1, 6, shade); px(g, x + 3, 9, shade); }
+    templeSeams(g, s, r);
+  }, 252);
+  T.templeStoneMossy = canvasTex(16, (g, s, r) => { softBricks(g, s, r, TEMPLE, 8, 4, 0.08, 0.16); templeSeams(g, s, r); overlayBlobs(g, s, r, MOSS_J, 4, [2, 3.5], 0.8, 1); }, 253);
+  // кристалл: бирюза с вертикальными светлыми гранями-струями; слой glow не тонмапится — светится под bloom
+  T.crystal = canvasTex(16, (g, s, r) => {
+    for (let x = 0; x < s; x++) {
+      const k = 0.5 + 0.5 * Math.sin(x * 1.3 + r() * 0.5);
+      for (let y = 0; y < s; y++) px(g, x, y, jitter(mix(CRYSTAL, CRYSTAL_LIGHT, k * 0.4 + (1 - y / s) * 0.25), r, 4));
+    }
+    for (let i = 0; i < 2; i++) { const x = (r() * s) | 0; for (let y = 0; y < s; y++) if (r() < 0.7) px(g, x, y, CRYSTAL_LIGHT); }
+  }, 254);
 
   T.square = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;

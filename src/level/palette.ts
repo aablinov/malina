@@ -147,6 +147,27 @@ export const BLOCKS: BlockDef[] = [
   B('leaves_snow', 'Хвоя под снегом', 'снег', [{ obj: 'cube', layer: 'cutout', tex: { top: 'snowTop', side: 'leavesSnowCut', bottom: 'leavesSnowCut' } }], { jitter: 0.08 }),
   B('dead_bush_snow', 'Куст сухой в снегу', 'снег', [{ obj: 'cross', layer: 'cutout', tex: { side: 'deadBushSnow' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.1 }),
 
+  // --- джунгли с кристаллами (биом «джунгли», wiki/design-prefab-library.md, референс 16) ---
+  // земля — мозаика ровных блоков, как на референсе: оранжевая, тёмно-красная, бирюзовый мох; раскладка пятнами по шуму — jungleGroundAt (kit.ts)
+  solid('jungle_floor', 'Земля джунглей', 'джунгли', { top: 'jungleTop', side: 'jungleSide', bottom: 'dirt' }, { jitter: 0.03, natural: true, bleed: ['jungleEdge0', 'jungleEdge1', 'jungleEdge2', 'jungleEdge3'], fringe: 'jungleFringe' }),
+  B('jungle_floor_slab', 'Земля джунглей: полублок', 'джунгли', [cube({ top: 'jungleTop', side: 'jungleSide', bottom: 'dirt' }, 'slab')], { collide: 0.5, connects: true, jitter: 0.03, natural: true, fringe: 'jungleFringe', bleed: ['jungleEdge0', 'jungleEdge1', 'jungleEdge2', 'jungleEdge3'] }),
+  solid('jungle_floor_red', 'Земля джунглей красная', 'джунгли', { top: 'jungleRed', side: 'jungleSide', bottom: 'dirt' }, { jitter: 0.03, natural: true, bleed: ['jungleRedEdge0', 'jungleRedEdge1', 'jungleRedEdge2', 'jungleRedEdge3'] }),
+  solid('moss_teal', 'Мох бирюзовый', 'джунгли', { top: 'mossTeal', side: 'jungleSide', bottom: 'dirt' }, { jitter: 0.03, natural: true, fringe: 'jungleFringe', bleed: ['mossTealEdge0', 'mossTealEdge1', 'mossTealEdge2', 'mossTealEdge3'] }),
+  solid('cliff_jungle', 'Скала во мху', 'джунгли', { top: 'jungleTop', side: 'cliffJungleSide', bottom: 'cliff' }, { jitter: 0.03, natural: true, fringe: 'jungleFringe' }),
+  solid('moss_block', 'Мох', 'джунгли', 'mossBlock', { jitter: 0.06, natural: true, bleed: ['mossEdge0', 'mossEdge1', 'mossEdge2', 'mossEdge3'] }),
+  B('moss_carpet', 'Мох: ковёр', 'джунгли', [cube(same('mossBlock'), 'layer')], { collide: 0, replaceable: true, jitter: 0.06, natural: true }),
+  B('leaves_jungle', 'Листва джунглей', 'джунгли', [{ obj: 'leaves_fluffy', layer: 'cutout', tex: { side: 'leavesJungle', puff: 'leavesJunglePuff' } }], { jitter: 0.1 }),
+  solid('log_jungle', 'Бревно джунглей', 'джунгли', { top: 'logJungleTop', side: 'logJungleSide', bottom: 'logJungleTop' }),
+  B('vine', 'Лиана', 'джунгли', [{ obj: 'cross', layer: 'cutout', tex: { side: 'vine' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.15 }),
+  B('fern_big', 'Папоротник большой', 'джунгли', [{ obj: 'cross', layer: 'cutout', tex: { side: 'fernBig' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.15 }),
+  B('flower_pink', 'Цветок розовый', 'джунгли', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerPink' } }], { collide: 0, scatter: true, replaceable: true }),
+  ...stoneSet('temple_stone', 'Храмовый камень', 'джунгли', 'templeStone'),
+  solid('temple_stone_carved', 'Храмовый камень: резной', 'джунгли', { top: 'templeStoneTop', side: 'templeStoneCarved', bottom: 'templeStoneTop' }),
+  solid('temple_stone_mossy', 'Храмовый камень: мшистый', 'джунгли', 'templeStoneMossy'),
+  // кристалл: три призмы, слой glow (не тонмапится, светится под bloom), запечённый бирюзовый свет на 4 м
+  B('crystal', 'Кристалл', 'джунгли', [{ obj: 'crystal', layer: 'glow', tex: same('crystal') }], { collide: 1, jitter: 0, bakedLight: { color: '#6fe8e0', intensity: 1.0, dist: 4 } }),
+  B('crystal_small', 'Кристалл малый', 'джунгли', [{ obj: 'crystal_small', layer: 'glow', tex: same('crystal') }], { collide: 0, scatter: true, replaceable: true, jitter: 0, bakedLight: { color: '#6fe8e0', intensity: 0.5, dist: 2.5 } }),
+
   // --- растения ---
   B('leaves', 'Листва', 'растения', [{ obj: 'cube', layer: 'cutout', tex: same('leavesCut') }], { jitter: 0.12 }),
   B('berry_bush', 'Куст с ягодами', 'растения', [{ obj: 'cube', layer: 'cutout', tex: same('berryBush') }], { jitter: 0.1 }),

@@ -4,6 +4,7 @@ import { RUINS } from './builders-ruins.ts';
 import { SETTLEMENT } from './builders-settlement.ts';
 import { COMPOSITIONS } from './builders-compositions.ts';
 import { snowBuilders } from './builders-snow.ts';
+import { jungleBuilders } from './builders-jungle.ts';
 
 /**
  * Строители пресетов библиотеки (wiki/design-prefab-library.md, каталог — раздел 3). Опора — (0, 0, 0): y = 0 — первый слой
@@ -11,7 +12,8 @@ import { snowBuilders } from './builders-snow.ts';
  * Партия 1 — пробные (стог, дуб, ограда, лагерь), партия 2 — «Дорога и природа» (разделы A и B каталога),
  * партия 3 — «Руины» (раздел C, builders-ruins.ts), партия 4 — «Поселение» (раздел D, builders-settlement.ts),
  * партия 5 — «Композиции» (раздел E, builders-compositions.ts — из средних пресетов через bake + stampInto),
- * партия 6 — биом «снег» (builders-snow.ts — снежные пресеты и snowCap-варианты готовых).
+ * партия 6 — биом «снег» (builders-snow.ts — снежные пресеты и snowCap-варианты готовых),
+ * партия 7 — биом «джунгли с кристаллами» (builders-jungle.ts — храм, кристаллы, деревья с контрфорсами).
  */
 
 const pick = <T,>(c: BuildCtx, list: T[]): T => list[Math.floor(c.rnd() * list.length)];
@@ -337,3 +339,4 @@ export const BUILDERS: Builder[] = [
 ];
 // снежные варианты ссылаются на базовые по id, поэтому добавляются после сборки реестра
 BUILDERS.push(...snowBuilders(BUILDERS));
+BUILDERS.push(...jungleBuilders(BUILDERS));

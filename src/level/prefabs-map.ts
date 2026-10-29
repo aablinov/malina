@@ -1,4 +1,5 @@
 import { Level } from './level.ts';
+import { jungleGroundAt } from './kit.ts';
 import type { PgLabel } from './playground-map.ts';
 import { stampPrefab } from './prefab-lib/stamp.ts';
 import type { LibraryPrefab } from './prefab-lib/types.ts';
@@ -43,7 +44,7 @@ export function buildPrefabsMap(list: LibraryPrefab[]): Level {
   const X0 = -10, X1 = maxX + 10, Z0 = -8, Z1 = z + 8;
   for (let x = X0; x <= X1; x++) for (let zz = Z0; zz <= Z1; zz++) {
     const g = GROUND[rows.find(([a, b]) => zz >= a && zz < b)?.[2] ?? ''] ?? ['grass', 'dirt'];
-    L.set(x, -1, zz, g[0]); L.set(x, -2, zz, g[1]); L.set(x, -3, zz, 'dirt');
+    L.set(x, -1, zz, g[0] === 'jungle_floor' ? jungleGroundAt(x, zz, 5) : g[0]); L.set(x, -2, zz, g[1]); L.set(x, -3, zz, 'dirt');
   }
   for (const [p, x, zz] of spots) {
     const r = stampPrefab(L, p, x, 0, zz);
