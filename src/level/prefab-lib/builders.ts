@@ -3,13 +3,15 @@ import type { BuildCtx, Builder } from './build.ts';
 import { RUINS } from './builders-ruins.ts';
 import { SETTLEMENT } from './builders-settlement.ts';
 import { COMPOSITIONS } from './builders-compositions.ts';
+import { snowBuilders } from './builders-snow.ts';
 
 /**
  * Строители пресетов библиотеки (wiki/design-prefab-library.md, каталог — раздел 3). Опора — (0, 0, 0): y = 0 — первый слой
  * воздуха над землёй, земля — y = −1, в неё врезаются дороги и вода. Каждый пресет несёт мелкий декор — голых коробок нет.
  * Партия 1 — пробные (стог, дуб, ограда, лагерь), партия 2 — «Дорога и природа» (разделы A и B каталога),
  * партия 3 — «Руины» (раздел C, builders-ruins.ts), партия 4 — «Поселение» (раздел D, builders-settlement.ts),
- * партия 5 — «Композиции» (раздел E, builders-compositions.ts — из средних пресетов через bake + stampInto).
+ * партия 5 — «Композиции» (раздел E, builders-compositions.ts — из средних пресетов через bake + stampInto),
+ * партия 6 — биом «снег» (builders-snow.ts — снежные пресеты и snowCap-варианты готовых).
  */
 
 const pick = <T,>(c: BuildCtx, list: T[]): T => list[Math.floor(c.rnd() * list.length)];
@@ -21,7 +23,7 @@ const inBlob = (c: BuildCtx, dx: number, dz: number, rx: number, rz: number, fuz
 // ---------- деревья (общие для пресетов и рощи) ----------
 
 /** Золотая лиственница: ствол и крона конусом из leaves_gold (референсы 2, 3, 8); радиусы слоёв снизу вверх */
-function goldenTree(c: BuildCtx, x: number, z: number, trunk: number, radii: number[]): void {
+export function goldenTree(c: BuildCtx, x: number, z: number, trunk: number, radii: number[]): void {
   for (let k = 0; k < trunk; k++) c.L.set(x, k, z, 'log');
   radii.forEach((r, i) => {
     const y = trunk - 1 + i;
@@ -34,7 +36,7 @@ function goldenTree(c: BuildCtx, x: number, z: number, trunk: number, radii: num
   });
 }
 /** Тёмная ель (референс 11): ствол и ярусы вырезной листвы, к верху уже */
-function pineTree(c: BuildCtx, x: number, z: number, trunk: number, radii: number[]): void {
+export function pineTree(c: BuildCtx, x: number, z: number, trunk: number, radii: number[]): void {
   for (let k = 0; k < trunk + 1; k++) c.L.set(x, k, z, 'log');
   radii.forEach((r, i) => {
     const y = trunk + i;
@@ -333,3 +335,5 @@ export const BUILDERS: Builder[] = [
   ...SETTLEMENT,
   ...COMPOSITIONS,
 ];
+// снежные варианты ссылаются на базовые по id, поэтому добавляются после сборки реестра
+BUILDERS.push(...snowBuilders(BUILDERS));

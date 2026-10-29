@@ -135,6 +135,18 @@ export const BLOCKS: BlockDef[] = [
   B('shingles_stairs', 'Черепица бурая: ступени', 'дерево', [cube(same('shingles'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true }),
   B('shingles_slab', 'Черепица бурая: полублок', 'дерево', [cube(same('shingles'), 'slab')], { collide: 0.5, connects: true }),
 
+  // --- снег (биом «снег», wiki/design-prefab-library.md) ---
+  solid('snow', 'Снег', 'снег', { top: 'snowTop', side: 'snowSide', bottom: 'dirt' }, { jitter: 0.02, natural: true, bleed: ['snowEdge0', 'snowEdge1', 'snowEdge2', 'snowEdge3'], fringe: 'snowFringe' }),
+  B('snow_slab', 'Снег: полублок', 'снег', [cube({ top: 'snowTop', side: 'snowSide', bottom: 'dirt' }, 'slab')], { collide: 0.5, connects: true, jitter: 0.02, natural: true, fringe: 'snowFringe' }),
+  B('snow_layer', 'Снег: слой', 'снег', [cube(same('snowTop'), 'layer')], { collide: 0, replaceable: true, jitter: 0.02, natural: true }),
+  solid('cliff_snow', 'Скала под снегом', 'снег', { top: 'snowTop', side: 'cliffSnowSide', bottom: 'cliff' }, { jitter: 0.02, natural: true, fringe: 'snowFringe' }),
+  solid('ice', 'Лёд', 'снег', 'ice', { jitter: 0 }),
+  solid('ice_cracked', 'Лёд треснутый', 'снег', 'iceCracked', { jitter: 0 }),
+  B('ice_slab', 'Лёд: полублок', 'снег', [cube(same('ice'), 'slab')], { collide: 0.5, connects: true, jitter: 0 }),
+  solid('frozen_water', 'Вода замёрзшая', 'снег', 'frozenWater', { jitter: 0 }),
+  B('leaves_snow', 'Хвоя под снегом', 'снег', [{ obj: 'cube', layer: 'cutout', tex: { top: 'snowTop', side: 'leavesSnowCut', bottom: 'leavesSnowCut' } }], { jitter: 0.08 }),
+  B('dead_bush_snow', 'Куст сухой в снегу', 'снег', [{ obj: 'cross', layer: 'cutout', tex: { side: 'deadBushSnow' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.1 }),
+
   // --- растения ---
   B('leaves', 'Листва', 'растения', [{ obj: 'cube', layer: 'cutout', tex: same('leavesCut') }], { jitter: 0.12 }),
   B('berry_bush', 'Куст с ягодами', 'растения', [{ obj: 'cube', layer: 'cutout', tex: same('berryBush') }], { jitter: 0.1 }),
