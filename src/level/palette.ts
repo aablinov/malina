@@ -104,7 +104,13 @@ export const BLOCKS: BlockDef[] = [
   solid('bricks_mossy', 'Кирпич мшистый', 'камень', 'stoneBricksMossy'),
   solid('bricks_cracked', 'Кирпич треснутый', 'камень', 'stoneBricksCracked'),
   solid('bricks_old', 'Кирпич руинный', 'камень', ['stoneBricksOld', 'stoneBricksOld', 'stoneBricksOld', 'stoneBricksOldMossy']),
+  // руинный кирпич: ступени, полублок и стенка — для арок, обломанных стен и зубцов (библиотека пресетов, партия «Руины»)
+  B('bricks_old_stairs', 'Кирпич руинный: ступени', 'камень', [cube(same(['stoneBricksOld', 'stoneBricksOld', 'stoneBricksOldMossy']), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true }),
+  B('bricks_old_slab', 'Кирпич руинный: полублок', 'камень', [cube(same(['stoneBricksOld', 'stoneBricksOld', 'stoneBricksOldMossy']), 'slab')], { collide: 0.5, connects: true }),
+  B('bricks_old_wall', 'Кирпич руинный: стенка', 'камень', [cube(same('stoneBricksOld'), 'wall_post'), { obj: 'wall_seg', tex: same('stoneBricksOld'), connect: true }], { collide: 1.5, connects: true }),
   ...stoneSet('tiles', 'Плиты мостовой', 'камень', 'tiles', false),
+  // битые плиты (дорога Лимгрейва): одна плита выпала, под ней земля — два варианта по хэшу клетки
+  solid('tiles_broken', 'Плиты битые', 'камень', { top: ['tilesBroken0', 'tilesBroken1'], side: 'tiles', bottom: 'tiles' }),
   B('bricks_low', 'Кирпич: низкое укрытие', 'камень', [cube(same('stoneBricks'), 'low')], { collide: 0.875, connects: true }),
   B('cobble_low', 'Булыжник: низкое укрытие', 'камень', [cube(same('cobble'), 'low')], { collide: 0.875, connects: true }),
 
@@ -121,6 +127,13 @@ export const BLOCKS: BlockDef[] = [
   B('roof_dark_stairs', 'Черепица тёмная: ступени', 'дерево', [cube(same('roofDark'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true }),
   B('roof_dark_slab', 'Черепица тёмная: полублок', 'дерево', [cube(same('roofDark'), 'slab')], { collide: 0.5, connects: true }),
   solid('hay', 'Сено', 'дерево', { top: 'hayTop', side: 'hay', bottom: 'hayTop' }),
+  // частокол лагеря (библиотека пресетов, партия 5): заострённый кол 12/16, через него не перешагнуть
+  B('stake_fence', 'Частокол', 'дерево', [cube({ side: 'stake', top: 'stakeTop', bottom: 'logTop' }, 'post')], { collide: 1.5 }),
+  // крыши поселения (библиотека пресетов, партия 4): солома и тёмная черепица
+  B('roof_thatch_stairs', 'Солома: ступени', 'дерево', [cube(same('thatch'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true }),
+  B('roof_thatch_slab', 'Солома: полублок', 'дерево', [cube(same('thatch'), 'slab')], { collide: 0.5, connects: true }),
+  B('shingles_stairs', 'Черепица бурая: ступени', 'дерево', [cube(same('shingles'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true }),
+  B('shingles_slab', 'Черепица бурая: полублок', 'дерево', [cube(same('shingles'), 'slab')], { collide: 0.5, connects: true }),
 
   // --- растения ---
   B('leaves', 'Листва', 'растения', [{ obj: 'cube', layer: 'cutout', tex: same('leavesCut') }], { jitter: 0.12 }),
@@ -131,6 +144,9 @@ export const BLOCKS: BlockDef[] = [
   B('flower_blue', 'Цветок синий', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerBlue' } }], { collide: 0, scatter: true, replaceable: true }),
   B('flower_white', 'Цветок белый', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerWhite' } }], { collide: 0, scatter: true, replaceable: true }),
   B('flower_yellow', 'Цветок жёлтый', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerYellow' } }], { collide: 0, scatter: true, replaceable: true }),
+  B('crops', 'Ростки', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'crops' } }], { collide: 0, replaceable: true, jitter: 0.1 }),
+  B('crops_ripe', 'Ростки спелые', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'cropsRipe' } }], { collide: 0, replaceable: true, jitter: 0.1 }),
+  B('flower_orange', 'Цветок оранжевый', 'растения', [{ obj: 'cross', layer: 'cutout', tex: { side: 'flowerOrange' } }], { collide: 0, scatter: true, replaceable: true }),
 
   // --- дом: стены, окно, перила ---
   solid('plaster_teal', 'Штукатурка бирюзовая', 'дом', 'plasterTeal'),
@@ -181,6 +197,8 @@ export const BLOCKS: BlockDef[] = [
     collide: 0.5, connects: true, jitter: 0.02, natural: true, fringe: 'grassFringe', tufts: ['grassTuft', 'grassTuft', 'flowerTuft'], bleed: ['grassEdge0', 'grassEdge1', 'grassEdge2', 'grassEdge3'],
   }),
   B('leaves_fluffy', 'Листва пышная', 'холмы', [{ obj: 'leaves_fluffy', layer: 'cutout', tex: { side: 'leavesClump', puff: 'leavesPuff' } }], { jitter: 0.1 }),
+  // золотая осень: жёлтый и оранжевый тон выбираются по хэшу клетки — крона пятнистая, как лиственницы на референсах 2, 3, 8
+  B('leaves_gold', 'Листва золотая', 'холмы', [{ obj: 'leaves_fluffy', layer: 'cutout', tex: { side: ['leavesGold', 'leavesOrange'], puff: ['leavesGoldPuff', 'leavesOrangePuff'] } }], { jitter: 0.1 }),
   B('dry_grass', 'Сухая трава', 'холмы', [{ obj: 'cross', layer: 'cutout', tex: { side: 'dryGrass' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.1 }),
   B('daisies', 'Ромашки', 'холмы', [{ obj: 'cross', layer: 'cutout', tex: { side: 'daisies' } }], { collide: 0, scatter: true, replaceable: true, jitter: 0.05 }),
   B('path_stairs', 'Тропинка: ступени', 'холмы', [cube(same('path'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true, jitter: 0.02, natural: true }),

@@ -1,6 +1,6 @@
 # Редактор уровней в духе Unreal Engine
 
-Версия 1.0 от 24.10.2026. Заменяет описание редактора в [design-level-blocks.md](design-level-blocks.md) (раздел 9) и дополняет [design-level-decor.md](design-level-decor.md) (раздел 6), [style-world.md](style-world.md) (ландшафт), [style-lighting.md](style-lighting.md) (настройки мира). Как проверять — [dev-testing.md](dev-testing.md).
+Версия 1.1 от 29.10.2026. Заменяет описание редактора в [design-level-blocks.md](design-level-blocks.md) (раздел 9) и дополняет [design-level-decor.md](design-level-decor.md) (раздел 6), [style-world.md](style-world.md) (ландшафт), [style-lighting.md](style-lighting.md) (настройки мира). Как проверять — [dev-testing.md](dev-testing.md).
 
 Открыть: `?dev=editor` (или F10 в плейграунде). Код — `src/dev/editor.ts` и `src/dev/editor/`.
 
@@ -50,7 +50,7 @@ Tab — по кругу «Выделение → Блоки → Декор → �
 
 ## 6. Префабы
 
-Сборки — функции `src/level/kit.ts` (дерево, холм, скала, скальный массив, русло, водопад, мост, портал, стены, лестница, площадка, стог). Всё, что они ставят через `level.set`, пишется одной правкой. **Мои префабы** — сохранённое выделение (блоки, декор и свет относительно опорной клетки) в localStorage `malina.editor.prefabs`.
+Сборки — функции `src/level/kit.ts` (дерево, холм, скала, скальный массив, русло, водопад, мост, портал, стены, лестница, площадка, стог). Всё, что они ставят через `level.set`, пишется одной правкой. **Библиотека** (29.10.2026) — запечённые пресеты из `assets/prefabs/` ([design-prefab-library.md](design-prefab-library.md)): блоки + декор + свет относительно опоры, разделы — категории каталога; в режиме «Поставить» **R** поворачивает пресет на 90° (клетки, поворот блоков, рыск декора и свет — вместе). **Мои префабы** — сохранённое выделение в том же формате в localStorage `malina.editor.prefabs`; ПКМ → «Сохранить в библиотеку (JSON)» скачивает его как файл для `assets/prefabs/`.
 
 ## 7. Оружие
 

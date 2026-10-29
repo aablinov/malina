@@ -256,3 +256,27 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-10-29] код | Одно место применения заклинаний
 Стартовые заклинания вынесены из класса `Spells` в `src/magic/starters.ts`; все заклинания — в одном реестре `SPELLS` (`src/magic/registry.ts`, тип `Spell` вместо `BossSpell`, полнота проверяется типами), `spellOf(kind)` отличает заклинание от обычного артефакта. У `Spell` — хуки заряда `self`, `orb`, `charging` вместо проверок `kind === 'heal'` внутри `Spells`. В `gear.ts` вместо двух `switch` — общие проверки, затем `Spells.cast` или `plain` для обычных артефактов. Поведение не менялось.
 Страницы: [design-spells.md](design-spells.md).
+
+## [2026-10-29] источник | Референсы холмистых земель с поселениями
+17 скриншотов Elden Ring и Minecraft Dungeons: дороги из плит, лагерь, золотые деревья, статуи, капеллы-руины, кладбище, мельницы, дома, хижины, грядки, пирс — `sources/refs-settlements/`, конспект [sources/refs-settlements.md](sources/refs-settlements.md).
+Страницы: [design-prefab-library.md](design-prefab-library.md).
+
+## [2026-10-29] код | Библиотека пресетов, партия 1: формат, генератор, поворот, вкладка, витрина
+Каталог пресетов по референсам и формат `LibraryPrefab` (`src/level/prefab-lib/`): строители с локальной картой, декором и светом, `bake` → `assets/prefabs/*.json` (`npm run prefabs`), постановка `stampPrefab` с поворотом на 90°, вкладка «Библиотека» в редакторе (R — повернуть), «Сохранить в библиотеку (JSON)» у своих префабов, витрина `?map=prefabs`. Четыре пробных пресета в вариантах: стог, дуб, ограда, лагерь. Тест `tests/prefabs.spec.ts`.
+Страницы: [design-prefab-library.md](design-prefab-library.md), [design-editor.md](design-editor.md).
+
+## [2026-10-29] код | Библиотека пресетов, партия 2: дорога и природа
+20 строителей (45 пресетов с вариантами): дороги из плит (прямая, поворот, перекрёсток, обрыв), земляные тропы, лестница, луга (цветочный и сухой), пруд, ручей с бродом, золотые лиственницы, мёртвое дерево, ель, кусты, золотая роща, пень с брёвнами, валуны. Новые блоки `leaves_gold` (жёлтый / оранжевый тон по хэшу), `flower_orange`, `tiles_broken`; декор «природа» — `tree_dead`, `reeds`, `stump`, `rock_small`, `leaf_litter`. Витрина переносит ряд длиннее 96 м. Тест библиотеки считает категории по JSON.
+Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+
+## [2026-10-29] код | Библиотека пресетов, партия 3: руины
+11 строителей (`src/level/prefab-lib/builders-ruins.ts`, 22 пресета): арка, акведук с обрушенным пролётом, стена с окном, угол, ряд колонн, капелла с колокольней (дерево внутри / алтарь и обрушенная башня), круглая башня, площадка со статуями, алтарь со свечами, кладбище, чаши. Руинный кирпич получил ступени, полублок и стенку; декор «руины» — `gravestone` × 3, `grave_cross`, `statue_hooded`, `stone_bowl`, `pot_clay`, `ivy` (настенный, cutout), `skull`; текстуры `clay`, `ivy`.
+Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+
+## [2026-10-29] код | Библиотека пресетов, партия 4: поселение
+17 строителей (`src/level/prefab-lib/builders-settlement.ts`, 34 пресета): мельница с крыльями (целыми / сломанными), сарай, двухэтажный дом с балконом и лестницей, каменный дом с трубой, соломенная хижина, разрушенный дом, навес, заборы (прямой, угол, ворота), колодец, грядки, прилавок, вышка, пирс, каменный мостик, сломанная телега. Блоки `crops` / `crops_ripe`, `roof_thatch_*`, `shingles_*`; декор «поселение» — `windmill_sails` (+ `_broken`), `barrel`, `barrel_broken`, `sack`, `sacks_pile`, `well_roof`, `bucket`, `ladder`, `tent`, `scarecrow`, `firewood_pile`, `signpost`, `cart_broken`; текстуры ростков, соломы, черепицы, бочки, мешковины, палаточной ткани. Помощники `walls`, `gableX`, `hipRoof`, `fenceRun`.
+Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+
+## [2026-10-29] код | Библиотека пресетов, партия 5: композиции
+Вложенные пресеты: `stampInto` и `c.put` / `c.putEntity` в `build.ts` — средний пресет запекается своим строителем и вкладывается со сдвигом и поворотом, код не дублируется, JSON средних не меняется. Пять композиций (`builders-compositions.ts`, 10 пресетов): деревня с мельницей, хутор у дороги, лагерь разбойников (новый блок `stake_fence`), руины у кладбища, обрыв со статуей. В библиотеке 115 пресетов по 57 строителям.
+Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).

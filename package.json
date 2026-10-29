@@ -11,7 +11,8 @@
     "blocks": "node scripts/gen-blocks.mjs",
     "decor": "node scripts/gen-decor.mjs",
     "map:playground": "node scripts/export-map.ts playground",
-    "map:rooms": "node scripts/export-map.ts rooms"
+    "map:rooms": "node scripts/export-map.ts rooms",
+    "prefabs": "node scripts/gen-prefabs.ts"
   },
   "dependencies": {
     "three": "^0.169.0"

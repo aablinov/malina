@@ -1,0 +1,1 @@
+{"id":"bush_cluster_2","title":"Кусты","category":"природа","hint":"2 × 2 кустов с цветами вокруг","size":[4,2,3],"seed":2,"cells":[[0,0,0,"berry_bush",0],[1,0,0,"berry_bush",0],[1,0,1,"berry_bush",0],[2,0,1,"tall_grass",0],[0,0,2,"flower_red",0],[0,1,0,"leaves",0]],"decor":[{"name":"rock_small","pos":[-1,0,2],"rot":[209]}],"entities":[]}

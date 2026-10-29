@@ -40,6 +40,16 @@ export const DECOR: DecorDef[] = [
   D('rubble', 'Щебень', 'руины', 'floor', [p('rubble', { side: 'cobble', top: 'stone', bottom: 'stone' })]),
   D('bricks_loose', 'Выпавшие кирпичи', 'руины', 'floor', [p('bricks_loose', { side: 'stoneBricks', top: 'stoneBricks', bottom: 'stone' })]),
   D('bones', 'Кости и череп', 'руины', 'floor', [p('bones', { bone: 'bone', dark: 'ironDark' })]),
+  // партия «Руины» (wiki/design-prefab-library.md): надгробия, крест, статуя, чаша, горшки, плющ, череп
+  D('gravestone', 'Надгробие', 'руины', 'floor', [p('gravestone', { side: 'stone', top: 'stone', bottom: 'stone' })], { solid: [{ w: 0.5, d: 0.2, h: 0.9 }] }),
+  D('gravestone_wide', 'Надгробие широкое', 'руины', 'floor', [p('gravestone_wide', { side: 'stoneBricksOld', top: 'stone', bottom: 'stone' })], { solid: [{ w: 0.75, d: 0.2, h: 0.6 }] }),
+  D('gravestone_fallen', 'Надгробие упавшее', 'руины', 'floor', [p('gravestone_fallen', { side: 'stone', top: 'stone', bottom: 'stone' })]),
+  D('grave_cross', 'Крест могильный', 'руины', 'floor', [p('grave_cross', { side: 'planksDark', top: 'planksDark', bottom: 'planksDark' })]),
+  D('statue_hooded', 'Статуя в капюшоне', 'руины', 'floor', [p('statue_hooded', { side: 'stone', top: 'stone', bottom: 'stone', hood: 'stoneBricksOld' })], { solid: [{ w: 0.9, d: 0.9, h: 2.2 }] }),
+  D('stone_bowl', 'Каменная чаша', 'руины', 'floor', [p('stone_bowl', { side: 'stone', top: 'stone', bottom: 'stone', inner: 'cobble' })], { solid: [{ w: 0.9, d: 0.9, h: 0.55 }] }),
+  D('pot_clay', 'Горшки глиняные', 'руины', 'floor', [p('pot_clay', { side: 'clay', top: 'clay', bottom: 'clay' })]),
+  D('ivy', 'Плющ', 'руины', 'wall', [p('ivy', { side: 'ivy' }, 'cutout')]),
+  D('skull', 'Череп', 'руины', 'floor', [p('skull', { bone: 'bone', dark: 'ironDark' })]),
 
   // --- стены и потолок ---
   D('chain', 'Цепь', 'стены', 'ceiling', [p('chain', { side: 'ironDark' })]),
@@ -84,6 +94,30 @@ export const DECOR: DecorDef[] = [
   D('waterfall_foam', 'Пена у камней', 'вода', 'floor', [p('waterfall_foam', { side: 'foam', top: 'foam', bottom: 'foam' })]),
   D('foam_patch', 'Пена на воде', 'вода', 'floor', [p('foam_patch', { side: 'foam', top: 'foam', bottom: 'foam' })]),
   // --- мир: свечи (скриншот 13) — свет запечён в соседние блоки, PointLight нет ---
+  // --- природа (wiki/design-prefab-library.md, партия «Дорога и природа») ---
+  D('tree_dead', 'Мёртвое дерево', 'природа', 'floor', [p('tree_dead', { side: 'barkDead', top: 'barkDead', bottom: 'barkDead' })],
+    { solid: [{ w: 0.5, d: 0.5, h: 2.3 }] }),
+  D('reeds', 'Тростник', 'природа', 'floor', [p('reeds', { side: 'reeds' }, 'cutout')]),
+  D('stump', 'Пень', 'природа', 'floor', [p('stump', { side: 'logSide', top: 'logTop', bottom: 'logTop' })], { solid: [{ w: 0.65, d: 0.65, h: 0.4 }] }),
+  D('rock_small', 'Камешки', 'природа', 'floor', [p('rock_small', { side: 'cliff', top: 'stone', bottom: 'stone' })]),
+  D('leaf_litter', 'Опавшие листья', 'природа', 'floor', [p('leaf_litter', { side: 'leafLitter', top: 'leafLitter', bottom: 'leafLitter' }, 'cutout')]),
+
+  // --- поселение (партия 4): крылья мельницы, бочки, мешки, колодец, ведро, лестница, палатка, пугало, дрова, указатель, сломанная телега ---
+  D('windmill_sails', 'Крылья мельницы', 'поселение', 'wall', [p('windmill_sails', { side: 'planksDark', lattice: 'planks', iron: 'ironDark' })]),
+  D('windmill_sails_broken', 'Крылья мельницы: сломанные', 'поселение', 'wall', [p('windmill_sails_broken', { side: 'planksDark', lattice: 'planks', iron: 'ironDark' })]),
+  D('barrel', 'Бочка', 'поселение', 'floor', [p('barrel', { side: 'barrel', top: 'barrelTop', bottom: 'barrelTop' })], { solid: [{ w: 0.75, d: 0.75, h: 0.9 }] }),
+  D('barrel_broken', 'Бочка разбитая', 'поселение', 'floor', [p('barrel_broken', { side: 'barrel', top: 'barrelTop', bottom: 'barrelTop' })]),
+  D('sack', 'Мешок', 'поселение', 'floor', [p('sack', { side: 'burlap', top: 'burlap', bottom: 'burlap' })]),
+  D('sacks_pile', 'Мешки горкой', 'поселение', 'floor', [p('sacks_pile', { side: 'burlap', top: 'burlap', bottom: 'burlap' })], { solid: [{ w: 1.2, d: 1, h: 0.7 }] }),
+  D('well_roof', 'Навес колодца', 'поселение', 'floor', [p('well_roof', { post: 'planksDark', roof: 'shingles', iron: 'ironDark', rope: 'burlap' })]),
+  D('bucket', 'Ведро', 'поселение', 'floor', [p('bucket', { side: 'planksDark', top: 'planksDark', bottom: 'planksDark', iron: 'ironDark' })]),
+  D('ladder', 'Лестница приставная', 'поселение', 'wall', [p('ladder', { side: 'planksDark', top: 'planksDark', bottom: 'planksDark' })]),
+  D('tent', 'Палатка', 'поселение', 'floor', [p('tent', { cloth: 'tentCloth', pole: 'planksDark' })], { solid: [{ w: 2, d: 2, h: 1.4 }] }),
+  D('scarecrow', 'Пугало', 'поселение', 'floor', [p('scarecrow', { pole: 'planksDark', hay: 'hay', hayTop: 'hayTop', cloth: 'tentCloth' })], { solid: [{ w: 0.3, d: 0.3, h: 2 }] }),
+  D('firewood_pile', 'Дрова', 'поселение', 'floor', [p('firewood_pile', { side: 'logSide', end: 'logTop' })], { solid: [{ w: 1, d: 0.6, h: 0.6 }] }),
+  D('signpost', 'Указатель', 'поселение', 'floor', [p('signpost', { post: 'planksDark', board: 'planks' })]),
+  D('cart_broken', 'Телега сломанная', 'поселение', 'floor', [p('cart_broken', { side: 'cartWood', top: 'cartWood', bottom: 'cartWood', wheel: 'planksDark', iron: 'ironDark' })], { solid: [{ w: 1.4, d: 1.4, h: 0.8 }] }),
+
   D('candles_group', 'Свечи кучкой', 'свечи', 'floor', [p('candles_group', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candles_group_flame', { side: 'fire' }, 'fire')],
     { light: { color: '#ffb25a', intensity: 0.9, dist: 2.6, at: [0, 0.4, 0], baked: true } }),
   D('candles_row', 'Свечи в ряд', 'свечи', 'floor', [p('candles_row', { side: 'candle', top: 'candle', bottom: 'candle' }), p('candles_row_flame', { side: 'fire' }, 'fire')],

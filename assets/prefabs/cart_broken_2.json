@@ -1,0 +1,1 @@
+{"id":"cart_broken_2","title":"Телега сломанная","category":"поселение","hint":"кузов на боку, колесо рядом, рассыпанные ящики","size":[3,1,3],"seed":2,"cells":[[1,0,-1,"dry_grass",0]],"decor":[{"name":"cart_broken","pos":[0,0,0],"rot":[264]},{"name":"crate_small","pos":[1,0,1],"rot":[20]},{"name":"sack","pos":[-1,0,1],"rot":[193]}],"entities":[]}
