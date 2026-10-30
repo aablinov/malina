@@ -100,3 +100,29 @@ test('оборона: нет малины — нет башни; меню пло
   expect(r.esc).toBe(true);
   expect(r.hud).toContain('башен');
 });
+
+test('оборона: пять башен бьют по-своему — болты, иней замедляет, камень по площади, пламя жжёт, сфера ослабляет цепью', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
+    m.profile.data.berries = 5000;
+    m.hero.god = true;
+    m.hero.place(26, 14, Math.PI);
+    const kinds = ['arrow', 'frost', 'splash', 'fire', 'magic'], pads = [10, 11, 12, 13, 14];
+    const towers = kinds.map((k, i) => td.build(td.pads[pads[i]], k));
+    const mobs: any[] = [];
+    for (const i of pads) { const p = td.pads[i]; for (let j = 0; j < 3; j++) mobs.push(td.spawn('gardener', new V(p.pos.x + 3 + j * 0.9, 0, p.pos.z - 2 + j))); }
+    let chilled = 0, exposed = 0, burning = 0;
+    for (let i = 0; i < 60; i++) { m.step(0.1); chilled = Math.max(chilled, mobs.filter((x) => x.chillT > 0).length); exposed = Math.max(exposed, mobs.filter((x) => x.exposeT > 0).length); burning = Math.max(burning, towers[3].burning); }
+    return { shots: towers.map((t) => t.shots), dealt: towers.map((t) => t.dealt), chilled, exposed, burning, dead: mobs.filter((x) => x.dead).length, titles: towers.map((t) => t.title) };
+  });
+  for (const s of r.shots) expect(s).toBeGreaterThan(0);
+  for (const d of r.dealt) expect(d).toBeGreaterThan(0);
+  // вышка стреляет чаще всех, катапульта — реже
+  expect(r.shots[0]).toBeGreaterThan(r.shots[2]);
+  expect(r.chilled).toBeGreaterThan(0);
+  expect(r.exposed).toBeGreaterThan(0);
+  expect(r.burning).toBeGreaterThan(0);
+  expect(r.dead).toBeGreaterThan(5);
+  expect(r.titles).toEqual(['Стрелковая вышка I', 'Морозный шпиль I', 'Катапульта I', 'Огненная жаровня I', 'Волшебный обелиск I']);
+});
