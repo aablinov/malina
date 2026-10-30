@@ -10,6 +10,7 @@ import { Pack } from '../mobs/pack';
 import type { Mob } from '../mobs/mob';
 import { Tower, type Foe } from './tower';
 import { RaspberryBush } from './bush';
+import { Lair } from './lair';
 import { SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from './towers';
 import type { TdLane, TdPad, TdSpec } from './types';
 import './td.css';
@@ -82,6 +83,8 @@ export class TowerDefense {
   readonly pack: Pack;
   /** Куст малины — что защищаем; враги с конца дороги бьют его как приманку */
   readonly bush: RaspberryBush;
+  /** Логова — по одному на дорогу: завеса, кольцо, тревога перед волной, вспышка выхода */
+  readonly lairs: Lair[];
   /** Состояние партии: идёт, куст засох, все волны отбиты */
   state: 'play' | 'lost' | 'won' = 'play';
   /** Номер текущей волны (1 — первая); 0 — ещё не начиналась */
@@ -113,6 +116,7 @@ export class TowerDefense {
     this.next = spec.rest ?? 20;
     this.pack = new Pack(h.boss, (at, n) => { this.fallen++; h.loot(at, n); });
     this.bush = new RaspberryBush(h.scene, h.fx, spec.bush.x, spec.bush.z, spec.bush.hp, h.quiet);
+    this.lairs = spec.lanes.map((l) => new Lair(h.scene, h.fx, l, h.quiet));
     this.bush.onDeath = () => { this.state = 'lost'; this.closeMenu(); h.banner('Куст засох<small>Орден добрался до малины · N — попробовать снова</small>', 5); };
     this.menuEl = document.createElement('div');
     this.menuEl.className = 'td-menu hidden';
@@ -269,7 +273,16 @@ export class TowerDefense {
     m.marchI = 1;
     m.aggro = Math.min(m.aggro, 3.5);
     m.yaw = Math.atan2(lane.points[1][0] - sx, lane.points[1][1] - sz);
+    this.lairs.find((l) => l.lane === lane)?.burst();
     return m;
+  }
+
+  /** Дороги следующей волны — по ним логова тревожатся; null — волн больше нет */
+  get nextLanes(): TdLane[] | null {
+    const w = this.waves[this.wave];
+    if (!w) return null;
+    const ids = new Set(w.groups.map((g) => g.lane));
+    return this.spec.lanes.filter((l) => ids.has(l.id));
   }
 
   // ---------- волны ----------
@@ -330,6 +343,14 @@ export class TowerDefense {
   update(dt: number): void {
     this.time += dt;
     this.tickWaves(dt);
+    // логова: тревога нарастает за 6 с до волны по их дорогам и держится, пока группы выходят
+    const soon = this.state === 'play' && !this.waveRunning ? this.nextLanes : null;
+    const busy = new Set(this.queue.map((q) => q.lane));
+    for (const l of this.lairs) {
+      const want = busy.has(l.lane.id) ? 1 : soon?.includes(l.lane) ? Math.max(0, Math.min(1, (6 - this.next) / 5)) : 0;
+      l.warn += (want - l.warn) * Math.min(1, dt * 4);
+      l.update(dt);
+    }
     for (const p of this.pads) { p.hover = p === this.hoverPad || p === this.menuPad; p.update(dt, this.time); }
     for (const t of this.towers) t.update(dt);
     this.pack.update(dt);
@@ -347,7 +368,8 @@ export class TowerDefense {
     const b = this.bush, k = Math.max(0, b.hp / b.maxHp), n = this.waves.length;
     const head = this.state === 'lost' ? 'Куст засох' : this.state === 'won' ? 'Куст отбит!' : n ? `Волна <span>${this.wave}</span> из ${n}` : `Оборона куста · башен <span>${this.towers.length}</span> из ${this.pads.length}`;
     const alive = this.pack.mobs.filter((m) => !m.dead).length;
-    const sub = this.state !== 'play' || !n ? '' : this.waveRunning ? `врагов на карте ${alive}` : this.wave >= n ? '' : `следующая через ${Math.ceil(this.next)} с · <kbd>G</kbd> сейчас (+${this.earlyBonus})`;
+    const from = this.nextLanes?.map((l) => l.title.toLowerCase()).join(', ') ?? '';
+    const sub = this.state !== 'play' || !n ? '' : this.waveRunning ? `врагов на карте ${alive}` : this.wave >= n ? '' : `следующая через ${Math.ceil(this.next)} с — ${from} · <kbd>G</kbd> сейчас (+${this.earlyBonus})`;
     const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">куст малины ${Math.ceil(b.hp)} / ${b.maxHp}</div>`;
     if (html !== this.hudHtml) { this.hudHtml = html; this.hudEl.innerHTML = html; }
     this.hudEl.classList.toggle('lost', this.state === 'lost');
@@ -364,6 +386,7 @@ export class TowerDefense {
     this.wave = 0;
     this.next = this.spec.rest ?? 20;
     this.spawned = this.fallen = 0;
+    for (const l of this.lairs) { l.warn = 0; l.spawned = 0; }
     this.pack.setScale(1, 1);
     this.bush.reset();
     this.state = 'play';

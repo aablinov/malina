@@ -239,3 +239,36 @@ test('оборона: гонец быстрый, таран держит уда�
   expect(r.won.again).toBe(false);
   expect(r.reset).toEqual([0, 'play', 20]);
 });
+
+test('оборона: логова на дорогах тревожатся перед волной и вспыхивают при выходе врага', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td;
+    m.hero.place(0, 30, Math.PI); m.hero.god = true;
+    const lairs = td.lairs.map((l: any) => l.lane.id);
+    const next = td.nextLanes.map((l: any) => l.id);
+    // за 6 с до волны тревожится только логово её дороги
+    const warn0 = td.lairs.map((l: any) => l.warn);
+    td.next = 2;
+    m.step(1.5);
+    const warn1 = td.lairs.map((l: any) => +l.warn.toFixed(2));
+    const hud = document.querySelector('.td-hud')?.textContent ?? '';
+    td.callWave();
+    m.step(3);
+    const bursts = td.lairs.map((l: any) => l.spawned);
+    const veil = td.lairs[0].group.children.length;
+    for (const x of td.pack.mobs) x.vanish();
+    m.resetTargets();
+    return { lairs, next, warn0, warn1, hud, bursts, veil, after: td.lairs.map((l: any) => l.spawned) };
+  });
+  expect(r.lairs).toEqual(['west', 'north', 'east']);
+  expect(r.next).toEqual(['west']);
+  expect(r.warn0).toEqual([0, 0, 0]);
+  expect(r.warn1[0]).toBeGreaterThan(0.5);
+  expect(r.warn1[1]).toBe(0);
+  expect(r.hud).toContain('западная тропа');
+  expect(r.bursts[0]).toBeGreaterThan(1);
+  expect(r.bursts[1]).toBe(0);
+  expect(r.veil).toBeGreaterThan(3);
+  expect(r.after).toEqual([0, 0, 0]);
+});
