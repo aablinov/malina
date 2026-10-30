@@ -45,6 +45,7 @@ import { Dummy } from './dummies';
 import { Overlays } from './overlay';
 import { DEV_TOOLS, openEditor } from '../devflag';
 import { TowerDefense, type Pad } from '../td/td';
+import { LavaFx } from '../td/lava-fx';
 import type { TdSpec } from '../td/types';
 import { button, Panel, select, toggle } from './panel';
 import '../style.css';
@@ -170,6 +171,10 @@ export function runPlayground(): void {
     scene.add(l);
   }
   const view = new LevelRenderer(scene, level, T);
+  // лава (src/td/lava-fx.ts): дымка над разломами и искры; есть на карте целиком в сцене — при стриминге клетки меняются
+  const lavaFx = !STREAM && level.palette.includes('lava') ? new LavaFx(scene, fx, level) : null;
+  /** Герой стоит в лаве: ожог раз в 0,4 с */
+  let lavaT = 0;
   const terrain = terrainOf(level);
   const pathfinder = new Pathfinder(level, terrain);
   const bounds = level.getBounds() ?? { minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF, minY: -1, maxY: 0 };
@@ -1042,6 +1047,17 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       if (d < 2.3) { td.openMenu(padGoal); padGoal = null; goal = null; path = []; input.move.set(0, 0); }
       else if (!goal) padGoal = null;
     }
+    // в лаве горит: урон раз в 0,4 с, искры и шипение; перекат не спасает — выходи на берег
+    if (lavaFx && level.nameAt(Math.round(hero.pos.x), Math.floor(hero.pos.y - 0.01), Math.round(hero.pos.z)) === 'lava') {
+      lavaT -= dt;
+      if (lavaT <= 0) {
+        lavaT = 0.4;
+        const hp0 = hero.hp;
+        if (hero.hurt(6)) fx.text(hero.pos.clone().setY(hero.pos.y + 1.2), `−${Math.round(hp0 - hero.hp)}`, 'bad');
+        fx.burst(hero.pos.clone().setY(hero.pos.y + 0.2), [new THREE.Color(3.4, 1.4, 0.3), '#ff8a2a'], 8, { speed: 1.5, up: 3, size: 0.09, life: 0.5, glow: true, gravity: 2 });
+        if (!scripted) sfx.flame();
+      }
+    } else lavaT = 0;
     const healed = props.update(dt, hero);
     if (healed > 0) hero.hp = Math.min(hero.maxHp, hero.hp + healed);
     clearEdges();
@@ -1050,6 +1066,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const m of merchants) m.update(dt, hero.pos);
     pack.update(dt);
     td?.update(dt);
+    lavaFx?.update(dt, hero.pos);
     // комната думает, когда герой рядом или гарнизон в бою; пал весь, а герой вышел — гарнизон снова на постах
     for (const r of mobRooms) {
       if (inRoom(r.spec, 30) || r.pack.mobs.some((m) => m.alerted)) r.pack.update(dt);
@@ -1190,8 +1207,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     bossScale(level: number | 'hero', players = bossPlayers) { bossLevelPick = String(level); bossPlayers = players; rescaleBosses(); return { level: bossLevel(), players: bossPlayers }; },
     /** Рядовые мобы (src/mobs/): pack.mobs; вызвать моба в точку */
     pack,
-    /** Оборона куста (src/td/): pads, towers, build(pad, kind), pack врагов */
-    td,
+    /** Оборона куста (src/td/): pads, towers, build(pad, kind), pack врагов; lavaFx — дымка и искры лавы (cells) */
+    td, lavaFx,
     /** Комнаты мобов: spec (посты, вход) и стая гарнизона; fillRoom — заново на постах */
     mobRooms, fillRoom,
     spawnMob(kind: string, x: number, z: number) { return pack.spawn(kind, new THREE.Vector3(x, 0, z)); },

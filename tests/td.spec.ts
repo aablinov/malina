@@ -272,3 +272,49 @@ test('оборона: логова на дорогах тревожатся пе
   expect(r.veil).toBeGreaterThan(3);
   expect(r.after).toEqual([0, 0, 0]);
 });
+
+test('оборона: лавовая карта — лава в разломах жжёт героя, мосты через неё на дорогах, дороги проходимы, дымка над лавой', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td, L = m.level, V = m.hero.pos.constructor;
+    let lava = 0, bridges = 0, fences = 0, volcanoFire = 0;
+    L.forEach((_x: number, _y: number, _z: number, id: number) => { const n = L.palette[id]; if (n === 'lava') lava++; else if (n === 'bridge_deck') bridges++; else if (n === 'fence' || n === 'bridge_post') fences++; else if (n === 'fire') volcanoFire++; });
+    // дороги проходимы от логова до куста по точкам
+    const bad: unknown[] = [];
+    for (const lane of td.spec.lanes) for (let i = 0; i + 1 < lane.points.length; i++) {
+      const [ax, az] = lane.points[i], [bx, bz] = lane.points[i + 1];
+      m.hero.place(ax, az, 0); m.step(0.1);
+      const path = m.pathfinder.find(new V(ax, m.hero.pos.y, az), new V(bx, 0, bz), { solids: m.solids });
+      const end = path[path.length - 1], d = end ? Math.hypot(end.x - bx, end.z - bz) : 99;
+      if (d > 1.5) bad.push([lane.id, i, d]);
+    }
+    // площадки и куст — на ровной земле, не в лаве
+    const spots = [...td.spec.pads, td.spec.bush].map((p: any) => L.nameAt(p.x, -1, p.z));
+    // герой в лаве горит, на берегу — нет
+    let cell: [number, number] | null = null;
+    L.forEach((x: number, y: number, z: number, id: number) => { if (!cell && y === -1 && L.palette[id] === 'lava' && L.nameAt(x + 1, -1, z) === 'lava' && L.nameAt(x - 1, -1, z) === 'lava') cell = [x, z]; });
+    m.hero.god = false; m.hero.hp = m.hero.maxHp;
+    m.hero.place(cell![0], cell![1], 0);
+    m.step(1.5);
+    const burnt = m.hero.maxHp - m.hero.hp, inLavaY = m.hero.pos.y;
+    m.hero.hp = m.hero.maxHp;
+    m.hero.place(0, 7, 0); m.step(1.5);
+    const safe = m.hero.maxHp - m.hero.hp;
+    const world = L.meta.world;
+    return { lava, bridges, fences, volcanoFire, bad, spots, burnt, inLavaY, safe, weather: world.weather.kind, fog: world.fog.color, haze: m.lavaFx?.cells?.length ?? -1 };
+  });
+  expect(r.lava).toBeGreaterThan(300);
+  expect(r.bridges).toBeGreaterThan(8);
+  expect(r.fences).toBeGreaterThan(20);
+  expect(r.volcanoFire).toBeGreaterThan(5);
+  expect(r.bad).toEqual([]);
+  for (const s of r.spots) expect(['stone', 'tiles', 'tiles_broken', 'basalt']).toContain(s);
+  expect(r.burnt).toBeGreaterThan(10);
+  expect(r.inLavaY).toBeLessThan(0);
+  expect(r.safe).toBe(0);
+  expect(r.weather).toBe('embers');
+  expect(r.fog).toBe('#3a1c14');
+  // дымка считает лаву, открытую сверху (в кратерах над ней огонь)
+  expect(r.haze).toBeGreaterThan(r.lava * 0.9);
+  expect(r.haze).toBeLessThanOrEqual(r.lava);
+});

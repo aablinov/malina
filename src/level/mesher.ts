@@ -22,7 +22,7 @@ interface Baked { x: number; y: number; z: number; r: number; g: number; b: numb
 
 interface LightSpot { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
 
-const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow', 'detail', 'river', 'falls', 'portal'];
+const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow', 'detail', 'river', 'falls', 'portal', 'lava'];
 
 /**
  * «Рентген»: блоки между камерой и героем (в цилиндре радиуса uXrayR вокруг луча камера → герой,
@@ -234,7 +234,7 @@ class Bucket {
   }
 }
 
-const LIQUID_LAYERS = new Set<Layer>(['water', 'acid', 'river']);
+const LIQUID_LAYERS = new Set<Layer>(['water', 'acid', 'river', 'lava']);
 
 /** Форма с общими вершинами: грани ссылаются на номера вершин; совпадают только вершины одной группы и одного cull */
 interface IndexedShape { verts: { p: [number, number, number]; n: [number, number, number]; uv: [number, number]; group: string; cull: number }[]; tris: { v: [number, number, number]; cull: number; group: string }[] }
@@ -271,6 +271,7 @@ export class LevelRenderer {
   private readonly pool: THREE.PointLight[] = [];
   private readonly waterTex: THREE.Texture;
   private readonly acidTex: THREE.Texture;
+  private readonly lavaTex: THREE.Texture;
   private readonly fireTex: THREE.Texture;
   private readonly fallsTex: THREE.Texture;
   /** Свободный декор поверх блоков (src/level/decor.ts) */
@@ -280,6 +281,7 @@ export class LevelRenderer {
     this.atlas = new Atlas(T, [...new Set([...paletteTextures(), ...decorTextures()])]);
     this.waterTex = T.water;
     this.acidTex = T.acid;
+    this.lavaTex = T.lava;
     this.fireTex = T.fire;
     this.fallsTex = T.waterfall;
     this.mats = {
@@ -292,6 +294,8 @@ export class LevelRenderer {
       falls: withXray(new THREE.MeshLambertMaterial({ map: T.waterfall, vertexColors: true, emissive: new THREE.Color('#0d3a4a'), emissiveIntensity: 0.6 })),
       portal: portalMaterial(this.atlas.texture),
       acid: liquid(new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }), '#d8ffb0', [1.4, 2.4, 0.8], [0.2, 0.4, 0.1]),
+      // лава: непрозрачная, светится сама (эмиссия под bloom), медленные волны, жёлтая пена у берега
+      lava: liquid(new THREE.MeshLambertMaterial({ map: T.lava, vertexColors: true, emissive: new THREE.Color('#d8500e'), emissiveIntensity: 0.45 }), '#ffd070', [2.0, 1.1, 0.3], [0.8, 0.35, 0.07], 0.3),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
       // мелкая трава: только лицевая сторона (пучки выпускаются в обе стороны) — иначе обратная сторона переворачивает
       // нормаль «вверх» и темнеет; тени не отбрасывает
@@ -614,6 +618,7 @@ export class LevelRenderer {
     WATER_UNIFORMS.uTime.value = t;
     this.waterTex.offset.set(Math.sin(t * 0.4) * 0.06, t * 0.02);
     this.acidTex.offset.set(t * 0.015, Math.sin(t * 0.3) * 0.05);
+    this.lavaTex.offset.set(t * 0.008, Math.sin(t * 0.2) * 0.03);
     this.fallsTex.offset.y = t * 1.6;
     this.fireTex.offset.y = (2 - (Math.floor(t * 9) % 3)) / 3;
     const all: LightSpot[] = [];
