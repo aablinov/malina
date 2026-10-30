@@ -356,7 +356,9 @@ export class SupplyCrate implements Placed {
 
 // ---------- терминал здоровья ----------
 
-export class HealthTerminal {
+export class HealthTerminal implements Placed {
+  id?: string;
+  region?: string;
   readonly pos: THREE.Vector3;
   readonly group = new THREE.Group();
   readonly solid: Obstacle;
@@ -623,11 +625,11 @@ export class Props {
   }
 
   /** Поставить предметы региона мира (ключ key); у каждого — id для сохранения состояния */
-  addGroup(key: string, items: { id: string; kind: 'barrel' | 'crate' | 'chest'; x: number; z: number; rot: number }[]): void {
+  addGroup(key: string, items: { id: string; kind: 'barrel' | 'crate' | 'chest' | 'terminal'; x: number; z: number; rot: number }[]): void {
     for (const it of items) {
-      const o = it.kind === 'barrel' ? new Barrel(this.scene, it.x, it.z) : it.kind === 'crate' ? new BreakCrate(this.scene, it.x, it.z, it.rot) : new SupplyCrate(this.scene, it.x, it.z, it.rot);
+      const o = it.kind === 'barrel' ? new Barrel(this.scene, it.x, it.z) : it.kind === 'crate' ? new BreakCrate(this.scene, it.x, it.z, it.rot) : it.kind === 'terminal' ? new HealthTerminal(this.scene, it.x, it.z, it.rot) : new SupplyCrate(this.scene, it.x, it.z, it.rot);
       o.id = it.id; o.region = key;
-      if (o instanceof Barrel) this.barrels.push(o); else if (o instanceof BreakCrate) this.crates.push(o); else this.supplies.push(o);
+      if (o instanceof Barrel) this.barrels.push(o); else if (o instanceof BreakCrate) this.crates.push(o); else if (o instanceof HealthTerminal) this.terminals.push(o); else this.supplies.push(o);
     }
     this.version++;
   }
@@ -639,6 +641,7 @@ export class Props {
     this.crates = this.crates.filter((c) => !gone(c));
     for (const s of this.supplies) if (s.region === key) this.chestLoot.delete(s);
     this.supplies = this.supplies.filter((c) => !gone(c));
+    this.terminals = this.terminals.filter((t) => !gone(t));
     this.version++;
   }
 

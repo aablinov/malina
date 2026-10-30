@@ -8,7 +8,7 @@ import { REGION, type RegionEntity, type RegionSource } from './gen.ts';
  * сущностей карты становятся предметами региона со стабильными id «rx,rz:n» — их состояние переживает выгрузку.
  */
 
-const KINDS: Record<string, RegionEntity['kind']> = { chest: 'chest', barrel: 'barrel', crate: 'crate' };
+const KINDS: Record<string, RegionEntity['kind']> = { chest: 'chest', barrel: 'barrel', crate: 'crate', terminal: 'terminal' };
 
 export function mapSource(source: Level): RegionSource {
   /** Декор, поставленный в живой уровень по регионам */

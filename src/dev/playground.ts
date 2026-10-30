@@ -20,7 +20,7 @@ import { surfaceAt } from '../level/kit.ts';
 import { worldSource } from '../world/gen.ts';
 import { RegionManager } from '../world/regions.ts';
 import { mapSource, STREAM_CHUNKS } from '../world/map-source.ts';
-import { BOSS_ARENAS, MOB_ROOMS, type MobRoomSpec, type PgLabel } from '../level/playground-map.ts';
+import { BOSS_ARENAS, MOB_ROOMS, type BossArenaSpec, type MobRoomSpec, type PgLabel } from '../level/playground-map.ts';
 import { Arena } from '../bosses/arena';
 import { BossBar } from '../bosses/boss-bar';
 import { MINI_BOSSES } from '../bosses/roster';
@@ -169,8 +169,16 @@ export function runPlayground(): void {
   const terrain = terrainOf(level);
   const pathfinder = new Pathfinder(level, terrain);
   const bounds = level.getBounds() ?? { minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF, minY: -1, maxY: 0 };
-  // для врагов и пуль: блоки выше шага и декор с коллайдерами (колонны, фонари, ящики)
-  const obstacles: Obstacle[] = [...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)];
+  // для врагов и пуль: блоки выше шага и декор с коллайдерами (колонны, фонари, ящики); при стриминге — по загруженным регионам
+  const obstacles: Obstacle[] = STREAM ? [] : [...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)];
+  const regionObstacles = new Map<string, Obstacle[]>();
+  let obstaclesCache: Obstacle[] | null = null, obstaclesDecorV = -1;
+  /** Препятствия врагов сейчас: статичные или по регионам вокруг героя плюс декор */
+  const obstaclesNow = (): Obstacle[] => {
+    if (!STREAM) return obstacles;
+    if (!obstaclesCache || obstaclesDecorV !== level.decorVersion) { obstaclesCache = [...regionObstacles.values()].flat().concat(decorSolids(level)); obstaclesDecorV = level.decorVersion; }
+    return obstaclesCache;
+  };
 
   // ---------- Надписи на полу ----------
   function floorLabel(text: string, x: number, z: number, size = 1, rot = 0, color = '#1f3a22'): void {
@@ -247,10 +255,10 @@ export function runPlayground(): void {
   });
   if (!STREAM) floorLabel('склад: бочки, сундуки (F), источник здоровья (F), ящики', -7.5, 21.3, 0.9);
   // лавки кузнеца и торговца — на плейграунде, в северо-западном углу (src/merchants.ts)
-  const merchants: Merchant[] = new URLSearchParams(window.location.search).has('map') ? [] : [
-    new Merchant(scene, overlayEl, T, 'smith', -17, -13, 0),
-    new Merchant(scene, overlayEl, T, 'merchant', -19, -6, Math.PI / 2),
-  ];
+  const hasMap = new URLSearchParams(window.location.search).has('map');
+  // на карте — из meta.merchants ({ kind, x, z, yaw }), на плейграунде — в северо-западном углу
+  const merchantSpecs = hasMap ? ((level.meta.merchants as { kind: 'smith' | 'merchant'; x: number; z: number; yaw: number }[] | undefined) ?? []) : [{ kind: 'smith' as const, x: -17, z: -13, yaw: 0 }, { kind: 'merchant' as const, x: -19, z: -6, yaw: Math.PI / 2 }];
+  const merchants: Merchant[] = merchantSpecs.map((m) => new Merchant(scene, overlayEl, T, m.kind, m.x, m.z, m.yaw));
   /** Плоские препятствия героя и пути: предметы склада, декор и лавки (пересобираются, когда меняется одно из них) */
   let solidsCache: Obstacle[] = [], solidsKey: [Obstacle[], number] | null = null;
   const solids = (): Obstacle[] => {
@@ -321,7 +329,7 @@ export function runPlayground(): void {
   // зал стражей за северной стеной: восемь арен, на каждой — свой мини-босс (src/bosses/roster.ts)
   const bossHooks = {
     scene, fx, hero, terrain,
-    obstacles: () => obstacles,
+    obstacles: () => obstaclesNow(),
     hurtHero: (dmg: number, from: THREE.Vector3, knock: number) => hurtHero(dmg, from, knock),
     quiet: () => scripted,
   };
@@ -329,14 +337,16 @@ export function runPlayground(): void {
   const arenas: Arena[] = [];
   /** id арены каждого стража (для тестов и кнопок) */
   const bossIds: string[] = [];
-  if (!new URLSearchParams(window.location.search).has('map')) for (const spec of BOSS_ARENAS) {
+  // арены: зал стражей плейграунда или meta.arenas карты (BossArenaSpec с home и gates)
+  const arenaSpecs: BossArenaSpec[] = hasMap ? ((level.meta.arenas as BossArenaSpec[] | undefined) ?? []) : BOSS_ARENAS;
+  for (const spec of arenaSpecs) {
     const Ctor = MINI_BOSSES[spec.id];
     if (!Ctor) continue;
-    // страж стоит в глубине арены, мордой к воротам
+    // страж стоит в глубине арены, мордой к воротам (или где сказано в home)
     const left = spec.x0 < 0;
-    const home = new THREE.Vector3(left ? spec.x0 + 6 : spec.x1 - 6, 0, (spec.z0 + spec.z1) / 2);
-    const boss = new Ctor(bossHooks, home, left ? Math.PI / 2 : -Math.PI / 2, spec);
-    const arena = new Arena(scene, fx, { trigger: spec.trigger, gates: [{ x: spec.gate.x, z: spec.gate.z, w: 3, rot: spec.gate.rot }], exit: spec.exit }, boss, bossBar, () => scripted);
+    const home = spec.home ? new THREE.Vector3(spec.home.x, 0, spec.home.z) : new THREE.Vector3(left ? spec.x0 + 6 : spec.x1 - 6, 0, (spec.z0 + spec.z1) / 2);
+    const boss = new Ctor(bossHooks, home, spec.home ? spec.home.yaw : left ? Math.PI / 2 : -Math.PI / 2, spec);
+    const arena = new Arena(scene, fx, { trigger: spec.trigger, gates: spec.gates ?? [{ x: spec.gate.x, z: spec.gate.z, w: 3, rot: spec.gate.rot }], exit: spec.exit }, boss, bossBar, () => scripted);
     bosses.push(boss);
     arenas.push(arena);
     bossIds.push(spec.id);
@@ -350,9 +360,10 @@ export function runPlayground(): void {
   }
   // комнаты мобов за западной стеной (казарма Ордена, Терновый сад): гарнизон стоит на постах и просыпается, когда
   // герой рядом (5 м); весь гарнизон пал, а герой вышел — комната снова полна
-  /** Комнаты есть только на карте плейграунда */
-  const garrison = !new URLSearchParams(window.location.search).has('map');
-  const mobRooms = MOB_ROOMS.map((spec) => ({ spec, pack: new Pack(bossHooks, (at, n) => props.berries(at, n)) }));
+  // комнаты мобов: плейграунд — MOB_ROOMS, карта — meta.mobRooms (группы, засады с малым aggro, патрули по route)
+  const roomSpecs: MobRoomSpec[] = hasMap ? ((level.meta.mobRooms as MobRoomSpec[] | undefined) ?? []) : MOB_ROOMS;
+  const garrison = roomSpecs.length > 0;
+  const mobRooms = roomSpecs.map((spec) => ({ spec, pack: new Pack(bossHooks, (at, n) => props.berries(at, n)) }));
   const inRoom = (r: MobRoomSpec, pad: number): boolean => hero.pos.x >= r.x0 - pad && hero.pos.x <= r.x1 + pad && hero.pos.z >= r.z0 - pad && hero.pos.z <= r.z1 + pad;
   function fillRoom(room: (typeof mobRooms)[number]): void {
     room.pack.clear();
@@ -360,9 +371,10 @@ export function runPlayground(): void {
     for (const p of room.spec.posts) {
       const m = room.pack.spawn(p.kind, new THREE.Vector3(p.x, 0, p.z));
       if (!m) continue;
-      // смотрят на вход, видят героя вблизи
+      // смотрят на вход, видят героя вблизи (засада — ещё ближе), патруль ходит по маршруту
       m.yaw = Math.atan2(room.spec.enter.x - p.x, room.spec.enter.z - p.z);
-      m.aggro = Math.min(m.aggro, 5);
+      m.aggro = Math.min(m.aggro, p.aggro ?? (hasMap ? 9 : 5));
+      if (p.route) m.route = p.route.map(([x, z]) => new THREE.Vector3(x, 0, z));
     }
   }
   for (const r of mobRooms) fillRoom(r);
@@ -816,7 +828,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     button(row3, 'Мобы: четвёртая партия', () => spawnSquad(SQUADS.fourth));
     for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
     button(row3, 'Убрать мобов', () => pack.clear());
-    for (const r of MOB_ROOMS) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
+    for (const r of roomSpecs) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
     // масштаб стражей: уровень и число игроков
     refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
     // закалка для проверки: любое оружие и до трёх зачарований на III (вид, синергии, спец-удар)
@@ -836,7 +848,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   // ---------- HUD и инвентарь как в Minecraft Dungeons (src/hud/) ----------
   const hud = new Hud(document.body, profile);
-  hud.setGoal('Исследуй плейграунд', 'Плейграунд Малины');
+  const questGoal = (level.meta.goal as [string, string] | undefined) ?? ['Исследуй плейграунд', 'Плейграунд Малины'];
+  hud.setGoal(questGoal[0], questGoal[1]);
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
   function openInventory(): void { gear.cancelCast(); if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
@@ -852,11 +865,12 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const regions: RegionManager | null = STREAM ? new RegionManager(level, sourceLevel ? mapSource(sourceLevel) : worldSource(worldSeed), {
     spawn: (key, rx, rz, entities) => {
       props.addGroup(key, entities);
+      regionObstacles.set(key, obstaclesOf(level, 0, rx * 32, rz * 32, rx * 32 + 31, rz * 32 + 31)); obstaclesCache = null;
       automap.addTile(rx, rz);
       const seen = regions?.seenOf(key);
       if (seen) automap.restoreSeen(rx, rz, seen);
     },
-    despawn: (key) => props.removeGroup(key),
+    despawn: (key) => { props.removeGroup(key); regionObstacles.delete(key); obstaclesCache = null; },
     seenOf: (_key, rx, rz) => automap.seenOf(rx, rz),
   }, `malina.world.${sourceLevel ? level.name : worldSeed}`) : null;
   if (regions) {
@@ -989,7 +1003,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     // комната думает, когда герой рядом или гарнизон в бою; пал весь, а герой вышел — гарнизон снова на постах
     for (const r of mobRooms) {
       if (inRoom(r.spec, 30) || r.pack.mobs.some((m) => m.alerted)) r.pack.update(dt);
-      if (garrison && !inRoom(r.spec, 3) && r.pack.mobs.every((m) => m.dead)) fillRoom(r);
+      if (garrison && r.spec.respawn !== false && !inRoom(r.spec, 3) && r.pack.mobs.every((m) => m.dead)) fillRoom(r);
     }
     if (arenas.length) {
       rescaleBosses();
