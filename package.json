@@ -13,6 +13,7 @@
     "map:playground": "node scripts/export-map.ts playground",
     "map:rooms": "node scripts/export-map.ts rooms",
     "map:island": "node scripts/export-map.ts island",
+    "map:td": "node scripts/export-map.ts td",
     "prefabs": "node scripts/gen-prefabs.ts"
   },
   "dependencies": {

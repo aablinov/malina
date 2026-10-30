@@ -35,6 +35,8 @@ body.dev-playground #hurt { display: none !important; }
 /* под курсором цель — красный прицел; Shift — удар на месте, жёлтый */
 .pg-reticle.hover i { border-color: #ff5a6a; transform: rotate(45deg) scale(1.35); }
 .pg-reticle.here i { border-color: #ffd25a; }
+/* над площадкой обороны — золотой квадрат */
+.pg-reticle.pad i { border-color: #ffd25a; transform: rotate(0deg) scale(1.25); }
 
 .pg-dummy {
   position: absolute; left: 0; top: 0; white-space: nowrap; text-align: center; pointer-events: none;

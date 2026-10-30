@@ -5,6 +5,7 @@
  *   node scripts/export-map.ts playground — плейграунд → assets/maps/playground.json
  *   node scripts/export-map.ts rooms    — комнаты подземелья → assets/maps/rooms/*.json
  *   node scripts/export-map.ts island   — карта 1 «Остров» из пресетов → assets/maps/island.json
+ *   node scripts/export-map.ts td       — карта «Оборона куста» → assets/maps/td.json
  */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -13,6 +14,7 @@ import { ROOM_TEMPLATES, roomFromTemplate } from '../src/level/rooms.ts';
 import { buildPlaygroundLevel } from '../src/level/playground-map.ts';
 import type { Level } from '../src/level/level.ts';
 import { buildIslandMap } from '../src/level/island-map.ts';
+import { buildTdMap } from '../src/level/td-map.ts';
 import type { LibraryPrefab } from '../src/level/prefab-lib/types.ts';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'maps');
@@ -31,10 +33,10 @@ function save(sub: string, name: string, level: Level): void {
 const what = process.argv[2] ?? 'garden';
 if (what === 'playground') save('', 'playground', buildPlaygroundLevel().level);
 else if (what === 'rooms') for (const t of ROOM_TEMPLATES) save('rooms', t.name, roomFromTemplate(t));
-else if (what === 'island') {
+else if (what === 'island' || what === 'td') {
   // библиотека пресетов — из assets/prefabs/*.json (их пишет npm run prefabs)
   const dir = join(DIR, '..', 'prefabs');
   const lib: Record<string, LibraryPrefab> = {};
   for (const f of readdirSync(dir)) if (f.endsWith('.json')) { const p = JSON.parse(readFileSync(join(dir, f), 'utf8')) as LibraryPrefab; lib[p.id] = p; }
-  save('', 'island', buildIslandMap(lib));
-} else { console.error(`Нечего экспортировать: «${what}». Есть: playground, rooms, island`); process.exit(1); }
+  save('', what, what === 'island' ? buildIslandMap(lib) : buildTdMap(lib));
+} else { console.error(`Нечего экспортировать: «${what}». Есть: playground, rooms, island, td`); process.exit(1); }

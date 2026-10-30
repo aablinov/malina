@@ -44,6 +44,8 @@ import { aimLight, lightData, makeLight, worldOf } from '../world';
 import { Dummy } from './dummies';
 import { Overlays } from './overlay';
 import { DEV_TOOLS, openEditor } from '../devflag';
+import { TowerDefense, type Pad } from '../td/td';
+import type { TdSpec } from '../td/types';
 import { button, Panel, select, toggle } from './panel';
 import '../style.css';
 import './playground.css';
@@ -143,6 +145,8 @@ export function runPlayground(): void {
   // (большая карта стримится сама, любая — с ?stream=1) или процедурный генератор для отладки (?map=world&seed=N)
   const query = new URLSearchParams(window.location.search);
   const WORLD = query.get('map') === 'world';
+  /** Открыта карта (?map=…): чучела, склад и подписи плейграунда не ставятся */
+  const hasMap = query.has('map');
   const worldSeed = Number(query.get('seed')) || 1;
   const sourceLevel = WORLD ? null : Level.fromJSON(pickMap());
   const STREAM = WORLD || query.has('stream') || (sourceLevel !== null && sourceLevel.chunks.size > STREAM_CHUNKS);
@@ -202,7 +206,9 @@ export function runPlayground(): void {
     scene.add(m);
   }
   for (const l of (level.meta.labels as PgLabel[] | undefined) ?? []) floorLabel(l.text, l.x, l.z, l.size ?? 0.6);
-  if (!STREAM) {
+  /** Плейграунд как есть: не карта и не мир */
+  const PG = !STREAM && !hasMap;
+  if (PG) {
     floorLabel('укрытия', 6.5, -6.6, 0.9);
     floorLabel('колонна', 9, -2.3, 0.9);
     floorLabel('угол', 18, 7, 0.9);
@@ -213,10 +219,10 @@ export function runPlayground(): void {
   // ---------- Чучела ----------
   const dummies: Dummy[] = [];
   // кучка из четырёх — проверить, что широкий удар задевает нескольких, и одиночное в стороне
-  if (!STREAM) for (const [x, z, name] of [[-6, -3, 'чучело 1'], [-7.4, -3.7, 'чучело 2'], [-4.6, -3.7, 'чучело 3'], [-6, -5.2, 'чучело 4'], [-11, 0, 'одиночное']] as [number, number, string][]) {
+  if (PG) for (const [x, z, name] of [[-6, -3, 'чучело 1'], [-7.4, -3.7, 'чучело 2'], [-4.6, -3.7, 'чучело 3'], [-6, -5.2, 'чучело 4'], [-11, 0, 'одиночное']] as [number, number, string][]) {
     dummies.push(new Dummy(scene, overlayEl, 'static', x, z, Math.PI / 4, name));
   }
-  if (!STREAM) {
+  if (PG) {
     floorLabel('чучела: ЛКМ — удар, держи — комбо', -6, -1.6, 0.85);
     const rail = new Dummy(scene, overlayEl, 'rail', 0, -17, 0, 'на рельсе');
     rail.railA = -9; rail.railB = 9;
@@ -247,15 +253,21 @@ export function runPlayground(): void {
     },
     // предмет региона исчерпан — в сохранение мира, чтобы после выгрузки и перезагрузки он не вернулся
     changed: (id) => regions?.kill(id),
-  }, STREAM ? { barrels: [], crates: [], supplies: [], terminals: [] } : {
+  }, !PG ? { barrels: [], crates: [], supplies: [], terminals: [] } : {
     barrels: [[-11, 11], [-10.25, 11.6], [-10.9, 10.15], [-6, 12.2], [-3.4, 18]],
     crates: [[-8.6, 14, 0], [-7.6, 14, 0], [-6.6, 14, 0], [-4.2, 15.2, 15], [-12.8, 15.6, 0], [-12.8, 16.6, 0]],
     supplies: [[-9.6, 17.6, 145], [-5.4, 19, 160]],
     terminals: [[-2.6, 10.6, 50]],
   });
-  if (!STREAM) floorLabel('склад: бочки, сундуки (F), источник здоровья (F), ящики', -7.5, 21.3, 0.9);
+  if (PG) floorLabel('склад: бочки, сундуки (F), источник здоровья (F), ящики', -7.5, 21.3, 0.9);
+  // карта целиком в сцене (без регионов): её сундуки, ящики, бочки и источники — из сущностей, как у регионов
+  if (hasMap && !STREAM) {
+    const kinds = new Set(['chest', 'barrel', 'crate', 'terminal']);
+    props.addGroup('map', level.entities.filter((e) => kinds.has(e.kind)).map((e, i) => ({ id: `map:${i}`, kind: e.kind as 'chest' | 'barrel' | 'crate' | 'terminal', x: e.x, z: e.z, rot: e.rot ?? 0 })));
+  }
   // лавки кузнеца и торговца — на плейграунде, в северо-западном углу (src/merchants.ts)
-  const hasMap = new URLSearchParams(window.location.search).has('map');
+  // режим «Оборона куста» (src/td/, wiki/design-tower-defence.md): на карте с meta.td — площадки, башни, враги по дорогам
+  let td: TowerDefense | null = null;
   // на карте — из meta.merchants ({ kind, x, z, yaw }), на плейграунде — в северо-западном углу
   const merchantSpecs = hasMap ? ((level.meta.merchants as { kind: 'smith' | 'merchant'; x: number; z: number; yaw: number }[] | undefined) ?? []) : [{ kind: 'smith' as const, x: -17, z: -13, yaw: 0 }, { kind: 'merchant' as const, x: -19, z: -6, yaw: Math.PI / 2 }];
   const merchants: Merchant[] = merchantSpecs.map((m) => new Merchant(scene, overlayEl, T, m.kind, m.x, m.z, m.yaw));
@@ -267,9 +279,11 @@ export function runPlayground(): void {
       solidsCache = [...p, ...decorSolids(level), ...merchants.map((m) => m.solid)];
       solidsKey = [p, level.decorVersion];
     }
-    // решётки арены стража — пока подняты
+    // решётки арены стража — пока подняты; башни обороны
     const gates = arenas.filter((a) => a.solids.length);
-    return gates.length ? solidsCache.concat(...gates.map((a) => a.solids)) : solidsCache;
+    const towers = td ? td.solids : [];
+    if (!gates.length && !towers.length) return solidsCache;
+    return solidsCache.concat(...gates.map((a) => a.solids), towers);
   };
   /** Нажали F — использовать ближайший предмет */
   let interactReq = false;
@@ -327,9 +341,17 @@ export function runPlayground(): void {
   // ---------- Страж: Багровый дракон на арене за северной стеной (src/bosses/, wiki/design-bosses.md) ----------
   const bossBar = new BossBar(document.body);
   // зал стражей за северной стеной: восемь арен, на каждой — свой мини-босс (src/bosses/roster.ts)
+  /** Препятствия врагов: уровень, декор и башни обороны (кэш, пока состав тот же) */
+  let foeObsCache: Obstacle[] = [], foeObsKey: [Obstacle[], Obstacle[]] | null = null;
+  const foeObstacles = (): Obstacle[] => {
+    const base = obstaclesNow(), towers = td ? td.solids : [];
+    if (!towers.length) return base;
+    if (!foeObsKey || foeObsKey[0] !== base || foeObsKey[1] !== towers) { foeObsCache = base.concat(towers); foeObsKey = [base, towers]; }
+    return foeObsCache;
+  };
   const bossHooks = {
     scene, fx, hero, terrain,
-    obstacles: () => obstaclesNow(),
+    obstacles: () => foeObstacles(),
     hurtHero: (dmg: number, from: THREE.Vector3, knock: number) => hurtHero(dmg, from, knock),
     quiet: () => scripted,
   };
@@ -428,6 +450,7 @@ export function runPlayground(): void {
     for (const b of bosses) if (b.awake) list.push(...b.targets());
     list.push(...pack.targets());
     for (const r of mobRooms) list.push(...r.pack.targets());
+    if (td) list.push(...td.targets());
     return list;
   };
   let lastStrike: { s: Strike; t: number } | null = null;
@@ -568,6 +591,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
     if (inventory.open) { inventory.key(e); return; }
     if (shop.open) { shop.key(e); return; }
+    // меню площадки обороны: цифры — выбор башни, Esc / F — закрыть
+    if (td?.menuOpen && td.key(e)) return;
     if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
     keys.add(e.code);
     switch (e.code) {
@@ -635,6 +660,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       raycaster.setFromCamera(mouseNdc, camera);
       groundAt(raycaster.ray, pointer.ground);
       pointer.hover = pickRay(raycaster.ray);
+      pointer.pad = td && !pointer.hover ? td.padAt(raycaster.ray) : null;
+      if (td) td.hoverPad = pointer.pad;
     }
     input.roll = edges.roll;
   }
@@ -647,11 +674,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   // ---------- Мышь как в Minecraft Dungeons ----------
   // ЛКМ по земле — идти туда (держишь — идёт за курсором), ЛКМ по цели — подойти на длину меча и бить
   // (держишь — комбо), Shift + ЛКМ — бить на месте в сторону курсора. WASD отменяет приказ мыши.
-  const pointer = { down: false, shift: false, ground: new THREE.Vector3(), hover: null as Target | null };
+  const pointer = { down: false, shift: false, ground: new THREE.Vector3(), hover: null as Target | null, pad: null as Pad | null };
   let pointerWas = false;
-  /** Режим текущего нажатия: идти, бить цель, бить на месте */
-  let pressMode: 'walk' | 'chase' | 'here' = 'walk';
+  /** Режим текущего нажатия: идти, бить цель, бить на месте, подойти к площадке обороны */
+  let pressMode: 'walk' | 'chase' | 'here' | 'pad' = 'walk';
   let goal: THREE.Vector3 | null = null;
+  /** Площадка, к которой идём по клику: дошли — откроется меню */
+  let padGoal: Pad | null = null;
   let chase: Target | null = null;
   /** Сколько ударов было на момент приказа: отпустил ЛКМ — хватит одного удара по цели */
   let chaseSwings = 0;
@@ -746,9 +775,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     input.attack = false;
     if (keyMove) { goal = null; chase = null; }
     if (pressed) {
-      pressMode = pointer.shift ? 'here' : pointer.hover ? 'chase' : 'walk';
-      chase = null; goal = null; path = []; stuckRepaths = 0; repathT = 0; arrived = false;
+      pressMode = pointer.shift ? 'here' : pointer.hover ? 'chase' : pointer.pad ? 'pad' : 'walk';
+      chase = null; goal = null; path = []; stuckRepaths = 0; repathT = 0; arrived = false; padGoal = null;
       if (pressMode === 'chase') { chase = pointer.hover; chaseSwings = hero.swings; }
+      // клик по площадке обороны: подойти к её краю, там откроется меню
+      if (pressMode === 'pad' && td && pointer.pad) { padGoal = pointer.pad; goal = td.approach(pointer.pad, hero.pos); marker.position.set(goal.x, goal.y + 0.04, goal.z); marker.visible = true; markerT = 0.5; }
       if (pressMode === 'walk' && !keyMove) { marker.position.set(pointer.ground.x, pointer.ground.y + 0.04, pointer.ground.z); marker.visible = true; markerT = 0.5; }
     }
     if (pointer.down && pressMode === 'walk' && !keyMove) goal = pointer.ground.clone();
@@ -795,7 +826,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const g of grimoires.splice(0)) g.dispose();
     pack.clear();
     for (const r of mobRooms) fillRoom(r);
-    toast('Чучела и склад на местах');
+    td?.reset();
+    toast(td ? 'Оборона заново: башни снесены, казна полная' : 'Чучела и склад на местах');
   }
 
   // ---------- Панель: переключатели ----------
@@ -850,6 +882,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const hud = new Hud(document.body, profile);
   const questGoal = (level.meta.goal as [string, string] | undefined) ?? ['Исследуй плейграунд', 'Плейграунд Малины'];
   hud.setGoal(questGoal[0], questGoal[1]);
+  const tdSpec = level.meta.td as TdSpec | undefined;
+  if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted }, tdSpec, document.body);
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
   function openInventory(): void { gear.cancelCast(); if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
@@ -912,15 +946,17 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   function setHTML(id: string, v: string): void { if (cache[id] !== v) { cache[id] = v; $(id).innerHTML = v; } }
 
   function updateHUD(dt: number, _fps: number, _frameMs: number): void {
-    const trader = hero.down ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
-    const near = hero.down || trader ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
+    const pad = td && !td.menuOpen && !hero.down ? td.nearPad(hero.pos) : null;
+    const trader = hero.down || pad ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
+    const near = hero.down || trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
     // подошёл к сундуку — он тихо звенит
     const nearChest = near?.kind === 'supply' ? near.target : null;
     if (nearChest && nearChest !== lastNearChest && !scripted) sfx.twinkle();
     lastNearChest = nearChest;
     const promptEl = $('pgPrompt');
-    promptEl.style.display = (near || trader) && !inventory.open && !shop.open ? '' : 'none';
-    if (trader) setHTML('pgPrompt', `<kbd>F</kbd>Торговать: ${MERCHANT_TITLE[trader.kind].toLowerCase()}`);
+    promptEl.style.display = (near || trader || pad) && !inventory.open && !shop.open ? '' : 'none';
+    if (pad && td) setHTML('pgPrompt', `<kbd>F</kbd>${td.prompt(pad)}`);
+    else if (trader) setHTML('pgPrompt', `<kbd>F</kbd>Торговать: ${MERCHANT_TITLE[trader.kind].toLowerCase()}`);
     else if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
     hud.update(gear.hudState(), dt);
     hud.el.classList.toggle('show-hp', showTelemetry);
@@ -962,6 +998,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       ret.style.transform = `translate(${mousePx.x}px,${mousePx.y}px)`;
       ret.classList.toggle('hover', !!pointer.hover && !pointer.shift);
       ret.classList.toggle('here', pointer.shift);
+      ret.classList.toggle('pad', !!pointer.pad && !pointer.hover && !pointer.shift);
     }
   }
 
@@ -988,10 +1025,18 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
     if (interactReq) {
       interactReq = false;
-      const trader = merchants.find((m) => m.near(hero.pos));
+      const pad = td && !hero.down ? td.nearPad(hero.pos) : null;
+      const trader = pad ? null : merchants.find((m) => m.near(hero.pos));
+      if (pad && td) { if (td.menuOpen) td.closeMenu(); else td.openMenu(pad); }
       if (trader && !hero.down) { shop.show(trader.kind); }
-      const it = trader ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
+      const it = trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
+    }
+    // шёл к площадке по клику: подошёл — меню; приказ сняли — забыть
+    if (td && padGoal) {
+      const d = Math.hypot(hero.pos.x - padGoal.pos.x, hero.pos.z - padGoal.pos.z);
+      if (d < 2.3) { td.openMenu(padGoal); padGoal = null; goal = null; path = []; input.move.set(0, 0); }
+      else if (!goal) padGoal = null;
     }
     const healed = props.update(dt, hero);
     if (healed > 0) hero.hp = Math.min(hero.maxHp, hero.hp + healed);
@@ -1000,6 +1045,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
     pack.update(dt);
+    td?.update(dt);
     // комната думает, когда герой рядом или гарнизон в бою; пал весь, а герой вышел — гарнизон снова на постах
     for (const r of mobRooms) {
       if (inRoom(r.spec, 30) || r.pack.mobs.some((m) => m.alerted)) r.pack.update(dt);
@@ -1029,7 +1075,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   /** Бой: проснувшийся страж или моб, поднявший тревогу, в 25 м от героя */
   const inFight = (): boolean =>
     bosses.some((b) => b.awake && !b.dead) ||
-    [pack, ...mobRooms.map((r) => r.pack)].some((p) => p.mobs.some((m) => m.alerted && !m.dead && near(m.pos, 25)));
+    [pack, ...mobRooms.map((r) => r.pack), ...(td ? [td.pack] : [])].some((p) => p.mobs.some((m) => m.alerted && !m.dead && near(m.pos, 25)));
 
   let acc = 0;
   let last = performance.now();
@@ -1140,6 +1186,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     bossScale(level: number | 'hero', players = bossPlayers) { bossLevelPick = String(level); bossPlayers = players; rescaleBosses(); return { level: bossLevel(), players: bossPlayers }; },
     /** Рядовые мобы (src/mobs/): pack.mobs; вызвать моба в точку */
     pack,
+    /** Оборона куста (src/td/): pads, towers, build(pad, kind), pack врагов */
+    td,
     /** Комнаты мобов: spec (посты, вход) и стая гарнизона; fillRoom — заново на постах */
     mobRooms, fillRoom,
     spawnMob(kind: string, x: number, z: number) { return pack.spawn(kind, new THREE.Vector3(x, 0, z)); },
@@ -1183,7 +1231,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Нажатие пробела: перекат */
     press(what: 'roll') { input[what] = true; },
     /** Нажать ЛКМ в точке на земле (shift — удар на месте); цель в этой точке — подойти и бить */
-    click(x: number, z: number, shift = false, y?: number) { pointer.ground.set(x, y ?? terrain.floorAt(x, z, hero.pos.y + 4), z); pointer.hover = pickAt(x, z); pointer.shift = shift; pointer.down = true; },
+    click(x: number, z: number, shift = false, y?: number) { pointer.ground.set(x, y ?? terrain.floorAt(x, z, hero.pos.y + 4), z); pointer.hover = pickAt(x, z); pointer.pad = td && !pointer.hover ? td.nearPad(new THREE.Vector3(x, 0, z)) : null; pointer.shift = shift; pointer.down = true; },
     /** Отпустить ЛКМ */
     release() { pointer.down = false; },
     get goal() { return goal; },
