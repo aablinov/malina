@@ -45,6 +45,9 @@ export abstract class Mob extends Boss {
   aggro = 14;
   /** Заметил героя */
   alerted = false;
+  /** Маршрут патруля: пока не заметил героя, ходит по точкам по кругу (src/level/playground-map.ts, MobPost.route) */
+  route: THREE.Vector3[] | null = null;
+  private routeI = 0;
   /** Малина с моба (до масштаба) */
   loot = 1;
   /** Призван — малины нет */
@@ -217,7 +220,7 @@ export abstract class Mob extends Boss {
       case 'idle':
       case 'walk': {
         if (!this.alerted && dist < this.aggro && Math.abs(hero.y - this.pos.y) < 2) this.notice();
-        if (!this.alerted || this.h.hero.down) { this.state = 'idle'; break; }
+        if (!this.alerted || this.h.hero.down) { walk = !this.alerted && this.patrol(dt); this.state = walk ? 'walk' : 'idle'; break; }
         this.cd -= dt;
         if (this.cd <= 0) {
           const a = this.choose(dist, rel);
@@ -259,6 +262,20 @@ export abstract class Mob extends Boss {
     if (Math.abs(rel) < 1.2 && dist > this.keep + 0.3) { this.pos.x += (dx / dist) * sp; this.pos.z += (dz / dist) * sp; return true; }
     if (this.keep > 4 && dist < this.keep - 2) { this.pos.x -= (dx / dist) * sp * 0.7; this.pos.z -= (dz / dist) * sp * 0.7; return true; }
     return false;
+  }
+
+  /** Шаг патруля к очередной точке маршрута (вполсилы); дошёл — к следующей по кругу. true — шёл */
+  protected patrol(dt: number): boolean {
+    const r = this.route;
+    if (!r || !r.length) return false;
+    const t = r[this.routeI % r.length], dx = t.x - this.pos.x, dz = t.z - this.pos.z, d = Math.hypot(dx, dz);
+    if (d < 0.7) { this.routeI = (this.routeI + 1) % r.length; return false; }
+    const want = wrap(Math.atan2(dx, dz) - this.yaw), m = this.turn * dt;
+    this.yaw += Math.max(-m, Math.min(m, want));
+    if (Math.abs(want) > 1) return true;
+    const sp = this.pace * 0.55 * dt;
+    this.pos.x += (dx / d) * sp; this.pos.z += (dz / d) * sp;
+    return true;
   }
 
   /** Рывок вдоль dir: speed м/с; true — упёрся в стену */

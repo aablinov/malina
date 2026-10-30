@@ -279,6 +279,10 @@ export interface BossArenaSpec {
   gate: { x: number; z: number; rot: number };
   trigger: { x0: number; x1: number; z0: number; z1: number };
   exit: { x: number; z: number; yaw: number };
+  /** Несколько ворот (карты из meta.arenas); нет — одни gate */
+  gates?: { x: number; z: number; w: number; rot?: number }[];
+  /** Где стоит страж (карты из meta.arenas); нет — в глубине арены лицом к воротам */
+  home?: { x: number; z: number; yaw: number };
 }
 
 /**
@@ -387,10 +391,15 @@ export interface MobRoomSpec {
   id: string;
   title: string;
   x0: number; x1: number; z0: number; z1: number;
-  posts: { kind: string; x: number; z: number }[];
+  posts: MobPost[];
   /** Куда встать у входа (кнопка в F1) */
   enter: { x: number; z: number; yaw: number };
+  /** Весь гарнизон пал, герой ушёл — комната снова полна (плейграунд); false — павшие не возвращаются (карты) */
+  respawn?: boolean;
 }
+
+/** Моб на посту: aggro — с какого расстояния видит героя (засада — меньше), route — патрулирует по точкам, пока не заметил */
+export interface MobPost { kind: string; x: number; z: number; aggro?: number; route?: [number, number][] }
 
 const at = (kind: string, pts: number[][]) => pts.map(([x, z]) => ({ kind, x, z }));
 

@@ -13,7 +13,7 @@ export const REGION = 32;
 const MARGIN = 12;
 const ROAD = 64;
 
-export interface RegionEntity { id: string; kind: 'barrel' | 'crate' | 'chest'; x: number; z: number; rot: number }
+export interface RegionEntity { id: string; kind: 'barrel' | 'crate' | 'chest' | 'terminal'; x: number; z: number; rot: number }
 export interface RegionData { entities: RegionEntity[] }
 export interface RegionSource {
   generate(rx: number, rz: number, into: Level): RegionData;

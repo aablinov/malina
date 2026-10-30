@@ -12,6 +12,7 @@
     "decor": "node scripts/gen-decor.mjs",
     "map:playground": "node scripts/export-map.ts playground",
     "map:rooms": "node scripts/export-map.ts rooms",
+    "map:island": "node scripts/export-map.ts island",
     "prefabs": "node scripts/gen-prefabs.ts"
   },
   "dependencies": {
