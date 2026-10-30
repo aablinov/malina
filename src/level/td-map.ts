@@ -3,6 +3,7 @@ import { hash2, noise2, rockOutcrop, tree } from './kit.ts';
 import { stampPrefab } from './prefab-lib/stamp.ts';
 import type { LibraryPrefab } from './prefab-lib/types.ts';
 import type { TdLane, TdPad, TdSpec } from '../td/types.ts';
+import { TD_WAVES } from '../td/waves.ts';
 
 /**
  * Карта «Оборона куста» (wiki/design-tower-defence.md): 96 × 96 м, куст малины в центре, три дороги врагов от логов
@@ -36,6 +37,7 @@ export const TD_SPEC: TdSpec = {
   lanes: TD_LANES,
   pads: TD_PADS,
   berries: 300,
+  waves: TD_WAVES,
   rest: 20,
 };
 

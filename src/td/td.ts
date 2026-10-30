@@ -84,6 +84,15 @@ export class TowerDefense {
   readonly bush: RaspberryBush;
   /** Состояние партии: идёт, куст засох, все волны отбиты */
   state: 'play' | 'lost' | 'won' = 'play';
+  /** Номер текущей волны (1 — первая); 0 — ещё не начиналась */
+  wave = 0;
+  /** До следующей волны, с (пока не идёт волна) */
+  next: number;
+  /** Группы текущей волны: сколько ещё выпустить и когда */
+  private readonly queue: { kind: string; lane: string; left: number; t: number; every: number }[] = [];
+  /** Всего врагов вышло и пало за партию */
+  spawned = 0;
+  fallen = 0;
   /** Площадка, чьё меню открыто */
   menuPad: Pad | null = null;
   /** Площадка под курсором */
@@ -101,7 +110,8 @@ export class TowerDefense {
     this.h = h;
     this.spec = spec;
     this.pads = spec.pads.map((p, i) => new Pad(h.scene, p, i));
-    this.pack = new Pack(h.boss, (at, n) => h.loot(at, n));
+    this.next = spec.rest ?? 20;
+    this.pack = new Pack(h.boss, (at, n) => { this.fallen++; h.loot(at, n); });
     this.bush = new RaspberryBush(h.scene, h.fx, spec.bush.x, spec.bush.z, spec.bush.hp, h.quiet);
     this.bush.onDeath = () => { this.state = 'lost'; this.closeMenu(); h.banner('Куст засох<small>Орден добрался до малины · N — попробовать снова</small>', 5); };
     this.menuEl = document.createElement('div');
@@ -254,6 +264,7 @@ export class TowerDefense {
     const [sx, sz] = lane.points[0];
     const m = this.pack.spawn(kind, new THREE.Vector3(sx + (Math.random() - 0.5) * 1.2, 0, sz + (Math.random() - 0.5) * 1.2));
     if (!m) return null;
+    this.spawned++;
     m.march = lane.points.map(([x, z]) => new THREE.Vector3(x, 0, z));
     m.marchI = 1;
     m.aggro = Math.min(m.aggro, 3.5);
@@ -261,8 +272,64 @@ export class TowerDefense {
     return m;
   }
 
+  // ---------- волны ----------
+  get waves(): readonly import('./types').TdWave[] { return this.spec.waves ?? []; }
+  /** Идёт волна: группы ещё выходят или враги живы */
+  get waveRunning(): boolean { return this.queue.length > 0 || this.pack.mobs.some((m) => !m.dead); }
+  /** Награда за ранний вызов: по малине за каждую секунду ожидания */
+  get earlyBonus(): number { return this.waveRunning || this.wave >= this.waves.length ? 0 : Math.round(this.next); }
+
+  /** Следующая волна сейчас (G): бонус за ожидание — в казну */
+  callWave(): boolean {
+    if (this.state !== 'play' || this.waveRunning || this.wave >= this.waves.length) return false;
+    const bonus = this.earlyBonus;
+    if (bonus > 0) { this.h.profile.data.berries += bonus; this.h.toast(`Волна раньше срока: +${bonus} малины`); }
+    this.startWave();
+    return true;
+  }
+
+  private startWave(): void {
+    const w = this.waves[this.wave];
+    if (!w) return;
+    this.wave++;
+    // враги крепчают с волнами: уровень стаи, как у стражей (src/bosses/scaling.ts)
+    this.pack.setScale(1 + Math.floor((this.wave - 1) / 2) * 2, 1);
+    for (const g of w.groups) this.queue.push({ kind: g.kind, lane: g.lane, left: g.count, t: g.delay ?? 0, every: g.every });
+    this.h.banner(`Волна ${this.wave} из ${this.waves.length}<small>${w.title ?? 'Орден идёт к кусту'}</small>`, 2.5);
+    this.h.fx.shake = Math.max(this.h.fx.shake, 0.2);
+  }
+
+  private tickWaves(dt: number): void {
+    if (this.state !== 'play' || !this.waves.length) return;
+    if (this.queue.length) {
+      for (let i = this.queue.length - 1; i >= 0; i--) {
+        const q = this.queue[i];
+        q.t -= dt;
+        if (q.t > 0) continue;
+        this.spawnOn(q.kind, q.lane);
+        q.t = q.every;
+        if (--q.left <= 0) this.queue.splice(i, 1);
+      }
+      return;
+    }
+    if (this.wave > 0 && !this.waveRunning && this.next >= (this.spec.rest ?? 20)) {
+      // волна отбита: награда и отдых; последняя — победа
+      const w = this.waves[this.wave - 1];
+      this.h.profile.data.berries += w.bounty;
+      this.h.fx.text(this.bush.pos.clone().setY(3.6), `+${w.bounty} малины`, 'berry');
+      if (this.wave >= this.waves.length) { this.state = 'won'; this.h.banner('Куст отбит!<small>Все волны Ордена разбиты · N — сыграть снова</small>', 6); return; }
+      this.h.banner(`Волна ${this.wave} отбита<small>+${w.bounty} малины · следующая через ${this.spec.rest ?? 20} с · G — сейчас</small>`, 3);
+      this.next = (this.spec.rest ?? 20) - 0.001;
+      return;
+    }
+    if (this.waveRunning) { this.next = this.spec.rest ?? 20; return; }
+    this.next -= dt;
+    if (this.next <= 0) this.startWave();
+  }
+
   update(dt: number): void {
     this.time += dt;
+    this.tickWaves(dt);
     for (const p of this.pads) { p.hover = p === this.hoverPad || p === this.menuPad; p.update(dt, this.time); }
     for (const t of this.towers) t.update(dt);
     this.pack.update(dt);
@@ -277,9 +344,11 @@ export class TowerDefense {
   }
 
   private renderHud(): void {
-    const b = this.bush, k = Math.max(0, b.hp / b.maxHp);
-    const head = this.state === 'lost' ? 'Куст засох' : `Оборона куста · башен <span>${this.towers.length}</span> из ${this.pads.length}`;
-    const html = `<div class="td-wave">${head}</div><div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">куст малины ${Math.ceil(b.hp)} / ${b.maxHp}</div>`;
+    const b = this.bush, k = Math.max(0, b.hp / b.maxHp), n = this.waves.length;
+    const head = this.state === 'lost' ? 'Куст засох' : this.state === 'won' ? 'Куст отбит!' : n ? `Волна <span>${this.wave}</span> из ${n}` : `Оборона куста · башен <span>${this.towers.length}</span> из ${this.pads.length}`;
+    const alive = this.pack.mobs.filter((m) => !m.dead).length;
+    const sub = this.state !== 'play' || !n ? '' : this.waveRunning ? `врагов на карте ${alive}` : this.wave >= n ? '' : `следующая через ${Math.ceil(this.next)} с · <kbd>G</kbd> сейчас (+${this.earlyBonus})`;
+    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">куст малины ${Math.ceil(b.hp)} / ${b.maxHp}</div>`;
     if (html !== this.hudHtml) { this.hudHtml = html; this.hudEl.innerHTML = html; }
     this.hudEl.classList.toggle('lost', this.state === 'lost');
     this.hudEl.classList.toggle('won', this.state === 'won');
@@ -291,6 +360,11 @@ export class TowerDefense {
     for (const t of this.towers.splice(0)) t.dispose();
     for (const p of this.pads) p.tower = null;
     this.pack.clear();
+    this.queue.length = 0;
+    this.wave = 0;
+    this.next = this.spec.rest ?? 20;
+    this.spawned = this.fallen = 0;
+    this.pack.setScale(1, 1);
     this.bush.reset();
     this.state = 'play';
     this.h.profile.data.berries = this.spec.berries;

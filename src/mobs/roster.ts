@@ -7,6 +7,7 @@ import { Reaper, BoneArcher, Wisp, Crow, Scarecrow } from './fallen';
 import { Boarlet, BurrowBeetle, VineSpider, Bee, Hive } from './beasts';
 import { BasketMimic, DruseGolemling, HopPot, JamKeg, WardObelisk } from './constructs';
 import { SunKnight } from './soller';
+import { BerryRunner, PollenMoth, VineRam } from './td-foes';
 import { BerrySlime, BerrySlimeMid, BerrySlimeSmall, BudSpitter, ThornBall, ThornHorror, VineWhip } from './bush';
 
 /** Рядовые мобы (wiki/design-mobs.md): id → имя и класс. Номера — из списка тридцати */
@@ -52,7 +53,14 @@ export const MOBS: Record<string, { title: string; make: MobCtor }> = {
   keg: { title: 'Бочонок варенья', make: JamKeg },
   // одиночки: редкие сильные воины
   soller: { title: 'Соллер, Рыцарь Солнца', make: SunKnight },
+  // враги обороны куста (src/mobs/td-foes.ts, wiki/design-tower-defence.md): идут по дорогам, героя почти не замечают
+  runner: { title: 'Ягодный гонец', make: BerryRunner },
+  ram: { title: 'Лозовый таран', make: VineRam },
+  moth: { title: 'Пыльцевой мотылёк', make: PollenMoth },
 };
+
+/** Враги обороны куста — в кнопках витрины плейграунда не нужны, выходят волнами */
+export const TD_FOES = new Set(['runner', 'ram', 'moth']);
 
 /** Осколки слизня, вороны пугала, шмели улья — в стае есть, в кнопках витрины не нужны */
 export const MOB_PARTS = new Set(['slime_mid', 'slime_small', 'crow', 'bee']);

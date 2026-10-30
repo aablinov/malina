@@ -98,7 +98,7 @@ test('оборона: нет малины — нет башни; меню пло
   expect(r.opened).toBe(true);
   expect(r.dist).toBeLessThan(2.4);
   expect(r.esc).toBe(true);
-  expect(r.hud).toContain('башен');
+  expect(r.hud).toContain('Волна');
 });
 
 test('оборона: пять башен бьют по-своему — болты, иней замедляет, камень по площади, пламя жжёт, сфера ослабляет цепью', async ({ page }) => {
@@ -180,4 +180,62 @@ test('оборона: враги идут по дорогам к кусту и �
   expect(r.dead).toBe(true);
   expect(r.banner).toBe(true);
   expect(r.after).toEqual(['play', 400, 0, 0]);
+});
+
+test('оборона: гонец быстрый, таран держит удар спереди, мотылёк летит; волны по G с бонусом, награда за отбитую, победа', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
+    m.hero.place(0, 30, Math.PI); m.hero.god = true;
+    const ru = td.spawnOn('runner', 'west'), ra = td.spawnOn('ram', 'north'), mo = td.spawnOn('moth', 'east');
+    const x0 = ru.pos.x;
+    m.step(2);
+    const runDist = ru.pos.x - x0;
+    // таран идёт на юг (+z): удар навстречу взгляду — dir от героя к мобу смотрит в −z
+    ra.hit(10, new V(0, 0, -1), ra.pos.clone(), 0);
+    const front = ra.taken;
+    ra.hit(10, new V(0, 0, 1), ra.pos.clone(), 0);
+    const back = ra.taken - front;
+    const r1 = { runDist, front, back, mothY: mo.pos.y, ghost: mo.ghost, titles: [ru.title, ra.title, mo.title], speeds: [ru.speed, ra.speed, mo.speed] };
+    td.pack.clear();
+    // волна раньше срока: бонус за ожидание; группы выходят по дорогам; отбили — награда, отдых
+    const b0 = m.berries, next0 = td.next, waves = td.waves.length;
+    const called = td.callWave();
+    const bonus = m.berries - b0;
+    let maxAlive = 0;
+    for (let i = 0; i < 300 && td.waveRunning; i++) { m.step(0.1); maxAlive = Math.max(maxAlive, td.pack.mobs.filter((x: any) => !x.dead).length); if (td.spawned >= 6) for (const x of td.pack.mobs) if (!x.dead) x.vanish(); }
+    m.step(0.2);
+    const afterFirst = { wave: td.wave, spawned: td.spawned, fallen: td.fallen, running: td.waveRunning, berries: m.berries, resting: td.next < next0 && td.next > 0, hud: document.querySelector('.td-hud')?.textContent ?? '' };
+    // остальные волны: всех сразу в землю — до победы
+    for (let w = 0; w < waves + 1 && td.state === 'play'; w++) {
+      td.callWave();
+      for (let i = 0; i < 600 && td.waveRunning; i++) { m.step(0.1); for (const x of td.pack.mobs) if (!x.dead && x.state !== 'spawn') x.vanish(); }
+      m.step(0.2);
+    }
+    const won = { state: td.state, wave: td.wave, banner: document.body.textContent?.includes('Куст отбит'), again: td.callWave() };
+    m.resetTargets();
+    return { r1, called, bonus, waves, afterFirst, won, reset: [td.wave, td.state, td.next] };
+  });
+  expect(r.r1.runDist).toBeGreaterThan(5);
+  expect(r.r1.front).toBeCloseTo(3.5, 1);
+  expect(r.r1.back).toBeCloseTo(10, 1);
+  expect(r.r1.mothY).toBeGreaterThan(0.8);
+  expect(r.r1.ghost).toBe(true);
+  expect(r.r1.titles).toEqual(['Ягодный гонец', 'Лозовый таран', 'Пыльцевой мотылёк']);
+  expect(r.r1.speeds[0]).toBeGreaterThan(r.r1.speeds[2]);
+  expect(r.r1.speeds[2]).toBeGreaterThan(r.r1.speeds[1]);
+  expect(r.called).toBe(true);
+  expect(r.bonus).toBeGreaterThan(10);
+  expect(r.waves).toBe(10);
+  expect(r.afterFirst.wave).toBe(1);
+  expect(r.afterFirst.spawned).toBeGreaterThanOrEqual(6);
+  expect(r.afterFirst.running).toBe(false);
+  expect(r.afterFirst.berries).toBe(300 + r.bonus + 40);
+  expect(r.afterFirst.resting).toBe(true);
+  expect(r.afterFirst.hud).toContain('Волна 1 из 10');
+  expect(r.won.state).toBe('won');
+  expect(r.won.wave).toBe(10);
+  expect(r.won.banner).toBe(true);
+  expect(r.won.again).toBe(false);
+  expect(r.reset).toEqual([0, 'play', 20]);
 });
