@@ -5,7 +5,7 @@
  */
 
 /** detail — мелкая трава поверх блоков: как cutout, но без теней (дёшево) */
-export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow' | 'detail' | 'river' | 'falls' | 'portal';
+export type Layer = 'opaque' | 'cutout' | 'water' | 'acid' | 'fire' | 'glow' | 'detail' | 'river' | 'falls' | 'portal' | 'lava';
 
 export interface Part {
   /** Имя формы — файл assets/blocks/<obj>.obj */
@@ -248,6 +248,16 @@ export const BLOCKS: BlockDef[] = [
   solid('dev_wall', 'Стена плейграунда', 'служебные', 'devWall', { jitter: 0 }),
   solid('dev_cover', 'Укрытие плейграунда', 'служебные', 'devCover', { jitter: 0 }),
   B('dev_cover_low', 'Укрытие плейграунда низкое', 'служебные', [cube(same('devCover'), 'low')], { collide: 0.875, connects: true, jitter: 0 }),
+
+  // --- лава (wiki/design-tower-defence.md, раздел 7): пепельная земля, базальт, обожжённая скала, лава вброд (жжёт) ---
+  solid('ash_ground', 'Пепельная земля', 'лава', { top: 'ashTop', side: 'ashSide', bottom: 'ashSide' }, { jitter: 0.03, natural: true }),
+  solid('basalt', 'Базальт', 'лава', 'basalt', { jitter: 0.03 }),
+  B('basalt_slab', 'Базальт: полублок', 'лава', [cube(same('basalt'), 'slab')], { collide: 0.5, connects: true, jitter: 0.03 }),
+  B('basalt_stairs', 'Базальт: ступени', 'лава', [cube(same('basalt'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true, jitter: 0.03 }),
+  solid('cliff_lava', 'Скала обожжённая', 'лава', 'cliffLava', { jitter: 0.03 }),
+  solid('cliff_lava_top', 'Скала обожжённая с пеплом', 'лава', { top: 'ashTop', side: 'cliffLava', bottom: 'cliffLava' }, { jitter: 0.02, natural: true }),
+  // лава: жидкость по колено с запечённым тёплым светом на блоки вокруг; герой в ней горит (src/dev/playground.ts)
+  B('lava', 'Лава', 'лава', [{ obj: 'water', layer: 'lava', tex: same('lava') }], { collide: 0.5, cullSame: true, jitter: 0, bakedLight: { color: '#ff7a2a', intensity: 0.9, dist: 4 } }),
 
   // --- огонь и свет ---
   B('torch', 'Факел', 'свет', [cube({ side: 'logSide' }, 'torch'), { obj: 'torch_flame', layer: 'fire', tex: { side: 'fire' } }], { collide: 0, light: { color: '#ffa040', intensity: 6, dist: 7 } }),

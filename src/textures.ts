@@ -222,6 +222,8 @@ export interface Textures {
   pathEdge0: THREE.Texture; pathEdge1: THREE.Texture; pathEdge2: THREE.Texture; pathEdge3: THREE.Texture;
   /** Вода: 16 × 16, двигается смещением UV */
   water: THREE.Texture;
+  // лавовая карта обороны куста (wiki/design-tower-defence.md, раздел 7): пепельная земля, базальт, обожжённая скала, лава
+  ashTop: THREE.Texture; ashSide: THREE.Texture; basalt: THREE.Texture; cliffLava: THREE.Texture; lava: THREE.Texture;
   /** Огонь: 3 кадра по 16 × 16 друг над другом */
   fire: THREE.Texture;
 }
@@ -440,6 +442,20 @@ export function makeTextures(): Textures {
   // листва кроны: с дырками по краям, чтобы кубы кроны не читались как кубы
   T.leavesCut = canvasTex(16, (g, s, r) => softLeaves(g, s, r, LEAF, true), 68, { alpha: true });
   T.ash = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#3a3835', '#2e2c2a', '#454240'], 6), 65);
+  // лавовая карта: тёмная тёплая земля из пепла и обожжённой глины, базальтовый булыжник, скала в бурых пластах,
+  // лава — жёлто-оранжевая с яркими прожилками (бежит смещением UV, светится эмиссией в mesher.ts)
+  T.ashTop = canvasTex(16, (g, s, r) => softFill(g, s, r, '#4e3c35', 3, [{ col: '#5e4a42', n: 3, rad: [2.5, 4], k: 0.6 }, { col: '#3c2d29', n: 2, rad: [2, 3.5], k: 0.55 }]), 191);
+  T.ashSide = canvasTex(16, (g, s, r) => softFill(g, s, r, '#40302c', 3, [{ col: '#4c3a34', n: 2, rad: [2, 3], k: 0.5 }]), 192);
+  T.basalt = canvasTex(16, (g, s, r) => softCobble(g, s, r, '#4c4a52'), 193);
+  T.lava = canvasTex(16, (g, s, r) => {
+    noiseFill(g, s, r, ['#f07a18', '#ff8c22', '#e8661a', '#ff9a2e'], 6);
+    for (let i = 0; i < 5; i++) {
+      const y = (r() * s) | 0;
+      for (let x = (r() * 6) | 0, n = 3 + ((r() * 7) | 0); n > 0; n--, x++) px(g, x % s, y, jitter('#ffd25a', r, 10));
+    }
+    for (let i = 0; i < 4; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#8a2a0a'); px(g, x + 1, y, '#a83a10'); }
+  }, 195);
+  T.lava.wrapS = T.lava.wrapT = THREE.RepeatWrapping;
   [T.flowerRed, T.flowerBlue, T.flowerWhite, T.flowerYellow] = T.flowers;
   T.water = canvasTex(16, (g, s, r) => {
     noiseFill(g, s, r, ['#2a9fd8', '#2496d0', '#33ade2', '#1f8cc6'], 6);
@@ -727,6 +743,8 @@ export function makeTextures(): Textures {
   };
   T.cliff = canvasTex(16, (g, s, r) => strata(CLIFF, r, g, s), 170);
   T.cliffDark = canvasTex(16, (g, s, r) => strata(CLIFF_DARK, r, g, s), 171);
+  // обожжённая скала лавовой карты: бурые пласты
+  T.cliffLava = canvasTex(16, (g, s, r) => strata('#5c3e38', r, g, s), 194);
   T.cliffGrassSide = canvasTex(16, (g, s, r) => {
     strata(CLIFF, r, g, s);
     for (let x = 0; x < s; x++) {
