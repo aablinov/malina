@@ -1,0 +1,37 @@
+/* Оборона куста (wiki/design-tower-defence.md): меню площадки и строка волны — в духе HUD Minecraft Dungeons */
+.td-menu {
+  position: fixed; left: 50%; bottom: calc(clamp(10px, min(0.84vw, 1.5vh), 22px) * 9.5); transform: translateX(-50%);
+  display: flex; gap: 8px; padding: 10px 12px; z-index: 6; pointer-events: auto; user-select: none;
+  background: rgba(14, 12, 18, 0.92); border: 2px solid #5a5763; border-radius: 6px;
+  font: 500 12px/1.3 Rubik, system-ui, sans-serif; color: #f4f1ea;
+}
+.td-menu.hidden { display: none; }
+.td-menu .td-head { position: absolute; left: 10px; top: -22px; font-weight: 700; font-size: 13px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); white-space: nowrap; }
+.td-card {
+  position: relative; width: 112px; padding: 8px 8px 7px; border-radius: 5px; cursor: pointer; text-align: left;
+  background: #24222b; border: 1px solid #4a4753; color: inherit; font: inherit;
+}
+.td-card:hover { background: #312e3a; border-color: #8b86a0; }
+.td-card.off { opacity: 0.45; cursor: default; }
+.td-card.off:hover { background: #24222b; border-color: #4a4753; }
+.td-card kbd { position: absolute; right: 6px; top: 6px; padding: 0 5px; border-radius: 3px; background: #ffd25a; color: #1a1b1e; font: 700 11px/1.5 Rubik, system-ui, sans-serif; }
+.td-card i { display: block; width: 18px; height: 18px; border-radius: 4px; margin-bottom: 6px; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.35); }
+.td-card b { display: block; font-size: 12px; line-height: 1.2; min-height: 29px; }
+.td-card small { display: block; opacity: 0.75; font-size: 10.5px; min-height: 26px; margin-top: 2px; }
+.td-card em { display: block; font-style: normal; font-weight: 700; color: #ff7aa2; margin-top: 4px; }
+.td-card em.ok { color: #ffd25a; }
+.td-card em.sell { color: #9ad87a; }
+
+.td-hud {
+  position: fixed; left: 50%; top: 10px; transform: translateX(-50%); z-index: 5; pointer-events: none; text-align: center;
+  font: 600 12px/1.35 Rubik, system-ui, sans-serif; color: #f4f1ea; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+.td-hud .td-wave { font-size: 15px; font-weight: 700; }
+.td-hud .td-wave span { color: #ffd25a; }
+.td-hud .td-next { opacity: 0.85; }
+.td-hud .td-next kbd { padding: 0 5px; border-radius: 3px; background: #ffd25a; color: #1a1b1e; font: 700 11px/1.5 Rubik, system-ui, sans-serif; }
+.td-hud .td-bush { width: 220px; height: 9px; margin: 5px auto 0; border: 2px solid #3a2a36; border-radius: 6px; background: #241020; overflow: hidden; }
+.td-hud .td-bush i { display: block; height: 100%; background: linear-gradient(#ff5a8a, #c8124a); transition: width 0.2s; }
+.td-hud .td-bush-t { font-size: 11px; opacity: 0.85; }
+.td-hud.lost .td-wave { color: #ff6a5a; }
+.td-hud.won .td-wave { color: #9ad87a; }

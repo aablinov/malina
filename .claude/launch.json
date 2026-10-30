@@ -42,6 +42,22 @@
         "--strictPort"
       ],
       "port": 5175
+    },
+    {
+      "name": "vite-td",
+      "runtimeExecutable": "mise",
+      "runtimeArgs": [
+        "exec",
+        "--",
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5176",
+        "--strictPort"
+      ],
+      "port": 5176
     }
   ]
 }
