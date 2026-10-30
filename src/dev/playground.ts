@@ -27,7 +27,7 @@ import { MINI_BOSSES } from '../bosses/roster';
 import type { MiniBoss } from '../bosses/mini';
 import { Grimoire } from '../bosses/grimoire';
 import { Pack } from '../mobs/pack';
-import { MOB_PARTS, MOBS, SQUADS } from '../mobs/roster';
+import { MOB_PARTS, MOBS, SQUADS, TD_FOES } from '../mobs/roster';
 import { HERO, SWORD, snapshotTuning } from '../tuning';
 import { getWeapon, onWeaponChange, pickWeapon, weapons } from '../weapons';
 import { MELEE_ENCHANTS, TEMPER_LOOK, type MeleeEnchant } from '../temper';
@@ -613,6 +613,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       case 'KeyU': look.unreal = !look.unreal; toast(look.unreal ? 'Свет как в Unreal' : 'Простой свет'); refreshControls(); break;
       case 'KeyB': postFX = !postFX; toast(postFX ? 'Постобработка включена' : 'Постобработка выключена'); refreshControls(); break;
       case 'KeyN': resetTargets(); break;
+      case 'KeyG': td?.callWave(); break;
       case 'F1': panel.toggle(); break;
       case 'F2': overlays.colliders = !overlays.colliders; toast(`Коллайдеры: ${overlays.colliders ? 'вкл' : 'выкл'}`); break;
       case 'F3': overlays.aim = !overlays.aim; toast(`Дуга удара: ${overlays.aim ? 'вкл' : 'выкл'}`); break;
@@ -859,10 +860,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     button(row3, 'Мобы: вторая партия', () => spawnSquad(SQUADS.second));
     button(row3, 'Мобы: третья партия', () => spawnSquad(SQUADS.third));
     button(row3, 'Мобы: четвёртая партия', () => spawnSquad(SQUADS.fourth));
-    for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
+    for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id) && !TD_FOES.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
     button(row3, 'Убрать мобов', () => pack.clear());
     // оборона куста: враг на каждую дорогу
-    if (tdSpec) for (const l of tdSpec.lanes) button(row3, `На дорогу: ${l.title}`, () => td?.spawnOn(['berryling', 'gardener', 'wolf', 'slime', 'boarlet'][Math.floor(Math.random() * 5)], l.id));
+    if (tdSpec) for (const l of tdSpec.lanes) button(row3, `На дорогу: ${l.title}`, () => td?.spawnOn(['berryling', 'gardener', 'wolf', 'runner', 'ram', 'moth'][Math.floor(Math.random() * 6)], l.id));
+    if (tdSpec) button(row3, 'Волна сейчас (G)', () => td?.callWave());
     for (const r of roomSpecs) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
     // масштаб стражей: уровень и число игроков
     refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
@@ -935,7 +937,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     <div class="pg-fps" id="pgFps"></div>
     <div class="pg-toast" id="pgToast"></div>
     <div class="pg-prompt" id="pgPrompt"></div>
-    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — заклинания и артефакты (держи — заряд) · Q — спец-удар оружия · R — вспышка ауры · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры<br>
+    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — заклинания и артефакты (держи — заряд) · G — волна сейчас · Q — спец-удар оружия · R — вспышка ауры · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры<br>
     F1 параметры · F2 коллайдеры · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · F9 звук · B bloom · U свет · L день/ночь · N сброс · F10 редактор · H — скрыть подсказку</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(dev);

@@ -76,7 +76,7 @@ export class RaspberryBush implements Decoy {
     const v = Math.round(dmg);
     this.hp = Math.max(0, this.hp - v);
     this.taken += v;
-    this.flashT = 0.12;
+    this.flashT = 0.08;
     this.hurtT = 0.4;
     this.fx.text(this.pos.clone().setY(2.2), `−${v}`, 'bad');
     const dir = new THREE.Vector3(this.pos.x - from.x, 0, this.pos.z - from.z).normalize();
@@ -115,7 +115,7 @@ export class RaspberryBush implements Decoy {
     this.time += dt;
     this.flashT = Math.max(0, this.flashT - dt);
     this.hurtT = Math.max(0, this.hurtT - dt);
-    for (const m of this.leaves) m.emissive.setScalar(this.flashT > 0 ? 0.5 : 0);
+    for (const m of this.leaves) m.emissive.setScalar(this.flashT > 0 ? 0.25 : 0);
     const k = this.hp / this.maxHp;
     // сердце бьётся: чем меньше здоровья, тем чаще и тусклее; ягоды гаснут вместе с ним
     const beat = 0.75 + 0.25 * Math.max(0, Math.sin(this.time * (2 + (1 - k) * 4)));
