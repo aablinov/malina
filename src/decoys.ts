@@ -28,7 +28,8 @@ export function pickDecoy(at: THREE.Vector3, hero: THREE.Vector3, aggro: number)
   for (const d of decoys) {
     if (!d.alive) continue;
     const dist = Math.hypot(d.pos.x - at.x, d.pos.z - at.z);
-    if (dist > aggro) continue;
+    // приманка с taunt видна из своего радиуса, даже если он больше aggro моба (куст малины и мобы на марше)
+    if (dist > Math.max(aggro, d.taunt ?? 0)) continue;
     // приманка с taunt перебивает героя в своём радиусе
     const score = d.taunt && dist < d.taunt ? dist - 100 : dist;
     if (score < bd) { bd = score; best = d; }
