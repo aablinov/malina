@@ -9,8 +9,9 @@ import { C, glowMat } from '../bosses/kit';
 import { Pack } from '../mobs/pack';
 import type { Mob } from '../mobs/mob';
 import { Tower, type Foe } from './tower';
+import { RaspberryBush } from './bush';
 import { SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from './towers';
-import type { TdPad, TdSpec } from './types';
+import type { TdLane, TdPad, TdSpec } from './types';
 import './td.css';
 
 /**
@@ -79,6 +80,10 @@ export class TowerDefense {
   readonly towers: Tower[] = [];
   /** Стая врагов режима: все, кто идёт к кусту */
   readonly pack: Pack;
+  /** Куст малины — что защищаем; враги с конца дороги бьют его как приманку */
+  readonly bush: RaspberryBush;
+  /** Состояние партии: идёт, куст засох, все волны отбиты */
+  state: 'play' | 'lost' | 'won' = 'play';
   /** Площадка, чьё меню открыто */
   menuPad: Pad | null = null;
   /** Площадка под курсором */
@@ -97,6 +102,8 @@ export class TowerDefense {
     this.spec = spec;
     this.pads = spec.pads.map((p, i) => new Pad(h.scene, p, i));
     this.pack = new Pack(h.boss, (at, n) => h.loot(at, n));
+    this.bush = new RaspberryBush(h.scene, h.fx, spec.bush.x, spec.bush.z, spec.bush.hp, h.quiet);
+    this.bush.onDeath = () => { this.state = 'lost'; this.closeMenu(); h.banner('Куст засох<small>Орден добрался до малины · N — попробовать снова</small>', 5); };
     this.menuEl = document.createElement('div');
     this.menuEl.className = 'td-menu hidden';
     this.menuEl.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -114,11 +121,12 @@ export class TowerDefense {
 
   get berries(): number { return this.h.profile.data.berries; }
   get menuOpen(): boolean { return this.menuPad !== null; }
-  /** Препятствия от башен (герой, путь, враги) */
+  /** Препятствия от башен и ствола куста (герой, путь, враги) */
   get solids(): Obstacle[] {
-    if (this.solidsN !== this.towers.length) { this.solidsCache = this.towers.map((t) => t.solid); this.solidsN = this.towers.length; }
+    if (this.solidsN !== this.towers.length) { this.solidsCache = [this.bush.solid, ...this.towers.map((t) => t.solid)]; this.solidsN = this.towers.length; }
     return this.solidsCache;
   }
+  lane(id: string): TdLane | undefined { return this.spec.lanes.find((l) => l.id === id); }
   /** Враги как цели меча и заклинаний */
   targets(): Target[] { return this.pack.targets(); }
   /** Враги для башен */
@@ -236,14 +244,29 @@ export class TowerDefense {
     return back;
   }
 
-  /** Враг на дорогу (пока — у точки; с волнами — src/td/waves.ts) */
+  /** Враг в точке (без дороги: стоит и ждёт героя, как в комнатах) */
   spawn(kind: string, at: THREE.Vector3): Mob | null { return this.pack.spawn(kind, at); }
+
+  /** Враг из логова на дорогу: марш по точкам к кусту, героя замечает только в 3,5 м */
+  spawnOn(kind: string, laneId: string): Mob | null {
+    const lane = this.lane(laneId);
+    if (!lane) return null;
+    const [sx, sz] = lane.points[0];
+    const m = this.pack.spawn(kind, new THREE.Vector3(sx + (Math.random() - 0.5) * 1.2, 0, sz + (Math.random() - 0.5) * 1.2));
+    if (!m) return null;
+    m.march = lane.points.map(([x, z]) => new THREE.Vector3(x, 0, z));
+    m.marchI = 1;
+    m.aggro = Math.min(m.aggro, 3.5);
+    m.yaw = Math.atan2(lane.points[1][0] - sx, lane.points[1][1] - sz);
+    return m;
+  }
 
   update(dt: number): void {
     this.time += dt;
     for (const p of this.pads) { p.hover = p === this.hoverPad || p === this.menuPad; p.update(dt, this.time); }
     for (const t of this.towers) t.update(dt);
     this.pack.update(dt);
+    this.bush.update(dt);
     if (this.menuPad) {
       // ушёл от площадки — меню закрывается
       const hp = this.h.hero.pos, p = this.menuPad.pos;
@@ -254,8 +277,12 @@ export class TowerDefense {
   }
 
   private renderHud(): void {
-    const html = `<div class="td-wave">Оборона куста · башен <span>${this.towers.length}</span> из ${this.pads.length}</div>`;
+    const b = this.bush, k = Math.max(0, b.hp / b.maxHp);
+    const head = this.state === 'lost' ? 'Куст засох' : `Оборона куста · башен <span>${this.towers.length}</span> из ${this.pads.length}`;
+    const html = `<div class="td-wave">${head}</div><div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">куст малины ${Math.ceil(b.hp)} / ${b.maxHp}</div>`;
     if (html !== this.hudHtml) { this.hudHtml = html; this.hudEl.innerHTML = html; }
+    this.hudEl.classList.toggle('lost', this.state === 'lost');
+    this.hudEl.classList.toggle('won', this.state === 'won');
   }
 
   /** Всё заново: башни снесены, враги убраны, казна полная */
@@ -264,6 +291,8 @@ export class TowerDefense {
     for (const t of this.towers.splice(0)) t.dispose();
     for (const p of this.pads) p.tower = null;
     this.pack.clear();
+    this.bush.reset();
+    this.state = 'play';
     this.h.profile.data.berries = this.spec.berries;
   }
 }

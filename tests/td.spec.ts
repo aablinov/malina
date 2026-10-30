@@ -126,3 +126,58 @@ test('оборона: пять башен бьют по-своему — бол�
   expect(r.dead).toBeGreaterThan(5);
   expect(r.titles).toEqual(['Стрелковая вышка I', 'Морозный шпиль I', 'Катапульта I', 'Огненная жаровня I', 'Волшебный обелиск I']);
 });
+
+test('оборона: враги идут по дорогам к кусту и бьют его; ударенный гонится и возвращается на дорогу; куст засыхает', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
+    m.hero.place(0, 30, Math.PI); m.hero.god = true;
+    const a = td.spawnOn('berryling', 'west'), b = td.spawnOn('gardener', 'north'), w = td.spawnOn('wolf', 'east'), none = td.spawnOn('wolf', 'nope');
+    const p0 = a.progress;
+    let reached = -1, maxProgress = 0;
+    for (let i = 0; i < 400; i++) { m.step(0.1); maxProgress = Math.max(maxProgress, a.progress); if (td.bush.taken > 0 && reached < 0) reached = i; }
+    const r1 = { none, p0, maxProgress, reached, taken: td.bush.taken, alerted: [a.alerted, b.alerted, w.alerted], focus: [!!a.focus, !!b.focus, !!w.focus], near: [a, b, w].map((x: any) => Math.hypot(x.pos.x, x.pos.z) < 4), hud: document.querySelector('.td-hud')?.textContent ?? '' };
+    // поводок: ударенный мечом гонится, герой убежал — снова марш
+    td.pack.clear();
+    const c = td.spawnOn('gardener', 'west');
+    for (let i = 0; i < 30; i++) m.step(0.1);
+    m.hero.place(c.pos.x + 1.5, c.pos.z, -Math.PI / 2);
+    c.hit(5, new V(1, 0, 0), c.pos.clone(), 1);
+    const al1 = c.alerted;
+    m.hero.place(c.pos.x + 25, c.pos.z, 0);
+    for (let i = 0; i < 20; i++) m.step(0.1);
+    const al2 = c.alerted, walking = c.state === 'walk';
+    // башня бьёт марширующего издалека — тот не отвлекается
+    td.pack.clear();
+    m.profile.data.berries = 500;
+    td.build(td.pads[1], 'arrow');
+    const d = td.spawnOn('gardener', 'west');
+    let hitYetMarching = false;
+    for (let i = 0; i < 150; i++) { m.step(0.1); if (d.taken > 0 && !d.alerted) hitYetMarching = true; }
+    // куст засыхает
+    td.pack.clear();
+    td.bush.hp = 3;
+    const e = td.spawnOn('berryling', 'east');
+    for (let i = 0; i < 400 && td.state === 'play'; i++) m.step(0.1);
+    const lost = td.state, dead = td.bush.dead, banner = document.body.textContent?.includes('Куст засох');
+    m.resetTargets();
+    return { r1, al1, al2, walking, hitYetMarching, lost, dead, banner, after: [td.state, td.bush.hp, td.towers.length, td.pack.mobs.length], e: !!e };
+  });
+  expect(r.r1.none).toBeNull();
+  expect(r.r1.p0).toBeLessThan(0.05);
+  expect(r.r1.maxProgress).toBe(1);
+  expect(r.r1.reached).toBeGreaterThan(0);
+  expect(r.r1.taken).toBeGreaterThan(20);
+  expect(r.r1.alerted).toEqual([true, true, true]);
+  expect(r.r1.focus).toEqual([true, true, true]);
+  expect(r.r1.near).toEqual([true, true, true]);
+  expect(r.r1.hud).toContain('куст малины');
+  expect(r.al1).toBe(true);
+  expect(r.al2).toBe(false);
+  expect(r.walking).toBe(true);
+  expect(r.hitYetMarching).toBe(true);
+  expect(r.lost).toBe('lost');
+  expect(r.dead).toBe(true);
+  expect(r.banner).toBe(true);
+  expect(r.after).toEqual(['play', 400, 0, 0]);
+});

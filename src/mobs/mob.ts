@@ -48,6 +48,14 @@ export abstract class Mob extends Boss {
   /** Маршрут патруля: пока не заметил героя, ходит по точкам по кругу (src/level/playground-map.ts, MobPost.route) */
   route: THREE.Vector3[] | null = null;
   private routeI = 0;
+  /**
+   * Марш в один конец (оборона куста, src/td/): идёт по точкам полным ходом, героя замечает только в aggro; в конце дороги —
+   * тревога, и куст-приманка (src/decoys.ts) становится целью. Ударенный героем гонится за ним, отбежал дальше leash — снова на дорогу
+   */
+  march: THREE.Vector3[] | null = null;
+  marchI = 0;
+  leash = 10;
+  private marchDone = false;
   /** Малина с моба (до масштаба) */
   loot = 1;
   /** Призван — малины нет */
@@ -125,9 +133,21 @@ export abstract class Mob extends Boss {
   /** Ещё цели, кроме самого моба (воткнутое знамя) */
   extras(): Target[] { return []; }
 
-  /** Заметил героя — и соседи в 8 м тоже */
-  notice(): void {
+  /** Доля пройденной дороги (0..1) на марше; башни бьют того, у кого больше */
+  get progress(): number {
+    const r = this.march;
+    if (!r || !r.length) return 0;
+    if (this.marchI >= r.length) return 1;
+    const t = r[this.marchI], prev = r[this.marchI - 1];
+    const seg = prev ? Math.hypot(t.x - prev.x, t.z - prev.z) : 1;
+    const frac = prev && seg > 0 ? Math.max(0, Math.min(1, 1 - Math.hypot(t.x - this.pos.x, t.z - this.pos.z) / seg)) : 0;
+    return (this.marchI - (prev ? 1 : 0) + frac) / r.length;
+  }
+
+  /** Заметил героя — и соседи в 8 м тоже. byHit — от удара: на марше выстрел башни издалека не отвлекает */
+  notice(byHit = false): void {
     if (this.alerted || this.dead) return;
+    if (this.march && byHit) { const hp = this.mh.hero.pos; if (Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z) > this.aggro + 2) return; }
     this.alerted = true;
     for (const m of this.mh.allies()) if (m !== this && Math.hypot(m.pos.x - this.pos.x, m.pos.z - this.pos.z) < 8) m.notice();
   }
@@ -146,7 +166,7 @@ export abstract class Mob extends Boss {
     super.hit(dmg * k, dir, point, knock);
     // отброс: лёгкого — дальше; стены поправит update
     this.pos.addScaledVector(dir, (0.15 + knock * 0.5) * k / this.mass);
-    this.notice();
+    this.notice(true);
   }
 
   /** Пасть без удара (пал хозяин, лопнул сам): мимо щита и появления */
@@ -220,7 +240,9 @@ export abstract class Mob extends Boss {
       case 'idle':
       case 'walk': {
         if (!this.alerted && dist < this.aggro && Math.abs(hero.y - this.pos.y) < 2) this.notice();
-        if (!this.alerted || this.h.hero.down) { walk = !this.alerted && this.patrol(dt); this.state = walk ? 'walk' : 'idle'; break; }
+        // на марше: герой убежал дальше поводка, приманки нет — тревога снята, снова на дорогу
+        if (this.march && this.alerted && !this.focus && dist > this.leash) this.alerted = false;
+        if (!this.alerted || this.h.hero.down) { walk = this.march ? this.marching(dt) : !this.alerted && this.patrol(dt); this.state = walk ? 'walk' : 'idle'; break; }
         this.cd -= dt;
         if (this.cd <= 0) {
           const a = this.choose(dist, rel);
@@ -274,6 +296,19 @@ export abstract class Mob extends Boss {
     this.yaw += Math.max(-m, Math.min(m, want));
     if (Math.abs(want) > 1) return true;
     const sp = this.pace * 0.55 * dt;
+    this.pos.x += (dx / d) * sp; this.pos.z += (dz / d) * sp;
+    return true;
+  }
+
+  /** Шаг марша к очередной точке дороги (почти полным ходом); конец дороги — тревога: куст-приманка рядом. true — шёл */
+  protected marching(dt: number): boolean {
+    const r = this.march!;
+    if (this.marchI >= r.length) { if (!this.marchDone) { this.marchDone = true; this.notice(); } return false; }
+    const t = r[this.marchI], dx = t.x - this.pos.x, dz = t.z - this.pos.z, d = Math.hypot(dx, dz);
+    if (d < 0.6) { this.marchI++; return true; }
+    const want = wrap(Math.atan2(dx, dz) - this.yaw), m = this.turn * 1.5 * dt;
+    this.yaw += Math.max(-m, Math.min(m, want));
+    const sp = this.pace * 0.85 * dt * (Math.abs(want) > 1.2 ? 0.4 : 1);
     this.pos.x += (dx / d) * sp; this.pos.z += (dz / d) * sp;
     return true;
   }

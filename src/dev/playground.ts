@@ -268,6 +268,7 @@ export function runPlayground(): void {
   // лавки кузнеца и торговца — на плейграунде, в северо-западном углу (src/merchants.ts)
   // режим «Оборона куста» (src/td/, wiki/design-tower-defence.md): на карте с meta.td — площадки, башни, враги по дорогам
   let td: TowerDefense | null = null;
+  const tdSpec = level.meta.td as TdSpec | undefined;
   // на карте — из meta.merchants ({ kind, x, z, yaw }), на плейграунде — в северо-западном углу
   const merchantSpecs = hasMap ? ((level.meta.merchants as { kind: 'smith' | 'merchant'; x: number; z: number; yaw: number }[] | undefined) ?? []) : [{ kind: 'smith' as const, x: -17, z: -13, yaw: 0 }, { kind: 'merchant' as const, x: -19, z: -6, yaw: Math.PI / 2 }];
   const merchants: Merchant[] = merchantSpecs.map((m) => new Merchant(scene, overlayEl, T, m.kind, m.x, m.z, m.yaw));
@@ -860,6 +861,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     button(row3, 'Мобы: четвёртая партия', () => spawnSquad(SQUADS.fourth));
     for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
     button(row3, 'Убрать мобов', () => pack.clear());
+    // оборона куста: враг на каждую дорогу
+    if (tdSpec) for (const l of tdSpec.lanes) button(row3, `На дорогу: ${l.title}`, () => td?.spawnOn(['berryling', 'gardener', 'wolf', 'slime', 'boarlet'][Math.floor(Math.random() * 5)], l.id));
     for (const r of roomSpecs) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
     // масштаб стражей: уровень и число игроков
     refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
@@ -882,7 +885,6 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const hud = new Hud(document.body, profile);
   const questGoal = (level.meta.goal as [string, string] | undefined) ?? ['Исследуй плейграунд', 'Плейграунд Малины'];
   hud.setGoal(questGoal[0], questGoal[1]);
-  const tdSpec = level.meta.td as TdSpec | undefined;
   if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted }, tdSpec, document.body);
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
