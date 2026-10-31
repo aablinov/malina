@@ -230,7 +230,7 @@ test('оборона: гонец быстрый, таран держит уда�
   expect(r.afterFirst.wave).toBe(1);
   expect(r.afterFirst.spawned).toBeGreaterThanOrEqual(6);
   expect(r.afterFirst.running).toBe(false);
-  expect(r.afterFirst.berries).toBe(300 + r.bonus + 40);
+  expect(r.afterFirst.berries).toBe(300 + r.bonus + 50);
   expect(r.afterFirst.resting).toBe(true);
   expect(r.afterFirst.hud).toContain('Волна 1 из 10');
   expect(r.won.state).toBe('won');
@@ -238,6 +238,48 @@ test('оборона: гонец быстрый, таран держит уда�
   expect(r.won.banner).toBe(true);
   expect(r.won.again).toBe(false);
   expect(r.reset).toEqual([0, 'play', 20]);
+});
+
+test('оборона: масштаб — с волнами уровень стаи 1, 4, 7…; игроков больше — врагов, здоровья и награды больше', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td;
+    m.script(true);
+    const run = (players: number) => {
+      m.resetTargets();
+      m.bossScale('hero', players);
+      const b0 = m.berries;
+      td.callWave();
+      let maxHp = 0, level = 0;
+      for (let i = 0; i < 600 && td.waveRunning; i++) {
+        m.step(0.1);
+        for (const x of td.pack.mobs) { maxHp = Math.max(maxHp, x.maxHp); level = x.scale?.level ?? level; }
+        if (!td.queue.length) for (const x of td.pack.mobs) if (!x.dead && x.state !== 'spawn') x.vanish();
+      }
+      m.step(0.2);
+      return { players: td.players, spawned: td.spawned, maxHp, level, bounty: m.berries - b0 - 0, hud: document.querySelector('.td-hud')?.textContent ?? '' };
+    };
+    const solo = run(1), trio = run(3);
+    // вторая волна втроём: уровень стаи 4
+    td.callWave();
+    for (let i = 0; i < 30; i++) m.step(0.1);
+    const lvl2 = td.pack.mobs.map((x: any) => x.scale?.level ?? 0);
+    m.bossScale('hero', 1);
+    m.resetTargets();
+    return { solo, trio, lvl2 };
+  });
+  expect(r.solo.players).toBe(1);
+  expect(r.solo.spawned).toBe(10);
+  expect(r.solo.level).toBe(1);
+  expect(r.trio.players).toBe(3);
+  expect(r.trio.spawned).toBe(20);
+  expect(r.trio.maxHp).toBe(r.solo.maxHp * 2);
+  expect(r.trio.hud).toContain('игроков 3');
+  expect(r.solo.hud).not.toContain('игроков');
+  // награда = бонус за ранний вызов (одинаков: та же пауза) + bounty × 2
+  expect(r.trio.bounty - r.solo.bounty).toBe(50);
+  expect(r.lvl2.length).toBeGreaterThan(0);
+  expect(r.lvl2.every((l: number) => l === 4)).toBe(true);
 });
 
 test('оборона: логова на дорогах тревожатся перед волной и вспыхивают при выходе врага', async ({ page }) => {

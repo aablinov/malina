@@ -419,6 +419,7 @@ export function runPlayground(): void {
     for (const b of bosses) b.setScale(bossLevel(), bossPlayers);
     pack.setScale(bossLevel(), bossPlayers);
     for (const r of mobRooms) r.pack.setScale(bossLevel(), bossPlayers);
+    td?.setPlayers(bossPlayers);
   }
   rescaleBosses();
   const grimoires: Grimoire[] = [];
@@ -893,6 +894,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const questGoal = (level.meta.goal as [string, string] | undefined) ?? ['Исследуй плейграунд', 'Плейграунд Малины'];
   hud.setGoal(questGoal[0], questGoal[1]);
   if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted }, tdSpec, document.body);
+  td?.setPlayers(bossPlayers);
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
   function openInventory(): void { gear.cancelCast(); if (hud.mapOpen) hud.toggleMap(); inventory.show(); }

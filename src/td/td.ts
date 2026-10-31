@@ -10,6 +10,7 @@ import { Pack } from '../mobs/pack';
 import type { Mob } from '../mobs/mob';
 import { Tower, type Foe } from './tower';
 import { RaspberryBush } from './bush';
+import { scaledBounty, scaledCount, waveLevel } from './scaling';
 import { Lair } from './lair';
 import { SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from './towers';
 import type { TdLane, TdPad, TdSpec } from './types';
@@ -95,6 +96,8 @@ export class TowerDefense {
   private readonly queue: { kind: string; lane: string; left: number; t: number; every: number }[] = [];
   /** Всего врагов вышло и пало за партию */
   spawned = 0;
+  /** Игроков (1–4): больше врагов, здоровья и награды — src/td/scaling.ts */
+  players = 1;
   fallen = 0;
   /** Площадка, чьё меню открыто */
   menuPad: Pad | null = null;
@@ -301,13 +304,19 @@ export class TowerDefense {
     return true;
   }
 
+  /** Число игроков (панель F1 / сеть): следующие волны — по новому масштабу, живые враги — сразу */
+  setPlayers(n: number): void {
+    this.players = Math.max(1, Math.round(n));
+    this.pack.setScale(this.wave ? waveLevel(this.wave) : 1, this.players);
+  }
+
   private startWave(): void {
     const w = this.waves[this.wave];
     if (!w) return;
     this.wave++;
-    // враги крепчают с волнами: уровень стаи, как у стражей (src/bosses/scaling.ts)
-    this.pack.setScale(1 + Math.floor((this.wave - 1) / 2) * 2, 1);
-    for (const g of w.groups) this.queue.push({ kind: g.kind, lane: g.lane, left: g.count, t: g.delay ?? 0, every: g.every });
+    // враги крепчают с волнами и игроками: уровень стаи, как у стражей (src/td/scaling.ts); больше игроков — больше врагов
+    this.pack.setScale(waveLevel(this.wave), this.players);
+    for (const g of w.groups) this.queue.push({ kind: g.kind, lane: g.lane, left: scaledCount(g.count, this.players), t: g.delay ?? 0, every: g.every });
     this.h.banner(`Волна ${this.wave} из ${this.waves.length}<small>${w.title ?? 'Орден идёт к кусту'}</small>`, 2.5);
     this.h.fx.shake = Math.max(this.h.fx.shake, 0.2);
   }
@@ -327,11 +336,11 @@ export class TowerDefense {
     }
     if (this.wave > 0 && !this.waveRunning && this.next >= (this.spec.rest ?? 20)) {
       // волна отбита: награда и отдых; последняя — победа
-      const w = this.waves[this.wave - 1];
-      this.h.profile.data.berries += w.bounty;
-      this.h.fx.text(this.bush.pos.clone().setY(3.6), `+${w.bounty} малины`, 'berry');
+      const w = this.waves[this.wave - 1], bounty = scaledBounty(w.bounty, this.players);
+      this.h.profile.data.berries += bounty;
+      this.h.fx.text(this.bush.pos.clone().setY(3.6), `+${bounty} малины`, 'berry');
       if (this.wave >= this.waves.length) { this.state = 'won'; this.h.banner('Куст отбит!<small>Все волны Ордена разбиты · N — сыграть снова</small>', 6); return; }
-      this.h.banner(`Волна ${this.wave} отбита<small>+${w.bounty} малины · следующая через ${this.spec.rest ?? 20} с · G — сейчас</small>`, 3);
+      this.h.banner(`Волна ${this.wave} отбита<small>+${bounty} малины · следующая через ${this.spec.rest ?? 20} с · G — сейчас</small>`, 3);
       this.next = (this.spec.rest ?? 20) - 0.001;
       return;
     }
@@ -366,7 +375,7 @@ export class TowerDefense {
 
   private renderHud(): void {
     const b = this.bush, k = Math.max(0, b.hp / b.maxHp), n = this.waves.length;
-    const head = this.state === 'lost' ? 'Куст засох' : this.state === 'won' ? 'Куст отбит!' : n ? `Волна <span>${this.wave}</span> из ${n}` : `Оборона куста · башен <span>${this.towers.length}</span> из ${this.pads.length}`;
+    const head = this.state === 'lost' ? 'Куст засох' : this.state === 'won' ? 'Куст отбит!' : n ? `Волна <span>${this.wave}</span> из ${n}${this.players > 1 ? ` · игроков ${this.players}` : ''}` : `Оборона куста · башен <span>${this.towers.length}</span> из ${this.pads.length}`;
     const alive = this.pack.mobs.filter((m) => !m.dead).length;
     const from = this.nextLanes?.map((l) => l.title.toLowerCase()).join(', ') ?? '';
     const sub = this.state !== 'play' || !n ? '' : this.waveRunning ? `врагов на карте ${alive}` : this.wave >= n ? '' : `следующая через ${Math.ceil(this.next)} с — ${from} · <kbd>G</kbd> сейчас (+${this.earlyBonus})`;
@@ -387,7 +396,7 @@ export class TowerDefense {
     this.next = this.spec.rest ?? 20;
     this.spawned = this.fallen = 0;
     for (const l of this.lairs) { l.warn = 0; l.spawned = 0; }
-    this.pack.setScale(1, 1);
+    this.pack.setScale(1, this.players);
     this.bush.reset();
     this.state = 'play';
     this.h.profile.data.berries = this.spec.berries;
