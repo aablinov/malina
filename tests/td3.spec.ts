@@ -67,6 +67,7 @@ test('осада: замок — стены, бастионы с площадк�
       name: L.name, pads: td.pads.length, high: td.pads.filter((p: any) => p.pos.y === 3).length, lanes: spec.lanes.map((l: any) => l.wall), kinds: td.kinds, walls: td.walls.map((w: any) => [w.id, w.kind, w.maxHp]),
       bad, pits, climbed, padUp, padDown, hp0, breachAt, ignored, hole, banner, marchLen, bushTaken, nwId: nw?.id, cost, prompt, spent, ok, fixed, walkAfter,
       hud: document.querySelector('.td-walls')?.children.length,
+      mist: m.mistFx?.count ?? 0, fogFar: L.meta.world.fog.far,
     };
   });
   expect(r.name).toBe('Замок на лугу');
@@ -99,6 +100,8 @@ test('осада: замок — стены, бастионы с площадк�
   expect(r.fixed[3]).not.toBe('air');
   expect(r.walkAfter).toBe(3);
   expect(r.hud).toBe(4);
+  expect(r.mist).toBeGreaterThan(40);
+  expect(r.fogFar).toBeLessThanOrEqual(60);
 });
 
 test('осада: ворота расстреливают баллиста и арбалетчик, герой проходит через калитку; броня подрывника и пробивающий болт; смола вяжет и жжёт', async ({ page }) => {

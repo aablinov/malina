@@ -46,6 +46,7 @@ import { Overlays } from './overlay';
 import { DEV_TOOLS, openEditor } from '../devflag';
 import { TowerDefense, type Pad } from '../td/td';
 import { LavaFx } from '../td/lava-fx';
+import { MistFx } from '../td/mist-fx';
 import type { TdSpec } from '../td/types';
 import { button, Panel, select, toggle } from './panel';
 import '../style.css';
@@ -274,6 +275,8 @@ export function runPlayground(): void {
   // режим «Оборона куста» (src/td/, wiki/design-tower-defence.md): на карте с meta.td — площадки, башни, враги по дорогам
   let td: TowerDefense | null = null;
   const tdSpec = level.meta.td as TdSpec | undefined;
+  // туман у лагерей врагов (src/td/mist-fx.ts): точки выхода скрыты
+  const mistFx = tdSpec?.mist ? new MistFx(scene, tdSpec.lanes, tdSpec.mist) : null;
   // на карте — из meta.merchants ({ kind, x, z, yaw }), на плейграунде — в северо-западном углу
   const merchantSpecs = hasMap ? ((level.meta.merchants as { kind: 'smith' | 'merchant'; x: number; z: number; yaw: number }[] | undefined) ?? []) : [{ kind: 'smith' as const, x: -17, z: -13, yaw: 0 }, { kind: 'merchant' as const, x: -19, z: -6, yaw: Math.PI / 2 }];
   const merchants: Merchant[] = merchantSpecs.map((m) => new Merchant(scene, overlayEl, T, m.kind, m.x, m.z, m.yaw));
@@ -1075,6 +1078,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     pack.update(dt);
     td?.update(dt);
     lavaFx?.update(dt, hero.pos);
+    mistFx?.update(dt);
     // комната думает, когда герой рядом или гарнизон в бою; пал весь, а герой вышел — гарнизон снова на постах
     for (const r of mobRooms) {
       if (inRoom(r.spec, 30) || r.pack.mobs.some((m) => m.alerted)) r.pack.update(dt);
@@ -1216,7 +1220,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Рядовые мобы (src/mobs/): pack.mobs; вызвать моба в точку */
     pack,
     /** Оборона куста (src/td/): pads, towers, build(pad, kind), pack врагов, walls (осада); lavaFx — дымка и искры лавы (cells) */
-    td, lavaFx,
+    td, lavaFx, mistFx,
     /** Комнаты мобов: spec (посты, вход) и стая гарнизона; fillRoom — заново на постах */
     mobRooms, fillRoom,
     spawnMob(kind: string, x: number, z: number) { return pack.spawn(kind, new THREE.Vector3(x, 0, z)); },
