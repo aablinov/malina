@@ -75,10 +75,13 @@ export function buildTdCastleMap(lib: Record<string, LibraryPrefab>): Level {
   const inMap = (x: number, z: number): boolean => Math.abs(x) <= H && Math.abs(z) <= H;
   const inCastle = (x: number, z: number): boolean => Math.abs(x) <= OUT + 2 && Math.abs(z) <= OUT + 2;
   // ---------- луг: трава с сухими и цветочными пятнами, тропинки врагов ----------
+  // сухая трава и ромашки — растения без коллизии: только поверх земли, иначе герой проваливается в клетку
+  const flora = new Map<string, string>();
   for (let x = -H; x <= H; x++) for (let z = -H; z <= H; z++) {
     const n = noise2(x, z, 9, 1);
-    L.set(x, -1, z, n > 0.72 ? 'dry_grass' : n < 0.2 ? 'daisies' : 'grass');
+    L.set(x, -1, z, 'grass');
     L.set(x, -2, z, 'dirt');
+    if (n > 0.72) flora.set(key(x, z), 'dry_grass'); else if (n < 0.2) flora.set(key(x, z), 'daisies');
   }
   const road = new Set<string>();
   for (const lane of CASTLE_LANES) for (let i = 0; i + 1 < lane.points.length; i++) {
@@ -219,7 +222,9 @@ export function buildTdCastleMap(lib: Record<string, LibraryPrefab>): Level {
   for (let z = -H + 2; z <= H - 2; z++) for (let x = -H + 2; x <= H - 2; x++) {
     if (inCastle(x, z) || !free(x, z, 0)) continue;
     const v = hash2(x, z, 24);
-    if (v < 0.06) L.set(x, 0, z, 'tall_grass');
+    const f = flora.get(key(x, z));
+    if (f && hash2(x, z, 27) < 0.35) L.set(x, 0, z, f);
+    else if (v < 0.06) L.set(x, 0, z, 'tall_grass');
     else if (v < 0.09) L.set(x, 0, z, ['flower_pink', 'flower_blue', 'flower_white', 'flower_yellow', 'flower_red'][Math.floor(hash2(x, z, 26) * 5)]);
     else if (v < 0.1) L.set(x, 0, z, 'fern');
   }

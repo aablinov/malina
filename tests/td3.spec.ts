@@ -28,6 +28,9 @@ test('осада: замок — стены, бастионы с площадк�
     // дорожка по стене на высоте 3 — свободна от угла до угла
     let bad = 0;
     for (let i = -16; i <= 16; i++) if (t.floorAt(i, -18, 3.5) !== 3 || t.floorAt(i, 18, 3.5) !== 3 || t.floorAt(18, i, 3.5) !== 3 || t.floorAt(-18, i, 3.5) !== 3) bad++;
+    // луг: пол везде не ниже земли — нет ям, в которые проваливается герой (растения только поверх травы)
+    let pits = 0;
+    for (let x = -47; x <= 47; x += 1) for (let z = -47; z <= 47; z += 1) { const f = t.floorAt(x, z, 0.4); if (f < -0.5 || (f === -Infinity)) pits++; }
     // лестница: герой со двора кликом поднимается на стену
     m.hero.place(-14, -14, 0, 0);
     m.click(-10, -18, false, 3);
@@ -62,7 +65,7 @@ test('осада: замок — стены, бастионы с площадк�
     m.resetTargets();
     return {
       name: L.name, pads: td.pads.length, high: td.pads.filter((p: any) => p.pos.y === 3).length, lanes: spec.lanes.map((l: any) => l.wall), kinds: td.kinds, walls: td.walls.map((w: any) => [w.id, w.kind, w.maxHp]),
-      bad, climbed, padUp, padDown, hp0, breachAt, ignored, hole, banner, marchLen, bushTaken, nwId: nw?.id, cost, prompt, spent, ok, fixed, walkAfter,
+      bad, pits, climbed, padUp, padDown, hp0, breachAt, ignored, hole, banner, marchLen, bushTaken, nwId: nw?.id, cost, prompt, spent, ok, fixed, walkAfter,
       hud: document.querySelector('.td-walls')?.children.length,
     };
   });
@@ -73,6 +76,7 @@ test('осада: замок — стены, бастионы с площадк�
   expect(r.kinds).toEqual(['arrow', 'frost', 'splash', 'fire', 'magic', 'ballista', 'oil']);
   expect(r.walls).toEqual([['gate', 'gate', 250], ['east', 'wall', 400], ['south', 'wall', 400], ['west', 'wall', 400]]);
   expect(r.bad).toBe(0);
+  expect(r.pits).toBe(0);
   expect(r.climbed).toEqual([-10, 3, -18]);
   expect(r.padUp).toBe(0);
   expect(r.padDown).toBeNull();
