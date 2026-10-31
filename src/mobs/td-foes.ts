@@ -504,3 +504,199 @@ export class RainbowHopper extends Mob {
     this.ears[0].rotation.x = -0.3 + e; this.ears[1].rotation.x = -0.3 - e;
   }
 }
+
+// ---------- третья карта: осада замка (wiki/design-tower-defence.md, раздел 9) ----------
+
+const POWDER = C(3.4, 1.0, 0.3), FUSE = C(3.4, 3.0, 1.2);
+
+/**
+ * 38. Пнёвый подрывник — ходячий пень в коре-броне с бочонком ягодного пороха на спине: броня гасит ×0,3 любой удар,
+ * кроме пробивающего (стенная баллиста); героя не замечает — идёт к стене, у неё поджигает фитиль (1,6 с) и взрывается:
+ * стене 160, героям в 3 м — 30, своим в 2,5 м — 40. Пал раньше — взрывается там, где пал. 120 здоровья, 1,5 м/с
+ */
+export class StumpSapper extends Mob {
+  readonly kind = 'sapper';
+  readonly title = 'Пнёвый подрывник';
+  readonly cost = 7;
+  readonly radius = 0.55;
+  override readonly topY = 1.5;
+  /** Взорвался (для тестов) */
+  blasted = false;
+  private readonly keg = new THREE.Group();
+  private readonly spark: THREE.MeshBasicMaterial;
+  private readonly legs: THREE.Group[];
+  private fuseT = 0;
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 120, at);
+    this.speed = 1.5;
+    this.turn = 2.5;
+    this.keep = 1.2;
+    this.mass = 3;
+    this.aggro = 0;
+    this.leash = 4;
+    this.loot = 4;
+    const bark = this.lam('#4a3018', pixelTex('#4a3018', 10, 1011)), plate = this.lam('#6a5a4a', pixelTex('#6a5a4a', 8, 1012)), wood = this.lam('#8a6a3a', pixelTex('#8a6a3a', 10, 1013));
+    const iron = this.lam('#3a3c42'), eye = this.shimmer(POWDER, C(3.4, 2.0, 0.6), 0, 2.4);
+    this.spark = this.shimmer(FUSE, POWDER, 0, 6);
+    const B = this.box.bind(this);
+    // пень с корой и железными пластинами, два угля-глаза
+    B(this.body, bark, 0.9, 1.0, 0.8, 0, 0.9, 0);
+    B(this.body, bark, 0.7, 0.3, 0.6, 0, 1.45, 0.05);
+    for (const [x, z] of [[0.46, 0], [-0.46, 0], [0, 0.41]]) B(this.body, plate, x ? 0.08 : 0.6, 0.7, x ? 0.6 : 0.08, x, 0.95, z);
+    for (const [x, y] of [[-0.25, 0.7], [0.3, 1.2], [0, 0.45]]) B(this.body, iron, 0.08, 0.08, 0.08, x, y, 0.45);
+    for (const x of [-0.16, 0.16]) B(this.body, eye, 0.12, 0.1, 0.04, x, 1.1, 0.42);
+    // бочонок на спине с фитилём
+    this.keg.position.set(0, 1.1, -0.55);
+    this.body.add(this.keg);
+    B(this.keg, wood, 0.6, 0.7, 0.5, 0, 0, 0);
+    for (const y of [-0.22, 0.22]) B(this.keg, iron, 0.64, 0.08, 0.54, 0, y, 0);
+    B(this.keg, iron, 0.12, 0.12, 0.12, 0, 0.4, 0);
+    B(this.keg, this.lam('#d8c8a0'), 0.04, 0.3, 0.04, 0.05, 0.55, 0, 0.2, 0, 0.4);
+    B(this.keg, this.spark, 0.1, 0.1, 0.1, 0.1, 0.7, 0);
+    this.legs = [-1, 1].map((s) => {
+      const g = new THREE.Group();
+      g.position.set(s * 0.28, 0.45, 0);
+      this.body.add(g);
+      B(g, bark, 0.26, 0.45, 0.3, 0, -0.22, 0);
+      return g;
+    });
+    this.place();
+  }
+
+  /** Кора-броня: любой удар ×0,3 (пробивающий — без направления — проходит целиком, см. Mob.hit) */
+  protected override guard(): number { return 0.3; }
+
+  protected choose(dist: number): string | null { return dist < 2.3 ? 'fuse' : null; }
+
+  protected act(_name: string, t: number): boolean {
+    this.fuseT = t;
+    if (t > 1.6) { this.blast(); return true; }
+    return false;
+  }
+
+  /** Взрыв: стене (приманке) 160, героям в 3 м — 30, своим в 2,5 м — 40; сам рассыпается */
+  blast(): void {
+    if (this.blasted) return;
+    this.blasted = true;
+    const at = this.pos.clone().setY(0.9);
+    this.h.fx.explosion(at, 3, POWDER);
+    this.h.fx.burst(at, [POWDER, RASP, '#4a3018', '#ffffff'], 30, { speed: 5, up: 4, size: 0.12, life: 0.8, gravity: 8 });
+    this.h.fx.shake = Math.max(this.h.fx.shake, 0.6);
+    if (!this.quiet) boom(70, 25, 0.8, 0.6);
+    const f = this.focus;
+    if (f?.alive && Math.hypot(f.pos.x - this.pos.x, f.pos.z - this.pos.z) < 3) f.hurt(160, this.pos);
+    const hero = this.mh.hero.pos;
+    if (Math.hypot(hero.x - this.pos.x, hero.z - this.pos.z) < 3 && Math.abs(hero.y - this.pos.y) < 2) this.mh.hurtHero(30 * this.dmgMult, this.pos, 6);
+    for (const m of this.mh.allies()) {
+      if (m === this || m.dead) continue;
+      const d = Math.hypot(m.pos.x - this.pos.x, m.pos.z - this.pos.z);
+      if (d < 2.5) m.hit(40, new THREE.Vector3(m.pos.x - this.pos.x, 0, m.pos.z - this.pos.z).normalize(), m.pos.clone().setY(1), 2);
+    }
+    if (!this.dead) this.vanish();
+  }
+
+  protected override die(): void {
+    super.die();
+    // пал — порох всё равно рванул
+    if (!this.blasted) this.blast();
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const k = Math.min(1, dt * 8), s = this.stride(6);
+    lerpTo(this.legs[0], walk ? s * 0.5 : 0, k);
+    lerpTo(this.legs[1], walk ? -s * 0.5 : 0, k);
+    this.body.rotation.z = walk ? s * 0.06 : 0;
+    // фитиль горит: искра мигает всё чаще, бочонок трясётся
+    const fusing = this.state === 'attack';
+    const f = fusing ? this.fuseT / 1.6 : 0;
+    this.spark.color.copy(FUSE).multiplyScalar(fusing ? 1 + Math.sin(this.time * (20 + f * 40)) : 0.6 + Math.sin(this.time * 6) * 0.3);
+    this.keg.rotation.x = fusing ? Math.sin(this.time * 30) * 0.08 * f : 0;
+    if (fusing && Math.random() < 0.5) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(-Math.sin(this.yaw) * 0.55, 1.8, -Math.cos(this.yaw) * 0.55)), vel: new THREE.Vector3((Math.random() - 0.5) * 1.5, 1 + Math.random(), (Math.random() - 0.5) * 1.5), life: 0.3, size: 0.06, color: Math.random() < 0.5 ? FUSE : POWDER, gravity: 4 });
+  }
+}
+
+/**
+ * 39. Лозовая баллиста — осадная машина Ордена на корнях-ногах: держится в 9 м от цели и бьёт тяжёлым болтом раз в 3,4 с —
+ * воротам и стенам 24, герою 14. Ворота для неё приманка (taunt 12): встала на дороге — и стреляет, пока не разбьёт.
+ * 140 здоровья, 1,3 м/с, медленно разворачивается
+ */
+export class VineBallista extends Mob {
+  readonly kind = 'ballista';
+  readonly title = 'Лозовая баллиста';
+  readonly cost = 8;
+  readonly radius = 0.7;
+  override readonly topY = 1.9;
+  /** Выстрелов (для тестов) */
+  shots = 0;
+  private readonly bow = new THREE.Group();
+  private readonly arm = new THREE.Group();
+  private readonly legs: THREE.Group[];
+  private readonly aim = new THREE.Vector3();
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 140, at);
+    this.speed = 1.3;
+    this.turn = 1.8;
+    this.keep = 9;
+    this.mass = 4;
+    this.aggro = 3.5;
+    this.loot = 5;
+    const wood = this.lam('#7a5232', pixelTex('#7a5232', 10, 1021)), woodD = this.lam('#4a3018'), vine = this.lam('#4a8a2a', pixelTex('#4a8a2a', 10, 1022)), iron = this.lam('#3a3c42'), rope = this.lam('#d8c8a0');
+    const B = this.box.bind(this);
+    // станина из брёвен, обвитая лозой
+    B(this.body, wood, 1.2, 0.3, 1.6, 0, 0.75, 0);
+    for (const z of [-0.5, 0.4]) B(this.body, vine, 1.26, 0.1, 0.14, 0, 0.8, z);
+    for (let i = 0; i < 3; i++) B(this.body, this.shimmer(RASP, C(3.4, 1.2, 0.6), i, 1.5), 0.12, 0.12, 0.12, -0.5 + i * 0.5, 0.95, -0.6);
+    // лук на вертлюге: ложе, дуги, тетива, ворот; стрела в жёлобе
+    this.bow.position.set(0, 1.0, 0);
+    this.body.add(this.bow);
+    B(this.bow, woodD, 0.3, 0.24, 2.0, 0, 0.2, 0.2);
+    for (const s of [-1, 1]) B(this.bow, woodD, 1.0, 0.12, 0.14, s * 0.65, 0.35, 0.8, 0, 0, s * 0.3);
+    B(this.bow, rope, 2.0, 0.03, 0.03, 0, 0.35, 0.35);
+    B(this.bow, iron, 0.3, 0.3, 0.2, 0, 0.4, -0.75);
+    B(this.bow, woodD, 0.08, 0.5, 0.08, 0.2, 0.45, -0.75, 0, 0, 0.4);
+    this.arm.position.set(0, 0.4, 0.3);
+    this.bow.add(this.arm);
+    B(this.arm, iron, 0.1, 0.1, 1.3, 0, 0, 0.3);
+    B(this.arm, this.lam('#d8285a'), 0.16, 0.16, 0.2, 0, 0, 1.0);
+    this.legs = [[-0.5, 0.6], [0.5, 0.6], [-0.5, -0.6], [0.5, -0.6]].map(([x, z]) => {
+      const g = new THREE.Group();
+      g.position.set(x, 0.6, z);
+      this.body.add(g);
+      B(g, vine, 0.16, 0.6, 0.16, x > 0 ? 0.15 : -0.15, -0.3, 0, 0, 0, x > 0 ? -0.5 : 0.5);
+      B(g, woodD, 0.3, 0.12, 0.3, x > 0 ? 0.3 : -0.3, -0.58, 0);
+      return g;
+    });
+    this.place();
+  }
+
+  protected choose(dist: number, rel: number): string | null { return dist < 13 && Math.abs(rel) < 0.25 ? 'shoot' : null; }
+  protected override rest(): number { return rand(1.6, 2.0); }
+
+  protected act(_name: string, t: number, dt: number): boolean {
+    if (t - dt <= 0) {
+      const from = this.pos.clone();
+      this.aim.copy(this.fwd());
+      this.field.markLine(from, this.aim, 14, 0.7, 0.9, () => {
+        if (this.dead) return;
+        this.shots++;
+        if (!this.quiet) { boom(160, 70, 0.2, 0.3); hiss({ dur: 0.25, vol: 0.12, f: 1600, f1: 500, q: 1 }); }
+        this.field.shot(from, this.aim, 14, C(3.4, 2.2, 1.0));
+        // ворота (приманка) стоят на месте — болт их не минует; герою — только в полосе
+        if (this.inLine(from, this.aim, 14, 0.7)) this.hurt(this.focus?.alive ? 24 : 14, from, 4);
+      });
+    }
+    return t > 1.4;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const k = Math.min(1, dt * 8), s = this.stride(5);
+    this.legs.forEach((g, i) => lerpTo(g, walk ? s * 0.4 * (i % 2 ? 1 : -1) : 0, k));
+    this.body.position.y = walk ? Math.abs(s) * 0.05 : 0;
+    // выстрел: стрела уходит, затем новая ложится в жёлоб
+    const fired = this.state === 'attack' && this.st > 0.9;
+    this.arm.visible = !(fired && this.st < 1.3);
+    this.bow.rotation.x = this.state === 'attack' ? -0.1 : 0;
+  }
+}

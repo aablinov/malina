@@ -350,7 +350,7 @@ export function runPlayground(): void {
   /** Препятствия врагов: уровень, декор и башни обороны (кэш, пока состав тот же) */
   let foeObsCache: Obstacle[] = [], foeObsKey: [Obstacle[], Obstacle[]] | null = null;
   const foeObstacles = (): Obstacle[] => {
-    const base = obstaclesNow(), towers = td ? td.solids : [];
+    const base = obstaclesNow(), towers = td ? td.foeSolids : [];
     if (!towers.length) return base;
     if (!foeObsKey || foeObsKey[0] !== base || foeObsKey[1] !== towers) { foeObsCache = base.concat(towers); foeObsKey = [base, towers]; }
     return foeObsCache;
@@ -869,7 +869,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id) && !TD_FOES.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
     button(row3, 'Убрать мобов', () => pack.clear());
     // оборона куста: враг на каждую дорогу
-    if (tdSpec) for (const l of tdSpec.lanes) button(row3, `На дорогу: ${l.title}`, () => td?.spawnOn(['berryling', 'gardener', 'wolf', 'runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper'][Math.floor(Math.random() * 9)], l.id));
+    if (tdSpec) for (const l of tdSpec.lanes) button(row3, `На дорогу: ${l.title}`, () => td?.spawnOn(['berryling', 'gardener', 'wolf', 'runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper', 'sapper', 'ballista'][Math.floor(Math.random() * 11)], l.id));
     if (tdSpec) button(row3, 'Волна сейчас (G)', () => td?.callWave());
     for (const r of roomSpecs) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
     // масштаб стражей: уровень и число игроков
@@ -893,7 +893,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const hud = new Hud(document.body, profile);
   const questGoal = (level.meta.goal as [string, string] | undefined) ?? ['Исследуй плейграунд', 'Плейграунд Малины'];
   hud.setGoal(questGoal[0], questGoal[1]);
-  if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted }, tdSpec, document.body);
+  // стены замка меняют блоки (пролом, починка): препятствия врагов — заново
+  const levelChanged = (): void => { if (STREAM) return; obstacles.length = 0; obstacles.push(...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)); foeObsKey = null; };
+  if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged }, tdSpec, document.body);
   td?.setPlayers(bossPlayers);
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
@@ -958,15 +960,17 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   function updateHUD(dt: number, _fps: number, _frameMs: number): void {
     const pad = td && !td.menuOpen && !hero.down ? td.nearPad(hero.pos) : null;
-    const trader = hero.down || pad ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
-    const near = hero.down || trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
+    const wall = td && !pad && !hero.down ? td.nearWall(hero.pos) : null;
+    const trader = hero.down || pad || wall ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
+    const near = hero.down || trader || pad || wall ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
     // подошёл к сундуку — он тихо звенит
     const nearChest = near?.kind === 'supply' ? near.target : null;
     if (nearChest && nearChest !== lastNearChest && !scripted) sfx.twinkle();
     lastNearChest = nearChest;
     const promptEl = $('pgPrompt');
-    promptEl.style.display = (near || trader || pad) && !inventory.open && !shop.open ? '' : 'none';
+    promptEl.style.display = (near || trader || pad || wall) && !inventory.open && !shop.open ? '' : 'none';
     if (pad && td) setHTML('pgPrompt', `<kbd>F</kbd>${td.prompt(pad)}`);
+    else if (wall && td) setHTML('pgPrompt', `<kbd>F</kbd>${td.wallPrompt(wall)}`);
     else if (trader) setHTML('pgPrompt', `<kbd>F</kbd>Торговать: ${MERCHANT_TITLE[trader.kind].toLowerCase()}`);
     else if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
     hud.update(gear.hudState(), dt);
@@ -1037,8 +1041,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (interactReq) {
       interactReq = false;
       const pad = td && !hero.down ? td.nearPad(hero.pos) : null;
-      const trader = pad ? null : merchants.find((m) => m.near(hero.pos));
+      const wall = td && !pad && !hero.down ? td.nearWall(hero.pos) : null;
+      const trader = pad || wall ? null : merchants.find((m) => m.near(hero.pos));
       if (pad && td) { if (td.menuOpen) td.closeMenu(); else td.openMenu(pad); }
+      else if (wall && td) td.repair(wall);
       if (trader && !hero.down) { shop.show(trader.kind); }
       const it = trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
@@ -1209,7 +1215,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     bossScale(level: number | 'hero', players = bossPlayers) { bossLevelPick = String(level); bossPlayers = players; rescaleBosses(); return { level: bossLevel(), players: bossPlayers }; },
     /** Рядовые мобы (src/mobs/): pack.mobs; вызвать моба в точку */
     pack,
-    /** Оборона куста (src/td/): pads, towers, build(pad, kind), pack врагов; lavaFx — дымка и искры лавы (cells) */
+    /** Оборона куста (src/td/): pads, towers, build(pad, kind), pack врагов, walls (осада); lavaFx — дымка и искры лавы (cells) */
     td, lavaFx,
     /** Комнаты мобов: spec (посты, вход) и стая гарнизона; fillRoom — заново на постах */
     mobRooms, fillRoom,

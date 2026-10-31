@@ -7,7 +7,7 @@ import { Reaper, BoneArcher, Wisp, Crow, Scarecrow } from './fallen';
 import { Boarlet, BurrowBeetle, VineSpider, Bee, Hive } from './beasts';
 import { BasketMimic, DruseGolemling, HopPot, JamKeg, WardObelisk } from './constructs';
 import { SunKnight } from './soller';
-import { BerryRunner, CrystalShellback, PollenMoth, RainbowHopper, Sporeling, VineRam } from './td-foes';
+import { BerryRunner, CrystalShellback, PollenMoth, RainbowHopper, Sporeling, VineRam, StumpSapper, VineBallista } from './td-foes';
 import { BerrySlime, BerrySlimeMid, BerrySlimeSmall, BudSpitter, ThornBall, ThornHorror, VineWhip } from './bush';
 
 /** Рядовые мобы (wiki/design-mobs.md): id → имя и класс. Номера — из списка тридцати */
@@ -60,10 +60,12 @@ export const MOBS: Record<string, { title: string; make: MobCtor }> = {
   shellback: { title: 'Кристальный панцирник', make: CrystalShellback },
   sporeling: { title: 'Споровик', make: Sporeling },
   hopper: { title: 'Радужный скакун', make: RainbowHopper },
+  sapper: { title: 'Пнёвый подрывник', make: StumpSapper },
+  ballista: { title: 'Лозовая баллиста', make: VineBallista },
 };
 
 /** Враги обороны куста — в кнопках витрины плейграунда не нужны, выходят волнами */
-export const TD_FOES = new Set(['runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper']);
+export const TD_FOES = new Set(['runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper', 'sapper', 'ballista']);
 
 /** Осколки слизня, вороны пугала, шмели улья — в стае есть, в кнопках витрины не нужны */
 export const MOB_PARTS = new Set(['slime_mid', 'slime_small', 'crow', 'bee']);

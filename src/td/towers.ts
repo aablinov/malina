@@ -3,7 +3,7 @@
  * умножает урон на UPGRADE_DMG и прибавляет дальности UPGRADE_RANGE. Цена улучшения — доля цены постройки.
  */
 
-export type TowerKind = 'arrow' | 'frost' | 'splash' | 'fire' | 'magic';
+export type TowerKind = 'arrow' | 'frost' | 'splash' | 'fire' | 'magic' | 'ballista' | 'oil';
 
 export interface TowerDef {
   id: TowerKind;
@@ -27,9 +27,13 @@ export const TOWERS: Record<TowerKind, TowerDef> = {
   splash: { id: 'splash', title: 'Катапульта', hint: 'камень по площади', cost: 110, range: 11, cd: 2.4, dmg: 26, color: '#c88a5a', key: '3' },
   fire: { id: 'fire', title: 'Огненная жаровня', hint: 'струя пламени, поджигает', cost: 100, range: 6, cd: 0.9, dmg: 10, color: '#ff8a3a', key: '4' },
   magic: { id: 'magic', title: 'Волшебный обелиск', hint: 'сфера бьёт цепью, ослабляет', cost: 130, range: 10, cd: 1.5, dmg: 18, color: '#c48aff', key: '5' },
+  // осада (раздел 9 вики): только на картах с `meta.td.towers`
+  ballista: { id: 'ballista', title: 'Стенная баллиста', hint: 'тяжёлый болт сквозь строй, пробивает броню', cost: 120, range: 14, cd: 2.2, dmg: 45, color: '#b8a070', key: '6' },
+  oil: { id: 'oil', title: 'Котёл со смолой', hint: 'лужа смолы: вязнут и горят', cost: 90, range: 6, cd: 3.5, dmg: 7, color: '#5a3a1a', key: '7' },
 };
 
-export const TOWER_ORDER: TowerKind[] = ['arrow', 'frost', 'splash', 'fire', 'magic'];
+/** Порядок в меню; первые пять — базовые, доступны везде; баллиста и котёл — где карта разрешает (`meta.td.towers`) */
+export const TOWER_ORDER: TowerKind[] = ['arrow', 'frost', 'splash', 'fire', 'magic', 'ballista', 'oil'];
 
 export const MAX_LEVEL = 3;
 /** Урон за уровень: I ×1, II ×1,6, III ×2,4 */

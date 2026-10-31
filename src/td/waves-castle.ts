@@ -1,0 +1,19 @@
+import type { TdWave } from './types';
+
+/**
+ * Волны осады замка — карта «Замок на лугу» `td3` (wiki/design-tower-defence.md, раздел 9). Враги идут с четырёх сторон:
+ * северная дорога упирается в ворота (их расстреливают арбалетчики и лозовые баллисты), три остальные — в стены,
+ * которые ломают пнёвые подрывники. Стая с уровня 5, десять волн; числа — соло, по игрокам масштабирует src/td/scaling.ts.
+ */
+export const TD_CASTLE_WAVES: TdWave[] = [
+  { title: 'Разведка у ворот', bounty: 80, groups: [{ kind: 'runner', count: 10, every: 1.0, lane: 'north' }, { kind: 'berryling', count: 8, every: 1.2, lane: 'north', delay: 4 }] },
+  { title: 'Первый подрывник', bounty: 110, groups: [{ kind: 'wolf', count: 8, every: 1.2, lane: 'east' }, { kind: 'sapper', count: 1, every: 1, lane: 'east', delay: 6 }, { kind: 'runner', count: 8, every: 0.8, lane: 'north', delay: 2 }] },
+  { title: 'Арбалеты по воротам', bounty: 140, groups: [{ kind: 'crossbow', count: 6, every: 1.6, lane: 'north' }, { kind: 'shield', count: 4, every: 1.4, lane: 'north', delay: 1 }, { kind: 'gardener', count: 8, every: 1.2, lane: 'west', delay: 3 }, { kind: 'sapper', count: 1, every: 1, lane: 'west', delay: 10 }] },
+  { title: 'Тараны с запада', bounty: 170, groups: [{ kind: 'ram', count: 5, every: 2.5, lane: 'west' }, { kind: 'sapper', count: 2, every: 4, lane: 'west', delay: 6 }, { kind: 'berryling', count: 12, every: 0.8, lane: 'south', delay: 2 }, { kind: 'hopper', count: 6, every: 1.2, lane: 'north', delay: 8 }] },
+  { title: 'Осадные баллисты', bounty: 210, groups: [{ kind: 'ballista', count: 2, every: 5, lane: 'north' }, { kind: 'shield', count: 6, every: 1.4, lane: 'north', delay: 1 }, { kind: 'spear', count: 6, every: 1.3, lane: 'north', delay: 4 }, { kind: 'wolf', count: 10, every: 1.0, lane: 'east', delay: 3 }, { kind: 'sapper', count: 2, every: 5, lane: 'east', delay: 8 }] },
+  { title: 'Подрыв южной стены', bounty: 250, groups: [{ kind: 'sapper', count: 3, every: 4, lane: 'south' }, { kind: 'shellback', count: 6, every: 1.8, lane: 'south', delay: 2 }, { kind: 'sporeling', count: 4, every: 2, lane: 'south', delay: 5 }, { kind: 'runner', count: 12, every: 0.7, lane: 'west', delay: 6 }] },
+  { title: 'Мотыльки над стенами', bounty: 290, groups: [{ kind: 'moth', count: 14, every: 0.9, lane: 'east' }, { kind: 'moth', count: 10, every: 0.9, lane: 'west', delay: 3 }, { kind: 'hopper', count: 8, every: 1.0, lane: 'south', delay: 2 }, { kind: 'crossbow', count: 6, every: 1.5, lane: 'north', delay: 6 }] },
+  { title: 'Сапёры с двух сторон', bounty: 330, groups: [{ kind: 'sapper', count: 3, every: 3, lane: 'east' }, { kind: 'sapper', count: 3, every: 3, lane: 'west', delay: 2 }, { kind: 'ram', count: 4, every: 2.5, lane: 'east', delay: 4 }, { kind: 'squire', count: 6, every: 1.6, lane: 'west', delay: 6 }, { kind: 'hedgehog', count: 6, every: 1.4, lane: 'south', delay: 8 }] },
+  { title: 'Баллисты и споры', bounty: 380, groups: [{ kind: 'ballista', count: 3, every: 4, lane: 'north' }, { kind: 'crossbow', count: 8, every: 1.2, lane: 'north', delay: 2 }, { kind: 'sporeling', count: 6, every: 1.6, lane: 'north', delay: 4 }, { kind: 'shellback', count: 8, every: 1.4, lane: 'south', delay: 3 }, { kind: 'sapper', count: 2, every: 5, lane: 'south', delay: 10 }, { kind: 'vine', count: 5, every: 2, lane: 'east', delay: 6 }] },
+  { title: 'Великий штурм', bounty: 480, groups: [{ kind: 'sapper', count: 4, every: 3, lane: 'east' }, { kind: 'sapper', count: 4, every: 3, lane: 'west', delay: 1 }, { kind: 'sapper', count: 4, every: 3, lane: 'south', delay: 2 }, { kind: 'ballista', count: 3, every: 4, lane: 'north' }, { kind: 'ram', count: 6, every: 2, lane: 'south', delay: 6 }, { kind: 'wolf', count: 12, every: 0.9, lane: 'east', delay: 10 }, { kind: 'hammer', count: 4, every: 2.5, lane: 'west', delay: 10 }, { kind: 'horror', count: 2, every: 8, lane: 'north', delay: 14 }, { kind: 'moth', count: 12, every: 0.8, lane: 'north', delay: 18 }] },
+];
