@@ -189,7 +189,7 @@ export interface Textures {
   stoveTop: THREE.Texture; fridge: THREE.Texture; fridgeTop: THREE.Texture;
   // декор (src/level/decor.ts)
   chain: THREE.Texture; cobweb: THREE.Texture; banner: THREE.Texture; bone: THREE.Texture; candle: THREE.Texture;
-  mushroomRed: THREE.Texture; mushroomGlow: THREE.Texture; mushroomStem: THREE.Texture; lanternGlass: THREE.Texture; roots: THREE.Texture;
+  mushroomRed: THREE.Texture; mushroomGlow: THREE.Texture; mushroomStem: THREE.Texture; mushroomPink: THREE.Texture; mushroomBlue: THREE.Texture; portalBlue: THREE.Texture; lanternGlass: THREE.Texture; roots: THREE.Texture;
   // трава поверх блоков: бахрома по краю уступа и мелкие пучки (mesher.ts)
   grassFringe: THREE.Texture; grassTuft: THREE.Texture; flowerTuft: THREE.Texture;
   // мир (скриншоты 10–15, wiki/style-world.md): двор
@@ -651,6 +651,9 @@ export function makeTextures(): Textures {
   };
   T.mushroomRed = canvasTex(16, dots('#d8262c', '#f6f0e8'), 125);
   T.mushroomGlow = canvasTex(16, dots('#ffc83a', '#fff4b0'), 126);
+  // грибы-светильники кристальной поляны (wiki/design-tower-defence.md, раздел 8): розовые и голубые шляпки, слой glow
+  T.mushroomPink = canvasTex(16, dots('#ff6ac8', '#ffd0f0'), 1126);
+  T.mushroomBlue = canvasTex(16, dots('#48c8ff', '#d0f4ff'), 1127);
   T.mushroomStem = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#efe6d2', '#e4d8c0', '#f6efe0'], 4), 127);
   T.lanternGlass = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(Math.hypot(x - 7.5, y - 9) < 4 ? '#fff2b0' : '#ffc860', r, 8));
@@ -946,6 +949,14 @@ export function makeTextures(): Textures {
     overlayBlobs(g, s, r, PORTAL_LIGHT, 3, [2, 3.5], 0.6);
   }, 190);
   // рама: тёмный камень, по краю фаска светлее, в середине — квадратный узор
+  // синий портал — логово на кристальной поляне: та же волна слоя portal, цвет холодный
+  T.portalBlue = canvasTex(16, (g, s, r) => {
+    for (let x = 0; x < s; x++) {
+      const k = 0.5 + 0.5 * Math.sin(x * 0.9 + r() * 0.6);
+      for (let y = 0; y < s; y++) px(g, x, y, jitter(mix('#3a8cff', '#b0ecff', k * 0.45 + (y / s) * 0.35), r, 3));
+    }
+    overlayBlobs(g, s, r, '#d8f8ff', 3, [2, 3.5], 0.6);
+  }, 1190);
   T.portalFrame = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, PORTAL_STONE, 2, [{ col: mix(PORTAL_STONE, '#ffffff', 0.08), n: 2, rad: [3, 5], k: 0.5 }]);
     for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, mix(PORTAL_STONE, '#ffffff', 0.12)); px(g, k, i, mix(PORTAL_STONE, '#000000', 0.15)); }

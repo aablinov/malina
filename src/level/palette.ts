@@ -259,6 +259,14 @@ export const BLOCKS: BlockDef[] = [
   // лава: жидкость по колено с запечённым тёплым светом на блоки вокруг; герой в ней горит (src/dev/playground.ts)
   B('lava', 'Лава', 'лава', [{ obj: 'water', layer: 'lava', tex: same('lava') }], { collide: 0.5, cullSame: true, jitter: 0, bakedLight: { color: '#ff7a2a', intensity: 0.9, dist: 4 } }),
 
+  // --- кристальная поляна (wiki/design-tower-defence.md, раздел 8): грибы-светильники и синий портал ---
+  solid('shroom_stem', 'Гриб: ножка', 'поляна', 'mushroomStem', { jitter: 0.02 }),
+  B('shroom_cap_pink', 'Гриб: шляпка розовая', 'поляна', [{ obj: 'cube', layer: 'glow', tex: same('mushroomPink') }], { collide: 1, jitter: 0, bakedLight: { color: '#ff7ad8', intensity: 0.8, dist: 4 } }),
+  B('shroom_cap_blue', 'Гриб: шляпка голубая', 'поляна', [{ obj: 'cube', layer: 'glow', tex: same('mushroomBlue') }], { collide: 1, jitter: 0, bakedLight: { color: '#5ad8ff', intensity: 0.8, dist: 4 } }),
+  B('shroom_cap_pink_slab', 'Гриб: шляпка розовая, полублок', 'поляна', [{ obj: 'slab', layer: 'glow', tex: same('mushroomPink') }], { collide: 0.5, connects: true, jitter: 0, bakedLight: { color: '#ff7ad8', intensity: 0.5, dist: 3 } }),
+  B('shroom_cap_blue_slab', 'Гриб: шляпка голубая, полублок', 'поляна', [{ obj: 'slab', layer: 'glow', tex: same('mushroomBlue') }], { collide: 0.5, connects: true, jitter: 0, bakedLight: { color: '#5ad8ff', intensity: 0.5, dist: 3 } }),
+  B('portal_blue', 'Портал синий: сияние', 'поляна', [{ obj: 'pane', layer: 'portal', tex: same('portalBlue') }], { collide: 0, rotatable: true, jitter: 0, bakedLight: { color: '#5aa8ff', intensity: 1.1, dist: 4.5 } }),
+
   // --- огонь и свет ---
   B('torch', 'Факел', 'свет', [cube({ side: 'logSide' }, 'torch'), { obj: 'torch_flame', layer: 'fire', tex: { side: 'fire' } }], { collide: 0, light: { color: '#ffa040', intensity: 6, dist: 7 } }),
   B('campfire', 'Костёр', 'свет', [cube({ top: 'logTop', side: 'logSide', bottom: 'ash' }, 'campfire_logs'), { obj: 'campfire_fire', layer: 'fire', tex: { side: 'fire' } }], { collide: 1, light: { color: '#ff9a3a', intensity: 12, dist: 10 } }),

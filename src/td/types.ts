@@ -28,4 +28,6 @@ export interface TdSpec {
   waves?: TdWave[];
   /** Пауза между волнами, с */
   rest?: number;
+  /** Уровень стаи на первой волне (дальше +3 за волну, src/td/scaling.ts); нет — 1 */
+  level?: number;
 }

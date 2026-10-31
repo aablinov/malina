@@ -14,6 +14,7 @@
     "map:rooms": "node scripts/export-map.ts rooms",
     "map:island": "node scripts/export-map.ts island",
     "map:td": "node scripts/export-map.ts td",
+    "map:td2": "node scripts/export-map.ts td2",
     "prefabs": "node scripts/gen-prefabs.ts"
   },
   "dependencies": {
