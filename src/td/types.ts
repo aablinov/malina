@@ -1,3 +1,5 @@
+import type { TdMist } from './mist-fx';
+
 /**
  * Режим «Оборона куста» (tower defence, wiki/design-tower-defence.md): всё, что карта говорит режиму, лежит в `meta.td`.
  * Координаты — метры мира, как у постов мобов и сундуков. Карта с `meta.td` играется в этом режиме (src/td/td.ts).
@@ -51,4 +53,6 @@ export interface TdSpec {
   towers?: string[];
   /** Цена починки стены: малины за 100 здоровья (нет — 20) */
   repair?: number;
+  /** Туман у лагерей врагов (src/td/mist-fx.ts): точки выхода не видны */
+  mist?: TdMist;
 }

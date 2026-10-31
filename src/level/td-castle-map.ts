@@ -11,7 +11,8 @@ import { TD_CASTLE_WAVES } from '../td/waves-castle.ts';
  * бастионы с площадками под башни, на севере **ворота** между двумя надвратными башнями (тоже с площадками), внутри —
  * двор с кустом малины, четыре площадки, колодец и лестницы на стены (ступени у внутренних граней). Враги идут
  * **с четырёх сторон**: северная дорога упирается в ворота, восточная, южная и западная — в стены; стены и ворота —
- * `meta.td.walls` (src/td/wall.ts): их ломают и чинят. `npm run map:td3` пишет assets/maps/td3.json; открыть — `?map=td3`.
+ * `meta.td.walls` (src/td/wall.ts): их ломают и чинят. Лагеря врагов скрыты **туманом** (`meta.td.mist`, src/td/mist-fx.ts),
+ * дымка мира плотная — с замка точки выхода не видны. `npm run map:td3` пишет assets/maps/td3.json; открыть — `?map=td3`.
  */
 
 export const CASTLE_HALF = 48;
@@ -53,6 +54,7 @@ export const CASTLE_SPEC: TdSpec = {
   walls: CASTLE_WALLS,
   towers: ['arrow', 'frost', 'splash', 'fire', 'magic', 'ballista', 'oil'],
   repair: 20,
+  mist: { radius: 13, density: 0.75, color: '#dfe7ee' },
 };
 
 const segDist = (px: number, pz: number, ax: number, az: number, bx: number, bz: number): number => {
@@ -236,7 +238,7 @@ export function buildTdCastleMap(lib: Record<string, LibraryPrefab>): Level {
   L.meta.world = {
     sun: { color: '#fff0d4', intensity: 1.1, elevation: 56, azimuth: 150, shadows: true },
     sky: { color: '#8fc4f0', hemiSky: '#bfe0ff', hemiGround: '#5a7a3a', hemi: 0.9, ambient: 0.35 },
-    fog: { enabled: true, color: '#cfe2f2', near: 45, far: 120 },
+    fog: { enabled: true, color: '#d3e2ee', near: 20, far: 52 },
     weather: { kind: 'clear', intensity: 0, wind: 0.3 },
     post: { bloom: 0.3, bloomThreshold: 0.85, vignette: 0.2, saturation: 1.08, shadowTint: '#2a4a6a', highTint: '#fff4d0', tintAmount: 0.06 },
   };
