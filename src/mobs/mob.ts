@@ -54,6 +54,8 @@ export abstract class Mob extends Boss {
    */
   march: THREE.Vector3[] | null = null;
   marchI = 0;
+  /** Дорога, по которой идёт (id из meta.td.lanes) — чтобы продолжить марш после пролома */
+  laneId: string | null = null;
   leash = 10;
   private marchDone = false;
   /** Малина с моба (до масштаба) */
@@ -153,11 +155,22 @@ export abstract class Mob extends Boss {
   }
 
   wake(): void { this.notice(); }
+
+  /** Дорога продолжилась (пролом в стене пробит, src/td/wall.ts): новые точки марша, тревога снята — снова в путь */
+  extendMarch(points: THREE.Vector3[]): void {
+    if (!this.march || this.dead) return;
+    this.march.push(...points);
+    this.marchDone = false;
+    this.alerted = false;
+    this.focus = null;
+    if (this.state === 'attack') { this.field.clear(); this.go('idle'); }
+  }
   reset(): void { /* рядовой не возвращается: стая убирает его целиком */ }
 
+  /** Удар без направления (нулевой dir) — пробивающий: броня и щиты его не гасят (стенная баллиста, src/td/tower.ts) */
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void {
     if (this.dead || this.state === 'spawn') return;
-    const k = this.guard(dir) * (this.ward > 0 ? 0.5 : 1);
+    const k = (dir.lengthSq() < 1e-6 ? 1 : this.guard(dir)) * (this.ward > 0 ? 0.5 : 1);
     if (k < 1) {
       this.h.fx.text(point.clone().setY(point.y + 0.5), this.ward > 0 && this.guard(dir) >= 1 ? 'купол' : 'блок', '');
       this.h.fx.burst(point, ['#ffffff', '#e8b84a'], 6, { speed: 3, up: 2, size: 0.07, life: 0.3, glow: true, gravity: 8 });

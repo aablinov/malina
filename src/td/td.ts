@@ -12,6 +12,8 @@ import { Tower, type Foe } from './tower';
 import { RaspberryBush } from './bush';
 import { scaledBounty, scaledCount, waveLevel } from './scaling';
 import { Lair } from './lair';
+import { Wall, wallBarColor } from './wall';
+import type { Level } from '../level/level.ts';
 import { SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from './towers';
 import type { TdLane, TdPad, TdSpec } from './types';
 import './td.css';
@@ -34,6 +36,10 @@ export interface TdHooks {
   toast(s: string): void;
   banner(html: string, sec?: number): void;
   quiet(): boolean;
+  /** Уровень — для стен замка (пролом убирает блоки, починка возвращает) */
+  level?: Level;
+  /** Блоки уровня изменились: пересчитать препятствия врагов и героя */
+  levelChanged?(): void;
 }
 
 /** Площадка: кольцо на земле, подсветка под курсором, башня на ней */
@@ -46,7 +52,7 @@ export class Pad {
   private readonly disc: THREE.Mesh;
 
   constructor(scene: THREE.Scene, readonly spec: TdPad, readonly index: number) {
-    this.pos = new THREE.Vector3(spec.x, 0, spec.z);
+    this.pos = new THREE.Vector3(spec.x, spec.y ?? 0, spec.z);
     this.group.position.copy(this.pos);
     // кольцо-подсветка: тускло всегда, ярко под курсором; каменный круг площадки рисует карта блоками
     this.ring = glowMat(C(1.2, 1.0, 0.5), 0.35, true);
@@ -71,7 +77,7 @@ export class Pad {
 
   /** Луч камеры проходит над площадкой (на высоте башни, если она стоит) */
   hitBy(ray: THREE.Ray): boolean {
-    const a = this.pos, b = this.pos.clone().setY(this.tower ? 3 : 0.4);
+    const a = this.pos, b = this.pos.clone().setY(this.pos.y + (this.tower ? 3 : 0.4));
     return ray.distanceSqToSegment(a, b) < 1.45 * 1.45;
   }
 }
@@ -86,6 +92,10 @@ export class TowerDefense {
   readonly bush: RaspberryBush;
   /** Логова — по одному на дорогу: завеса, кольцо, тревога перед волной, вспышка выхода */
   readonly lairs: Lair[];
+  /** Стены и ворота замка (осада, src/td/wall.ts); пусто — куст в чистом поле */
+  readonly walls: Wall[];
+  /** Какие башни можно строить на этой карте */
+  readonly kinds: TowerKind[];
   /** Состояние партии: идёт, куст засох, все волны отбиты */
   state: 'play' | 'lost' | 'won' = 'play';
   /** Номер текущей волны (1 — первая); 0 — ещё не начиналась */
@@ -111,6 +121,8 @@ export class TowerDefense {
   private hudHtml = '';
   private solidsCache: Obstacle[] = [];
   private solidsN = -1;
+  private foeSolidsCache: Obstacle[] | null = null;
+  private foeSolidsN = -1;
 
   constructor(h: TdHooks, spec: TdSpec, parent: HTMLElement) {
     this.h = h;
@@ -120,6 +132,12 @@ export class TowerDefense {
     this.pack = new Pack(h.boss, (at, n) => { this.fallen++; h.loot(at, n); });
     this.bush = new RaspberryBush(h.scene, h.fx, spec.bush.x, spec.bush.z, spec.bush.hp, h.quiet);
     this.lairs = spec.lanes.map((l) => new Lair(h.scene, h.fx, l, h.quiet));
+    this.kinds = (spec.towers ?? TOWER_ORDER.slice(0, 5)).filter((k): k is TowerKind => k in TOWERS);
+    this.walls = h.level ? (spec.walls ?? []).map((w) => new Wall(h.scene, h.fx, h.level!, w, h.quiet, () => { this.solidsN = -1; h.levelChanged?.(); })) : [];
+    for (const w of this.walls) {
+      w.onBreak = () => { this.breach(w); };
+      w.onRepair = () => { this.solidsN = -1; };
+    }
     this.bush.onDeath = () => { this.state = 'lost'; this.closeMenu(); h.banner('Куст засох<small>Орден добрался до малины · N — попробовать снова</small>', 5); };
     this.menuEl = document.createElement('div');
     this.menuEl.className = 'td-menu hidden';
@@ -140,8 +158,43 @@ export class TowerDefense {
   get menuOpen(): boolean { return this.menuPad !== null; }
   /** Препятствия от башен и ствола куста (герой, путь, враги) */
   get solids(): Obstacle[] {
-    if (this.solidsN !== this.towers.length) { this.solidsCache = [this.bush.solid, ...this.towers.map((t) => t.solid)]; this.solidsN = this.towers.length; }
+    if (this.solidsN !== this.towers.length) { this.solidsCache = [this.bush.solid, ...this.towers.map((t) => t.solid)]; this.solidsN = this.towers.length; this.foeSolidsCache = null; }
     return this.solidsCache;
+  }
+  /** Препятствия врагов: то же плюс целые ворота */
+  get foeSolids(): Obstacle[] {
+    const base = this.solids;
+    const gates = this.walls.filter((w) => w.solid && !w.dead);
+    if (!this.foeSolidsCache || this.foeSolidsN !== gates.length) { this.foeSolidsCache = base.concat(gates.map((w) => w.solid!)); this.foeSolidsN = gates.length; }
+    return this.foeSolidsCache;
+  }
+  wall(id: string): Wall | undefined { return this.walls.find((w) => w.id === id); }
+  /** Стена рядом с героем, которую можно чинить (битая или проломленная) */
+  nearWall(pos: THREE.Vector3): Wall | null { return this.walls.find((w) => w.hp < w.maxHp && w.near(pos)) ?? null; }
+  /** Цена починки: малины за недостающие 100 здоровья (не меньше 5) */
+  repairCost(w: Wall): number { return Math.max(5, Math.ceil(((w.maxHp - w.hp) / 100) * (this.spec.repair ?? 20))); }
+  wallPrompt(w: Wall): string { return `${w.dead ? 'Отстроить' : 'Починить'}: ${w.title.toLowerCase()} · ${this.repairCost(w)} малины`; }
+
+  /** Починить стену за малину (F у стены) */
+  repair(w: Wall): boolean {
+    if (w.hp >= w.maxHp) return false;
+    const cost = this.repairCost(w);
+    if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return false; }
+    this.h.profile.data.berries -= cost;
+    w.repair();
+    this.h.fx.text(w.pos.clone().setY(2.6), `−${cost} малины`, 'berry');
+    return true;
+  }
+
+  /** Пролом пробит: враги на этой дороге идут дальше внутрь, следующие — сразу до куста */
+  private breach(w: Wall): void {
+    this.h.banner(`${w.kind === 'gate' ? 'Ворота разбиты' : 'Стена проломлена'}!<small>${w.title} · враги идут внутрь · F у стены — починить</small>`, 3);
+    this.h.fx.shake = Math.max(this.h.fx.shake, 0.6);
+    for (const lane of this.spec.lanes) {
+      if (lane.wall !== w.id || !lane.inner) continue;
+      const inner = lane.inner.map(([x, z]) => new THREE.Vector3(x, 0, z));
+      for (const m of this.pack.mobs) if (m.march && m.laneId === lane.id && !m.ghost && m.march.length <= lane.points.length) m.extendMarch(inner.map((v) => v.clone()));
+    }
   }
   lane(id: string): TdLane | undefined { return this.spec.lanes.find((l) => l.id === id); }
   /** Враги как цели меча и заклинаний */
@@ -162,7 +215,7 @@ export class TowerDefense {
   /** Площадка рядом с героем (в 2 м от края) */
   nearPad(pos: THREE.Vector3): Pad | null {
     let best: Pad | null = null, bd = 2.2;
-    for (const p of this.pads) { const d = Math.hypot(p.pos.x - pos.x, p.pos.z - pos.z); if (d < bd) { bd = d; best = p; } }
+    for (const p of this.pads) { if (Math.abs(p.pos.y - pos.y) > 1.5) continue; const d = Math.hypot(p.pos.x - pos.x, p.pos.z - pos.z); if (d < bd) { bd = d; best = p; } }
     return best;
   }
   /** Куда подойти, чтобы открыть меню площадки: точка на краю со стороны героя */
@@ -186,7 +239,7 @@ export class TowerDefense {
     if (!e.code.startsWith('Digit')) return false;
     const n = e.code.slice(5);
     if (p.tower) { if (n === '1') this.act('upgrade'); else if (n === '2') this.act('sell'); return true; }
-    const kind = TOWER_ORDER.find((k) => TOWERS[k].key === n);
+    const kind = this.kinds.find((k) => TOWERS[k].key === n);
     if (kind) this.act(`build:${kind}`);
     return true;
   }
@@ -206,7 +259,7 @@ export class TowerDefense {
     if (!p) return;
     let html: string;
     if (!p.tower) {
-      html = `<div class="td-head">Площадка · малина ${this.berries}</div>` + TOWER_ORDER.map((k) => {
+      html = `<div class="td-head">Площадка · малина ${this.berries}</div>` + this.kinds.map((k) => {
         const d = TOWERS[k], ok = this.berries >= d.cost;
         return `<button class="td-card${ok ? '' : ' off'}" data-act="build:${k}"><kbd>${d.key}</kbd><i style="background:${d.color}"></i><b>${d.title}</b><small>${d.hint} · ${d.range} м</small><em class="${ok ? 'ok' : ''}">${d.cost} малины</em></button>`;
       }).join('');
@@ -222,10 +275,10 @@ export class TowerDefense {
   // ---------- постройка ----------
   build(p: Pad, kind: TowerKind): Tower | null {
     const def = TOWERS[kind];
-    if (!def || p.tower) return null;
+    if (!def || p.tower || !this.kinds.includes(kind)) return null;
     if (this.berries < def.cost) { this.h.toast(`Не хватает малины: нужно ${def.cost}`); return null; }
     this.h.profile.data.berries -= def.cost;
-    const t = new Tower({ scene: this.h.scene, fx: this.h.fx, quiet: this.h.quiet, foes: () => this.foes() }, kind, p.pos.x, p.pos.z);
+    const t = new Tower({ scene: this.h.scene, fx: this.h.fx, quiet: this.h.quiet, foes: () => this.foes() }, kind, p.pos.x, p.pos.z, p.pos.y);
     p.tower = t;
     this.towers.push(t);
     const c = new THREE.Color(def.color).multiplyScalar(2);
@@ -272,7 +325,11 @@ export class TowerDefense {
     const m = this.pack.spawn(kind, new THREE.Vector3(sx + (Math.random() - 0.5) * 1.2, 0, sz + (Math.random() - 0.5) * 1.2));
     if (!m) return null;
     this.spawned++;
-    m.march = lane.points.map(([x, z]) => new THREE.Vector3(x, 0, z));
+    // осада: дорога до стены; стена проломлена или враг летит — сразу дальше внутрь
+    const w = lane.wall ? this.wall(lane.wall) : undefined;
+    const through = lane.inner && (!w || w.dead || m.ghost) ? lane.inner : [];
+    m.march = [...lane.points, ...through].map(([x, z]) => new THREE.Vector3(x, 0, z));
+    m.laneId = lane.id;
     m.marchI = 1;
     m.aggro = Math.min(m.aggro, 3.5);
     m.yaw = Math.atan2(lane.points[1][0] - sx, lane.points[1][1] - sz);
@@ -362,6 +419,7 @@ export class TowerDefense {
     }
     for (const p of this.pads) { p.hover = p === this.hoverPad || p === this.menuPad; p.update(dt, this.time); }
     for (const t of this.towers) t.update(dt);
+    for (const w of this.walls) w.update(dt);
     this.pack.update(dt);
     this.bush.update(dt);
     if (this.menuPad) {
@@ -379,7 +437,8 @@ export class TowerDefense {
     const alive = this.pack.mobs.filter((m) => !m.dead).length;
     const from = this.nextLanes?.map((l) => l.title.toLowerCase()).join(', ') ?? '';
     const sub = this.state !== 'play' || !n ? '' : this.waveRunning ? `врагов на карте ${alive}` : this.wave >= n ? '' : `следующая через ${Math.ceil(this.next)} с — ${from} · <kbd>G</kbd> сейчас (+${this.earlyBonus})`;
-    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">куст малины ${Math.ceil(b.hp)} / ${b.maxHp}</div>`;
+    const walls = this.walls.length ? `<div class="td-walls">${this.walls.map((w) => `<span class="${w.dead ? 'dead' : ''}" title="${w.title}"><b>${w.kind === 'gate' ? '⌂' : w.title.slice(0, 1)}</b><i style="width:${(w.k * 100).toFixed(0)}%;background:${wallBarColor(w.k)}"></i></span>`).join('')}</div>` : '';
+    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">куст малины ${Math.ceil(b.hp)} / ${b.maxHp}</div>${walls}`;
     if (html !== this.hudHtml) { this.hudHtml = html; this.hudEl.innerHTML = html; }
     this.hudEl.classList.toggle('lost', this.state === 'lost');
     this.hudEl.classList.toggle('won', this.state === 'won');
@@ -397,6 +456,7 @@ export class TowerDefense {
     this.spawned = this.fallen = 0;
     for (const l of this.lairs) { l.warn = 0; l.spawned = 0; }
     this.pack.setScale(1, this.players);
+    for (const w of this.walls) if (w.hp < w.maxHp) w.repair();
     this.bush.reset();
     this.state = 'play';
     this.h.profile.data.berries = this.spec.berries;

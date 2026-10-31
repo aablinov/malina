@@ -14,7 +14,8 @@ import { MAX_LEVEL, TOWERS, UPGRADE_DMG, UPGRADE_RANGE, upgradeCost, type TowerD
  *
  * Пять видов (раздел 3 вики): стрелковая вышка — болты по одному; морозный шпиль — ледяной сгусток, замедляет;
  * катапульта — камень по дуге, взрыв по площади; огненная жаровня — струя пламени конусом, поджигает;
- * волшебный обелиск — сфера, бьёт цепью и ослабляет.
+ * волшебный обелиск — сфера, бьёт цепью и ослабляет. Осада (раздел 9): стенная баллиста — тяжёлый болт по прямой сквозь
+ * строй, пробивает броню (удар без направления, src/mobs/mob.ts); котёл со смолой — лужа под ногами: вязнут и горят.
  */
 
 /** Враг для башни: цель с долей пройденной дороги (кто ближе к кусту — тот первый) */
@@ -33,7 +34,9 @@ export interface TowerHooks {
 
 const WOOD = '#8a5a34', WOOD_DARK = '#5e3c22', STONE = '#8d939b', STONE_DARK = '#5c6168', IRON = '#3a3c42';
 const ICE = C(1.6, 3.2, 4), ICE_DEEP = C(0.6, 1.4, 3), FIRE = C(3.6, 1.6, 0.4), EMBER = C(3.2, 0.8, 0.2), ARCANE = C(2.6, 1.2, 4), ARCANE_DEEP = C(1.2, 0.4, 2.6);
+const TAR = '#1a1410', TAR_SHEEN = C(0.5, 0.35, 0.2);
 const _dir = new THREE.Vector3();
+const ZERO = new THREE.Vector3();
 
 /** Снаряд по прямой: летит к точке, где была цель, попадает — hit */
 interface Bolt { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; hit: () => void }
@@ -41,6 +44,8 @@ interface Bolt { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; t: nu
 interface Lob { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; h: number; land: (at: THREE.Vector3) => void }
 /** Горящий враг: тики урона */
 interface Burn { foe: Foe; t: number; tick: number; dmg: number }
+/** Лужа смолы: вязнут и горят, пока не высохла */
+interface Pool { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; at: THREE.Vector3; t: number; tick: number; r: number }
 
 export class Tower {
   readonly def: TowerDef;
@@ -68,17 +73,18 @@ export class Tower {
   private readonly bolts: Bolt[] = [];
   private readonly lobs: Lob[] = [];
   private readonly burns: Burn[] = [];
+  private readonly pools: Pool[] = [];
   private recoil = 0;
   private readonly h: TowerHooks;
 
-  constructor(h: TowerHooks, kind: TowerKind, x: number, z: number) {
+  constructor(h: TowerHooks, kind: TowerKind, x: number, z: number, y = 0) {
     this.h = h;
     this.def = TOWERS[kind];
     this.spent = this.def.cost;
-    this.pos = new THREE.Vector3(x, 0, z);
+    this.pos = new THREE.Vector3(x, y, z);
     this.group.position.copy(this.pos);
     this.group.add(this.body);
-    this.solid = { x, z, hx: 0.75, hz: 0.75, rot: 0, h: 2.5 };
+    this.solid = { x, z, hx: 0.75, hz: 0.75, rot: 0, h: 2.5, y0: y };
     this.build();
     h.scene.add(this.group);
   }
@@ -91,6 +97,8 @@ export class Tower {
   get nextCost(): number | null { return this.level >= MAX_LEVEL ? null : upgradeCost(this.def, this.level + 1); }
   /** Сколько врагов горит (для тестов) */
   get burning(): number { return this.burns.length; }
+  /** Сколько луж смолы на земле (для тестов) */
+  get pooling(): number { return this.pools.length; }
 
   /** Улучшить на уровень: урон и дальность растут, модель получает знак уровня */
   upgrade(): boolean {
@@ -110,6 +118,7 @@ export class Tower {
   dispose(): void {
     for (const b of this.bolts.splice(0)) this.dropMesh(b.mesh);
     for (const l of this.lobs.splice(0)) this.dropMesh(l.mesh);
+    for (const p of this.pools.splice(0)) { this.h.scene.remove(p.mesh); p.mat.dispose(); }
     this.burns.length = 0;
     this.h.scene.remove(this.group);
     for (const m of this.lamps) m.dispose();
@@ -156,6 +165,8 @@ export class Tower {
       case 'splash': this.buildSplash(); break;
       case 'fire': this.buildFire(); break;
       case 'magic': this.buildMagic(); break;
+      case 'ballista': this.buildBallista(); break;
+      case 'oil': this.buildOil(); break;
       default: this.buildArrow(); break;
     }
     // знак уровня: малиновые ягоды-светильники на углах основания — одна, две
@@ -277,6 +288,48 @@ export class Tower {
     for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.4; B(this.body, obs, 0.2, 0.5 + (i % 2) * 0.3, 0.2, Math.cos(a) * 0.85, 0.7, Math.sin(a) * 0.85, 0.2, a, 0); }
   }
 
+  /** Стенная баллиста: низкая станина с колёсами, на вертлюге — тяжёлый лук с воротом; болт лежит в жёлобе */
+  private buildBallista(): void {
+    const B = this.box.bind(this);
+    const wood = this.lam(WOOD), woodD = this.lam(WOOD_DARK), iron = this.lam(IRON, false), rope = this.lam('#c8b890', false);
+    B(this.body, woodD, 1.4, 0.2, 1.0, 0, 0.6, 0);
+    for (const s of [-1, 1]) B(this.body, woodD, 0.12, 0.5, 0.5, s * 0.6, 0.55, 0);
+    this.turret.position.set(0, 0.8, 0);
+    this.body.add(this.turret);
+    // ложе с жёлобом, дуги лука, тетива, ворот сзади
+    B(this.turret, wood, 0.3, 0.2, 2.0, 0, 0.15, 0.2);
+    B(this.turret, iron, 0.18, 0.06, 1.4, 0, 0.28, 0.4);
+    for (const s of [-1, 1]) { B(this.turret, woodD, 1.0, 0.1, 0.12, s * 0.65, 0.25, 0.75, 0, 0, s * 0.25); B(this.turret, iron, 0.08, 0.14, 0.14, s * 1.1, 0.25, 0.63); }
+    B(this.turret, rope, 2.1, 0.02, 0.02, 0, 0.25, 0.3);
+    B(this.turret, iron, 0.3, 0.3, 0.2, 0, 0.3, -0.8);
+    B(this.turret, woodD, 0.08, 0.6, 0.08, 0.2, 0.3, -0.8, 0, 0, 0.3);
+    this.arm.position.set(0, 0.34, 0.3);
+    this.turret.add(this.arm);
+    B(this.arm, iron, 0.08, 0.08, 1.2, 0, 0, 0.3);
+    B(this.arm, this.lam('#d8285a', false), 0.14, 0.14, 0.2, 0, 0, 0.95);
+    if (this.level >= 2) for (const s of [-1, 1]) B(this.turret, iron, 0.06, 0.4, 0.06, s * 0.4, 0.4, 0.75);
+    if (this.level >= 3) B(this.turret, this.lam('#d8285a', false), 0.03, 0.3, 0.5, 0, 0.6, -0.5);
+  }
+
+  /** Котёл со смолой: треножник над углями, чёрный котёл, из него валит дым; носик к цели */
+  private buildOil(): void {
+    const B = this.box.bind(this);
+    const iron = this.lam(IRON, false), coal = this.glow(EMBER), tar = this.lam(TAR, false), wood = this.lam(WOOD_DARK);
+    for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; B(this.body, wood, 0.14, 1.6, 0.14, Math.cos(a) * 0.55, 1.3, Math.sin(a) * 0.55, Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3); }
+    B(this.body, coal, 0.7, 0.2, 0.7, 0, 0.6, 0);
+    B(this.body, iron, 0.5, 0.1, 0.5, 0, 2.1, 0);
+    this.turret.position.set(0, 1.0, 0);
+    this.body.add(this.turret);
+    B(this.turret, iron, 1.0, 0.7, 1.0, 0, 0.35, 0);
+    B(this.turret, iron, 1.1, 0.12, 1.1, 0, 0.75, 0);
+    B(this.turret, tar, 0.8, 0.08, 0.8, 0, 0.78, 0);
+    B(this.turret, iron, 0.3, 0.2, 0.5, 0, 0.7, 0.6);
+    for (const s of [-1, 1]) B(this.turret, iron, 0.1, 0.4, 0.1, s * 0.56, 0.8, 0);
+    B(this.turret, iron, 1.22, 0.06, 0.06, 0, 1.0, 0);
+    if (this.level >= 2) B(this.turret, iron, 0.6, 0.6, 0.6, 0, 0.3, 0, 0, Math.PI / 4, 0);
+    if (this.level >= 3) B(this.turret, this.lam('#d8285a', false), 0.5, 0.3, 0.03, -0.7, 1.5, 0);
+  }
+
   // ---------- бой ----------
   /** Цель: кто дальше всех прошёл по дороге из тех, кто в радиусе */
   private pick(): Foe | null {
@@ -295,10 +348,10 @@ export class Tower {
   private inRange(f: Foe): boolean { return f.alive && !f.dead && Math.hypot(f.pos.x - this.pos.x, f.pos.z - this.pos.z) - f.radius <= this.range + 0.5; }
 
   /** Нанести урон цели от башни (учёт для подписи и тестов) */
-  private strike(f: Foe, dmg: number, knock: number, point: THREE.Vector3, cls = ''): void {
+  private strike(f: Foe, dmg: number, knock: number, point: THREE.Vector3, cls = '', pierce = false): void {
     if (!f.alive || dmg <= 0) return;
     _dir.set(f.pos.x - this.pos.x, 0, f.pos.z - this.pos.z).normalize();
-    f.hit(dmg, _dir, point, knock);
+    f.hit(dmg, pierce ? ZERO : _dir, point, knock);
     this.dealt += dmg;
     this.h.fx.text(point.clone().setY(point.y + 0.3), String(dmg), cls);
     if (!f.alive) this.kills++;
@@ -323,8 +376,55 @@ export class Tower {
       case 'splash': this.fireSplash(t); break;
       case 'fire': this.fireFlame(); break;
       case 'magic': this.fireMagic(t); break;
+      case 'ballista': this.fireBallista(t); break;
+      case 'oil': this.fireOil(t); break;
       default: this.fireArrow(t); break;
     }
+  }
+
+  /** Тяжёлый болт: по прямой через цель до края дальности, бьёт всех в полосе 0,7 м; удар без направления — броню не гасит */
+  private fireBallista(t: Foe): void {
+    const dmg = this.dmg, from = this.muzzle(1.3, 1.0), fx = this.h.fx;
+    const dir = new THREE.Vector3(t.pos.x - this.pos.x, 0, t.pos.z - this.pos.z).normalize();
+    const len = this.range + 1;
+    const end = this.pos.clone().addScaledVector(dir, len).setY(0.9);
+    fx.streak({ path: (k, out) => out.lerpVectors(from, end, k), dur: 0.22, color: C(2.6, 2.2, 1.2), color2: C(1.4, 1.0, 0.5), width: 0.14, tail: 0.5, halo: 1.2, core: 0.8 });
+    let n = 0;
+    for (const f of this.h.foes()) {
+      if (!f.alive || f.dead) continue;
+      const dx = f.pos.x - this.pos.x, dz = f.pos.z - this.pos.z, along = dx * dir.x + dz * dir.z;
+      if (along < 0 || along > len) continue;
+      const side = Math.abs(dx * dir.z - dz * dir.x);
+      if (side > 0.7 + f.radius) continue;
+      const at = this.chest(f);
+      this.strike(f, n === 0 ? dmg : Math.round(dmg * 0.7), 0, at, 'crit', true);
+      fx.burst(at, ['#ffffff', '#d8c8a0'], 6, { speed: 3, up: 2, size: 0.07, life: 0.3, glow: true, gravity: 8 });
+      n++;
+    }
+    if (!this.h.quiet()) { hiss({ dur: 0.15, vol: 0.12, f: 1400, f1: 400, q: 1 }); boom(200, 90, 0.15, 0.25); }
+  }
+
+  /** Ковш смолы по дуге: лужа радиусом 2,2 м на 5 с — в ней вязнут (−50 %) и горят (тик урона раз в 0,5 с) */
+  private fireOil(t: Foe): void {
+    const from = this.muzzle(1.9, 0.6), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
+    const to = t.pos.clone().setY(0);
+    const mesh = new THREE.Mesh(UNIT, new THREE.MeshLambertMaterial({ color: TAR }));
+    mesh.scale.set(0.5, 0.3, 0.5);
+    mesh.position.copy(from);
+    this.h.scene.add(mesh);
+    this.lobs.push({ mesh, from, to, t: 0, dur: 0.5 + dist * 0.05, h: 2 + dist * 0.2, land: (at) => {
+      const r = 2.2 + (this.level - 1) * 0.3;
+      const mat = new THREE.MeshBasicMaterial({ color: TAR, transparent: true, opacity: 0.85, depthWrite: false });
+      const pool = new THREE.Mesh(new THREE.CircleGeometry(r, 20), mat);
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(at.x, 0.03, at.z);
+      pool.renderOrder = 1;
+      this.h.scene.add(pool);
+      this.pools.push({ mesh: pool, mat, at: at.clone(), t: 5, tick: 0, r });
+      this.h.fx.burst(at.clone().setY(0.2), [TAR, '#2a2018', TAR_SHEEN], 16, { speed: 3, up: 2.5, size: 0.12, life: 0.6, gravity: 9, glow: false });
+      if (!this.h.quiet()) hiss({ dur: 0.3, vol: 0.1, f: 500, f1: 200, q: 0.8, type: 'lowpass' });
+    } });
+    if (!this.h.quiet()) hiss({ dur: 0.2, vol: 0.06, f: 400, f1: 250, q: 1 });
   }
 
   private bolt(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color, size: number, speed: number, hit: () => void): void {
@@ -462,6 +562,21 @@ export class Tower {
       l.mesh.rotation.x += dt * 6; l.mesh.rotation.z += dt * 4;
       if (k >= 1) { this.lobs.splice(i, 1); this.dropMesh(l.mesh); l.land(l.to); }
     }
+    for (let i = this.pools.length - 1; i >= 0; i--) {
+      const p = this.pools[i];
+      p.t -= dt; p.tick -= dt;
+      p.mat.opacity = Math.min(0.85, p.t * 0.6);
+      if (p.t <= 0) { this.pools.splice(i, 1); this.h.scene.remove(p.mesh); p.mat.dispose(); p.mesh.geometry.dispose(); continue; }
+      if (Math.random() < 0.4) this.h.fx.particle({ pos: p.at.clone().add(new THREE.Vector3((Math.random() - 0.5) * p.r * 1.6, 0.1, (Math.random() - 0.5) * p.r * 1.6)), vel: new THREE.Vector3(0, 0.6, 0), life: 0.6, size: 0.08, color: Math.random() < 0.5 ? FIRE : '#3a3028', gravity: 0 }, Math.random() < 0.5);
+      if (p.tick > 0) continue;
+      p.tick = 0.5;
+      for (const f of this.around(p.at, p.r)) {
+        f.chill?.(0.5, 0.6);
+        this.strike(f, this.dmg, 0, f.pos.clone().setY(0.8));
+        const b = this.burns.find((x) => x.foe === f);
+        if (b) b.t = Math.max(b.t, 2); else this.burns.push({ foe: f, t: 2, tick: 1, dmg: Math.max(1, Math.round(this.dmg * 0.5)) });
+      }
+    }
     for (let i = this.burns.length - 1; i >= 0; i--) {
       const b = this.burns[i];
       b.t -= dt; b.tick -= dt;
@@ -475,6 +590,11 @@ export class Tower {
   private animate(dt: number): void {
     switch (this.def.id) {
       case 'arrow': this.turret.position.z = -this.recoil * 0.12; break;
+      case 'ballista': this.arm.position.z = 0.3 - this.recoil * 0.5; this.arm.visible = this.recoil < 0.9; break;
+      case 'oil':
+        this.turret.rotation.x = this.recoil > 0.5 ? (this.recoil - 0.5) * 1.2 : 0;
+        if (Math.random() < 0.25) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.5, 1.9, (Math.random() - 0.5) * 0.5)), vel: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.8 + Math.random() * 0.6, (Math.random() - 0.5) * 0.3), life: 0.9, size: 0.1, color: '#3a3028', gravity: 0 }, false);
+        break;
       case 'splash': this.arm.rotation.x = this.recoil > 0.7 ? -0.9 : 0.7 - (this.recoil / 0.7) * 1.6; break;
       case 'magic':
         this.arm.position.y = Math.sin(this.time * 2) * 0.12;
