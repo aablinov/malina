@@ -1,8 +1,10 @@
-import { wantsEditor } from './devflag';
+import { wantsEditor, wantsGame } from './devflag';
 import { runPlayground } from './dev/playground';
 import { runEditor } from './dev/editor';
+import { runMenu } from './menu/menu';
 
-// Точка входа: плейграунд (основная сцена) или редактор уровней (?dev=editor, F10).
-// Сборка — один файл, поэтому оба модуля в нём, а запускается только нужный.
+// Точка входа: главное меню (страница без параметров), игра (?map=…, ?dev=playground) или редактор уровней (?dev=editor, F10).
+// Сборка — один файл, поэтому все модули в нём, а запускается только нужный.
 if (wantsEditor()) runEditor();
-else runPlayground();
+else if (wantsGame()) runPlayground();
+else runMenu();

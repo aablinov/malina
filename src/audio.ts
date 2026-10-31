@@ -9,6 +9,8 @@ let bus: GainNode | null = null;
 let verb: GainNode | null = null;
 let muted = false;
 const VOL = 0.4;
+/** Общая громкость из настроек 0..1 (src/menu/settings.ts) */
+let volume = 1;
 
 declare global {
   interface Window { webkitAudioContext?: typeof AudioContext }
@@ -21,7 +23,7 @@ export function initAudio(): void {
     if (!Ctor) return;
     ctx = new Ctor();
     master = ctx.createGain();
-    master.gain.value = muted ? 0 : VOL;
+    master.gain.value = muted ? 0 : VOL * volume;
     // компрессор: громкие удары заклинаний плотнее и не хрипят на перегрузе
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.25;
@@ -69,8 +71,14 @@ export function busy(): number { prune(); return ends.length / MAX_VOICES; }
 
 export function toggleMute(): boolean {
   muted = !muted;
-  if (master) master.gain.value = muted ? 0 : VOL;
+  if (master) master.gain.value = muted ? 0 : VOL * volume;
   return muted;
+}
+
+/** Общая громкость 0..1 — из настроек */
+export function setVolume(v: number): void {
+  volume = Math.max(0, Math.min(1, v));
+  if (master) master.gain.value = muted ? 0 : VOL * volume;
 }
 
 interface ToneOptions { type?: OscillatorType; f0?: number; f1?: number; dur?: number; vol?: number; delay?: number; echo?: boolean; fg?: boolean; attack?: number }

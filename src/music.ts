@@ -12,6 +12,9 @@ export type Mood = 'calm' | 'fight' | 'danger';
 const BPM: Record<Mood, number> = { calm: 66, fight: 66, danger: 118 };
 /** Общая громкость музыки — под звуками игры */
 const VOL = 0.2;
+/** Громкость музыки из настроек 0..1 (src/menu/settings.ts) */
+let level = 1;
+export function setMusicVolume(v: number): void { level = Math.max(0, Math.min(1, v)); }
 /** Бой держится столько секунд после того, как враги отстали: музыка не дёргается туда-сюда */
 const FIGHT_HOLD = 5;
 /** Здоровье ниже — «беда», выше LOW_OFF — отпускает */
@@ -73,7 +76,7 @@ export class Music {
       n.bass.gain.setTargetAtTime(l.bass, t, 0.6);
       n.drums.gain.setTargetAtTime(l.drums, t, mood === 'calm' ? 1.5 : 0.3);
       n.lp.frequency.setTargetAtTime(l.cut, t, 0.7);
-      n.main.gain.setTargetAtTime(VOL * l.vol, t, 0.8);
+      n.main.gain.setTargetAtTime(VOL * level * l.vol, t, 0.8);
     }
     // темп разгоняется за секунду-другую, успокаивается медленнее
     const want = BPM[this.mood], k = want > this.bpm ? 1.2 : 0.4;
@@ -89,7 +92,7 @@ export class Music {
     lp.type = 'lowpass'; lp.frequency.value = LAYERS.calm.cut; lp.Q.value = 0.5;
     main.gain.value = 0;
     // вступление: музыка выплывает за пару секунд, а не бьёт по ушам с первого клика
-    main.gain.setTargetAtTime(VOL * LAYERS[this.mood].vol, ctx.currentTime, 1.2);
+    main.gain.setTargetAtTime(VOL * level * LAYERS[this.mood].vol, ctx.currentTime, 1.2);
     lp.connect(main).connect(core.out);
     const layer = (v: number): GainNode => { const g = ctx.createGain(); g.gain.value = v; g.connect(lp); return g; };
     const l = LAYERS[this.mood];
