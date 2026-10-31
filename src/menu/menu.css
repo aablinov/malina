@@ -1,0 +1,164 @@
+/* Главное меню в духе Minecraft Dungeons (wiki/design-main-menu.md). Размеры — в em, шрифт растёт с окном */
+body.menu #c.mm-canvas { cursor: default; }
+.mm, .mm-settings, .pz {
+  --mm-bar: rgba(10, 30, 40, 0.86);
+  --mm-panel: rgba(12, 34, 46, 0.82);
+  --mm-line: #3c7f8f;
+  --mm-cyan: #7fe0ff;
+  --mm-green: #4fc35a;
+  font: 700 clamp(10px, min(0.84vw, 1.5vh), 22px) / 1.25 var(--mcd-text);
+  color: var(--mcd-ink);
+}
+.mm { position: absolute; inset: 0; pointer-events: none; }
+.mm kbd, .mm-settings kbd, .pz kbd {
+  display: inline-grid; place-items: center; min-width: 1.6em; height: 1.4em; padding: 0 0.35em; margin-left: 0.4em; box-sizing: border-box;
+  font: 400 0.6em/1 var(--mcd-px); color: #fff; background: #2b2930; border: 0.12em solid #8a8792; border-radius: 0.3em; vertical-align: middle;
+}
+
+/* ---------- кнопки ---------- */
+.mm-btn {
+  font: 400 0.9em/1 var(--mcd-px); color: #f4f1ea; cursor: pointer; pointer-events: auto;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5em;
+  padding: 0.9em 1.4em; background: linear-gradient(#4b5560, #313840); border: 0.2em solid #1a1d22;
+  box-shadow: inset 0 0.18em 0 rgba(255, 255, 255, 0.18), inset 0 -0.25em 0 rgba(0, 0, 0, 0.35); text-shadow: 0 0.12em 0 #000;
+}
+.mm-btn:hover, .mm-btn.focus { background: linear-gradient(#5d6a76, #3d4650); outline: 0.18em solid #fff; outline-offset: 0.1em; }
+.mm-btn:disabled { opacity: 0.45; cursor: default; outline: none; }
+.mm-btn img { width: 1.6em; height: 1.6em; }
+.mm-btn.small { font-size: 0.7em; padding: 0.75em 1.1em; }
+.mm-btn.icon { font: 700 1.3em/1 var(--mcd-text); padding: 0.3em 0.5em; }
+.mm-btn.primary, .mm-btn.start, .mm-btn.host { background: linear-gradient(#5fd06a, #2f8f3a); }
+.mm-btn.primary:hover, .mm-btn.start:hover, .mm-btn.host:hover { background: linear-gradient(#77e182, #37a443); }
+.mm-btn.locked { filter: grayscale(0.9) brightness(0.75); }
+.mm-btn.big { width: 100%; font-size: 1.15em; padding: 1.15em 1.4em; justify-content: flex-start; position: relative; }
+
+/* ---------- стартовый экран ---------- */
+.mm-start { position: absolute; inset: 0; display: none; pointer-events: none;
+  background: linear-gradient(90deg, rgba(4, 18, 26, 0.85) 0%, rgba(4, 18, 26, 0.55) 32%, transparent 58%); }
+.mm-start.open { display: block; }
+.mm-logo {
+  position: absolute; left: 6%; top: 11%; font: 400 4.2em/1 var(--mcd-px); color: #ff4f7b; letter-spacing: 0.04em;
+  text-shadow: 0 0.08em 0 #7a1030, 0 0.16em 0 #000, 0 0 0.6em rgba(255, 79, 123, 0.5);
+}
+.mm-logo small { display: block; margin-top: 0.8em; font-size: 0.3em; color: var(--mm-cyan); letter-spacing: 0.2em; text-transform: uppercase; text-shadow: 0 0.2em 0 #000; }
+.mm-nav { position: absolute; left: 6%; top: 36%; width: 26em; display: flex; flex-direction: column; gap: 1.1em; pointer-events: auto; }
+.mm-soon { position: absolute; right: 1em; font: 400 0.5em/1 var(--mcd-px); color: #1a1d22; background: var(--mcd-gold); padding: 0.5em 0.6em; font-style: normal; }
+.mm-dev { display: flex; gap: 0.8em; margin-top: 1.4em; opacity: 0.7; }
+.mm-foot { position: absolute; left: 6%; right: 4%; bottom: 3%; display: flex; justify-content: space-between; font: 400 0.65em/1 var(--mcd-px); color: #b9d4dc; text-shadow: 0 0.15em 0 #000; }
+.mm-foot b { color: #fff; }
+
+/* ---------- лагерь ---------- */
+.mm-lobby {
+  position: absolute; inset: 0; display: none; pointer-events: none;
+  grid-template-columns: 1fr 1.05fr 0.95fr; grid-template-rows: 4.4em minmax(0, 1fr) 5em; column-gap: 2em;
+  background: linear-gradient(90deg, transparent 0%, transparent 30%, rgba(6, 26, 36, 0.78) 44%, rgba(6, 26, 36, 0.9) 100%);
+}
+.mm-lobby.open { display: grid; }
+.mm-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 2em; padding: 0 2.4em; background: var(--mm-bar); border-bottom: 0.15em solid #000; pointer-events: auto; }
+.mm-tabs { display: flex; align-items: center; gap: 0.4em; height: 100%; }
+.mm-tabs button { height: 100%; padding: 0 1.4em; font: 400 0.85em/1 var(--mcd-px); color: #b9c4cc; background: none; border: 0; cursor: pointer; text-transform: uppercase; position: relative; }
+.mm-tabs button.on { color: #fff; }
+.mm-tabs button.on::after { content: ''; position: absolute; left: 0.8em; right: 0.8em; bottom: 0.6em; height: 0.25em; background: #ff9a3c; box-shadow: 0 0 0.6em #ff9a3c; }
+.mm-mode { font: 400 0.7em/1 var(--mcd-px); color: var(--mm-cyan); text-transform: uppercase; }
+.mm-cur { margin-left: auto; display: flex; align-items: center; gap: 1.6em; font: 400 1em/1 var(--mcd-px); }
+.mm-cur span { display: flex; align-items: center; gap: 0.45em; }
+.mm-cur img { width: 1.6em; height: 1.6em; }
+
+.mm-hero { position: relative; }
+.mm-level { position: absolute; left: 2.4em; top: 2em; display: flex; flex-direction: column; text-shadow: 0 0.12em 0 #000; }
+.mm-level span { font: 400 0.75em/1 var(--mcd-px); text-transform: uppercase; }
+.mm-level b { font: 400 3.2em/1.2 var(--mcd-px); color: #d68bff; }
+.mm-xp { display: block; width: 8em; height: 0.5em; background: #1b1920; border: 0.12em solid #000; }
+.mm-xp u { display: block; height: 100%; background: var(--mcd-xp); }
+.mm-hero-hint { position: absolute; left: 0; right: 0; bottom: 1em; text-align: center; font: 400 0.55em/1 var(--mcd-px); color: rgba(255, 255, 255, 0.5); }
+
+.mm-pane { min-height: 0; overflow: auto; padding: 1.6em 0.4em; pointer-events: auto; display: flex; flex-direction: column; gap: 1em; }
+.mm-pane-title, .mm-group h4 { margin: 0; display: flex; align-items: center; gap: 0.5em; font: 400 0.7em/1 var(--mcd-px); color: #cfd8e0; text-transform: uppercase; }
+.mm-group h4 img { width: 1.5em; height: 1.5em; }
+.mm-power { display: flex; align-items: center; gap: 1.6em; }
+.mm-power span { display: block; font: 400 0.65em/1 var(--mcd-px); text-transform: uppercase; }
+.mm-power > div > b { font: 400 2.6em/1.2 var(--mcd-px); color: var(--mm-cyan); text-shadow: 0 0.1em 0 #000; }
+.mm-stats { display: flex; gap: 1.1em; }
+.mm-stats span { display: flex; flex-direction: column; align-items: center; gap: 0.3em; font: 400 0.75em/1 var(--mcd-px); color: var(--mm-cyan); }
+.mm-stats img { width: 1.8em; height: 1.8em; }
+.mm-slots { display: flex; gap: 0.9em; margin-top: 0.5em; }
+.mm-slot { position: relative; width: 6.2em; height: 6.2em; box-sizing: border-box; cursor: pointer; }
+.mm-slot.empty { display: grid; place-items: center; background: #1d2228; border: 0.24em solid #4a4f58; box-shadow: 0 0 0 0.14em #050407; }
+.mm-slot.empty span { font: 400 1.6em/1 var(--mcd-px); color: #6e747e; }
+.mm-slot .it-ico { position: absolute; inset: 14%; width: 72%; height: 72%; image-rendering: pixelated; }
+.mm-slot .it-pw { position: absolute; right: 0.3em; bottom: 0.25em; font: 400 0.7em/1 var(--mcd-px); color: #fff; text-shadow: 0 0.12em 0 #000; }
+.mm-slot.sel { outline: 0.24em solid #fff; outline-offset: 0.12em; }
+.mm-slot:hover { filter: brightness(1.2); }
+.mm-new { font-style: normal; color: var(--mcd-gold); }
+
+.mm-side { min-height: 0; overflow: auto; padding: 1.6em 2.4em 1em 0; pointer-events: auto; display: flex; flex-direction: column; gap: 1em; }
+.mm-card { position: relative; padding: 2.4em 1.6em 1.6em; background: var(--mm-panel); border: 0.15em solid var(--mm-line); box-shadow: 0 0.3em 0 #000; }
+.mm-card.map { background: var(--bg); }
+.mm-card-tag { position: absolute; left: 0; right: 0; top: 0; padding: 0.6em; text-align: center; font: 400 0.7em/1 var(--mcd-px); text-transform: uppercase; background: #5a8794; color: #fff; }
+.mm-card-head { display: flex; align-items: center; gap: 1em; margin-top: 0.8em; }
+.mm-card-head img { width: 4em; height: 4em; margin-left: auto; image-rendering: pixelated; }
+.mm-card-pw { font: 400 1.6em/1 var(--mcd-px); }
+.mm-rar { font: 400 0.65em/1 var(--mcd-px); font-style: normal; padding: 0.5em 0.7em; background: var(--c); color: #111; text-transform: uppercase; }
+.mm-card h3 { margin: 0.7em 0 0.4em; font: 400 1.1em/1.3 var(--mcd-px); text-transform: uppercase; }
+.mm-card p { margin: 0 0 0.8em; color: #c9d3d8; font-weight: 500; }
+.mm-card ul { margin: 0 0 1em; padding-left: 1.2em; color: #e8e4ef; }
+.mm-card dl { display: grid; grid-template-columns: auto 1fr; gap: 0.4em 1em; margin: 0; font: 400 0.7em/1.4 var(--mcd-px); }
+.mm-card dt { color: #b9c4cc; }
+.mm-won-line { margin-top: 1em !important; color: var(--mcd-gold) !important; }
+
+.mm-maps { display: flex; flex-direction: column; gap: 1em; }
+.mm-map {
+  position: relative; display: grid; grid-template-columns: 5em 1fr; grid-template-rows: auto auto; column-gap: 1.2em; row-gap: 0.5em; align-items: center;
+  padding: 1em 1.2em; text-align: left; cursor: pointer; color: #fff; background: var(--bg); border: 0.2em solid #000; box-shadow: inset 0 0 0 0.15em rgba(255, 255, 255, 0.12);
+}
+.mm-map:hover { filter: brightness(1.15); }
+.mm-map.sel { outline: 0.24em solid #fff; outline-offset: 0.12em; }
+.mm-map-art { grid-row: 1 / 3; display: grid; place-items: center; width: 5em; height: 5em; background: rgba(0, 0, 0, 0.3); }
+.mm-map-art img { width: 3.6em; height: 3.6em; }
+.mm-map b { font: 400 0.95em/1.2 var(--mcd-px); }
+.mm-diff { font: 400 0.65em/1 var(--mcd-px); }
+.mm-diff.d1 { color: #8be38f; } .mm-diff.d2 { color: #ffd15c; } .mm-diff.d3 { color: #ff7a6b; }
+.mm-won { position: absolute; right: 0.8em; top: 0.8em; font: 400 0.55em/1 var(--mcd-px); font-style: normal; color: #111; background: var(--mcd-gold); padding: 0.4em 0.5em; }
+
+.mm-online { display: flex; flex-direction: column; gap: 0.8em; padding: 1.2em; background: var(--mm-panel); border: 0.15em solid var(--mm-line); }
+.mm-online .host { width: 100%; }
+.mm-toggle { display: flex; align-items: center; justify-content: space-between; padding: 0.7em 1em; background: rgba(79, 195, 90, 0.25); cursor: pointer; font: 400 0.7em/1 var(--mcd-px); }
+.mm-toggle i { width: 2.6em; height: 1.3em; background: #1b1920; border: 0.15em solid #8a8792; position: relative; }
+.mm-toggle i::after { content: ''; position: absolute; top: 0.1em; left: 0.1em; width: 0.9em; height: 0.9em; background: #8a8792; transition: left 0.15s; }
+.mm-toggle i.on::after { left: 1.4em; background: var(--mm-green); }
+.mm-online-h { display: flex; align-items: center; justify-content: space-between; font: 400 0.85em/1 var(--mcd-px); color: var(--mcd-gold); }
+.mm-online-empty { padding: 0.8em 1em; background: rgba(255, 255, 255, 0.12); color: #e0e6ea; font-weight: 500; }
+.mm-note { margin: 0; color: #9fb4bc; font-weight: 500; font-size: 0.9em; }
+
+.mm-bottom { grid-column: 1 / -1; display: flex; align-items: center; gap: 2em; padding: 0 2.4em; background: var(--mm-bar); border-top: 0.15em solid #000; pointer-events: auto; }
+.mm-hint { flex: 1; text-align: center; font: 400 0.6em/1.4 var(--mcd-px); color: #b9c4cc; }
+.mm-hint.warn { color: var(--mcd-gold); animation: mm-shake 0.35s; }
+@keyframes mm-shake { 25% { transform: translateX(-0.4em); } 75% { transform: translateX(0.4em); } }
+.mm-btn.start { font-size: 1em; padding: 0.9em 2em; }
+
+/* ---------- настройки ---------- */
+.mm-settings { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; background: rgba(0, 0, 0, 0.55); }
+.mm-settings.open { display: grid; }
+.mm-win { width: min(40em, 92vw); max-height: 88vh; overflow: auto; padding: 2em 2.4em; box-sizing: border-box; background: #10242e; border: 0.2em solid var(--mm-line); box-shadow: 0 0.4em 0 #000; }
+.mm-win h2 { margin: 0 0 1em; font: 400 1.4em/1 var(--mcd-px); text-transform: uppercase; }
+.mm-win h3 { margin: 1.2em 0 0.6em; font: 400 0.75em/1 var(--mcd-px); color: var(--mm-cyan); text-transform: uppercase; }
+.mm-row { display: flex; align-items: center; gap: 1em; padding: 0.5em 0; font-weight: 500; cursor: pointer; }
+.mm-row span { flex: 1; }
+.mm-row input[type='range'] { width: 12em; accent-color: var(--mm-green); }
+.mm-row input[type='checkbox'] { width: 1.3em; height: 1.3em; accent-color: var(--mm-green); }
+.mm-row select { font: inherit; padding: 0.3em 0.5em; background: #1d2228; color: #fff; border: 0.12em solid #4a4f58; }
+.mm-row b { width: 3em; text-align: right; font: 400 0.7em/1 var(--mcd-px); }
+.mm-win .mm-note { margin-top: 1.2em; }
+.mm-win-btns { display: flex; justify-content: flex-end; gap: 1em; margin-top: 1.6em; }
+
+/* ---------- пауза и конец боя (src/menu/pause.ts) ---------- */
+.pz { position: fixed; inset: 0; z-index: 30; display: none; place-items: center; background: rgba(4, 14, 20, 0.6); }
+.pz.open { display: grid; }
+.pz-win { width: min(26em, 90vw); display: flex; flex-direction: column; gap: 1em; padding: 2em; background: #10242e; border: 0.2em solid var(--mm-line); box-shadow: 0 0.4em 0 #000; text-align: center; }
+.pz-win h2 { margin: 0 0 0.4em; font: 400 1.5em/1.2 var(--mcd-px); text-transform: uppercase; }
+.pz-win p { margin: 0 0 0.6em; color: #c9d3d8; font-weight: 500; }
+.pz.won h2 { color: var(--mcd-gold); }
+.pz.lost h2 { color: #ff7a6b; }
+.pz .mm-btn { width: 100%; }
+.pz.end { background: rgba(4, 14, 20, 0.35); }
+.mm-pane > .mm-btn { align-self: flex-start; margin-top: 0.6em; }

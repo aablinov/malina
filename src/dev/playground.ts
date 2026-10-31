@@ -43,7 +43,12 @@ import { Weather } from '../weather';
 import { aimLight, lightData, makeLight, worldOf } from '../world';
 import { Dummy } from './dummies';
 import { Overlays } from './overlay';
-import { DEV_TOOLS, openEditor } from '../devflag';
+import { DEV_TOOLS, fromMenu, openEditor } from '../devflag';
+import { loadSettings, pixelRatio } from '../menu/settings';
+import { applyAudio, SettingsPanel } from '../menu/settings-panel';
+import { BattleMenu } from '../menu/pause';
+import { markWon, stashBerries } from '../menu/session';
+import { campaignMap } from '../menu/campaign';
 import { TowerDefense, type Pad } from '../td/td';
 import { LavaFx } from '../td/lava-fx';
 import { MistFx } from '../td/mist-fx';
@@ -88,7 +93,13 @@ export function runPlayground(): void {
   // Числа надетого — стартовые для «Сброса» в F1
   const urlWeapon = new URLSearchParams(window.location.search).has('weapon') ? pickWeapon() : null;
   const profile = new Profile();
+  // настройки из главного меню (src/menu/settings.ts): громкость, качество, постобработка, тени, подсказка
+  const settings = loadSettings();
+  applyAudio(settings);
+  /** Бой начат из главного меню: пауза по Esc, «В лагерь», без отладочной телеметрии */
+  const FROM_MENU = fromMenu();
   document.body.classList.add('dev-playground');
+  if (FROM_MENU) document.body.classList.add('from-menu');
   document.title = 'Малина — плейграунд';
 
   const $ = <E extends HTMLElement = HTMLElement>(id: string): E => {
@@ -102,7 +113,7 @@ export function runPlayground(): void {
   // без MSAA на канвасе: кадр собирает композер в своих буферах (src/lighting.ts), на канвас ложится готовая картинка;
   // плотность пикселей канваса — как у композера, иначе финальный проход и bloom масштабировались бы в пустую
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(pixelRatio(settings));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -124,7 +135,7 @@ export function runPlayground(): void {
   const sun = look.sun;
   let night = false;
   function applyNight(): void { look.setNight(night); }
-  let postFX = true;
+  let postFX = settings.postFX;
 
   function resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
@@ -172,6 +183,7 @@ export function runPlayground(): void {
     scene.add(l);
   }
   const view = new LevelRenderer(scene, level, T);
+  if (!settings.shadows) sun.castShadow = false;
   // лава (src/td/lava-fx.ts): дымка над разломами и искры; есть на карте целиком в сцене — при стриминге клетки меняются
   const lavaFx = !STREAM && level.palette.includes('lava') ? new LavaFx(scene, fx, level) : null;
   /** Герой стоит в лаве: ожог раз в 0,4 с */
@@ -591,13 +603,15 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const TIME_SCALES = [1, 0.5, 0.25, 0.1];
   let paused = false;
   let stepOnce = false;
-  let showTelemetry = true;
+  let showTelemetry = !FROM_MENU;
   let showFps = false;
 
   window.addEventListener('keydown', (e) => {
     if (['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10'].includes(e.code)) e.preventDefault();
     initAudio();
     if (e.repeat) return;
+    // пауза и итог боя из меню: клавиши — им
+    if (battle?.key(e)) return;
     // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
     if (inventory.open) { inventory.key(e); return; }
     if (shop.open) { shop.key(e); return; }
@@ -615,7 +629,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       case 'KeyI': openInventory(); break;
       case 'KeyM': hud.toggleMap(); break;
       case 'Tab': hud.toggleOverlay(); break;
-      case 'Escape': if (hud.mapOpen) hud.toggleMap(); break;
+      case 'Escape': if (hud.mapOpen) hud.toggleMap(); else battle?.pause(); break;
       case 'KeyH': helpOn = !helpOn; helpT = helpOn ? Infinity : 0; break;
       case 'F9': toast(toggleMute() ? 'Звук выключен' : 'Звук включён'); break;
       case 'KeyL': night = !night; applyNight(); toast(night ? 'Ночь' : 'День'); refreshControls(); break;
@@ -898,7 +912,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   hud.setGoal(questGoal[0], questGoal[1]);
   // стены замка меняют блоки (пролом, починка): препятствия врагов — заново
   const levelChanged = (): void => { if (STREAM) return; obstacles.length = 0; obstacles.push(...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)); foeObsKey = null; };
+  // из меню: малина героя откладывается — оборона ставит в профиль свою казну, лагерь вернёт собранное (src/menu/session.ts)
+  if (tdSpec && FROM_MENU) stashBerries(profile.data.berries);
   if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged }, tdSpec, document.body);
+  // число игроков партии (сетевая игра — позже): ?players=N
+  if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
   td?.setPlayers(bossPlayers);
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
@@ -936,10 +954,23 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   let mapT = 0;
   // торговцы: окно покупок (src/hud/shop.ts)
   const shop = new Shop(document.body, profile);
+  // бой из главного меню (src/menu/pause.ts): Esc — пауза с настройками, конец обороны — итог и «В лагерь»
+  const mapName = query.get('map') ?? '';
+  if (FROM_MENU) document.title = `Малина — ${tdSpec ? campaignMap(mapName).title : level.name}`;
+  const battle = FROM_MENU ? new BattleMenu(document.body, new SettingsPanel(document.body), tdSpec ? campaignMap(mapName).title : level.name) : null;
+  if (battle) {
+    battle.onRestart = () => { resetTargets(); if (hero.down) hero.revive(); else hero.hp = hero.maxHp; };
+    battle.settings.onChange = (st) => {
+      postFX = st.postFX; sun.castShadow = st.shadows; helpOn = st.help;
+      refreshControls();
+    };
+  }
+  /** Итог обороны уже показан (для этой партии) */
+  let tdEndShown: 'play' | 'won' | 'lost' = 'play';
   shop.onClose = () => { lmb = false; rmb = false; keys.clear(); };
   shop.onSound = (ok) => { if (!scripted) (ok ? sfx.pickup : sfx.empty)(); };
   /** Подсказка по управлению: первые 15 с, потом — по H */
-  let helpOn = true;
+  let helpOn = settings.help;
   let helpT = 15;
 
   const dev = document.createElement('div');
@@ -949,8 +980,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     <div class="pg-fps" id="pgFps"></div>
     <div class="pg-toast" id="pgToast"></div>
     <div class="pg-prompt" id="pgPrompt"></div>
-    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — заклинания и артефакты (держи — заряд) · G — волна сейчас · Q — спец-удар оружия · R — вспышка ауры · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры<br>
-    F1 параметры · F2 коллайдеры · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · F9 звук · B bloom · U свет · L день/ночь · N сброс · F10 редактор · H — скрыть подсказку</div>
+    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — заклинания и артефакты (держи — заряд) · G — волна сейчас · Q — спец-удар оружия · R — вспышка ауры · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры${FROM_MENU ? ' · Esc — пауза' : `<br>
+    F1 параметры · F2 коллайдеры · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · F9 звук · B bloom · U свет · L день/ночь · N сброс · F10 редактор`} · H — скрыть подсказку</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(dev);
 
@@ -1126,7 +1157,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     const stop = fx.hitstop > 0 ? 0.04 : fx.slowmo > 0 ? 0.33 : 1;
     fx.updateReal(real);
     // инвентарь открыт — игра на паузе, как в одиночной MCD
-    if (!paused && !inventory.open && !shop.open) acc += real * timeScale * stop;
+    if (!paused && !inventory.open && !shop.open && !battle?.pausing) acc += real * timeScale * stop;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     perf.begin();
     let n = 0;
@@ -1135,6 +1166,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     perf.tickEnd();
     if (n >= 6) acc = 0;
     music.update(real, inFight(), hero.down ? 0 : hero.hp / hero.maxHp);
+    if (battle && td && td.state !== tdEndShown) {
+      tdEndShown = td.state;
+      if (td.state === 'won') markWon(mapName);
+      if (td.state !== 'play') battle.end(td.state === 'won', `волн отбито ${td.state === 'won' ? td.waves.length : Math.max(0, td.wave - 1)} из ${td.waves.length}, врагов повержено ${td.fallen}`);
+    }
     perf.renderStart();
     render(real);
     perf.renderEnd();

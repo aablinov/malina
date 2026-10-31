@@ -19,7 +19,7 @@ import './inventory.css';
  * Клавиши: I / Esc — закрыть, Q / E — вкладки, стрелки — по сетке, Enter — надеть, X — разобрать.
  */
 
-type Tab = 'all' | ItemSlot | 'enchanted';
+export type Tab = 'all' | ItemSlot | 'enchanted';
 const TABS: { id: Tab; title: string; icon: string }[] = [
   { id: 'all', title: 'Все', icon: 'grid' },
   { id: 'melee', title: 'Ближний бой', icon: 'sword' },
@@ -110,11 +110,15 @@ export class Inventory {
 
   get open(): boolean { return this.el.classList.contains('open'); }
 
-  show(): void {
+  /** Открыть; tab — сразу на вкладке (лагерь открывает инвентарь с гнезда нужного вида) */
+  show(tab?: Tab): void {
     if (this.open) return;
+    if (tab) this.tab = tab;
     this.el.classList.add('open');
     this.enchSlot = -1; this.confirm = false;
     if (!this.sel || !this.profile.get(this.sel)) this.sel = this.profile.data.equip.melee;
+    // с вкладки — первым выбран надетый предмет этого вида
+    if (tab) this.sel = this.list()[0]?.uid ?? this.sel;
     this.preview ??= new Preview(this.el.querySelector('canvas') as HTMLCanvasElement, this.T);
     this.preview.start();
     this.render();
