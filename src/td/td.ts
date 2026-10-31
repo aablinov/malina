@@ -307,7 +307,7 @@ export class TowerDefense {
   /** Число игроков (панель F1 / сеть): следующие волны — по новому масштабу, живые враги — сразу */
   setPlayers(n: number): void {
     this.players = Math.max(1, Math.round(n));
-    this.pack.setScale(this.wave ? waveLevel(this.wave) : 1, this.players);
+    this.pack.setScale(this.wave ? waveLevel(this.wave, this.spec.level) : (this.spec.level ?? 1), this.players);
   }
 
   private startWave(): void {
@@ -315,7 +315,7 @@ export class TowerDefense {
     if (!w) return;
     this.wave++;
     // враги крепчают с волнами и игроками: уровень стаи, как у стражей (src/td/scaling.ts); больше игроков — больше врагов
-    this.pack.setScale(waveLevel(this.wave), this.players);
+    this.pack.setScale(waveLevel(this.wave, this.spec.level), this.players);
     for (const g of w.groups) this.queue.push({ kind: g.kind, lane: g.lane, left: scaledCount(g.count, this.players), t: g.delay ?? 0, every: g.every });
     this.h.banner(`Волна ${this.wave} из ${this.waves.length}<small>${w.title ?? 'Орден идёт к кусту'}</small>`, 2.5);
     this.h.fx.shake = Math.max(this.h.fx.shake, 0.2);

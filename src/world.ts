@@ -7,9 +7,9 @@ import type { Level } from './level/level.ts';
  * Пустые поля — значения по умолчанию (день «как в Unreal», src/lighting.ts).
  */
 
-export type WeatherKind = 'clear' | 'rain' | 'storm' | 'snow' | 'leaves' | 'embers';
+export type WeatherKind = 'clear' | 'rain' | 'storm' | 'snow' | 'leaves' | 'embers' | 'fireflies';
 export const WEATHER_TITLES: Record<WeatherKind, string> = {
-  clear: 'Ясно', rain: 'Дождь', storm: 'Гроза', snow: 'Снег', leaves: 'Листопад', embers: 'Искры и пепел',
+  clear: 'Ясно', rain: 'Дождь', storm: 'Гроза', snow: 'Снег', leaves: 'Листопад', embers: 'Искры и пепел', fireflies: 'Светлячки',
 };
 
 export interface WorldSettings {

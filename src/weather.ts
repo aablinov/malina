@@ -18,6 +18,7 @@ const LOOKS: Record<Exclude<WeatherKind, 'clear'>, Look> = {
   snow: { count: 2400, color: '#ffffff', size: 0.12, fall: 1.6, streak: 0, sway: 0.8, opacity: 0.9 },
   leaves: { count: 500, color: '#d9a441', size: 0.16, fall: 1.4, streak: 0, sway: 1.6, opacity: 0.95 },
   embers: { count: 700, color: '#ff9a3c', size: 0.07, fall: -0.9, streak: 0, sway: 0.5, up: true, opacity: 1 },
+  fireflies: { count: 420, color: '#b4ff6a', size: 0.09, fall: -0.25, streak: 0, sway: 1.4, up: true, opacity: 1 },
 };
 
 export class Weather {
