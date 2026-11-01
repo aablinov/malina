@@ -72,6 +72,10 @@ export abstract class Mob extends Boss {
   rally = 0;
   /** Призрак: летает сквозь стены */
   ghost = false;
+  /** Охотник на башни: осадные приманки (башни обороны, src/td/tower.ts) тянут его с дороги */
+  hunter = false;
+  /** Насколько выше или ниже себя охотник достаёт башню, м */
+  reachY = 1.5;
   /** Под куполом обелиска (секунды): урон по мобу ×0,5 */
   ward = 0;
   /** Замедлен аурой «Стужа»: теряет долю скорости chillK, осталось chillT с */
@@ -249,7 +253,7 @@ export abstract class Mob extends Boss {
       if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
     }
     // цель: ближайшая из героя и приманок; меняем только вне атаки, чтобы удар не перескочил на полпути
-    if (this.state !== 'attack') { this.focus = null; this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro); }
+    if (this.state !== 'attack') { this.focus = null; this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro, this.hunter, this.reachY); }
     const hero = this.h.hero.pos;
     const dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, dist = Math.hypot(dx, dz);
     const rel = wrap(Math.atan2(dx, dz) - this.yaw);
@@ -263,6 +267,8 @@ export abstract class Mob extends Boss {
       case 'idle':
       case 'walk': {
         if (!this.alerted && dist < this.aggro && Math.abs(hero.y - this.pos.y) < 2) this.notice();
+        // охотник увидел башню — сворачивает к ней с дороги (соседей не тревожит); башня пала — фокус пуст, снова марш
+        if (!this.alerted && this.focus?.siege && dist < (this.focus.taunt ?? 0)) this.alerted = true;
         // на марше: герой убежал дальше поводка, приманки нет — тревога снята, снова на дорогу
         if (this.march && this.alerted && !this.focus && dist > this.leash) this.alerted = false;
         if (!this.alerted || this.h.hero.down) { walk = this.march ? this.marching(dt) : !this.alerted && this.patrol(dt); this.state = walk ? 'walk' : 'idle'; break; }

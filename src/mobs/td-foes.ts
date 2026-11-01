@@ -11,6 +11,7 @@ import { Mob, type MobHooks } from './mob';
  */
 
 const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x += (x - o.rotation.x) * k; };
+const FROST_ORB = C(1.6, 3.0, 4);
 
 /** 32. Ягодный гонец — бегун: ягода с мешком на длинных ножках, 5,5 м/с, 14 здоровья; у куста щиплет понемногу */
 export class BerryRunner extends Mob {
@@ -698,5 +699,173 @@ export class VineBallista extends Mob {
     const fired = this.state === 'attack' && this.st > 0.9;
     this.arm.visible = !(fired && this.st < 1.3);
     this.bow.rotation.x = this.state === 'attack' ? -0.1 : 0;
+  }
+}
+
+/**
+ * 40. Бобёр-грызун — охотник на башни (раздел 10 вики): идёт по дороге, а увидев целую башню в 7 м, сворачивает и грызёт
+ * её — 9 прочности за укус (×сила волны); сгрыз — снова на дорогу. Героя кусает, только если тот рядом и башни нет.
+ * 45 здоровья, 3 м/с
+ */
+export class BeaverGnawer extends Mob {
+  readonly kind = 'gnawer';
+  readonly title = 'Бобёр-грызун';
+  readonly cost = 3;
+  readonly radius = 0.45;
+  override readonly topY = 1.0;
+  /** Укусов по башням (для тестов) */
+  bites = 0;
+  private readonly head = new THREE.Group();
+  private readonly tail = new THREE.Group();
+  private readonly legs: THREE.Group[];
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 45, at);
+    this.speed = 3;
+    this.turn = 6;
+    this.keep = 1;
+    this.mass = 1.2;
+    this.aggro = 3;
+    this.loot = 3;
+    this.hunter = true;
+    const fur = this.lam('#7a4e2a', pixelTex('#7a4e2a', 10, 1031)), belly = this.lam('#b08050'), tooth = this.lam('#f4ecd0', undefined), eye = this.lam('#1a1010'), tailM = this.lam('#4a3020', pixelTex('#4a3020', 6, 1032));
+    const B = this.box.bind(this);
+    // толстое тельце, голова с двумя большими резцами, плоский хвост-лопата
+    B(this.body, fur, 0.7, 0.55, 0.85, 0, 0.45, 0);
+    B(this.body, belly, 0.5, 0.3, 0.05, 0, 0.4, 0.43);
+    this.head.position.set(0, 0.6, 0.45);
+    this.body.add(this.head);
+    B(this.head, fur, 0.5, 0.42, 0.4, 0, 0.05, 0.12);
+    B(this.head, belly, 0.3, 0.16, 0.1, 0, -0.04, 0.33);
+    for (const x of [-0.05, 0.05]) B(this.head, tooth, 0.08, 0.14, 0.04, x, -0.16, 0.34);
+    for (const x of [-0.14, 0.14]) { B(this.head, eye, 0.07, 0.08, 0.03, x, 0.14, 0.33); B(this.head, fur, 0.1, 0.1, 0.06, x * 1.4, 0.28, 0.05); }
+    this.tail.position.set(0, 0.3, -0.42);
+    this.body.add(this.tail);
+    B(this.tail, tailM, 0.42, 0.08, 0.6, 0, 0, -0.3);
+    this.legs = [[-0.24, 0.25], [0.24, 0.25], [-0.24, -0.25], [0.24, -0.25]].map(([x, z]) => {
+      const g = new THREE.Group();
+      g.position.set(x, 0.22, z);
+      this.body.add(g);
+      B(g, fur, 0.16, 0.24, 0.18, 0, -0.1, 0);
+      return g;
+    });
+    this.place();
+  }
+
+  protected choose(dist: number): string | null { return dist < (this.focus?.siege ? 2 : 1.3) ? 'gnaw' : null; }
+  protected override rest(): number { return rand(0.6, 0.9); }
+
+  protected act(_name: string, t: number, dt: number): boolean {
+    if (t >= 0.3 && t - dt < 0.3) {
+      const f = this.focus;
+      if (f?.siege && f.alive) {
+        if (Math.hypot(f.pos.x - this.pos.x, f.pos.z - this.pos.z) < 2.4) {
+          this.bites++;
+          f.hurt(9 * this.dmgMult, this.pos);
+          if (!this.quiet) voice({ type: 'square', f: rand(300, 380), f1: 180, dur: 0.07, vol: 0.03, lp: 2000 });
+          this.h.fx.burst(this.pos.clone().addScaledVector(this.fwd(), 0.7).setY(f.pos.y + 0.7), ['#c8a060', '#8a5a34'], 4, { speed: 2, up: 2, size: 0.06, life: 0.35, gravity: 8 });
+        }
+      } else {
+        const at = this.pos.clone().addScaledVector(this.fwd(), 0.6);
+        if (this.inCircle(at, 0.6)) this.hurt(5, this.pos, 1);
+      }
+    }
+    return t > 0.5;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const k = Math.min(1, dt * 14), s = this.stride(12);
+    this.legs.forEach((g, i) => lerpTo(g, walk ? s * 0.8 * (i % 3 ? 1 : -1) : 0, k));
+    this.tail.rotation.x = walk ? Math.sin(this.time * 12) * 0.15 : Math.sin(this.time * 2) * 0.08;
+    // грызёт — голова ходит вверх-вниз
+    this.head.rotation.x = this.state === 'attack' ? Math.sin(this.st * 30) * 0.25 : 0;
+  }
+}
+
+/**
+ * 41. Ледяной колдунчик — охотник на башни (раздел 10 вики): держится в 6 м и раз в ~7 с кидает снежок — башня замерзает
+ * на 4 с и не стреляет; два удара героя разбивают лёд. Морозный шпиль не мёрзнет. Достаёт и башни на стенах.
+ * Без башни рядом кидает снежок в героя (5 урона). 35 здоровья, 2,6 м/с
+ */
+export class FrostImp extends Mob {
+  readonly kind = 'frostling';
+  readonly title = 'Ледяной колдунчик';
+  readonly cost = 3;
+  readonly radius = 0.38;
+  override readonly topY = 1.3;
+  /** Заморозил башен (для тестов) */
+  froze = 0;
+  private readonly staff = new THREE.Group();
+  private readonly orb: THREE.MeshBasicMaterial;
+  private readonly legs: THREE.Group[];
+  private readonly aim = new THREE.Vector3();
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 35, at);
+    this.speed = 2.6;
+    this.turn = 5;
+    this.keep = 6;
+    this.mass = 0.6;
+    this.aggro = 3;
+    this.loot = 3;
+    this.hunter = true;
+    this.reachY = 5;
+    const robe = this.lam('#4a7ab8', pixelTex('#4a7ab8', 10, 1041)), trim = this.lam('#e8f4ff'), face = this.lam('#a8d8f0'), eye = this.lam('#1a2a4a'), wood = this.lam('#6a4a2a');
+    this.orb = this.shimmer(FROST_ORB, C(3.4, 3.6, 4), 0, 3);
+    const B = this.box.bind(this);
+    // балахон-конус из кубов, колпак со снежным помпоном, посох со снежным шаром
+    B(this.body, robe, 0.6, 0.5, 0.55, 0, 0.35, 0);
+    B(this.body, robe, 0.48, 0.35, 0.44, 0, 0.75, 0);
+    B(this.body, trim, 0.62, 0.08, 0.57, 0, 0.12, 0);
+    B(this.body, face, 0.36, 0.28, 0.3, 0, 1.0, 0.05);
+    for (const x of [-0.08, 0.08]) B(this.body, eye, 0.06, 0.07, 0.03, x, 1.02, 0.21);
+    B(this.body, robe, 0.42, 0.14, 0.4, 0, 1.18, 0);
+    B(this.body, robe, 0.26, 0.2, 0.26, 0, 1.33, -0.04, -0.3, 0, 0);
+    B(this.body, trim, 0.14, 0.14, 0.14, 0, 1.45, -0.14);
+    this.staff.position.set(0.38, 0.6, 0.1);
+    this.body.add(this.staff);
+    B(this.staff, wood, 0.06, 1.1, 0.06, 0, 0.2, 0);
+    B(this.staff, this.orb, 0.2, 0.2, 0.2, 0, 0.8, 0);
+    this.legs = [-1, 1].map((s) => {
+      const g = new THREE.Group();
+      g.position.set(s * 0.13, 0.15, 0);
+      this.body.add(g);
+      B(g, trim, 0.14, 0.12, 0.2, 0, -0.08, 0.04);
+      return g;
+    });
+    this.place();
+  }
+
+  protected choose(dist: number, rel: number): string | null {
+    if (Math.abs(rel) > 0.4) return null;
+    return this.focus?.siege ? (dist < 9 ? 'freeze' : null) : dist < 7 ? 'snow' : null;
+  }
+  protected override rest(): number { return this.focus?.siege ? rand(6.5, 7.5) : rand(2.5, 3.5); }
+
+  protected act(name: string, t: number, dt: number): boolean {
+    if (t - dt <= 0) {
+      // снежок по дуге: 0,5 с полёта
+      const from = this.pos.clone().setY(this.pos.y + 1.4), to = this.h.hero.pos.clone();
+      to.y += name === 'freeze' ? 1.6 : 0.8;
+      this.aim.copy(to);
+      this.h.fx.streak({ path: (k, out) => { out.lerpVectors(from, to, k); out.y += Math.sin(k * Math.PI) * 1.5; return out; }, dur: 0.5, color: FROST_ORB, color2: C(3.4, 3.6, 4), width: 0.18, tail: 0.4, halo: 1.4, core: 0.6 });
+      if (!this.quiet) voice({ type: 'sine', f: 1200, f1: 600, dur: 0.15, vol: 0.04 });
+    }
+    if (t >= 0.5 && t - dt < 0.5) {
+      this.h.fx.burst(this.aim.clone(), [FROST_ORB, '#ffffff'], 10, { speed: 2.5, up: 1.5, size: 0.08, life: 0.4, glow: true, gravity: 6 });
+      const f = this.focus;
+      if (name === 'freeze') { if (f?.alive && f.freeze?.(4)) this.froze++; }
+      else if (this.inCircle(this.aim, 0.6)) this.hurt(5, this.pos, 1);
+    }
+    return t > 0.8;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const k = Math.min(1, dt * 12), s = this.stride(10);
+    lerpTo(this.legs[0], walk ? s * 0.8 : 0, k);
+    lerpTo(this.legs[1], walk ? -s * 0.8 : 0, k);
+    this.body.rotation.z = walk ? s * 0.05 : 0;
+    // замах посохом
+    lerpTo(this.staff, this.state === 'attack' ? (this.st < 0.3 ? -1.2 : 0.6) : 0, k);
   }
 }

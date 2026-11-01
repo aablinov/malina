@@ -198,7 +198,11 @@ export class TowerDefense {
   }
   lane(id: string): TdLane | undefined { return this.spec.lanes.find((l) => l.id === id); }
   /** Враги как цели меча и заклинаний */
-  targets(): Target[] { return this.pack.targets(); }
+  targets(): Target[] {
+    const list = this.pack.targets();
+    for (const t of this.towers) if (t.frozen > 0) list.push(t.ice);
+    return list;
+  }
   /** Враги для башен */
   foes(): readonly Foe[] { return this.pack.mobs as unknown as Foe[]; }
 
@@ -225,7 +229,7 @@ export class TowerDefense {
     return p.pos.clone().addScaledVector(d.normalize(), 1.7);
   }
   /** Подсказка внизу: что сделает F у этой площадки */
-  prompt(p: Pad): string { return p.tower ? `Башня: ${p.tower.title}` : 'Построить башню'; }
+  prompt(p: Pad): string { return p.tower ? p.tower.ruined ? `Руины: ${p.tower.title} · починить` : `Башня: ${p.tower.title}` : 'Построить башню'; }
 
   // ---------- меню площадки ----------
   openMenu(p: Pad): void { this.menuPad = p; this.menuHtml = ''; this.menuEl.classList.remove('hidden'); this.renderMenu(); }
@@ -238,6 +242,7 @@ export class TowerDefense {
     if (e.code === 'Escape' || e.code === 'KeyF') { this.closeMenu(); return true; }
     if (!e.code.startsWith('Digit')) return false;
     const n = e.code.slice(5);
+    if (p.tower?.ruined) { if (n === '1') this.act('repair'); return true; }
     if (p.tower) { if (n === '1') this.act('upgrade'); else if (n === '2') this.act('sell'); return true; }
     const kind = this.kinds.find((k) => TOWERS[k].key === n);
     if (kind) this.act(`build:${kind}`);
@@ -249,6 +254,7 @@ export class TowerDefense {
     if (!p) return;
     if (a.startsWith('build:')) { if (this.build(p, a.slice(6) as TowerKind)) this.closeMenu(); }
     else if (a === 'upgrade') this.upgrade(p);
+    else if (a === 'repair') this.repairTower(p);
     else if (a === 'sell') { this.sell(p); this.closeMenu(); }
     else if (a === 'close') this.closeMenu();
     if (this.menuPad) this.renderMenu();
@@ -263,6 +269,10 @@ export class TowerDefense {
         const d = TOWERS[k], ok = this.berries >= d.cost;
         return `<button class="td-card${ok ? '' : ' off'}" data-act="build:${k}"><kbd>${d.key}</kbd><i style="background:${d.color}"></i><b>${d.title}</b><small>${d.hint} · ${d.range} м</small><em class="${ok ? 'ok' : ''}">${d.cost} малины</em></button>`;
       }).join('');
+    } else if (p.tower.ruined) {
+      const t = p.tower, cost = t.repairCost, ok = this.berries >= cost;
+      html = `<div class="td-head">Руины: ${t.title} · малина ${this.berries}</div>`
+        + `<button class="td-card${ok ? '' : ' off'}" data-act="repair"><kbd>1</kbd><i style="background:${t.def.color}"></i><b>Починить</b><small>снова стреляет, уровень прежний</small><em class="${ok ? 'ok' : ''}">${cost} малины</em></button>`;
     } else {
       const t = p.tower, next = t.nextCost, back = Math.round(t.spent * SELL_BACK), ok = next !== null && this.berries >= next;
       html = `<div class="td-head">${t.title} · урон ${t.dmg} · ${t.range} м · малина ${this.berries}</div>`
@@ -279,6 +289,7 @@ export class TowerDefense {
     if (this.berries < def.cost) { this.h.toast(`Не хватает малины: нужно ${def.cost}`); return null; }
     this.h.profile.data.berries -= def.cost;
     const t = new Tower({ scene: this.h.scene, fx: this.h.fx, quiet: this.h.quiet, foes: () => this.foes() }, kind, p.pos.x, p.pos.z, p.pos.y);
+    t.onAlarm = (why) => this.alarm(t, why);
     p.tower = t;
     this.towers.push(t);
     const c = new THREE.Color(def.color).multiplyScalar(2);
@@ -289,9 +300,26 @@ export class TowerDefense {
     return t;
   }
 
+  /** Починить руины башни за малину: прочность полная, уровень прежний */
+  repairTower(p: Pad): boolean {
+    const t = p.tower;
+    if (!t?.ruined) return false;
+    const cost = t.repairCost;
+    if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return false; }
+    this.h.profile.data.berries -= cost;
+    t.repair();
+    this.h.fx.text(p.pos.clone().setY(p.pos.y + 1.6), `−${cost} малины`, 'berry');
+    return true;
+  }
+
+  /** Башню грызут, заморозили или сломали: сигнал игроку */
+  private alarm(t: Tower, why: 'hurt' | 'frozen' | 'ruin'): void {
+    if (why === 'ruin') this.h.toast(`Башня разрушена: ${t.title} — F у руин, чтобы починить`);
+  }
+
   upgrade(p: Pad): boolean {
     const t = p.tower;
-    if (!t) return false;
+    if (!t || t.ruined) return false;
     const cost = t.nextCost;
     if (cost === null) { this.h.toast('Башня на пределе'); return false; }
     if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return false; }
