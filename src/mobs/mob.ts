@@ -128,6 +128,8 @@ export abstract class Mob extends Boss {
   override get dmgMult(): number { return super.dmgMult * (this.rally > 0 ? 1.25 : 1); }
   /** Скорость бега со знаменем */
   get pace(): number { return this.speed * (this.rally > 0 ? 1.25 : 1) * this.slowMul; }
+  /** Скорость на марше: кто сам не ходит (слизень прыгает, лоза растёт), по дороге всё же ползёт */
+  protected get marchPace(): number { return this.pace; }
   /** Множитель скорости от холода */
   get slowMul(): number { return this.chillT > 0 ? 1 - this.chillK : 1; }
   /** Замедление героя от зон моба (0..1) */
@@ -164,6 +166,14 @@ export abstract class Mob extends Boss {
     this.alerted = false;
     this.focus = null;
     if (this.state === 'attack') { this.field.clear(); this.go('idle'); }
+  }
+  /** Встать на дорогу того же марша, что у `from` (порождённые в пути: половинки слизня, подручные) */
+  joinMarch(from: Mob): void {
+    if (!from.march) return;
+    this.march = from.march.map((v) => v.clone());
+    this.marchI = from.marchI;
+    this.laneId = from.laneId;
+    this.aggro = Math.min(this.aggro, from.aggro);
   }
   reset(): void { /* рядовой не возвращается: стая убирает его целиком */ }
 
@@ -321,7 +331,7 @@ export abstract class Mob extends Boss {
     if (d < 0.6) { this.marchI++; return true; }
     const want = wrap(Math.atan2(dx, dz) - this.yaw), m = this.turn * 1.5 * dt;
     this.yaw += Math.max(-m, Math.min(m, want));
-    const sp = this.pace * 0.85 * dt * (Math.abs(want) > 1.2 ? 0.4 : 1);
+    const sp = this.marchPace * 0.85 * dt * (Math.abs(want) > 1.2 ? 0.4 : 1);
     this.pos.x += (dx / d) * sp; this.pos.z += (dz / d) * sp;
     return true;
   }
