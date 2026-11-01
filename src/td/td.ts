@@ -17,7 +17,7 @@ import { scaledBounty, scaledCount, waveLevel } from './scaling';
 import { Lair } from './lair';
 import { Wall, wallBarColor } from './wall';
 import type { Level } from '../level/level.ts';
-import { SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from './towers';
+import { BASE_TOWERS, menuKey, SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from './towers';
 import type { TdLane, TdPad, TdSpec } from './types';
 import './td.css';
 
@@ -149,7 +149,7 @@ export class TowerDefense {
     this.pack = new Pack(h.boss, (at, n) => { this.fallen++; h.loot(at, n); });
     this.bush = new RaspberryBush(h.scene, h.fx, spec.bush.x, spec.bush.z, spec.bush.hp, h.quiet);
     this.lairs = spec.lanes.map((l) => new Lair(h.scene, h.fx, l, h.quiet));
-    this.kinds = (spec.towers ?? TOWER_ORDER.slice(0, 5)).filter((k): k is TowerKind => k in TOWERS);
+    this.kinds = (spec.towers ?? TOWER_ORDER.slice(0, BASE_TOWERS)).filter((k): k is TowerKind => k in TOWERS);
     this.walls = h.level ? (spec.walls ?? []).map((w) => new Wall(h.scene, h.fx, h.level!, w, h.quiet, () => { this.solidsN = -1; h.levelChanged?.(); })) : [];
     for (const w of this.walls) {
       w.onBreak = () => { this.breach(w); };
@@ -261,7 +261,7 @@ export class TowerDefense {
     const n = e.code.slice(5);
     if (p.tower?.ruined) { if (n === '1') this.act('repair'); return true; }
     if (p.tower) { if (n === '1') this.act('upgrade'); else if (n === '2') this.act('sell'); return true; }
-    const kind = this.kinds.find((k) => TOWERS[k].key === n);
+    const kind = this.kinds.find((_, i) => menuKey(i) === n);
     if (kind) this.act(`build:${kind}`);
     return true;
   }
@@ -282,9 +282,9 @@ export class TowerDefense {
     if (!p) return;
     let html: string;
     if (!p.tower) {
-      html = `<div class="td-head">Площадка · малина ${this.berries}</div>` + this.kinds.map((k) => {
+      html = `<div class="td-head">Площадка · малина ${this.berries}</div>` + this.kinds.map((k, i) => {
         const d = TOWERS[k], ok = this.berries >= d.cost;
-        return `<button class="td-card${ok ? '' : ' off'}" data-act="build:${k}"><kbd>${d.key}</kbd><i style="background:${d.color}"></i><b>${d.title}</b><small>${d.hint} · ${d.range} м</small><em class="${ok ? 'ok' : ''}">${d.cost} малины</em></button>`;
+        return `<button class="td-card${ok ? '' : ' off'}" data-act="build:${k}"><kbd>${menuKey(i)}</kbd><i style="background:${d.color}"></i><b>${d.title}</b><small>${d.hint} · ${d.range} м</small><em class="${ok ? 'ok' : ''}">${d.cost} малины</em></button>`;
       }).join('');
     } else if (p.tower.ruined) {
       const t = p.tower, cost = t.repairCost, ok = this.berries >= cost;

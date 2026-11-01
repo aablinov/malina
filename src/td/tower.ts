@@ -18,6 +18,8 @@ import { MAX_LEVEL, REPAIR_COST, TOWERS, UPGRADE_DMG, UPGRADE_HP, UPGRADE_RANGE,
  * катапульта — камень по дуге, взрыв по площади; огненная жаровня — струя пламени конусом, поджигает;
  * волшебный обелиск — сфера, бьёт цепью и ослабляет. Осада (раздел 9): стенная баллиста — тяжёлый болт по прямой сквозь
  * строй, пробивает броню (удар без направления, src/mobs/mob.ts); котёл со смолой — лужа под ногами: вязнут и горят.
+ * Раздел 14, дорогие башни по площади: звездочёт — метеорит в самую плотную толпу; грозовой шпиль — молния цепью
+ * по многим врагам; сердце зимы — вьюга вокруг: урон и замедление всем, каждый пятый удар — ледяная волна с оглушением.
  *
  * Прочность (раздел 10): для охотников на башни (Mob.hunter) башня — осадная приманка (src/decoys.ts). Сгрызли до нуля —
  * руины: не стреляет, дымит, чинится за малину с прежним уровнем. Ледяной колдунчик замораживает башню: не стреляет,
@@ -41,6 +43,7 @@ export interface TowerHooks {
 const WOOD = '#8a5a34', WOOD_DARK = '#5e3c22', STONE = '#8d939b', STONE_DARK = '#5c6168', IRON = '#3a3c42';
 const ICE = C(1.6, 3.2, 4), ICE_DEEP = C(0.6, 1.4, 3), FIRE = C(3.6, 1.6, 0.4), EMBER = C(3.2, 0.8, 0.2), ARCANE = C(2.6, 1.2, 4), ARCANE_DEEP = C(1.2, 0.4, 2.6);
 const TAR = '#1a1410', TAR_SHEEN = C(0.5, 0.35, 0.2);
+const STAR = C(3.6, 2.6, 1.2), STAR_DEEP = C(2.4, 0.8, 2.8), VOLT = C(2.4, 3.0, 4), SNOW = C(2.6, 3.4, 4);
 const _dir = new THREE.Vector3();
 const ZERO = new THREE.Vector3();
 
@@ -287,6 +290,9 @@ export class Tower implements Decoy {
       case 'magic': this.buildMagic(); break;
       case 'ballista': this.buildBallista(); break;
       case 'oil': this.buildOil(); break;
+      case 'meteor': this.buildMeteor(); break;
+      case 'storm': this.buildStorm(); break;
+      case 'winter': this.buildWinter(); break;
       default: this.buildArrow(); break;
     }
     // знак уровня: малиновые ягоды-светильники на углах основания — одна, две
@@ -387,6 +393,60 @@ export class Tower implements Decoy {
     if (this.level >= 3) for (const s of [-1, 1]) B(this.turret, flame, 0.2, 0.5, 0.2, s * 0.45, 0.6, -0.45);
     // кочерга у ног
     B(this.body, iron, 0.06, 1.2, 0.06, -0.8, 1.0, 0.6, 0.3, 0, 0.25);
+  }
+
+  /** Звездочёт: круглая каменная башня, купол-обсерватория с прорезью, из неё — подзорная труба на цель; над куполом — звезда */
+  private buildMeteor(): void {
+    const B = this.box.bind(this);
+    const stone = this.lam('#6a6278'), stoneD = this.lam('#4a4458'), brass = this.lam('#d8a040'), dome = this.lam('#3a3a6a'), star = this.glow(STAR), deep = this.glow(STAR_DEEP);
+    B(this.body, stone, 1.5, 1.2, 1.5, 0, 1.1, 0);
+    B(this.body, stone, 1.5, 1.2, 1.5, 0, 1.1, 0, 0, Math.PI / 4, 0);
+    B(this.body, stoneD, 1.3, 1.0, 1.3, 0, 2.2, 0, 0, Math.PI / 8, 0);
+    for (const y of [1.0, 1.9]) for (const s of [-1, 1]) B(this.body, deep, 0.2, 0.3, 0.04, s * 0.5, y, 0.72);
+    this.turret.position.set(0, 2.75, 0);
+    this.body.add(this.turret);
+    B(this.turret, dome, 1.4, 0.5, 1.4, 0, 0.2, 0);
+    B(this.turret, dome, 1.0, 0.35, 1.0, 0, 0.6, 0);
+    B(this.turret, dome, 0.5, 0.2, 0.5, 0, 0.86, 0);
+    B(this.turret, brass, 0.26, 0.26, 1.4, 0, 0.45, 0.5, -0.5, 0, 0);
+    B(this.turret, star, 0.2, 0.2, 0.06, 0, 0.82, 1.15, -0.5, 0, 0);
+    this.arm.position.set(0, 1.5, 0);
+    this.turret.add(this.arm);
+    B(this.arm, star, 0.34, 0.34, 0.34, 0, 0, 0, Math.PI / 4, 0, Math.PI / 4);
+    for (let i = 1; i < this.level; i++) B(this.arm, deep, 0.14, 0.14, 0.14, Math.cos(i * 2.1) * 0.5, 0, Math.sin(i * 2.1) * 0.5);
+  }
+
+  /** Грозовой шпиль: высокая каменная игла в медных кольцах, наверху — грозовой шар между тремя рогами-разрядниками */
+  private buildStorm(): void {
+    const B = this.box.bind(this);
+    const stone = this.lam('#5c6470'), copper = this.lam('#c87a3a'), iron = this.lam(IRON, false), volt = this.glow(VOLT);
+    B(this.body, stone, 1.0, 0.6, 1.0, 0, 0.8, 0);
+    B(this.body, stone, 0.7, 1.4, 0.7, 0, 1.8, 0);
+    B(this.body, stone, 0.45, 1.0, 0.45, 0, 3.0, 0);
+    for (const y of [1.3, 1.9, 2.5, 3.1]) B(this.body, copper, y < 2.6 ? 0.82 : 0.56, 0.1, y < 2.6 ? 0.82 : 0.56, 0, y, 0);
+    this.turret.position.set(0, 3.6, 0);
+    this.body.add(this.turret);
+    for (let i = 0; i < 3; i++) { const a = (i * Math.PI * 2) / 3; B(this.turret, iron, 0.08, 0.7, 0.08, Math.cos(a) * 0.35, 0.3, Math.sin(a) * 0.35, Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4); }
+    this.arm.position.set(0, 0.55, 0);
+    this.turret.add(this.arm);
+    B(this.arm, volt, 0.4 + this.level * 0.06, 0.4 + this.level * 0.06, 0.4 + this.level * 0.06, 0, 0, 0, Math.PI / 4, 0, Math.PI / 4);
+  }
+
+  /** Сердце зимы: ледяная глыба-постамент, над ней парит огромный кристалл, вокруг кружат осколки (их больше с уровнем) */
+  private buildWinter(): void {
+    const B = this.box.bind(this);
+    const rime = this.lam('#dceeff', false), stone = this.lam('#7f8ea0'), ice = this.glow(SNOW), deep = this.glow(ICE_DEEP);
+    B(this.body, stone, 1.2, 0.6, 1.2, 0, 0.8, 0);
+    B(this.body, rime, 1.3, 0.2, 1.3, 0, 1.15, 0, 0, Math.PI / 4, 0);
+    for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.3; B(this.body, deep, 0.2, 0.7, 0.2, Math.cos(a) * 0.55, 1.4, Math.sin(a) * 0.55, Math.sin(a) * 0.3, a, Math.cos(a) * 0.3); }
+    this.turret.position.set(0, 2.6, 0);
+    this.body.add(this.turret);
+    B(this.turret, ice, 0.7, 1.4, 0.7, 0, 0, 0, 0, Math.PI / 4, 0);
+    B(this.turret, deep, 0.4, 0.4, 0.4, 0, 0.9, 0, 0, Math.PI / 4, 0);
+    B(this.turret, deep, 0.4, 0.4, 0.4, 0, -0.9, 0, 0, Math.PI / 4, 0);
+    this.arm.position.set(0, 0, 0);
+    this.turret.add(this.arm);
+    for (let i = 0; i < 3 + this.level; i++) { const a = (i / (3 + this.level)) * Math.PI * 2; B(this.arm, ice, 0.16, 0.3, 0.16, Math.cos(a) * 1.1, Math.sin(i * 1.7) * 0.3, Math.sin(a) * 1.1, 0.4, a, 0.3); }
   }
 
   /** Волшебный обелиск: тёмный столб с сужением и резьбой, над ним парит светящаяся руна */
@@ -498,6 +558,9 @@ export class Tower implements Decoy {
       case 'magic': this.fireMagic(t); break;
       case 'ballista': this.fireBallista(t); break;
       case 'oil': this.fireOil(t); break;
+      case 'meteor': this.fireMeteor(); break;
+      case 'storm': this.fireStorm(t); break;
+      case 'winter': this.fireWinter(); break;
       default: this.fireArrow(t); break;
     }
   }
@@ -554,6 +617,80 @@ export class Tower implements Decoy {
     mesh.lookAt(to);
     this.h.scene.add(mesh);
     this.bolts.push({ mesh, from, to, t: 0, dur: from.distanceTo(to) / speed, hit });
+  }
+
+  /** Метеорит: в самую плотную толпу в радиусе — с неба, взрыв 4,5 м (урон слабеет к краю, не меньше половины), отброс, поджог */
+  private fireMeteor(): void {
+    const R = 4.5, dmg = this.dmg, fx = this.h.fx;
+    const foes = this.around(this.pos, this.range);
+    if (!foes.length) return;
+    // центр — враг, у которого больше всего соседей в радиусе взрыва; при равенстве — кто дальше по дороге
+    let best = foes[0], bn = -1;
+    for (const f of foes) {
+      const n = foes.filter((o) => Math.hypot(o.pos.x - f.pos.x, o.pos.z - f.pos.z) < R).length + (f.progress ?? 0) * 0.5;
+      if (n > bn) { bn = n; best = f; }
+    }
+    const to = best.pos.clone().setY(0), from = to.clone().add(new THREE.Vector3(-4, 22, -4));
+    const mesh = new THREE.Mesh(UNIT, glowMat(STAR));
+    mesh.scale.setScalar(0.9);
+    mesh.position.copy(from);
+    this.h.scene.add(mesh);
+    fx.shock(to.clone().setY(0.08), R, STAR_DEEP, 0.8, 0.1);
+    fx.streak({ path: (k, out) => out.lerpVectors(from, to, k), dur: 0.8, color: STAR, color2: STAR_DEEP, width: 0.5, tail: 0.6, halo: 3, core: 0.8 });
+    this.lobs.push({ mesh, from, to, t: 0, dur: 0.8, h: 0, land: (at) => {
+      fx.explosion(at.clone().setY(0.5), R, STAR);
+      fx.shock(at.clone().setY(0.1), R, STAR, 0.6, 0.3);
+      fx.burst(at.clone().setY(0.4), [STAR, STAR_DEEP, '#ffffff', '#5a4a3a'], 40, { speed: 7, up: 6, size: 0.16, life: 0.9, glow: true, gravity: 10 });
+      fx.shake = Math.max(fx.shake, 0.7);
+      for (const f of this.around(at, R)) {
+        const d = Math.hypot(f.pos.x - at.x, f.pos.z - at.z), k = Math.max(0.5, 1 - d / R);
+        this.strike(f, Math.round(dmg * k), 3 * k, f.pos.clone().setY(1), 'crit');
+        const b = this.burns.find((x) => x.foe === f);
+        if (b) b.t = 3; else this.burns.push({ foe: f, t: 3, tick: 1, dmg: Math.max(1, Math.round(dmg * 0.1)) });
+      }
+      if (!this.h.quiet()) { boom(55, 22, 0.9, 0.7); hiss({ dur: 0.6, vol: 0.12, f: 1200, f1: 200, q: 0.6, type: 'lowpass' }); }
+    } });
+    if (!this.h.quiet()) hiss({ dur: 0.8, vol: 0.08, f: 300, f1: 1800, q: 0.8 });
+  }
+
+  /** Молния: в цель и дальше цепью к ближайшему (до 5 м) — 6 врагов, на II — 8, на III — 10; каждый прыжок −8 % урона, оглушение 0,3 с */
+  private fireStorm(t: Foe): void {
+    const n = 4 + this.level * 2, dmg = this.dmg, fx = this.h.fx;
+    const chain: Foe[] = [t];
+    while (chain.length < n) {
+      const last = chain[chain.length - 1];
+      let next: Foe | null = null, bd = 5;
+      for (const f of this.around(last.pos, 5)) { if (chain.includes(f)) continue; const d = Math.hypot(f.pos.x - last.pos.x, f.pos.z - last.pos.z); if (d < bd) { bd = d; next = f; } }
+      if (!next) break;
+      chain.push(next);
+    }
+    let from = this.pos.clone().setY(this.pos.y + 4.15);
+    chain.forEach((f, i) => {
+      const a = from.clone(), b = this.chest(f);
+      // ломаная молния: смещение посередине, гаснет быстро
+      const mid = a.clone().lerp(b, 0.5).add(new THREE.Vector3((Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 1.2));
+      fx.streak({ path: (k, out) => (k < 0.5 ? out.lerpVectors(a, mid, k * 2) : out.lerpVectors(mid, b, (k - 0.5) * 2)), dur: 0.12, color: VOLT, color2: C(3.6, 3.6, 4), width: 0.12, tail: 1, halo: 2, core: 0.9 });
+      fx.flash(b, VOLT, 1.2, 0.12);
+      this.strike(f, Math.round(dmg * Math.pow(0.92, i)), 0.2, b, i === 0 ? 'crit' : '');
+      f.stun?.(0.3);
+      from = b;
+    });
+    if (!this.h.quiet()) { hiss({ dur: 0.25, vol: 0.14, f: 5000, f1: 800, q: 0.7 }); boom(120, 60, 0.2, 0.3); }
+  }
+
+  /** Вьюга: всем в радиусе урон и −50 % скорости; каждый пятый удар — ледяная волна: урон ×3 и оглушение 1,2 с */
+  private fireWinter(): void {
+    const R = this.range, nova = this.shots % 5 === 0, dmg = nova ? this.dmg * 3 : this.dmg, fx = this.h.fx;
+    for (const f of this.around(this.pos, R)) {
+      this.strike(f, dmg, nova ? 1.5 : 0, f.pos.clone().setY(1), nova ? 'crit' : '');
+      f.chill?.(0.5, 1.5);
+      if (nova) f.stun?.(1.2);
+    }
+    if (nova) {
+      fx.shock(this.pos.clone().setY(this.pos.y + 0.15), R, SNOW, 0.6, 0.3);
+      fx.burst(this.pos.clone().setY(this.pos.y + 2.6), [SNOW, '#ffffff', ICE_DEEP], 40, { speed: 8, up: 2, size: 0.12, life: 0.8, glow: true, gravity: 2 });
+      if (!this.h.quiet()) { hiss({ dur: 0.9, vol: 0.14, f: 6000, f1: 1200, q: 1 }); boom(90, 50, 0.4, 0.3); }
+    } else if (!this.h.quiet()) hiss({ dur: 0.4, vol: 0.04, f: 3000, f1: 1500, q: 0.8 });
   }
 
   /** Болт: летит по прямой к цели, попал — урон */
@@ -728,6 +865,19 @@ export class Tower implements Decoy {
       case 'fire':
         if (Math.random() < 0.3) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 1.9, (Math.random() - 0.5) * 0.6)), vel: new THREE.Vector3((Math.random() - 0.5) * 0.4, 1.2 + Math.random(), (Math.random() - 0.5) * 0.4), life: 0.5, size: 0.07, color: Math.random() < 0.6 ? FIRE : EMBER, gravity: 0 });
         break;
+      case 'meteor': this.arm.rotation.y += dt * 1.5; this.arm.position.y = 1.5 + Math.sin(this.time * 2) * 0.1; break;
+      case 'storm':
+        this.arm.rotation.y += dt * (2 + this.recoil * 10);
+        if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 4.1 + (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.6)), vel: new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2), life: 0.15, size: 0.05, color: VOLT, gravity: 0 });
+        break;
+      case 'winter': {
+        this.arm.rotation.y += dt * 1.2;
+        this.turret.position.y = 2.6 + Math.sin(this.time * 1.5) * 0.12;
+        // снег кружит в радиусе вьюги
+        const a = Math.random() * Math.PI * 2, r = Math.random() * this.range;
+        if (Math.random() < 0.6) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.3 + Math.random() * 2.5, Math.sin(a) * r)), vel: new THREE.Vector3(-Math.sin(a) * 2, -0.4, Math.cos(a) * 2), life: 0.9, size: 0.06, color: SNOW, gravity: 0 }, false);
+        break;
+      }
       case 'frost':
         this.turret.rotation.z = Math.sin(this.time * 1.3) * 0.04;
         if (Math.random() < 0.1) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.2, 1 + Math.random() * 2, (Math.random() - 0.5) * 1.2)), vel: new THREE.Vector3(0, -0.3, 0), life: 0.8, size: 0.05, color: ICE, gravity: 0 });

@@ -43,6 +43,8 @@ abstract class TdChief extends Mob {
   }
 
   protected override die(): void { super.die(); this.bar.set(0, false); }
+  /** Мини-босса не оглушить (сердце зимы, грозовой шпиль бьют только уроном) */
+  override stun(): void { /* не оглушается */ }
 
   /** Целые башни в радиусе r */
   protected towersNear(r: number): typeof decoys {
