@@ -606,6 +606,10 @@ export class Props {
   private lastBerry = -10;
   /** Последняя вспышка подбора малины: эффекты не чаще раза в 0,1 с, иначе десяток ягод за кадр ослепляет и грузит */
   private lastBerryFx = -10;
+  /** Откуда малину тянет к герою, м (оборона куста — дальше: в бою некогда бегать за каждой кучкой) */
+  berryReach = 2.4;
+  /** Сбор урожая: ещё столько секунд вся малина на земле летит к герою, откуда угодно */
+  private harvestT = 0;
   private clock = 0;
   private frame = 0;
   /** Фонтан малины: ягоды, ещё не вылетевшие — выпускаются волнами по FOUNTAIN_PER_TICK за тик */
@@ -750,6 +754,7 @@ export class Props {
       }
     }
     this.clock += dt;
+    this.harvestT = Math.max(0, this.harvestT - dt);
     for (const s of this.supplies) {
       if (s.update(dt, this.fx, this.rand)) this.chestBurst(s);
       // лут вылетает фонтаном по одному
@@ -812,10 +817,10 @@ export class Props {
         }
       }
       const d = Math.hypot(hero.pos.x - p.pos.x, hero.pos.z - p.pos.z);
-      const reach = p.kind === 'berry' ? 2.4 : 1.7;
+      const reach = p.kind === 'berry' ? (this.harvestT > 0 ? Infinity : this.berryReach) : 1.7;
       if (p.lock <= 0 && !hero.down && d < reach) {
         // притягивается к герою, всё быстрее
-        const pull = hero.pos.clone().setY(0.6).sub(p.pos).setLength(Math.min(10, 3 + (reach - d) * 6) * dt);
+        const pull = hero.pos.clone().setY(0.6).sub(p.pos).setLength((reach === Infinity ? 14 + d : Math.min(10, 3 + (reach - d) * 6)) * dt);
         p.pos.add(pull);
         if (d < 0.6) {
           this.scene.remove(p.mesh);
@@ -852,6 +857,11 @@ export class Props {
     this.fx.flash(at.clone().setY(1.2), BERRY_GLOW, 3, 0.4);
     this.fx.burst(at.clone().setY(1.2), ['#ff4a7e', '#c8124a', '#ffd0e0'], 30, { speed: 5, up: 6, size: 0.1, life: 1, glow: true, gravity: 6 });
   }
+
+  /** Сбор урожая (оборона куста, волна отбита): вся малина на земле летит к герою */
+  harvest(sec = 4): void { this.harvestT = Math.max(this.harvestT, sec); }
+  /** Малины на земле (кучек) — для тестов */
+  get berriesOnGround(): number { return this.pickups.filter((p) => p.kind === 'berry').length; }
 
   /** Малина с рядового моба (wiki/design-mobs.md): одна кучка подскакивает из точки, без фонтана */
   berries(at: THREE.Vector3, amount: number): void {
