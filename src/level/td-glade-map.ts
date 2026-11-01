@@ -87,7 +87,7 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
       const x = alongX ? t : ax + w, z = alongX ? az + w : t;
       if (!inMap(x, z)) continue;
       if (Math.abs(w) <= 1) { road.add(key(x, z)); side.delete(key(x, z)); }
-      else if (!road.has(key(x, z))) side.set(key(x, z), i);
+      else if (!road.has(key(x, z))) side.set(key(x, z), t);
     }
   }
   for (const k of road) {
@@ -98,14 +98,15 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
   }
   const keep = (x: number, z: number): boolean => {
     if (Math.hypot(x, z) < 7) return true;
-    for (const p of GLADE_PADS) if (Math.hypot(x - p.x, z - p.z) < 3) return true;
+    for (const p of GLADE_PADS) if (Math.hypot(x - p.x, z - p.z) < 4.5) return true;
     for (const l of GLADE_LANES) if (Math.hypot(x - l.points[0][0], z - l.points[0][1]) < 6) return true;
     return false;
   };
-  // стенки: сплошные, с мшистыми и низкими кусками, столбик на каждом пятом; у площадок и площади — проёмы
-  for (const k of side.keys()) {
+  // стенки: с мшистыми и низкими кусками, столбик на каждом пятом; у площадок, у площади и через каждые 9 м — проёмы,
+  // чтобы герой переходил ров где угодно, а не обходил стенку до ближайшей площадки
+  for (const [k, t] of side) {
     const [x, z] = k.split(',').map(Number);
-    if (keep(x, z) || !inMap(x, z)) continue;
+    if (keep(x, z) || !inMap(x, z) || ((t % 9) + 9) % 9 < 3) continue;
     const v = hash2(x, z, 3);
     L.set(x, -1, z, v < 0.5 ? 'mossy' : 'wall_stone');
     if ((x + z) % 5 === 0) L.set(x, 0, z, 'wall_stone');
@@ -117,7 +118,7 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
   for (let x = -7; x <= 7; x++) for (let z = -7; z <= 7; z++) {
     const d = Math.hypot(x, z);
     if (d <= 4.6) L.set(x, -1, z, hash2(x, z, 4) < 0.85 ? 'tiles' : 'tiles_broken');
-    else if (d <= 5.6) { L.set(x, -1, z, 'mossy'); if (!road.has(key(x, z)) && laneDist(x, z) > 2 && hash2(x, z, 5) < 0.8) L.set(x, 0, z, hash2(x, z, 6) < 0.3 ? 'wall_stone' : 'wall_stone_wall'); }
+    else if (d <= 5.6) { L.set(x, -1, z, 'mossy'); if (!road.has(key(x, z)) && laneDist(x, z) > 2 && !GLADE_PADS.some((p) => Math.hypot(x - p.x, z - p.z) < 5) && hash2(x, z, 5) < 0.8) L.set(x, 0, z, hash2(x, z, 6) < 0.3 ? 'wall_stone' : 'wall_stone_wall'); }
     used.add(key(x, z));
   }
   for (const [x, z] of [[4, 4], [-4, 4], [4, -4], [-4, -4]]) L.addDecor({ name: 'lantern_post', pos: [x, 0, z], rot: [45] });
