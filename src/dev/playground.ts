@@ -47,7 +47,7 @@ import { DEV_TOOLS, fromMenu, openEditor } from '../devflag';
 import { loadSettings, pixelRatio } from '../menu/settings';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel';
 import { BattleMenu } from '../menu/pause';
-import { markWon, stashBerries } from '../menu/session';
+import { markWon, stashBerries, stashGear } from '../menu/session';
 import { campaignMap } from '../menu/campaign';
 import { TowerDefense, type Pad } from '../td/td';
 import { LavaFx } from '../td/lava-fx';
@@ -913,7 +913,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   // стены замка меняют блоки (пролом, починка): препятствия врагов — заново
   const levelChanged = (): void => { if (STREAM) return; obstacles.length = 0; obstacles.push(...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)); foeObsKey = null; };
   // из меню: малина героя откладывается — оборона ставит в профиль свою казну, лагерь вернёт собранное (src/menu/session.ts)
-  if (tdSpec && FROM_MENU) stashBerries(profile.data.berries);
+  if (tdSpec && FROM_MENU) { stashBerries(profile.data.berries); stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); }
   if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged }, tdSpec, document.body);
   // число игроков партии (сетевая игра — позже): ?players=N
   if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
@@ -1274,7 +1274,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Регионы открытого мира (?map=world): loaded, stats, kill(id), save() */
     regions,
     /** Подойти к торговцу и нажать F */
-    trade(kind: 'smith' | 'merchant') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
+    trade(kind: 'smith' | 'merchant' | 'sutler') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
     /** ПКМ: выстрел к точке */
     shoot(x: number, z: number) { return gear.shoot(new THREE.Vector3(x, hero.pos.y, z)); },
     /** Клавиши 1/2/3: артефакт к точке; charge 0..1 — заклинание с зарядом, без удержания */

@@ -10,9 +10,10 @@ import { pixelTex } from './textures';
  * Торговля — окно src/hud/shop.ts, открывается на F рядом с прилавком.
  */
 
-export type MerchantKind = 'smith' | 'merchant';
+/** sutler — маркитант обороны куста: свой прилавок за малину боя (src/hud/shop.ts) */
+export type MerchantKind = 'smith' | 'merchant' | 'sutler';
 
-export const MERCHANT_TITLE: Record<MerchantKind, string> = { smith: 'Кузнец', merchant: 'Торговец' };
+export const MERCHANT_TITLE: Record<MerchantKind, string> = { smith: 'Кузнец', merchant: 'Торговец', sutler: 'Маркитант' };
 
 const ROT = (deg: number): number => THREE.MathUtils.degToRad(deg);
 

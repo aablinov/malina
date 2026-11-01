@@ -5,7 +5,7 @@ import { makeTextures } from '../textures';
 import { Lobby } from './lobby';
 import { MenuScene } from './scene';
 import { applyAudio, SettingsPanel } from './settings-panel';
-import { loadMenuState, saveMenuState, takeStash, type GameMode } from './session';
+import { loadMenuState, saveMenuState, takeGear, takeStash, type GameMode } from './session';
 import '../style.css';
 import '../hud/hud.css';
 import './menu.css';
@@ -23,6 +23,9 @@ export function runMenu(): void {
   // бой отдавал малину героя под казну обороны — вернуть её (src/menu/session.ts)
   const stash = takeStash();
   if (stash !== null) { profile.data.berries = stash; profile.save(); }
+  // купленное у маркитанта обороны остаётся в бою: снаряжение — как до него
+  const gear = takeGear();
+  if (gear) { profile.data.items = gear.items as typeof profile.data.items; profile.data.equip = gear.equip as typeof profile.data.equip; profile.data.arrows = gear.arrows; profile.save(); }
 
   const app = document.getElementById('app') as HTMLElement;
   const canvas = document.getElementById('c') as HTMLCanvasElement;

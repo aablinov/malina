@@ -82,6 +82,9 @@ export class Pad {
   }
 }
 
+/** Мини-босс обороны (src/mobs/td-chiefs.ts) */
+export const isChief = (kind: string): boolean => kind.startsWith('chief_');
+
 export class TowerDefense {
   readonly spec: TdSpec;
   readonly pads: Pad[];
@@ -362,6 +365,7 @@ export class TowerDefense {
     m.aggro = Math.min(m.aggro, 3.5);
     m.yaw = Math.atan2(lane.points[1][0] - sx, lane.points[1][1] - sz);
     this.lairs.find((l) => l.lane === lane)?.burst();
+    if (isChief(kind)) { this.h.banner(`Идёт мини-босс!<small>${m.title} · ${lane.title.toLowerCase()}</small>`, 3); this.h.fx.shake = Math.max(this.h.fx.shake, 0.4); }
     return m;
   }
 
@@ -401,7 +405,8 @@ export class TowerDefense {
     this.wave++;
     // враги крепчают с волнами и игроками: уровень стаи, как у стражей (src/td/scaling.ts); больше игроков — больше врагов
     this.pack.setScale(waveLevel(this.wave, this.spec.level), this.players);
-    for (const g of w.groups) this.queue.push({ kind: g.kind, lane: g.lane, left: scaledCount(g.count, this.players), t: g.delay ?? 0, every: g.every });
+    // мини-босс один на любое число игроков: сильнее он и так — по уровню и игрокам (src/td/scaling.ts)
+    for (const g of w.groups) this.queue.push({ kind: g.kind, lane: g.lane, left: isChief(g.kind) ? g.count : scaledCount(g.count, this.players), t: g.delay ?? 0, every: g.every });
     this.h.banner(`Волна ${this.wave} из ${this.waves.length}<small>${w.title ?? 'Орден идёт к кусту'}</small>`, 2.5);
     this.h.fx.shake = Math.max(this.h.fx.shake, 0.2);
   }

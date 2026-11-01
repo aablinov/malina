@@ -1,4 +1,5 @@
 import { Level } from './level.ts';
+import { sutlerSpot } from './td-sutler.ts';
 import { hash2, noise2 } from './kit.ts';
 import { stampPrefab } from './prefab-lib/stamp.ts';
 import type { LibraryPrefab } from './prefab-lib/types.ts';
@@ -228,6 +229,10 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
   L.spawn = [0, 0, 7];
   L.meta.spawnYaw = 270;
   L.meta.goal = ['Защити куст малины', 'Кристальная поляна'];
+  // маркитант обороны (раздел 12 вики): у точки появления, не на дороге и не у площадки
+  const sutler = sutlerSpot(L, GLADE_LANES, GLADE_PADS, 4, 10);
+  if (!sutler) throw new Error('Нет места для маркитанта');
+  L.meta.merchants = [sutler];
   L.meta.td = GLADE_SPEC;
   L.meta.world = {
     sun: { color: '#8fb4ff', intensity: 0.55, elevation: 48, azimuth: 200, shadows: true },

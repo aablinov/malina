@@ -73,6 +73,28 @@ export function stashBerries(berries: number): void {
   try { if (sessionStorage.getItem(STASH_KEY) === null) sessionStorage.setItem(STASH_KEY, String(berries)); } catch { /* закрытое хранилище */ }
 }
 
+// снаряжение героя тоже: купленное у маркитанта обороны служит только в этом бою (wiki/design-tower-defence.md, раздел 12)
+const GEAR_KEY = 'malina.stash.gear';
+
+/** Снаряжение героя до боя: вещи, что надето, стрелы */
+export interface GearStash { items: unknown[]; equip: unknown; arrows: number }
+
+/** Отложить снаряжение героя перед боем (один раз за бой, как малину) */
+export function stashGear(g: GearStash): void {
+  try { if (sessionStorage.getItem(GEAR_KEY) === null) sessionStorage.setItem(GEAR_KEY, JSON.stringify(g)); } catch { /* закрытое хранилище */ }
+}
+
+/** Забрать отложенное снаряжение; null — ничего не откладывали */
+export function takeGear(): GearStash | null {
+  try {
+    const raw = sessionStorage.getItem(GEAR_KEY);
+    if (raw === null) return null;
+    sessionStorage.removeItem(GEAR_KEY);
+    const g = JSON.parse(raw) as GearStash;
+    return Array.isArray(g?.items) && g.equip ? g : null;
+  } catch { return null; }
+}
+
 /** Забрать отложенную малину; null — ничего не откладывали */
 export function takeStash(): number | null {
   try {
