@@ -360,3 +360,36 @@ test('оборона: лавовая карта — лава в разломах
   expect(r.haze).toBeGreaterThan(r.lava * 0.9);
   expect(r.haze).toBeLessThanOrEqual(r.lava);
 });
+
+test('оборона: слизень и лоза сами не ходят, но по дороге доходят до куста; половинки слизня идут дальше по той же дороге', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
+    m.hero.place(0, 30, Math.PI); m.hero.god = true;
+    const s = td.spawnOn('slime', 'north'), v = td.spawnOn('vine', 'west');
+    const p0 = [s.progress, v.progress];
+    for (let i = 0; i < 300; i++) m.step(0.1);
+    const p1 = [s.progress, v.progress];
+    for (let i = 0; i < 400; i++) m.step(0.1);
+    const p2 = [s.progress, v.progress];
+    // слизень на полпути убит — половинки на марше, а не стоят
+    td.pack.clear();
+    const b = td.spawnOn('slime', 'east');
+    for (let i = 0; i < 100; i++) m.step(0.1);
+    const pb = b.progress;
+    b.hit(999, new V(0, 0, 0), b.pos.clone(), 0);
+    for (let i = 0; i < 10; i++) m.step(0.1);
+    const kids = td.pack.mobs.filter((x: any) => x !== b && !x.dead);
+    const k0 = kids.map((x: any) => x.progress);
+    for (let i = 0; i < 100; i++) m.step(0.1);
+    const k1 = kids.map((x: any) => x.progress);
+    return { p0, p1, p2, pb, lanes: kids.map((x: any) => x.laneId), k0, k1 };
+  });
+  expect(r.p0[0]).toBeLessThan(0.1);
+  expect(r.p1[0]).toBeGreaterThan(r.p0[0] + 0.3);
+  expect(r.p1[1]).toBeGreaterThan(r.p0[1] + 0.2);
+  expect(r.p2).toEqual([1, 1]);
+  expect(r.pb).toBeGreaterThan(0.1);
+  expect(r.lanes).toEqual(['east', 'east']);
+  for (let i = 0; i < 2; i++) { expect(r.k0[i]).toBeGreaterThanOrEqual(r.pb - 0.05); expect(r.k1[i]).toBeGreaterThan(r.k0[i] + 0.1); }
+});

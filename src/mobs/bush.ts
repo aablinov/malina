@@ -50,6 +50,8 @@ export class BerrySlime extends Mob {
 
   /** Ходит только прыжками */
   protected override steer(dt: number): boolean { this.face(dt); return false; }
+  /** По дороге скачет мелкими прыжками */
+  protected override get marchPace(): number { return 1.8 * this.slowMul; }
 
   protected choose(dist: number): string | null { return dist < 9 ? 'hop' : null; }
   protected override rest(): number { return rand(0.3, 0.7); }
@@ -88,7 +90,8 @@ export class BerrySlime extends Mob {
       const m = this.mh.spawn(this.size === 2 ? 'slime_mid' : 'slime_small', this.pos.clone().addScaledVector(side, s * this.radius));
       if (!m) continue;
       m.summoned = true;
-      m.notice();
+      // на марше половинки скачут дальше по той же дороге, иначе — сразу к герою
+      if (this.march) m.joinMarch(this); else m.notice();
     }
   }
 
@@ -96,6 +99,8 @@ export class BerrySlime extends Mob {
     // сплющивается перед прыжком, вытягивается в полёте, колышется на месте
     const a = this.state === 'attack' ? (this.st < 0.25 ? 0.7 : this.st < 0.55 ? 1.25 : 0.8) : 1 + Math.sin(this.time * 4) * 0.05;
     this.jelly.scale.y = this.jelly.scale.x * a;
+    // на марше подпрыгивает на ходу
+    if (this.state !== 'attack') this.flyY = this.state === 'walk' ? Math.abs(Math.sin(this.time * 5)) * 0.35 : 0;
   }
 }
 
@@ -232,6 +237,8 @@ export class VineWhip extends Mob {
 
   /** Не ходит — только поворачивается */
   protected override steer(dt: number): boolean { this.face(dt); return false; }
+  /** По дороге медленно ползёт, пуская корни */
+  protected override get marchPace(): number { return 1.2 * this.slowMul; }
   /** Корни держат: не отбрасывается */
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void { const p = this.pos.clone(); super.hit(dmg, dir, point, knock); this.pos.copy(p); }
 
