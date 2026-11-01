@@ -5,7 +5,9 @@ import type { Target } from '../target';
 import { pixelTex } from '../textures';
 import { C, glowMat, UNIT, wrap } from '../bosses/kit';
 import { boom, hiss, voice } from '../spell-audio';
-import { MAX_LEVEL, TOWERS, UPGRADE_DMG, UPGRADE_RANGE, upgradeCost, type TowerDef, type TowerKind } from './towers';
+import { addDecoy, type Decoy } from '../decoys';
+import { HpBar } from './hpbar';
+import { MAX_LEVEL, REPAIR_COST, TOWERS, UPGRADE_DMG, UPGRADE_HP, UPGRADE_RANGE, upgradeCost, type TowerDef, type TowerKind } from './towers';
 
 /**
  * Башня обороны куста (wiki/design-tower-defence.md): стоит на площадке, сама выбирает цель — того, кто дальше всех
@@ -16,6 +18,10 @@ import { MAX_LEVEL, TOWERS, UPGRADE_DMG, UPGRADE_RANGE, upgradeCost, type TowerD
  * катапульта — камень по дуге, взрыв по площади; огненная жаровня — струя пламени конусом, поджигает;
  * волшебный обелиск — сфера, бьёт цепью и ослабляет. Осада (раздел 9): стенная баллиста — тяжёлый болт по прямой сквозь
  * строй, пробивает броню (удар без направления, src/mobs/mob.ts); котёл со смолой — лужа под ногами: вязнут и горят.
+ *
+ * Прочность (раздел 10): для охотников на башни (Mob.hunter) башня — осадная приманка (src/decoys.ts). Сгрызли до нуля —
+ * руины: не стреляет, дымит, чинится за малину с прежним уровнем. Ледяной колдунчик замораживает башню: не стреляет,
+ * пока лёд не растает или герой не разобьёт его двумя ударами (лёд — цель меча, `ice`). Морозный шпиль не мёрзнет.
  */
 
 /** Враг для башни: цель с долей пройденной дороги (кто ближе к кусту — тот первый) */
@@ -47,7 +53,10 @@ interface Burn { foe: Foe; t: number; tick: number; dmg: number }
 /** Лужа смолы: вязнут и горят, пока не высохла */
 interface Pool { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; at: THREE.Vector3; t: number; tick: number; r: number }
 
-export class Tower {
+/** Сколько ударов героя разбивают лёд на башне */
+const ICE_HITS = 2;
+
+export class Tower implements Decoy {
   readonly def: TowerDef;
   readonly pos: THREE.Vector3;
   readonly group = new THREE.Group();
@@ -61,6 +70,22 @@ export class Tower {
   dealt = 0;
   kills = 0;
   readonly solid: Obstacle;
+  readonly radius = 0.75;
+  /** Охотник на башни видит её из этого радиуса */
+  readonly taunt = 7;
+  readonly siege = true;
+  hp: number;
+  maxHp: number;
+  /** Заморожена ещё столько секунд */
+  frozen = 0;
+  /** Лёд на башне — цель меча героя, пока башня заморожена */
+  readonly ice: Target;
+  /** Башню ранили или заморозили — сигнал «башня в беде» (src/td/td.ts) */
+  onAlarm?: (why: 'hurt' | 'frozen' | 'ruin') => void;
+  private iceHits = 0;
+  private readonly iceMesh: THREE.Mesh;
+  private readonly bar = new HpBar(1.6, 3.4);
+  private readonly dropDecoy: () => void;
   private cd = 0.3;
   private time = 0;
   private readonly body = new THREE.Group();
@@ -85,8 +110,96 @@ export class Tower {
     this.group.position.copy(this.pos);
     this.group.add(this.body);
     this.solid = { x, z, hx: 0.75, hz: 0.75, rot: 0, h: 2.5, y0: y };
+    this.hp = this.maxHp = this.def.hp;
     this.build();
+    this.iceMesh = new THREE.Mesh(UNIT, new THREE.MeshLambertMaterial({ color: '#bfe8ff', emissive: '#3a7aa8', transparent: true, opacity: 0.55 }));
+    this.iceMesh.scale.set(2, 3, 2);
+    this.iceMesh.position.y = 1.6;
+    this.iceMesh.visible = false;
+    this.group.add(this.iceMesh, this.bar.group);
+    const me = this;
+    this.ice = {
+      pos: this.pos, radius: 1, topY: 3, prop: true,
+      get alive() { return me.frozen > 0; },
+      hit: () => me.chip(),
+    };
+    this.dropDecoy = addDecoy(this);
     h.scene.add(this.group);
+  }
+
+  /** Цела (для охотников): руины — уже не цель */
+  get alive(): boolean { return this.hp > 0; }
+  get ruined(): boolean { return this.hp <= 0; }
+  /** Цена починки руин */
+  get repairCost(): number { return Math.max(10, Math.round(this.spent * REPAIR_COST)); }
+
+  /** Урон от охотника; до нуля — руины */
+  hurt(dmg: number): void {
+    if (this.ruined || dmg <= 0) return;
+    this.hp = Math.max(0, this.hp - dmg);
+    this.h.fx.text(this.pos.clone().setY(this.pos.y + 3), `−${Math.round(dmg)}`, 'bad');
+    this.h.fx.burst(this.pos.clone().setY(this.pos.y + 1), ['#9a8f70', '#5e3c22'], 5, { speed: 2, up: 2, size: 0.08, life: 0.4, gravity: 8 });
+    if (this.hp > 0) { this.onAlarm?.('hurt'); return; }
+    this.ruin();
+  }
+
+  private ruin(): void {
+    this.target = null;
+    this.thaw(false);
+    this.body.rotation.z = 0.22;
+    this.turret.rotation.x = 0.4;
+    for (const m of this.lamps) m.color.setScalar(0.3);
+    for (const m of this.glows) m.visible = false;
+    this.h.fx.burst(this.pos.clone().setY(this.pos.y + 1.2), ['#4a4440', '#2a2624', '#9a8f70'], 30, { speed: 3, up: 3, size: 0.16, life: 0.9, gravity: 6 });
+    this.h.fx.shake = Math.max(this.h.fx.shake, 0.3);
+    if (!this.h.quiet()) boom(90, 40, 0.5, 0.35);
+    this.onAlarm?.('ruin');
+  }
+
+  /** Починить руины (или подлатать): полная прочность, прежний уровень */
+  repair(): void {
+    const was = this.ruined;
+    this.hp = this.maxHp;
+    if (!was) return;
+    this.body.rotation.z = 0;
+    this.turret.rotation.x = 0;
+    for (const m of this.lamps) m.color.setScalar(1);
+    for (const m of this.glows) m.visible = true;
+    this.cd = 0.5;
+    this.h.fx.burst(this.pos.clone().setY(this.pos.y + 0.6), ['#d8cfa8', '#9ad87a', '#ffffff'], 20, { speed: 3, up: 3, size: 0.1, life: 0.6, gravity: 6 });
+    if (!this.h.quiet()) voice({ type: 'triangle', f: 440, f1: 880, dur: 0.25, vol: 0.05 });
+  }
+
+  /** Заморозить на sec секунд: не стреляет. Морозный шпиль и руины не мёрзнут */
+  freeze(sec: number): boolean {
+    if (this.def.id === 'frost' || this.ruined) return false;
+    const fresh = this.frozen <= 0;
+    this.frozen = Math.max(this.frozen, sec);
+    this.iceHits = 0;
+    this.iceMesh.visible = true;
+    if (fresh) {
+      this.h.fx.burst(this.pos.clone().setY(this.pos.y + 1.6), [ICE, '#ffffff'], 18, { speed: 2.5, up: 2, size: 0.1, life: 0.6, glow: true, gravity: 4 });
+      if (!this.h.quiet()) hiss({ dur: 0.35, vol: 0.08, f: 5000, f1: 2000, q: 2 });
+      this.onAlarm?.('frozen');
+    }
+    return true;
+  }
+
+  /** Удар героя по льду: со второго лёд разбит */
+  private chip(): void {
+    if (this.frozen <= 0) return;
+    this.iceHits++;
+    this.h.fx.burst(this.pos.clone().setY(this.pos.y + 1.6), [ICE, '#ffffff'], 8, { speed: 3, up: 2, size: 0.08, life: 0.4, gravity: 8 });
+    if (this.iceHits >= ICE_HITS) this.thaw(true);
+  }
+
+  private thaw(loud: boolean): void {
+    if (this.frozen <= 0 && !this.iceMesh.visible) return;
+    this.frozen = 0;
+    this.iceMesh.visible = false;
+    if (!loud) return;
+    this.h.fx.burst(this.pos.clone().setY(this.pos.y + 1.6), [ICE, '#ffffff', ICE_DEEP], 26, { speed: 4, up: 3, size: 0.12, life: 0.7, glow: true, gravity: 8 });
+    if (!this.h.quiet()) hiss({ dur: 0.2, vol: 0.1, f: 6000, f1: 3000, q: 1 });
   }
 
   get kind(): TowerKind { return this.def.id; }
@@ -106,6 +219,10 @@ export class Tower {
     if (cost === null) return false;
     this.level++;
     this.spent += cost;
+    // прочнее с уровнем: прибавка сразу и к запасу
+    const max = Math.round(this.def.hp * UPGRADE_HP ** (this.level - 1));
+    this.hp += max - this.maxHp;
+    this.maxHp = max;
     this.build();
     const c = new THREE.Color(this.def.color);
     this.h.fx.flash(this.pos.clone().setY(1.6), c.clone().multiplyScalar(2.5), 2.4, 0.3);
@@ -120,6 +237,9 @@ export class Tower {
     for (const l of this.lobs.splice(0)) this.dropMesh(l.mesh);
     for (const p of this.pools.splice(0)) { this.h.scene.remove(p.mesh); p.mat.dispose(); }
     this.burns.length = 0;
+    this.dropDecoy();
+    this.bar.dispose();
+    (this.iceMesh.material as THREE.Material).dispose();
     this.h.scene.remove(this.group);
     for (const m of this.lamps) m.dispose();
     for (const m of this.glows) m.dispose();
@@ -537,15 +657,20 @@ export class Tower {
     this.time += dt;
     this.cd -= dt;
     this.recoil = Math.max(0, this.recoil - dt * (this.def.id === 'splash' ? 1.2 : 6));
-    // цель: держим прежнюю, пока жива и в радиусе, иначе — первого по дороге
-    if (!this.target || !this.inRange(this.target)) this.target = this.pick();
+    this.bar.set(this.hp / this.maxHp, !this.ruined && this.hp < this.maxHp);
+    if (this.frozen > 0) { this.frozen -= dt; if (this.frozen <= 0) this.thaw(true); }
+    if (this.ruined && Math.random() < 0.3) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.2, 1 + Math.random() * 1.5, (Math.random() - 0.5) * 1.2)), vel: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.9, (Math.random() - 0.5) * 0.3), life: 1.2, size: 0.18, color: '#3a3634', gravity: -0.2 }, false);
+    // руины и лёд — не стреляет; цель: держим прежнюю, пока жива и в радиусе, иначе — первого по дороге
+    const idle = this.ruined || this.frozen > 0;
+    if (idle) this.target = null;
+    else if (!this.target || !this.inRange(this.target)) this.target = this.pick();
     const t = this.target;
     if (t) {
       const want = Math.atan2(t.pos.x - this.pos.x, t.pos.z - this.pos.z), d = wrap(want - this.turret.rotation.y), m = (this.def.id === 'splash' ? 3 : 9) * dt;
       this.turret.rotation.y += Math.max(-m, Math.min(m, d));
       if (this.cd <= 0 && Math.abs(d) < 0.5) { this.cd = this.def.cd; this.fire(t); }
     }
-    this.animate(dt);
+    if (!idle) this.animate(dt);
     for (let i = this.bolts.length - 1; i >= 0; i--) {
       const b = this.bolts[i];
       b.t += dt;
