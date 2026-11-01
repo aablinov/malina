@@ -28,19 +28,30 @@ test('оборона: маркитант на всех картах, цены п
     });
     expect(ok, map).toBe(true);
   }
+  // снаряжение героя до боёв — отложено при первом бою (в бою у героя набор обороны)
+  const camp0 = await page.evaluate(() => { const g = JSON.parse(sessionStorage.getItem('malina.stash.gear') ?? '{}'); return { items: g.items?.length, melee: g.equip?.melee, arrows: g.arrows }; });
+  expect(camp0.items).toBeGreaterThan(6);
   // бой из меню: купить топор, надеть, вернуться в лагерь
   await page.goto(`${URL}?map=td&from=menu`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
   const r = await page.evaluate(async () => {
     const m = (window as any).__malina, D = m.profile.data;
     await m.ready;
-    const before = { items: D.items.length, melee: D.equip.melee, arrows: D.arrows };
+    const def = (uid: string | null): string => D.items.find((i: any) => i.uid === uid)?.def ?? '';
+    const kit = { items: D.items.length, melee: def(D.equip.melee), armor: def(D.equip.armor), ranged: def(D.equip.ranged), arts: D.equip.artifacts.map(def), aura: D.equip.aura, power: Math.max(...D.items.map((i: any) => i.power)) };
+    const before = { items: D.items.length, melee: D.equip.melee };
+    m.profile.data.berries = 3000;
     const open = m.trade('sutler');
     const title = document.querySelector('.trade-head h1')?.textContent;
     m.shop.setTab('melee');
     const prices = Object.fromEntries(m.shop.list.map((w: any) => [w.key, w.price]));
     m.shop.setTab('ranged');
     const arrows = m.shop.list.find((w: any) => w.key === 'arrows')?.price;
+    m.shop.setTab('spell');
+    const spells = Object.fromEntries(m.shop.list.map((w: any) => [w.key, w.price]));
+    m.shop.setTab('aura');
+    const auras = Object.fromEntries(m.shop.list.map((w: any) => [w.key, w.price]));
+    const auraBought = m.shop.buy('rage') && D.items.some((i: any) => i.def === 'rage');
     m.shop.setTab('melee');
     const b0 = m.berries;
     const bought = m.shop.buy('axe');
@@ -50,21 +61,31 @@ test('оборона: маркитант на всех картах, цены п
     const inBattle = { items: D.items.length, melee: D.equip.melee };
     m.shop.hide();
     m.td.state = 'won';
-    return { open, title, prices, arrows, bought, paid, before, inBattle, axe: axe.uid };
+    return { open, title, prices, arrows, bought, paid, before, inBattle, axe: axe.uid, kit, spells, auras, auraBought };
   });
   expect(r.open).toBe(true);
   expect(r.title).toBe('Маркитант');
-  expect(r.prices.axe).toBe(80);
-  expect(r.prices.claymore).toBe(160);
-  expect(r.prices.scythe).toBe(260);
-  expect(r.arrows).toBe(15);
+  expect(r.prices.axe).toBe(240);
+  expect(r.prices.claymore).toBe(480);
+  expect(r.prices.scythe).toBe(780);
+  expect(r.arrows).toBe(45);
   expect(r.bought).toBe(true);
-  expect(r.paid).toBe(80);
-  expect(r.inBattle).toEqual({ items: r.before.items + 1, melee: r.axe });
+  expect(r.paid).toBe(240);
+  expect(r.inBattle).toEqual({ items: r.before.items + 2, melee: r.axe });
+  // в бой — набор нового героя силы 1
+  expect(r.kit).toEqual({ items: 6, melee: 'sword', armor: 'tunic', ranged: 'bow', arts: ['fireball', 'spark', 'heal'], aura: null, power: 1 });
+  // все заклинания и ауры — за малину по редкости
+  expect(r.spells.fireball).toBe(240);
+  expect(r.spells.meteor).toBe(480);
+  expect(r.spells.starfall).toBe(780);
+  expect(r.spells.firewall).toBe(240);
+  expect(Object.keys(r.auras).length).toBe(12);
+  expect(r.auras.rage).toBe(780);
+  expect(r.auraBought).toBe(true);
   await expect(page.locator('.pz.open.won')).toBeVisible();
   await page.getByRole('button', { name: 'В лагерь' }).click();
   await page.waitForFunction(() => (window as any).__menu?.screen === 'lobby');
   const camp = await page.evaluate((key) => { const d = JSON.parse(localStorage.getItem(key) ?? '{}'); return { items: d.items?.length, melee: d.equip?.melee, arrows: d.arrows }; }, 'malina.profile');
-  expect(camp).toEqual(r.before);
+  expect(camp).toEqual(camp0);
   expect(errors).toEqual([]);
 });

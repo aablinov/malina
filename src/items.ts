@@ -486,6 +486,20 @@ export class Profile {
     return p.data;
   }
 
+  /**
+   * Набор обороны куста (wiki/design-tower-defence.md, раздел 12): в бой — как новый герой, всё силы 1 — меч стража,
+   * куртка странника, лук и три стартовых заклинания, без ауры; остальное покупается у маркитанта за малину боя.
+   * Своё снаряжение героя откладывается на время боя и возвращается в лагере (src/menu/session.ts)
+   */
+  tdKit(): void {
+    const D = this.data;
+    D.items = [];
+    const eq = (def: string): string => this.add(def, 1, false).uid;
+    D.equip = { melee: eq('sword'), armor: eq('tunic'), ranged: eq('bow'), artifacts: [eq('fireball'), eq('spark'), eq('heal')], aura: null };
+    D.arrows = 40;
+    this.save();
+  }
+
   static load(): ProfileData | null {
     try {
       const raw = localStorage.getItem(KEY);

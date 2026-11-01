@@ -913,7 +913,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   // стены замка меняют блоки (пролом, починка): препятствия врагов — заново
   const levelChanged = (): void => { if (STREAM) return; obstacles.length = 0; obstacles.push(...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)); foeObsKey = null; };
   // из меню: малина героя откладывается — оборона ставит в профиль свою казну, лагерь вернёт собранное (src/menu/session.ts)
-  if (tdSpec && FROM_MENU) { stashBerries(profile.data.berries); stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); }
+  // снаряжение откладывается всегда (и с ?map=td без меню — лагерь вернёт), в бой — набор нового героя (Profile.tdKit)
+  if (tdSpec && FROM_MENU) stashBerries(profile.data.berries);
+  if (tdSpec) { stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); profile.tdKit(); }
   if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged, harvest: () => props.harvest() }, tdSpec, document.body);
   // оборона: малину с павших тянет издалека — в бою некогда бегать за каждой кучкой
   if (tdSpec) props.berryReach = 6;
