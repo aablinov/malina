@@ -74,7 +74,7 @@ test('осада: замок — стены, бастионы с площадк�
   expect(r.pads).toBe(16);
   expect(r.high).toBe(12);
   expect(r.lanes).toEqual(['gate', 'east', 'south', 'west']);
-  expect(r.kinds).toEqual(['arrow', 'frost', 'splash', 'fire', 'magic', 'ballista', 'oil']);
+  expect(r.kinds).toEqual(['arrow', 'frost', 'splash', 'fire', 'magic', 'meteor', 'storm', 'winter', 'ballista', 'oil']);
   expect(r.walls).toEqual([['gate', 'gate', 250], ['east', 'wall', 400], ['south', 'wall', 400], ['west', 'wall', 400]]);
   expect(r.bad).toBe(0);
   expect(r.pits).toBe(0);

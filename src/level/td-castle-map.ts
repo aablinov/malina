@@ -53,7 +53,7 @@ export const CASTLE_SPEC: TdSpec = {
   rest: 25,
   level: 5,
   walls: CASTLE_WALLS,
-  towers: ['arrow', 'frost', 'splash', 'fire', 'magic', 'ballista', 'oil'],
+  towers: ['arrow', 'frost', 'splash', 'fire', 'magic', 'meteor', 'storm', 'winter', 'ballista', 'oil'],
   repair: 20,
   mist: { radius: 13, density: 0.75, color: '#dfe7ee' },
 };
