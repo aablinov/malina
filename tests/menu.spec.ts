@@ -52,9 +52,11 @@ test('меню: одиночная игра — надеть топор в ла�
   await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
   const battle = await page.evaluate((u) => {
     const m = (window as any).__malina, prof = JSON.parse(localStorage.getItem('malina.profile') ?? '{}');
-    return { waves: m.td.waves.length, berries: m.berries, melee: prof.equip?.melee === u, title: document.title };
+    const melee = prof.items?.find((i: any) => i.uid === prof.equip?.melee);
+    return { waves: m.td.waves.length, berries: m.berries, melee: melee?.def, power: melee?.power, axe: prof.items?.some((i: any) => i.uid === u), title: document.title };
   }, uid);
-  expect(battle).toEqual({ waves: 12, berries: 350, melee: true, title: 'Малина — Кристальная поляна' });
+  // в бою обороны — набор нового героя (src/items.ts, tdKit); топор ждёт в лагере
+  expect(battle).toEqual({ waves: 12, berries: 350, melee: 'sword', power: 1, axe: false, title: 'Малина — Кристальная поляна' });
 
   // Esc — пауза, время стоит; «Выйти в лагерь» — обратно, малина героя на месте
   await page.keyboard.press('Escape');
@@ -63,6 +65,7 @@ test('меню: одиночная игра — надеть топор в ла�
   await page.waitForURL(/menu=lobby/);
   await page.waitForFunction(() => (window as any).__menu?.screen === 'lobby');
   expect(await page.evaluate(() => (window as any).__menu.profile.data.berries)).toBe(777);
+  expect(await page.evaluate(() => (window as any).__menu.profile.data.equip.melee)).toBe(uid);
   expect(errors).toEqual([]);
 });
 

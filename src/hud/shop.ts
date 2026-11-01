@@ -29,17 +29,17 @@ const TAB: Record<Tab, TabDef> = {
   aura: { id: 'aura', title: SLOT_TITLE.aura, icon: 'a-bastion' },
   spell: { id: 'spell', title: 'Заклинания', icon: 'fireball' },
 };
-const TABS: Record<MerchantKind, Tab[]> = { smith: ['melee', 'ranged', 'armor'], merchant: ['melee', 'ranged', 'armor', 'artifact', 'spell'], sutler: ['melee', 'ranged', 'armor', 'artifact'] };
+const TABS: Record<MerchantKind, Tab[]> = { smith: ['melee', 'ranged', 'armor'], merchant: ['melee', 'ranged', 'armor', 'artifact', 'spell'], sutler: ['melee', 'ranged', 'armor', 'artifact', 'spell', 'aura'] };
 const DESC: Record<MerchantKind, string> = {
-  sutler: 'Маркитант обороны: оружие, луки, броня и артефакты за малину боя. Купленное служит до конца боя — башня или меч, решай сам.',
+  sutler: 'Маркитант обороны: оружие, луки, броня, артефакты, все заклинания и ауры за малину боя. Купленное служит до конца боя — башни или герой, решай сам.',
   smith: 'Выкует любое оружие или броню по твоей силе и перекуёт надетое — +1 к силе за малину.',
   merchant: 'Продаёт всё: оружие, луки, броню, артефакты, обычные заклинания и стрелы. Цена — по силе предмета.',
 };
 const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask', aura: 'a-bastion' };
 const COLS = 4;
-/** Цены маркитанта обороны (wiki/design-tower-defence.md, раздел 12): по редкости, вровень с башнями (60–130) */
-export const SUTLER_PRICE: Record<ItemDef['rarity'], number> = { common: 80, rare: 160, unique: 260 };
-export const SUTLER_ARROWS = 15;
+/** Цены маркитанта обороны (wiki/design-tower-defence.md, раздел 12): по редкости, дорого — вложиться в героя или в две-три башни */
+export const SUTLER_PRICE: Record<ItemDef['rarity'], number> = { common: 240, rare: 480, unique: 780 };
+export const SUTLER_ARROWS = 45;
 const ARROWS = 24;
 
 export class Shop {
@@ -145,7 +145,9 @@ export class Shop {
     const of = (f: (d: ItemDef) => boolean): Ware[] => ITEMS.filter(f).map((d) => ({ key: d.id, def: d, price: sutler ? SUTLER_PRICE[d.rarity] : priceOf(d.id, pw) }));
     let w: Ware[];
     switch (this.tab) {
-      case 'spell': w = of((d) => d.spell === 'shop'); break;
+      // у маркитанта — все заклинания (стартовые, лавочные, с боссов) и все ауры
+      case 'spell': w = of((d) => (sutler ? d.slot === 'artifact' && !!d.spell : d.spell === 'shop')); break;
+      case 'aura': w = of((d) => d.slot === 'aura'); break;
       case 'artifact': w = of((d) => d.slot === 'artifact' && !d.spell); break;
       default: w = of((d) => d.slot === this.tab && !d.spell);
     }
