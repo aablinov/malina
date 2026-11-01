@@ -1300,7 +1300,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Нажатие пробела: перекат */
     press(what: 'roll') { input[what] = true; },
     /** Нажать ЛКМ в точке на земле (shift — удар на месте); цель в этой точке — подойти и бить */
-    click(x: number, z: number, shift = false, y?: number) { pointer.ground.set(x, y ?? terrain.floorAt(x, z, hero.pos.y + 4), z); pointer.hover = pickAt(x, z); pointer.pad = td && !pointer.hover ? td.nearPad(new THREE.Vector3(x, 0, z)) : null; pointer.shift = shift; pointer.down = true; },
+    click(x: number, z: number, shift = false, y?: number) { pointer.ground.set(x, y ?? terrain.floorAt(x, z, hero.pos.y + 4), z); pointer.hover = pickAt(x, z); pointer.pad = td && !pointer.hover ? td.nearPad(new THREE.Vector3(x, y ?? 0, z)) : null; pointer.shift = shift; pointer.down = true; },
     /** Отпустить ЛКМ */
     release() { pointer.down = false; },
     get goal() { return goal; },
