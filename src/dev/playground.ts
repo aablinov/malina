@@ -914,7 +914,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const levelChanged = (): void => { if (STREAM) return; obstacles.length = 0; obstacles.push(...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)); foeObsKey = null; };
   // из меню: малина героя откладывается — оборона ставит в профиль свою казну, лагерь вернёт собранное (src/menu/session.ts)
   if (tdSpec && FROM_MENU) { stashBerries(profile.data.berries); stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); }
-  if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged }, tdSpec, document.body);
+  if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged, harvest: () => props.harvest() }, tdSpec, document.body);
+  // оборона: малину с павших тянет издалека — в бою некогда бегать за каждой кучкой
+  if (tdSpec) props.berryReach = 6;
   // число игроков партии (сетевая игра — позже): ?players=N
   if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
   td?.setPlayers(bossPlayers);
@@ -1017,6 +1019,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       ...props.supplies.map((c) => ({ x: c.pos.x, z: c.pos.z, icon: 'chest', dim: c.opened })),
       ...props.terminals.map((t) => ({ x: t.pos.x, z: t.pos.z, icon: 'heart' })),
       ...merchants.map((m) => ({ x: m.pos.x, z: m.pos.z, icon: m.kind === 'smith' ? 'hammer' : 'berry', always: true })),
+      ...(td?.alarmMarkers ?? []),
     ], [props.supplies.filter((c) => c.opened).length, props.supplies.length]); }
     helpT -= dt;
     $('pgHelp').style.opacity = helpOn && helpT > 0 ? String(Math.min(0.9, helpT)) : '0';

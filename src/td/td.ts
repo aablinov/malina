@@ -7,6 +7,9 @@ import type { Target } from '../target';
 import type { BossHooks } from '../bosses/kit';
 import { C, glowMat } from '../bosses/kit';
 import { Pack } from '../mobs/pack';
+import { MOBS } from '../mobs/roster';
+import { voice } from '../spell-audio';
+import type { MapMarker } from '../hud/automap';
 import type { Mob } from '../mobs/mob';
 import { Tower, type Foe } from './tower';
 import { RaspberryBush } from './bush';
@@ -40,7 +43,15 @@ export interface TdHooks {
   level?: Level;
   /** Блоки уровня изменились: пересчитать препятствия врагов и героя */
   levelChanged?(): void;
+  /** Волна отбита: вся малина на земле летит к герою (src/props.ts, harvest) */
+  harvest?(): void;
 }
+
+/** Башня в беде: что с ней и сколько ещё показывать сигнал, с */
+interface Alarm { why: 'hurt' | 'frozen' | 'ruin'; t: number }
+const ALARM_TEXT: Record<Alarm['why'], string> = { hurt: 'Башню грызут', frozen: 'Башню заморозили', ruin: 'Башня разрушена' };
+/** Охотники на башни — в карточке следующей волны с пометкой */
+const HUNTERS = new Set(['gnawer', 'frostling']);
 
 /** Площадка: кольцо на земле, подсветка под курсором, башня на ней */
 export class Pad {
@@ -124,6 +135,9 @@ export class TowerDefense {
   private hudHtml = '';
   private solidsCache: Obstacle[] = [];
   private solidsN = -1;
+  /** Башни в беде: сигнал в HUD и на карте */
+  readonly alarms = new Map<Tower, Alarm>();
+  private alarmBeep = 0;
   private foeSolidsCache: Obstacle[] | null = null;
   private foeSolidsN = -1;
 
@@ -318,6 +332,45 @@ export class TowerDefense {
   /** Башню грызут, заморозили или сломали: сигнал игроку */
   private alarm(t: Tower, why: 'hurt' | 'frozen' | 'ruin'): void {
     if (why === 'ruin') this.h.toast(`Башня разрушена: ${t.title} — F у руин, чтобы починить`);
+    const was = this.alarms.get(t);
+    this.alarms.set(t, { why: was?.why === 'ruin' && why !== 'ruin' ? 'ruin' : why, t: why === 'ruin' ? 8 : 4 });
+    // тревожный сигнал — не чаще раза в 2 с, и только когда башня далеко от героя
+    const hp = this.h.hero.pos;
+    if (this.alarmBeep <= 0 && Math.hypot(t.pos.x - hp.x, t.pos.z - hp.z) > 8 && !this.h.quiet()) {
+      this.alarmBeep = 2;
+      voice({ type: 'square', f: 880, f1: 660, dur: 0.12, vol: 0.04, lp: 2500 });
+      voice({ type: 'square', f: 880, f1: 660, dur: 0.12, vol: 0.04, lp: 2500, delay: 0.18 });
+    }
+  }
+
+  /** Метки башен в беде для мини-карты и карты (src/hud/automap.ts) */
+  get alarmMarkers(): MapMarker[] {
+    return [...this.alarms].map(([t, a]) => ({ x: t.pos.x, z: t.pos.z, icon: a.why === 'frozen' ? 'icerain' : 'axe', always: true }));
+  }
+
+  /** Строка тревоги в HUD: самая свежая беда, стрелка — куда бежать (экранное направление камеры) */
+  private alarmLine(): string {
+    let best: [Tower, Alarm] | null = null;
+    for (const e of this.alarms) if (!best || e[1].t > best[1].t) best = e;
+    if (!best) return '';
+    const [t, a] = best, hp = this.h.hero.pos, dx = t.pos.x - hp.x, dz = t.pos.z - hp.z, d = Math.hypot(dx, dz);
+    // камера смотрит из (+1, ·, +1): вправо на экране — (1, −1), вверх — (−1, −1)
+    const deg = Math.round((Math.atan2(dx - dz, -dx - dz) * 180) / Math.PI);
+    return `<div class="td-alarm ${a.why}">${ALARM_TEXT[a.why]}: ${t.title} <i style="transform:rotate(${deg}deg)">↑</i> ${Math.round(d)} м</div>`;
+  }
+
+  /** Карточка следующей волны: кто и сколько, охотники на башни и мини-босс — отдельно */
+  private wavePreview(): string {
+    const w = this.waves[this.wave];
+    if (!w) return '';
+    const count = new Map<string, number>();
+    for (const g of w.groups) count.set(g.kind, (count.get(g.kind) ?? 0) + (isChief(g.kind) ? g.count : scaledCount(g.count, this.players)));
+    const chip = (k: string, n: number): string => {
+      const cls = isChief(k) ? 'chief' : HUNTERS.has(k) ? 'hunter' : '';
+      const mark = isChief(k) ? '♛ ' : k === 'frostling' ? '❄ ' : k === 'gnawer' ? '⚠ ' : '';
+      return `<span class="${cls}">${mark}${MOBS[k]?.title ?? k}${isChief(k) ? '' : ` ×${n}`}</span>`;
+    };
+    return `<div class="td-preview"><b>${w.title ?? `Волна ${this.wave + 1}`}:</b> ${[...count].map(([k, n]) => chip(k, n)).join('')}</div>`;
   }
 
   upgrade(p: Pad): boolean {
@@ -429,6 +482,7 @@ export class TowerDefense {
       const w = this.waves[this.wave - 1], bounty = scaledBounty(w.bounty, this.players);
       this.h.profile.data.berries += bounty;
       this.h.fx.text(this.bush.pos.clone().setY(3.6), `+${bounty} малины`, 'berry');
+      this.h.harvest?.();
       if (this.wave >= this.waves.length) { this.state = 'won'; this.h.banner('Куст отбит!<small>Все волны Ордена разбиты · N — сыграть снова</small>', 6); return; }
       this.h.banner(`Волна ${this.wave} отбита<small>+${bounty} малины · следующая через ${this.spec.rest ?? 20} с · G — сейчас</small>`, 3);
       this.next = (this.spec.rest ?? 20) - 0.001;
@@ -452,6 +506,12 @@ export class TowerDefense {
     }
     for (const p of this.pads) { p.hover = p === this.hoverPad || p === this.menuPad; p.update(dt, this.time); }
     for (const t of this.towers) t.update(dt);
+    this.alarmBeep -= dt;
+    for (const [t, a] of this.alarms) {
+      a.t -= dt;
+      // заморозка кончилась, руины починили или продали — сигнал снят
+      if (a.t <= 0 || !this.towers.includes(t) || (a.why === 'frozen' && t.frozen <= 0) || (a.why === 'ruin' && !t.ruined)) this.alarms.delete(t);
+    }
     for (const w of this.walls) w.update(dt);
     this.pack.update(dt);
     this.bush.update(dt);
@@ -471,7 +531,8 @@ export class TowerDefense {
     const from = this.nextLanes?.map((l) => l.title.toLowerCase()).join(', ') ?? '';
     const sub = this.state !== 'play' || !n ? '' : this.waveRunning ? `врагов на карте ${alive}` : this.wave >= n ? '' : `следующая через ${Math.ceil(this.next)} с — ${from} · <kbd>G</kbd> сейчас (+${this.earlyBonus})`;
     const walls = this.walls.length ? `<div class="td-walls">${this.walls.map((w) => `<span class="${w.dead ? 'dead' : ''}" title="${w.title}"><b>${w.kind === 'gate' ? '⌂' : w.title.slice(0, 1)}</b><i style="width:${(w.k * 100).toFixed(0)}%;background:${wallBarColor(w.k)}"></i></span>`).join('')}</div>` : '';
-    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">куст малины ${Math.ceil(b.hp)} / ${b.maxHp}</div>${walls}`;
+    const preview = this.state === 'play' && !this.waveRunning ? this.wavePreview() : '';
+    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}${preview}${this.alarmLine()}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">куст малины ${Math.ceil(b.hp)} / ${b.maxHp}</div>${walls}`;
     if (html !== this.hudHtml) { this.hudHtml = html; this.hudEl.innerHTML = html; }
     this.hudEl.classList.toggle('lost', this.state === 'lost');
     this.hudEl.classList.toggle('won', this.state === 'won');
@@ -481,6 +542,7 @@ export class TowerDefense {
   reset(): void {
     this.closeMenu();
     for (const t of this.towers.splice(0)) t.dispose();
+    this.alarms.clear();
     for (const p of this.pads) p.tower = null;
     this.pack.clear();
     this.queue.length = 0;

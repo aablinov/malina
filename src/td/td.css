@@ -42,3 +42,15 @@
 .td-hud .td-walls span b { font-size: 9px; line-height: 1; color: #d8d0c0; width: 8px; }
 .td-hud .td-walls span i { display: block; height: 4px; border-radius: 2px; transition: width 0.2s; }
 .td-hud .td-walls span.dead { border-color: #ff6a5a; background: #3a1a18; }
+
+/* карточка следующей волны: кто идёт; охотники на башни и мини-босс — заметнее */
+.td-hud .td-preview { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: 520px; margin: 4px auto 0; font-size: 11px; }
+.td-hud .td-preview b { color: #ffd25a; font-weight: 700; }
+.td-hud .td-preview span { padding: 1px 6px; border-radius: 4px; background: rgba(26, 27, 30, 0.65); }
+.td-hud .td-preview span.hunter { background: rgba(70, 120, 200, 0.75); }
+.td-hud .td-preview span.chief { background: rgba(200, 40, 90, 0.85); font-weight: 700; }
+/* башня в беде: мигает, стрелка — куда бежать */
+.td-hud .td-alarm { margin-top: 5px; padding: 2px 8px; display: inline-block; border-radius: 5px; background: rgba(200, 40, 60, 0.85); font-weight: 700; animation: td-alarm 0.6s ease-in-out infinite alternate; }
+.td-hud .td-alarm.frozen { background: rgba(60, 130, 220, 0.85); }
+.td-hud .td-alarm i { display: inline-block; font-style: normal; }
+@keyframes td-alarm { from { opacity: 1; } to { opacity: 0.55; } }
