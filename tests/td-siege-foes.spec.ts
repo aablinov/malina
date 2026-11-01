@@ -114,3 +114,50 @@ test('оборона: колдунчик замораживает башню —
   expect(r.spire).toBe(false);
   expect(r.alive).toBe(true);
 });
+
+test('оборона: мини-боссы каждую третью волну; великан топчет башни, королева роняет слизней на дорогу, шаман морозит башни', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td, pad = (window as any).__pad;
+    m.hero.place(0, 30, Math.PI); m.hero.god = true;
+    m.profile.data.berries = 5000;
+    const chiefs = td.waves.map((w: any, i: number) => w.groups.filter((g: any) => g.kind.startsWith('chief_')).map(() => i + 1)).flat();
+    const hunters = td.waves.slice(2).every((w: any) => w.groups.some((g: any) => g.kind === 'gnawer' || g.kind === 'frostling'));
+    // великан
+    const t = td.build(pad, 'splash');
+    const b = td.spawnOn('chief_brute', 'west');
+    b.hp = b.maxHp = 1e5;
+    const banner = document.body.textContent?.includes('мини-босс');
+    for (let i = 0; i < 400 && !b.casts; i++) m.step(0.1);
+    m.step(1);
+    const brute = { casts: b.casts, towerHp: t.hp, max: t.maxHp, bar: b.group.children.some((c: any) => c.children?.some((s: any) => s.isSprite)) };
+    td.pack.clear();
+    t.repair();
+    // королева
+    const q = td.spawnOn('chief_slime', 'north');
+    for (let i = 0; i < 100; i++) m.step(0.1);
+    const kids = td.pack.mobs.filter((x: any) => x.kind === 'slime_mid' && !x.dead);
+    const kidsOnLane = kids.length > 0 && kids.every((x: any) => x.laneId === 'north' && x.march);
+    q.hit(1e6, new m.hero.pos.constructor(0, 0, 0), q.pos.clone(), 0);
+    m.step(0.5);
+    const after = td.pack.mobs.filter((x: any) => x.kind === 'slime_mid' && !x.dead).length;
+    td.pack.clear();
+    // шаман
+    const s = td.spawnOn('chief_frost', 'west');
+    s.hp = s.maxHp = 1e5;
+    let frozen = false;
+    for (let i = 0; i < 400 && !frozen; i++) { m.step(0.1); frozen = t.frozen > 0; }
+    return { chiefs, hunters, banner, brute, queen: { casts: q.casts, kids: kids.length, kidsOnLane, after: after - kids.length }, shaman: { casts: s.casts, frozen } };
+  });
+  expect(r.chiefs).toEqual([3, 6, 9]);
+  expect(r.hunters).toBe(true);
+  expect(r.banner).toBe(true);
+  expect(r.brute.casts).toBeGreaterThanOrEqual(1);
+  expect(r.brute.towerHp).toBeLessThan(r.brute.max);
+  expect(r.brute.bar).toBe(true);
+  expect(r.queen.casts).toBeGreaterThanOrEqual(1);
+  expect(r.queen.kidsOnLane).toBe(true);
+  expect(r.queen.after).toBe(3);
+  expect(r.shaman.casts).toBeGreaterThanOrEqual(1);
+  expect(r.shaman.frozen).toBe(true);
+});

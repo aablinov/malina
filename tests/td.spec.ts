@@ -269,10 +269,10 @@ test('оборона: масштаб — с волнами уровень ста
     return { solo, trio, lvl2 };
   });
   expect(r.solo.players).toBe(1);
-  expect(r.solo.spawned).toBe(10);
+  expect(r.solo.spawned).toBe(13);
   expect(r.solo.level).toBe(1);
   expect(r.trio.players).toBe(3);
-  expect(r.trio.spawned).toBe(20);
+  expect(r.trio.spawned).toBe(26);
   expect(r.trio.maxHp).toBe(r.solo.maxHp * 2);
   expect(r.trio.hud).toContain('игроков 3');
   expect(r.solo.hud).not.toContain('игроков');

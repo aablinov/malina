@@ -29,13 +29,17 @@ const TAB: Record<Tab, TabDef> = {
   aura: { id: 'aura', title: SLOT_TITLE.aura, icon: 'a-bastion' },
   spell: { id: 'spell', title: 'Заклинания', icon: 'fireball' },
 };
-const TABS: Record<MerchantKind, Tab[]> = { smith: ['melee', 'ranged', 'armor'], merchant: ['melee', 'ranged', 'armor', 'artifact', 'spell'] };
+const TABS: Record<MerchantKind, Tab[]> = { smith: ['melee', 'ranged', 'armor'], merchant: ['melee', 'ranged', 'armor', 'artifact', 'spell'], sutler: ['melee', 'ranged', 'armor', 'artifact'] };
 const DESC: Record<MerchantKind, string> = {
+  sutler: 'Маркитант обороны: оружие, луки, броня и артефакты за малину боя. Купленное служит до конца боя — башня или меч, решай сам.',
   smith: 'Выкует любое оружие или броню по твоей силе и перекуёт надетое — +1 к силе за малину.',
   merchant: 'Продаёт всё: оружие, луки, броню, артефакты, обычные заклинания и стрелы. Цена — по силе предмета.',
 };
 const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask', aura: 'a-bastion' };
 const COLS = 4;
+/** Цены маркитанта обороны (wiki/design-tower-defence.md, раздел 12): по редкости, вровень с башнями (60–130) */
+export const SUTLER_PRICE: Record<ItemDef['rarity'], number> = { common: 80, rare: 160, unique: 260 };
+export const SUTLER_ARROWS = 15;
 const ARROWS = 24;
 
 export class Shop {
@@ -137,7 +141,8 @@ export class Shop {
   /** Товары вкладки: по цене, дешёвые первыми; заклинания с боссов, стартовые и ауры (падают с боссов) не продаются */
   private makeWares(): Ware[] {
     const pw = this.profile.power;
-    const of = (f: (d: ItemDef) => boolean): Ware[] => ITEMS.filter(f).map((d) => ({ key: d.id, def: d, price: priceOf(d.id, pw) }));
+    const sutler = this.kind === 'sutler';
+    const of = (f: (d: ItemDef) => boolean): Ware[] => ITEMS.filter(f).map((d) => ({ key: d.id, def: d, price: sutler ? SUTLER_PRICE[d.rarity] : priceOf(d.id, pw) }));
     let w: Ware[];
     switch (this.tab) {
       case 'spell': w = of((d) => d.spell === 'shop'); break;
@@ -145,7 +150,7 @@ export class Shop {
       default: w = of((d) => d.slot === this.tab && !d.spell);
     }
     w.sort((a, b) => a.price - b.price);
-    if (this.tab === 'ranged') w.unshift({ key: 'arrows', arrows: ARROWS, price: PRICE.arrows });
+    if (this.tab === 'ranged') w.unshift({ key: 'arrows', arrows: ARROWS, price: sutler ? SUTLER_ARROWS : PRICE.arrows });
     return w;
   }
 
