@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 /**
  * Главное меню (wiki/design-main-menu.md): стартовый экран → лагерь (снаряжение, выбор карты) → бой `?map=…&from=menu`
- * → пауза → «В лагерь». Сетевая игра — заглушка: старт закрыт.
+ * → пауза → «В лагерь». Сетевая игра без сервера: старт закрыт (с сервером — tests/net.spec.ts).
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href;
@@ -69,16 +69,16 @@ test('меню: одиночная игра — надеть топор в ла�
   expect(errors).toEqual([]);
 });
 
-test('меню: сетевая игра — заглушка, старт закрыт; итог обороны отмечает карту пройденной', async ({ page }) => {
+test('меню: сетевая игра без сервера — старт закрыт; итог обороны отмечает карту пройденной', async ({ page }) => {
   const errors: string[] = [];
   await openMenu(page, errors);
   await page.getByRole('button', { name: /Сетевая игра/ }).click();
   await page.waitForFunction(() => (window as any).__menu.screen === 'lobby');
   await page.locator('.mm-tabs [data-pane="map"]').click();
   await expect(page.locator('.mm-online')).toBeVisible();
-  await expect(page.locator('.mm-online')).toContainText('Сессий не найдено');
+  await expect(page.locator('.mm-online')).toContainText('Сервер недоступен');
   await page.getByRole('button', { name: /Начать игру/ }).click();
-  await expect(page.locator('.mm-hint.warn')).toContainText('Сетевая игра появится позже');
+  await expect(page.locator('.mm-hint.warn')).toContainText('Сервер сетевой игры недоступен');
   expect(page.url()).not.toContain('map=');
 
   // бой из меню: оборона отбита — итог и отметка «пройдена» в лагере

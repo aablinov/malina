@@ -20,6 +20,7 @@ import type { Level } from '../level/level.ts';
 import { BASE_TOWERS, menuKey, SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from './towers';
 import type { TdLane, TdPad, TdSpec } from './types';
 import './td.css';
+import type { TdCommand, TdSnap } from '../net/protocol';
 
 /**
  * Режим «Оборона куста» (wiki/design-tower-defence.md): площадки под башни, меню постройки, башни, враги по дорогам.
@@ -140,6 +141,13 @@ export class TowerDefense {
   private alarmBeep = 0;
   private foeSolidsCache: Obstacle[] | null = null;
   private foeSolidsN = -1;
+  /**
+   * Гость общего боя (src/net/coop.ts): волны не считает, враги — куклы, а меню площадок, починка и «волна сейчас»
+   * уходят хосту командой. null — бой свой (одиночный или хост)
+   */
+  remote: ((c: TdCommand) => void) | null = null;
+  /** Гость: идёт ли волна — со снимка хоста */
+  private netRunning: boolean | null = null;
 
   constructor(h: TdHooks, spec: TdSpec, parent: HTMLElement) {
     this.h = h;
@@ -195,6 +203,7 @@ export class TowerDefense {
   /** Починить стену за малину (F у стены) */
   repair(w: Wall): boolean {
     if (w.hp >= w.maxHp) return false;
+    if (this.remote) { this.remote({ t: 'td', a: 'repair', wall: w.id }); return false; }
     const cost = this.repairCost(w);
     if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return false; }
     this.h.profile.data.berries -= cost;
@@ -269,6 +278,11 @@ export class TowerDefense {
   private act(a: string): void {
     const p = this.menuPad;
     if (!p) return;
+    if (this.remote && a !== 'close') {
+      this.remote({ t: 'td', a, pad: p.index });
+      if (a.startsWith('build:') || a === 'sell') this.closeMenu();
+      return;
+    }
     if (a.startsWith('build:')) { if (this.build(p, a.slice(6) as TowerKind)) this.closeMenu(); }
     else if (a === 'upgrade') this.upgrade(p);
     else if (a === 'repair') this.repairTower(p);
@@ -305,15 +319,21 @@ export class TowerDefense {
     if (!def || p.tower || !this.kinds.includes(kind)) return null;
     if (this.berries < def.cost) { this.h.toast(`Не хватает малины: нужно ${def.cost}`); return null; }
     this.h.profile.data.berries -= def.cost;
-    const t = new Tower({ scene: this.h.scene, fx: this.h.fx, quiet: this.h.quiet, foes: () => this.foes() }, kind, p.pos.x, p.pos.z, p.pos.y);
-    t.onAlarm = (why) => this.alarm(t, why);
-    p.tower = t;
-    this.towers.push(t);
+    const t = this.placeTower(p, kind);
     const c = new THREE.Color(def.color).multiplyScalar(2);
     this.h.fx.burst(p.pos.clone().setY(0.4), ['#d8cfa8', '#9a8f70', c], 20, { speed: 3, up: 3, size: 0.12, life: 0.6, gravity: 8 });
     this.h.fx.shock(p.pos.clone().setY(0.06), 2, c, 0.4, 0.14);
     this.h.fx.shake = Math.max(this.h.fx.shake, 0.25);
     this.h.fx.text(p.pos.clone().setY(1.4), `−${def.cost} малины`, 'berry');
+    return t;
+  }
+
+  /** Башня на площадке — без казны и вспышек */
+  private placeTower(p: Pad, kind: TowerKind): Tower {
+    const t = new Tower({ scene: this.h.scene, fx: this.h.fx, quiet: this.h.quiet, foes: () => this.foes() }, kind, p.pos.x, p.pos.z, p.pos.y);
+    t.onAlarm = (why) => this.alarm(t, why);
+    p.tower = t;
+    this.towers.push(t);
     return t;
   }
 
@@ -433,12 +453,13 @@ export class TowerDefense {
   // ---------- волны ----------
   get waves(): readonly import('./types').TdWave[] { return this.spec.waves ?? []; }
   /** Идёт волна: группы ещё выходят или враги живы */
-  get waveRunning(): boolean { return this.queue.length > 0 || this.pack.mobs.some((m) => !m.dead); }
+  get waveRunning(): boolean { if (this.netRunning !== null) return this.netRunning; return this.queue.length > 0 || this.pack.mobs.some((m) => !m.dead); }
   /** Награда за ранний вызов: по малине за каждую секунду ожидания */
   get earlyBonus(): number { return this.waveRunning || this.wave >= this.waves.length ? 0 : Math.round(this.next); }
 
   /** Следующая волна сейчас (G): бонус за ожидание — в казну */
   callWave(): boolean {
+    if (this.remote) { this.remote({ t: 'td', a: 'wave' }); return false; }
     if (this.state !== 'play' || this.waveRunning || this.wave >= this.waves.length) return false;
     const bonus = this.earlyBonus;
     if (bonus > 0) { this.h.profile.data.berries += bonus; this.h.toast(`Волна раньше срока: +${bonus} малины`); }
@@ -495,7 +516,7 @@ export class TowerDefense {
 
   update(dt: number): void {
     this.time += dt;
-    this.tickWaves(dt);
+    if (!this.remote) this.tickWaves(dt);
     // логова: тревога нарастает за 6 с до волны по их дорогам и держится, пока группы выходят
     const soon = this.state === 'play' && !this.waveRunning ? this.nextLanes : null;
     const busy = new Set(this.queue.map((q) => q.lane));
@@ -513,7 +534,8 @@ export class TowerDefense {
       if (a.t <= 0 || !this.towers.includes(t) || (a.why === 'frozen' && t.frozen <= 0) || (a.why === 'ruin' && !t.ruined)) this.alarms.delete(t);
     }
     for (const w of this.walls) w.update(dt);
-    this.pack.update(dt);
+    if (this.remote) this.pack.puppets(dt);
+    else this.pack.update(dt);
     this.bush.update(dt);
     if (this.menuPad) {
       // ушёл от площадки — меню закрывается
@@ -538,8 +560,71 @@ export class TowerDefense {
     this.hudEl.classList.toggle('won', this.state === 'won');
   }
 
+  // ---------- общий бой (src/net/coop.ts) ----------
+
+  /** Хост: команда гостя — то же, что меню площадки, починка стены и «волна сейчас» у своего героя */
+  command(c: TdCommand): boolean {
+    if (this.state !== 'play') return false;
+    if (c.a === 'wave') return this.callWave();
+    if (c.wall !== undefined) { const w = this.wall(c.wall); return !!w && this.repair(w); }
+    const p = this.pads[c.pad ?? -1];
+    if (!p) return false;
+    if (c.a.startsWith('build:')) return !!this.build(p, c.a.slice(6) as TowerKind);
+    if (c.a === 'upgrade') return this.upgrade(p);
+    if (c.a === 'repair') return this.repairTower(p);
+    if (c.a === 'sell') return this.sell(p) > 0;
+    return false;
+  }
+
+  /** Хост: состояние обороны для снимка */
+  snap(): TdSnap {
+    return {
+      state: this.state, wave: this.wave, next: Math.round(this.next * 10) / 10, running: this.waveRunning,
+      berries: this.berries, bush: Math.round(this.bush.hp), walls: this.walls.map((w) => Math.round(w.hp)),
+      towers: this.pads.map((p) => (p.tower ? [p.tower.kind, p.tower.level, Math.round(p.tower.hp)] : 0)),
+    };
+  }
+
+  /**
+   * Гость: снимок хоста. Убыль здоровья куста, стен и башен проводится их же уроном — с трещинами, обвалом и руинами;
+   * башни строятся, растут и сносятся без казны (казна — тоже со снимка)
+   */
+  applySnap(s: TdSnap): void {
+    this.netRunning = s.running;
+    this.wave = s.wave;
+    this.next = s.next;
+    this.h.profile.data.berries = s.berries;
+    const b = this.bush;
+    if (s.bush < b.hp) b.hurt(b.hp - s.bush, b.pos);
+    else if (s.bush > b.hp) { if (b.dead) b.reset(); b.hp = s.bush; }
+    this.walls.forEach((w, i) => {
+      const hp = s.walls[i] ?? w.hp;
+      if (hp < w.hp) w.hurt(w.hp - hp, w.pos);
+      else if (hp > w.hp) { if (w.dead) w.repair(); w.hp = hp; }
+    });
+    this.pads.forEach((p, i) => {
+      const want = s.towers[i] ?? 0;
+      let t = p.tower;
+      if (t && (!want || want[0] !== t.kind)) {
+        this.towers.splice(this.towers.indexOf(t), 1);
+        t.dispose();
+        p.tower = t = null;
+      }
+      if (!want) return;
+      if (!t) {
+        t = this.placeTower(p, want[0] as TowerKind);
+        this.h.fx.burst(p.pos.clone().setY(0.4), ['#d8cfa8', '#9a8f70'], 14, { speed: 3, up: 3, size: 0.12, life: 0.6, gravity: 8 });
+      }
+      while (t.level < want[1] && t.upgrade()) { /* до уровня хоста */ }
+      if (want[2] < t.hp) t.hurt(t.hp - want[2]);
+      else if (want[2] > t.hp) { if (t.ruined) t.repair(); t.hp = want[2]; }
+    });
+    if (s.state !== this.state) this.state = s.state;
+  }
+
   /** Всё заново: башни снесены, враги убраны, казна полная */
   reset(): void {
+    if (this.remote) return;
     this.closeMenu();
     for (const t of this.towers.splice(0)) t.dispose();
     this.alarms.clear();

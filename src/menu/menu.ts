@@ -48,7 +48,7 @@ export function runMenu(): void {
     <div class="mm-logo">Малина<small>Оборона куста</small></div>
     <nav class="mm-nav">
       <button class="mm-btn big" data-act="solo">Одиночная игра</button>
-      <button class="mm-btn big" data-act="online">Сетевая игра<i class="mm-soon">скоро</i></button>
+      <button class="mm-btn big" data-act="online">Сетевая игра</button>
       <button class="mm-btn big" data-act="settings">Настройки</button>
       ${DEV_TOOLS ? '<div class="mm-dev"><button class="mm-btn small" data-act="playground">Плейграунд</button><button class="mm-btn small" data-act="editor">Редактор</button></div>' : ''}
     </nav>

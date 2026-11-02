@@ -1,4 +1,4 @@
-import { MAX_PLAYERS } from '../bosses/scaling';
+import { MAX_PLAYERS } from '../bosses/scaling.ts';
 
 /**
  * Масштаб волн обороны куста (wiki/design-tower-defence.md, раздел 5). Враги крепчают с волнами и с числом игроков:
