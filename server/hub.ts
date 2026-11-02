@@ -1,0 +1,127 @@
+import type { IncomingMessage } from 'node:http';
+import { WebSocketServer, type RawData, type WebSocket } from 'ws';
+import { CLOSE, NET_LIMITS, PROTOCOL, type ClientMsg, type ServerMsg } from '../src/net/protocol.ts';
+import type { Auth } from './auth.ts';
+import type { Players } from './repo/players.ts';
+import { RoomError, type Conn, type RoomManager } from './rooms.ts';
+import { checkClientMsg } from './validate.ts';
+
+/**
+ * WebSocket-соединения: первое сообщение — `hello` с токеном, дальше разбор `ClientMsg` и передача в менеджер комнат.
+ * Лимиты: размер — `maxPayload` (ws закроет сам), частота — NET_LIMITS.perSecond, две секунды с превышением подряд —
+ * закрыть с CLOSE.flood. Ввод гостя сверх NET_LIMITS.inputPerSecond молча отбрасывается
+ */
+const HELLO_MS = 15_000;
+
+class Client implements Conn {
+  readonly playerId: string;
+  readonly name: string;
+  readonly ws: WebSocket;
+  /** Счётчики текущей секунды */
+  windowStart = 0;
+  count = 0;
+  inputs = 0;
+  strikes = 0;
+
+  constructor(ws: WebSocket, playerId: string, name: string) { this.ws = ws; this.playerId = playerId; this.name = name; }
+
+  send(msg: ServerMsg): void { if (this.ws.readyState === this.ws.OPEN) this.ws.send(JSON.stringify(msg)); }
+}
+
+export interface HubDeps { auth: Auth; players: Players; rooms: RoomManager; now?: () => number }
+
+export class Hub {
+  readonly wss: WebSocketServer;
+  private readonly d: HubDeps;
+  private readonly now: () => number;
+  private readonly online = new Map<string, Client>();
+  /** Сервер останавливается: закрытия соединений уже не трогают комнаты (база закрывается следом) */
+  private closing = false;
+
+  constructor(deps: HubDeps) {
+    this.d = deps;
+    this.now = deps.now ?? Date.now;
+    this.wss = new WebSocketServer({ noServer: true, maxPayload: NET_LIMITS.maxMessage });
+    this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => this.greet(ws, req));
+  }
+
+  /** Сколько игроков на связи */
+  get size(): number { return this.online.size; }
+
+  close(): void {
+    this.closing = true;
+    for (const ws of this.wss.clients) ws.terminate();
+    this.wss.close();
+  }
+
+  private greet(ws: WebSocket, _req: IncomingMessage): void {
+    const timer = setTimeout(() => ws.close(CLOSE.hello, 'hello'), HELLO_MS);
+    ws.once('message', (raw: RawData) => {
+      clearTimeout(timer);
+      const msg = parse(raw);
+      if (!msg || msg.t !== 'hello') { ws.close(CLOSE.auth, 'hello'); return; }
+      if (msg.protocol !== PROTOCOL) { ws.close(CLOSE.protocol, `protocol ${PROTOCOL}`); return; }
+      const p = this.d.auth.check(msg.token);
+      if (!p) { ws.close(CLOSE.auth, 'token'); return; }
+      this.d.players.touch(p.id, this.now());
+      // тот же игрок с другой вкладки — старое соединение закрыть
+      const old = this.online.get(p.id);
+      if (old) { this.d.rooms.detach(old); old.ws.close(CLOSE.replaced, 'replaced'); }
+      const c = new Client(ws, p.id, p.name);
+      this.online.set(p.id, c);
+      c.send({ t: 'welcome', playerId: p.id, name: p.name });
+      this.d.rooms.attach(c);
+      ws.on('message', (data: RawData) => this.onMessage(c, data));
+      ws.on('close', () => {
+        if (this.online.get(c.playerId) === c) this.online.delete(c.playerId);
+        if (!this.closing) this.d.rooms.detach(c);
+      });
+    });
+  }
+
+  private onMessage(c: Client, raw: RawData): void {
+    const now = this.now();
+    if (now - c.windowStart >= 1000) {
+      c.strikes = c.count > NET_LIMITS.perSecond ? c.strikes + 1 : 0;
+      c.windowStart = now; c.count = 0; c.inputs = 0;
+    }
+    if (++c.count > NET_LIMITS.perSecond) {
+      if (c.strikes >= 1) c.ws.close(CLOSE.flood, 'flood');
+      return;
+    }
+    const msg = parse(raw);
+    if (!msg) { c.send({ t: 'error', code: 'bad-message', text: 'Непонятное сообщение' }); return; }
+    try {
+      this.dispatch(c, msg);
+    } catch (e) {
+      if (e instanceof RoomError) c.send({ t: 'error', code: e.code, text: e.message });
+      else throw e;
+    }
+  }
+
+  private dispatch(c: Client, m: ClientMsg): void {
+    const R = this.d.rooms;
+    switch (m.t) {
+      case 'hello': break;
+      case 'ping': c.send({ t: 'pong' }); break;
+      case 'room.create': R.create(c, m.map, m.max, m.private); break;
+      case 'room.join': R.join(c, m.code); break;
+      case 'room.leave': R.leave(c, 'leave'); break;
+      case 'room.ready': R.ready(c, m.ready); break;
+      case 'room.map': R.setMap(c, m.map); break;
+      case 'room.kick': R.kick(c, m.playerId); break;
+      case 'room.start': R.start(c); break;
+      case 'relay': {
+        const d = m.d as { t?: unknown } | null;
+        if (d && d.t === 'in' && ++c.inputs > NET_LIMITS.inputPerSecond) return;
+        R.relay(c, m.to, m.d);
+        break;
+      }
+      case 'battle.end': R.end(c, m.result, m.wave, m.rewards); break;
+    }
+  }
+}
+
+function parse(raw: RawData): ClientMsg | null {
+  try { return checkClientMsg(JSON.parse(raw.toString())); } catch { return null; }
+}

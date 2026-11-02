@@ -12,6 +12,8 @@ export class Pack {
   readonly mobs: Mob[] = [];
   private level = 1;
   private players = 1;
+  /** Счётчик сетевых id (снимок хоста, src/net/coop.ts) */
+  private seq = 0;
   private readonly hooks: MobHooks;
 
   /** loot — малина с павшего: где и сколько */
@@ -25,6 +27,7 @@ export class Pack {
     if (!def) return null;
     const m = new def.make(this.hooks, at);
     m.setScale(this.level, this.players);
+    m.net = ++this.seq;
     m.onDeath = (p) => { if (!m.summoned) this.loot(p, Math.max(1, Math.round(m.loot * m.lootMult))); };
     this.mobs.push(m);
     return m;
@@ -70,6 +73,12 @@ export class Pack {
         b.pos.x += dx * k * (1 - wa); b.pos.z += dz * k * (1 - wa);
       }
     }
+    for (let i = this.mobs.length - 1; i >= 0; i--) if (this.mobs[i].gone) { this.mobs[i].dispose(); this.mobs.splice(i, 1); }
+  }
+
+  /** Кукол (гость общего боя) — только шаг и поза по снимку хоста; рассыпавшихся убрать */
+  puppets(dt: number): void {
+    for (const m of this.mobs) m.puppetStep(dt);
     for (let i = this.mobs.length - 1; i >= 0; i--) if (this.mobs[i].gone) { this.mobs[i].dispose(); this.mobs.splice(i, 1); }
   }
 

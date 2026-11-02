@@ -4,8 +4,8 @@
   "description": "Малина — мистическая кооперативная зачистка подземелий в воксельном стиле",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "typecheck": "tsc",
+    "build": "tsc && tsc -p tsconfig.server.json && vite build",
+    "typecheck": "tsc && tsc -p tsconfig.server.json",
     "preview": "vite preview",
     "test": "playwright test",
     "blocks": "node scripts/gen-blocks.mjs",
@@ -16,14 +16,19 @@
     "map:td": "node scripts/export-map.ts td",
     "map:td2": "node scripts/export-map.ts td2",
     "map:td3": "node scripts/export-map.ts td3",
-    "prefabs": "node scripts/gen-prefabs.ts"
+    "prefabs": "node scripts/gen-prefabs.ts",
+    "server": "node server/main.ts",
+    "server:test": "node --test 'server/test/*.test.ts'"
   },
   "dependencies": {
-    "three": "^0.169.0"
+    "three": "^0.169.0",
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
+    "@types/node": "^24.19.2",
     "@types/three": "^0.169.0",
+    "@types/ws": "^8.18.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vite-plugin-singlefile": "^2.0.3"

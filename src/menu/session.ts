@@ -1,7 +1,10 @@
+import { NetClient } from '../net/client';
+import type { RoomInfo } from '../net/protocol';
+
 /**
  * Партия, которую собирает лагерь (wiki/design-main-menu.md): режим, карта, число игроков.
- * Одиночная игра запускается сразу; сетевая — пока заглушка: `NetSession` появится с тем же интерфейсом
- * и отдаст число игроков в `td.setPlayers` (src/td/scaling.ts).
+ * Одиночная игра запускается сразу; сетевая — через комнату сервера (src/net/client.ts): число игроков комнаты
+ * уходит в `td.setPlayers` (src/td/scaling.ts).
  */
 export type GameMode = 'solo' | 'online';
 
@@ -13,14 +16,11 @@ export interface GameSession {
   players: number;
 }
 
-/** Онлайн-сессия в списке лобби — формат на будущее, сейчас список всегда пуст */
-export interface OnlineLobby { id: string; host: string; map: string; players: number; max: number; private: boolean }
+/** Онлайн-сессия в списке лобби — комната сервера (src/net/protocol.ts) */
+export type OnlineLobby = RoomInfo;
 
-/** Сетевой слой: пока его нет, `available` — false, список сессий пуст */
-export const NET = {
-  available: false,
-  async list(): Promise<OnlineLobby[]> { return []; },
-};
+/** Сетевой слой: `available` — сервер ответил, `list()` — открытые комнаты (src/net/client.ts) */
+export const NET = new NetClient();
 
 /** Адрес боя: карта и метка «из меню» — игра покажет паузу по Esc и кнопку «В лагерь» */
 export function battleUrl(s: GameSession): string {

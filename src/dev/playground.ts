@@ -47,7 +47,9 @@ import { DEV_TOOLS, fromMenu, openEditor } from '../devflag';
 import { loadSettings, pixelRatio } from '../menu/settings';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel';
 import { BattleMenu } from '../menu/pause';
-import { markWon, stashBerries, stashGear } from '../menu/session';
+import { markWon, NET, stashBerries, stashGear } from '../menu/session';
+import { netBattle } from '../net/client';
+import { CoopGuest, CoopHost } from '../net/coop';
 import { campaignMap } from '../menu/campaign';
 import { TowerDefense, type Pad } from '../td/td';
 import { LavaFx } from '../td/lava-fx';
@@ -477,21 +479,37 @@ export function runPlayground(): void {
   };
   let lastStrike: { s: Strike; t: number } | null = null;
 
-  /** Удар меча: цели в дуге перед героем (и в волне добивающего), без стены между */
-  function strike(s: Strike): number {
-    lastStrike = { s, t: simTime };
+  /**
+   * Удар меча: цели в дуге перед героем (и в волне добивающего), без стены между.
+   * who — герой гостя в общем бою (src/net/coop.ts): урон — базовый, без снаряжения, закалки и звука
+   */
+  function strike(s: Strike, who: Knight = hero): number {
+    const mine = who === hero;
+    if (mine) lastStrike = { s, t: simTime };
     const fwd = new THREE.Vector3(Math.sin(s.yaw), 0, Math.cos(s.yaw));
     const finisher = s.step === 2;
-    const impact = s.from.clone().addScaledVector(fwd, 1.5).setY(hero.pos.y);
+    const impact = s.from.clone().addScaledVector(fwd, 1.5).setY(who.pos.y);
     const hit = new Set<Target>();
+    const waveR = SWORD.shockR * (mine ? gear.stats.waveMult : 1);
     for (const t of targets()) {
-      if (!t.alive || Math.abs(t.pos.y - hero.pos.y) > 1.6) continue;
+      if (!t.alive || Math.abs(t.pos.y - who.pos.y) > 1.6) continue;
       const dx = t.pos.x - s.from.x, dz = t.pos.z - s.from.z, d = Math.hypot(dx, dz);
       const inArc = d - t.radius <= s.range && (d < 0.7 || Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - s.yaw), Math.cos(Math.atan2(dx, dz) - s.yaw))) <= s.half + Math.atan(t.radius / Math.max(d, 0.3)));
-      const inWave = finisher && Math.hypot(t.pos.x - impact.x, t.pos.z - impact.z) - t.radius <= SWORD.shockR * gear.stats.waveMult;
+      const inWave = finisher && Math.hypot(t.pos.x - impact.x, t.pos.z - impact.z) - t.radius <= waveR;
       if (!inArc && !inWave) continue;
-      if (terrain.blocked(s.from.x, s.from.z, t.pos.x, t.pos.z, hero.pos.y + 0.5)) continue;
+      if (terrain.blocked(s.from.x, s.from.z, t.pos.x, t.pos.z, who.pos.y + 0.5)) continue;
       hit.add(t);
+    }
+    if (!mine) {
+      for (const t of hit) {
+        const dir = new THREE.Vector3(t.pos.x - s.from.x, 0, t.pos.z - s.from.z).normalize();
+        const point = t.pos.clone().setY(1.1).addScaledVector(dir, -t.radius);
+        t.hit(s.dmg, dir, point, s.knock);
+        fx.text(point, String(s.dmg), finisher ? 'crit' : '');
+        fx.burst(point, [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 8, { speed: 4, up: 2.5, size: 0.09, life: 0.45, glow: true, gravity: 8 });
+      }
+      if (finisher) fx.shock(impact.clone().setY(impact.y + 0.05), waveR, new THREE.Color(3.2, 2.4, 1.0), 0.4, 0.18);
+      return hit.size;
     }
     let smite = false;
     for (const t of hit) {
@@ -916,12 +934,21 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   // снаряжение откладывается всегда (и с ?map=td без меню — лагерь вернёт), в бой — набор нового героя (Profile.tdKit)
   if (tdSpec && FROM_MENU) stashBerries(profile.data.berries);
   if (tdSpec) { stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); profile.tdKit(); }
-  if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => props.berries(at, n), toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged, harvest: () => props.harvest() }, tdSpec, document.body);
+  // сетевая игра (src/net/client.ts): страница боя заново входит на сервер — место в комнате держится.
+  // Общий бой (src/net/coop.ts): хост считает, гость ведёт своего героя и видит бой по снимкам; у гостя малина с павших не падает
+  const netRoom = FROM_MENU && !!query.get('room');
+  const nb = netRoom ? netBattle() : null;
+  const netGuest = !!nb && nb.seat !== nb.hostSeat;
+  if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => { if (!netGuest) props.berries(at, n); }, toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged, harvest: () => props.harvest() }, tdSpec, document.body);
   // оборона: малину с павших тянет издалека — в бою некогда бегать за каждой кучкой
   if (tdSpec) props.berryReach = 6;
   // число игроков партии (сетевая игра — позже): ?players=N
   if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
   td?.setPlayers(bossPlayers);
+  // без проверки /api/health: пока строится карта, страница занята и проверка не успевает; соединение само переподключается
+  if (netRoom) NET.connect();
+  const coopHooks = nb && td ? { net: NET, battle: nb, scene, T, fx, hero, input, td, terrain, solids, strike, toast } : null;
+  const coop = coopHooks ? (netGuest ? new CoopGuest(coopHooks) : new CoopHost(coopHooks)) : null;
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
   function openInventory(): void { gear.cancelCast(); if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
@@ -1074,6 +1101,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     const slow = Math.max(pack.heroSlow, ...mobRooms.map((r) => r.pack.heroSlow));
     hero.slow = Math.min(0.8, slow);
     hero.update(dt, input, solids(), terrain);
+    coop?.update(dt);
     // под крышей: срезать потолок и всё, что выше, — виден этаж, где стоит герой
     cutY = ceilingAt(level, hero.pos.x, hero.pos.z, hero.pos.y);
 
@@ -1084,7 +1112,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       const trader = pad || wall ? null : merchants.find((m) => m.near(hero.pos));
       if (pad && td) { if (td.menuOpen) td.closeMenu(); else td.openMenu(pad); }
       else if (wall && td) td.repair(wall);
-      if (trader && !hero.down) { shop.show(trader.kind); }
+      // у гостя общего боя казна — хоста: маркитант пока только у хоста
+      if (trader && !hero.down) { if (netGuest) toast('Маркитант — у хоста: казна общая'); else shop.show(trader.kind); }
       const it = trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
     }
@@ -1174,6 +1203,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (battle && td && td.state !== tdEndShown) {
       tdEndShown = td.state;
       if (td.state === 'won') markWon(mapName);
+      if (td.state !== 'play' && netRoom && !netGuest && NET.isHost) NET.endBattle(td.state, td.state === 'won' ? td.waves.length : Math.max(0, td.wave - 1));
       if (td.state !== 'play') battle.end(td.state === 'won', `волн отбито ${td.state === 'won' ? td.waves.length : Math.max(0, td.wave - 1)} из ${td.waves.length}, врагов повержено ${td.fallen}`);
     }
     perf.renderStart();
@@ -1238,6 +1268,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   // ---------- Отладочный хук ----------
   window.__malina = {
+    /** Общий бой: CoopHost или CoopGuest (src/net/coop.ts), null — бой свой */
+    coop,
     mode: 'playground',
     hero, input, dummies, obstacles, camera, HERO, SWORD, props, level, terrain,
     /** Рендер уровня и декора */

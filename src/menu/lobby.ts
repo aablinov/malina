@@ -6,13 +6,15 @@ import type { Textures } from '../textures';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign';
 import type { MenuScene } from './scene';
 import { battleUrl, loadMenuState, NET, saveMenuState, type GameMode } from './session';
+import type { ServerMsg, RoomInfo } from '../net/protocol';
 
 /**
  * Лагерь перед боем (wiki/design-main-menu.md) — как инвентарь и экран героя в Minecraft Dungeons:
  * слева герой в 3D (фон меню, src/menu/scene.ts), в центре вкладки «Снаряжение» и «Карта», справа карточка выбранного.
  * Снаряжение: гнёзда по группам — оружие, броня, артефакты, аура; «Сменить» открывает инвентарь на нужной вкладке.
  * Карта: три карты обороны куста по сложности. «Начать игру» — бой на выбранной карте.
- * Сетевая игра — тот же лагерь с панелью сессий; сети пока нет, панель — заглушка, старт закрыт.
+ * Сетевая игра — тот же лагерь с панелью сессий (src/net/client.ts, wiki/design-multiplayer.md): вход по имени, создать комнату
+ * или войти по коду, места и готовность; «Начать игру» у хоста — «В бой» для всей комнаты, у гостя — «Готов».
  * Клавиши: Q / E — вкладки, стрелки — выбор, I — инвентарь, Enter — начать, Esc — назад.
  */
 type Pane = 'gear' | 'map';
@@ -37,8 +39,13 @@ export class Lobby {
   private slot: SlotId = 'melee';
   private map: string;
   private won: string[];
-  /** Сетевая панель: «закрытая игра» — пока только переключатель */
+  /** Сетевая панель: создать закрытую комнату (не видна в списке, вход по коду) */
   private privateGame = false;
+  /** Набранное в полях панели — переживает перерисовку */
+  private nameDraft = NET.auth?.name ?? '';
+  private codeDraft = '';
+  /** Публичные комнаты сервера: null — ещё не спрашивали */
+  private rooms: RoomInfo[] | null = null;
   onBack?: () => void;
   onSettings?: () => void;
 
@@ -72,6 +79,21 @@ export class Lobby {
     this.inventory.onClose = () => { this.scene.start(); this.render(); };
     this.inventory.onChange = () => this.scene.dress(this.profile);
     this.bind();
+    NET.onError = (text) => this.flash(text);
+    NET.on((m) => this.onNet(m));
+  }
+
+  /** Сообщение сервера: комната изменилась — перерисовать панель; бой начался — в бой */
+  private onNet(m: ServerMsg): void {
+    if (m.t === 'battle.start') {
+      sfx.twinkle();
+      const u = new URL(battleUrl({ mode: 'online', map: m.map, players: m.players }));
+      u.searchParams.set('room', NET.room?.room.code ?? '');
+      window.location.href = u.toString();
+      return;
+    }
+    if (m.t === 'room.state' && !NET.isHost) this.map = m.room.map;
+    if ((m.t === 'room.state' || m.t === 'room.left' || m.t === 'welcome') && this.open && this.mode === 'online') this.renderSel();
   }
 
   get open(): boolean { return this.el.classList.contains('open'); }
@@ -80,6 +102,8 @@ export class Lobby {
     this.mode = mode;
     this.el.classList.add('open');
     this.el.classList.toggle('online', mode === 'online');
+    // сетевая: в лагере сразу карта — там панель сессий
+    if (mode === 'online') { this.pane = 'map'; void NET.probe().then(() => this.connectNet()); }
     this.render();
   }
 
@@ -88,7 +112,9 @@ export class Lobby {
   setPane(p: Pane): void { this.pane = p; this.render(); }
 
   selectMap(id: string): void {
+    if (this.mode === 'online' && NET.room && !NET.isHost) { this.flash('Карту выбирает хост'); return; }
     this.map = campaignMap(id).id;
+    if (this.mode === 'online' && NET.room) NET.setMap(this.map);
     const st = loadMenuState();
     st.map = this.map;
     saveMenuState(st);
@@ -101,15 +127,25 @@ export class Lobby {
     this.inventory.show(slot ? SLOT_KIND(slot) : undefined);
   }
 
-  /** В бой: одиночная — сразу, сетевая — пока закрыта */
+  /** В бой: одиночная — сразу; сетевая — хост ведёт комнату в бой, гость отмечается готовым */
   startGame(): void {
-    if (this.mode === 'online' && !NET.available) { this.flash('Сетевая игра появится позже — пока играй в одиночную'); return; }
+    if (this.mode === 'online') {
+      if (!NET.available) { this.flash('Сервер сетевой игры недоступен — пока играй в одиночную'); return; }
+      const r = NET.room;
+      if (!r) { this.flash('Создай комнату или войди по коду'); return; }
+      if (NET.isHost) NET.startBattle();
+      else NET.setReady(!r.seats.find((x) => x.seat === r.you)?.ready);
+      return;
+    }
     sfx.twinkle();
     window.location.href = battleUrl({ mode: this.mode, map: this.map, players: 1 });
   }
 
   key(e: KeyboardEvent): void {
     if (this.inventory.open) { this.inventory.key(e); return; }
+    // в полях сетевой панели клавиши — для текста, Enter — кнопка поля
+    const field = (e.target as HTMLElement | null)?.closest?.('input');
+    if (field) { if (e.code === 'Enter') { e.preventDefault(); this.netAct(field.dataset.enter); } return; }
     switch (e.code) {
       case 'Escape': this.onBack?.(); break;
       case 'KeyQ': case 'KeyE': this.setPane(this.pane === 'gear' ? 'map' : 'gear'); break;
@@ -141,11 +177,17 @@ export class Lobby {
         case 'start': this.startGame(); break;
         case 'change': this.openInventory(this.slot); break;
         case 'inventory': this.openInventory(); break;
-        case 'refresh': this.flash('Сессий не найдено — сетевая игра появится позже'); break;
-        case 'host': case 'friend': this.flash('Сетевая игра появится позже'); break;
-        case 'private': this.privateGame = !this.privateGame; this.render(); break;
-        default: break;
+        case 'friend': this.flash('Друзья появятся позже — пока зови по коду комнаты'); break;
+        case 'private': this.privateGame = !this.privateGame; this.renderSel(); break;
+        case 'join-room': { const code = t.closest<HTMLElement>('[data-code]')?.dataset.code; if (code) NET.joinRoom(code); break; }
+        case 'kick': { const id = t.closest<HTMLElement>('[data-player]')?.dataset.player; if (id) NET.kick(id); break; }
+        default: this.netAct(t.closest<HTMLElement>('[data-act]')?.dataset.act); break;
       }
+    });
+    this.el.addEventListener('input', (e) => {
+      const f = e.target as HTMLInputElement;
+      if (f.dataset.field === 'name') this.nameDraft = f.value;
+      if (f.dataset.field === 'code') this.codeDraft = f.value.toUpperCase();
     });
     this.el.addEventListener('dblclick', (e) => {
       const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as SlotId | undefined;
@@ -191,10 +233,13 @@ export class Lobby {
     for (const e of this.el.querySelectorAll<HTMLElement>('[data-slot]')) e.classList.toggle('sel', e.dataset.slot === this.slot);
     for (const e of this.el.querySelectorAll<HTMLElement>('[data-map]')) e.classList.toggle('sel', e.dataset.map === this.map);
     this.q('side').innerHTML = this.pane === 'gear' ? this.itemCard() : this.mapCard() + (this.mode === 'online' ? this.onlineHtml() : '');
-    const lock = this.mode === 'online' && !NET.available;
+    const lock = this.mode === 'online' && !NET.room;
     const startBtn = this.el.querySelector('[data-act="start"]') as HTMLButtonElement;
     startBtn.classList.toggle('locked', lock);
-    startBtn.title = lock ? 'Сетевая игра появится позже' : `Начать: ${campaignMap(this.map).title}`;
+    startBtn.title = lock ? 'Сначала комната: создай или войди по коду' : `Начать: ${campaignMap(this.map).title}`;
+    const guest = this.mode === 'online' && NET.room && !NET.isHost;
+    const ready = guest && NET.room?.seats.find((x) => x.seat === NET.room?.you)?.ready;
+    startBtn.firstChild!.textContent = guest ? (ready ? 'Не готов ' : 'Готов ') : 'Начать игру ';
     this.q('hint').classList.remove('warn');
     this.q('hint').textContent = this.pane === 'gear'
       ? 'Клик — гнездо · двойной клик или I — сменить · Q / E — вкладки'
@@ -257,16 +302,77 @@ export class Lobby {
       ${this.won.includes(m.id) ? '<p class="mm-won-line">Карта пройдена — куст отбит!</p>' : ''}</div>`;
   }
 
-  /** Панель сетевой игры по образцу MCD: создать сессию, закрытая игра, список сессий, друзья — пока заглушки */
+  /** Действия сетевой панели: кнопки и Enter в полях */
+  private netAct(a: string | undefined): void {
+    switch (a) {
+      case 'probe': void NET.probe().then(() => this.connectNet()); break;
+      case 'login': {
+        const name = this.nameDraft.trim();
+        void NET.login(name).then((ok) => { if (ok) this.connectNet(); });
+        break;
+      }
+      case 'logout': NET.logout(); this.rooms = null; this.renderSel(); break;
+      case 'host': NET.createRoom(this.map, this.privateGame); break;
+      case 'join': if (this.codeDraft.trim()) NET.joinRoom(this.codeDraft.trim()); break;
+      case 'leave': NET.leaveRoom(); this.renderSel(); break;
+      case 'refresh': void NET.list().then((r) => { this.rooms = r; this.renderSel(); if (!r.length) this.flash('Открытых комнат нет — создай свою'); }); break;
+      default: break;
+    }
+  }
+
+  /** Сервер есть и вход сделан: связать профиль, открыть соединение, спросить список комнат */
+  connectNet(): void {
+    if (NET.available && NET.auth) {
+      void NET.syncProfile(this.profile).then(() => { if (this.open) this.render(); });
+      NET.connect();
+      void NET.list().then((r) => { this.rooms = r; if (this.open && this.mode === 'online') this.renderSel(); });
+    }
+    if (this.open && this.mode === 'online') this.renderSel();
+  }
+
+  /** Панель сетевой игры по образцу MCD: вход, комната с местами, создать сессию, список сессий, вход по коду */
   private onlineHtml(): string {
-    return `<div class="mm-online">
-      <button class="mm-btn host locked" data-act="host">Создать онлайн-сессию</button>
+    const esc = (v: string): string => v.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    if (!NET.available) {
+      return `<div class="mm-online">
+      <div class="mm-online-empty">Сервер недоступен</div>
+      <p class="mm-note">Сетевая игра идёт через сервер «Малины» (${esc(NET.base)}): <code>npm run server</code>. Снаряжение и карту можно выбрать уже сейчас.</p>
+      <button class="mm-btn small" data-act="probe">Проверить снова</button>
+    </div>`;
+    }
+    if (!NET.auth) {
+      return `<div class="mm-online">
+      <div class="mm-online-h"><b>Имя героя</b></div>
+      <input class="mm-field" data-field="name" data-enter="login" maxlength="16" placeholder="2–16 букв" value="${esc(this.nameDraft)}">
+      <button class="mm-btn host" data-act="login">Войти</button>
+      <p class="mm-note">Без пароля: сервер запомнит героя в этом браузере.</p>
+    </div>`;
+    }
+    const who = `<div class="mm-online-h"><b>${esc(NET.auth.name)}</b><button class="mm-btn small" data-act="logout" title="Забыть вход в этом браузере">Выйти</button></div>`;
+    const r = NET.room;
+    if (r) {
+      const seats = r.seats.map((x) => `<li class="mm-seat${x.online ? '' : ' off'}${x.seat === r.you ? ' me' : ''}" data-player="${x.playerId}">
+        <b>${x.host ? '♛ ' : ''}${esc(x.name)}</b><i>${x.host ? 'хост' : x.ready ? 'готов' : 'не готов'}${x.online ? '' : ' · нет связи'}</i>
+        ${NET.isHost && !x.host ? '<button class="mm-btn small" data-act="kick" title="Убрать из комнаты">✕</button>' : ''}</li>`).join('');
+      return `<div class="mm-online">${who}
+      <div class="mm-online-h"><b>Комната</b><span class="mm-code" title="Код для друзей">${r.room.code}</span></div>
+      <ul class="mm-seats">${seats}${'<li class="mm-seat empty">свободно</li>'.repeat(Math.max(0, r.room.max - r.seats.length))}</ul>
+      <p class="mm-note">${campaignMap(r.room.map).title}${r.room.private ? ' · закрытая' : ''} · ${NET.isHost ? 'все готовы — «Начать игру»' : '«Готов» — и ждём хоста'}</p>
+      <button class="mm-btn small" data-act="leave">Покинуть комнату</button>
+    </div>`;
+    }
+    const list = this.rooms === null ? '<div class="mm-online-empty">…</div>'
+      : this.rooms.length ? `<ul class="mm-rooms">${this.rooms.map((x) => `<li><b>${esc(x.host)}</b><i>${campaignMap(x.map).title} · ${x.players}/${x.max}</i><button class="mm-btn small" data-act="join-room" data-code="${x.code}">Войти</button></li>`).join('')}</ul>`
+        : '<div class="mm-online-empty">Сессий не найдено</div>';
+    return `<div class="mm-online">${who}
+      <button class="mm-btn host" data-act="host">Создать онлайн-сессию</button>
       <label class="mm-toggle" data-act="private">Закрытая игра<i class="${this.privateGame ? 'on' : ''}"></i></label>
+      <div class="mm-online-h"><b>Код комнаты</b></div>
+      <div class="mm-join"><input class="mm-field" data-field="code" data-enter="join" maxlength="6" placeholder="ABCDEF" value="${esc(this.codeDraft)}"><button class="mm-btn small" data-act="join">Войти</button></div>
       <div class="mm-online-h"><b>Сессии</b><button class="mm-btn small" data-act="refresh">Обновить</button></div>
-      <div class="mm-online-empty">Сессий не найдено</div>
+      ${list}
       <div class="mm-online-h"><b>Друзья</b><button class="mm-btn small" data-act="friend">+ Добавить</button></div>
       <div class="mm-online-empty">Друзей пока нет</div>
-      <p class="mm-note">Сетевая игра появится позже. Снаряжение и карту можно выбрать уже сейчас.</p>
     </div>`;
   }
 }

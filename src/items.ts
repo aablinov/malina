@@ -1,4 +1,4 @@
-import { rng, type Rand } from './textures';
+import { rng, type Rand } from './rng.ts';
 
 /**
  * Предметы, снаряжение и прокачка в духе Minecraft Dungeons (wiki/design-inventory.md).
@@ -443,7 +443,10 @@ export class Profile {
   private readonly listeners = new Set<() => void>();
   private rand: Rand;
 
-  constructor(data?: ProfileData, private readonly persist = true) {
+  private readonly persist: boolean;
+
+  constructor(data?: ProfileData, persist = true) {
+    this.persist = persist;
     const loaded = data ? null : Profile.load();
     this.data = data ?? loaded ?? Profile.starter();
     this.rand = rng(hash(String(this.data.seq)) || 1);
