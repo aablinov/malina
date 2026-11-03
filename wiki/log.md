@@ -388,3 +388,11 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-11-03] код | Сеть: плавность, смена хоста, повтор, опоздавшие, друзья, чат
 Сверка места гостя по учтённому вводу и отброс, буфер снимков, зоны и лава для героев гостей, флаги кукол и заморозка башен, заряд заклинаний и звуки чужих героев. Хост ушёл посреди боя — бой ведёт следующий (`battle.host`, `TowerDefense.takeOver`); пауза без остановки; «Ещё раз» (`room.again`); вход в идущий бой; друзья (миграция 003), чат, список игроков с пингом. Тесты — `tests/net-party.spec.ts`.
 Страницы: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md).
+
+## [2026-11-04] код | Сеть: подготовка к серверному бою — страж границы, `test:net`
+Начало перехода на серверно-авторитарный бой (план по образцу Quake 3): `tsconfig.server.json` проверяет `src/sim`, `src/net`, `src/game` без DOM, `server/test/sim-boundary.test.ts` грузит их в Node и запрещает сцену, DOM, FX и `Math.random`; `npm run test:net`; импорты с `.ts` в `collision`/`nav`/`level` для Node, `TdMist` в `td/types.ts`.
+Страницы: [dev-testing.md](dev-testing.md).
+
+## [2026-11-04] код | Сеть: канал, транспорты и кодек снимков
+Сетевой слой выделен в чистый код с тестами на `node:test` (`channel.test.ts`, `snapshot.test.ts`): `Channel` с надёжной и ненадёжной полосами и seq/ack по образцу netchan Quake 3, транспорты над WebSocket и петля в памяти с потерями, `SnapshotRing`/`SnapshotView` — дельты снимков от подтверждённого клиентом. В игре пока не используется — подключится вместе с серверным боем.
+Страницы: [design-multiplayer.md](design-multiplayer.md).

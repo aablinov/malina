@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { overlapsY, type Obstacle } from '../collision';
-import { distToObstacle } from '../nav';
+import { overlapsY, type Obstacle } from '../collision.ts';
+import { distToObstacle } from '../nav.ts';
 import { BODY_H, collideTop, STEP, type Terrain } from './collide.ts';
 import type { Level } from './level.ts';
 
@@ -29,7 +29,9 @@ interface Node { i: number; j: number; y: number; g: number; f: number; parent: 
 const key = (i: number, j: number, y: number): number => ((i + 2048) * 4096 + (j + 2048)) * 128 + Math.round(y * 2) + 32;
 
 export class Pathfinder {
-  constructor(private readonly level: Level, private readonly terrain: Terrain) {}
+  private readonly level: Level;
+  private readonly terrain: Terrain;
+  constructor(level: Level, terrain: Terrain) { this.level = level; this.terrain = terrain; }
 
   /** Над полом y в точке (x, z) свободно на рост героя */
   private clear(x: number, z: number, y: number): boolean {

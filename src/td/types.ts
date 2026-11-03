@@ -1,4 +1,5 @@
-import type { TdMist } from './mist-fx';
+/** Туман над логовами (`src/td/mist-fx.ts`): радиус, плотность 0..1, цвет */
+export interface TdMist { radius: number; density?: number; color?: string }
 
 /**
  * Режим «Оборона куста» (tower defence, wiki/design-tower-defence.md): всё, что карта говорит режиму, лежит в `meta.td`.
