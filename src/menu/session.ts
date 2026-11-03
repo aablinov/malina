@@ -1,5 +1,5 @@
-import { NetClient } from '../net/client';
-import type { RoomInfo } from '../net/protocol';
+import { NetClient } from '../net/client.ts';
+import type { RoomInfo } from '../net/protocol.ts';
 
 /**
  * Партия, которую собирает лагерь (wiki/design-main-menu.md): режим, карта, число игроков.

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import type { Obstacle } from './collision';
-import type { Textures } from './textures';
-import { pixelTex } from './textures';
+import type { Obstacle } from './collision.ts';
+import type { Textures } from './textures.ts';
+import { pixelTex } from './textures.ts';
 
 /**
  * Лавки как в лагере Minecraft Dungeons (wiki/design-inventory.md, раздел «Торговцы»): кузнец — каменная стена
@@ -59,7 +59,8 @@ export class Merchant {
   private t = Math.random() * 6;
 
   /** yaw — куда смотрит прилавок: 0 — к +Z */
-  constructor(scene: THREE.Scene, overlay: HTMLElement, T: Textures, readonly kind: MerchantKind, x: number, z: number, yaw: number, y = 0) {
+  readonly kind: MerchantKind;
+  constructor(scene: THREE.Scene, overlay: HTMLElement, T: Textures, kind: MerchantKind, x: number, z: number, yaw: number, y = 0) { this.kind = kind;
     this.pos = new THREE.Vector3(x, y, z);
     const g = this.group;
     g.position.copy(this.pos);

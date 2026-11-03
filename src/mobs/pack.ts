@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import type { BossHooks } from '../bosses/kit';
-import type { Knight } from '../knight';
-import type { Target } from '../target';
-import type { Mob, MobHooks } from './mob';
-import { MOBS } from './roster';
+import type { BossHooks } from '../bosses/kit.ts';
+import type { Knight } from '../knight.ts';
+import type { Target } from '../target.ts';
+import type { Mob, MobHooks } from './mob.ts';
+import { MOBS } from './roster.ts';
 
 /**
  * Стая рядовых мобов (wiki/design-mobs.md): кто жив, кого призвали, толкотня, масштаб и малина с павших.
@@ -20,7 +20,8 @@ export class Pack {
   private readonly hooks: MobHooks;
 
   /** loot — малина с павшего: где и сколько */
-  constructor(h: BossHooks, private readonly loot: (at: THREE.Vector3, n: number) => void) {
+  private readonly loot: (at: THREE.Vector3, n: number) => void;
+  constructor(h: BossHooks, loot: (at: THREE.Vector3, n: number) => void) { this.loot = loot;
     // куклы гостя (src/net/coop.ts) никого не призывают: призванных пришлёт снимок хоста
     this.hooks = { ...h, allies: () => this.mobs.filter((m) => m.alive), spawn: (kind, at) => (this.mirror ? null : this.spawn(kind, at)) };
   }

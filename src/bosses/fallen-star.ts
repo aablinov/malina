@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { bell, boom, hiss, voice } from '../spell-audio';
-import type { Rect } from './arena';
-import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit';
-import { MiniBoss } from './mini';
+import { pixelTex } from '../textures.ts';
+import { bell, boom, hiss, voice } from '../spell-audio.ts';
+import type { Rect } from './arena.ts';
+import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
+import { MiniBoss } from './mini.ts';
 
 /**
  * Павшая Звезда — финальный страж (wiki/design-bosses.md, разделы 1–5; схематичное «Сердце Края» / Астель): та самая

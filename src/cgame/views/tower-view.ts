@@ -35,7 +35,9 @@ export class TowerView {
   private readonly glows: THREE.MeshBasicMaterial[] = [];
   private recoil = 0;
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, ent: EntityState) {
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  constructor(scene: THREE.Scene, fx: FX, ent: EntityState) { this.scene = scene; this.fx = fx;
     const e = ent as TowerEnt;
     this.kind = (e.kind in TOWERS ? e.kind : 'arrow') as TowerKind;
     this.level = e.level;

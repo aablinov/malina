@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { textureByName, type Textures } from '../textures';
+import { textureByName, type Textures } from '../textures.ts';
 
 /**
  * Атлас текстур блоков: все тайлы 16 × 16 из textures.ts складываются в одну картинку,

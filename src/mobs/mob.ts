@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { resolveCircle } from '../collision';
-import { HERO } from '../tuning';
-import { boom, hiss } from '../spell-audio';
-import { Boss, C, rand, RASP, wrap, type BossHooks } from '../bosses/kit';
-import { Field } from '../bosses/field';
-import type { Target } from '../target';
-import { pickDecoy, type Decoy } from '../decoys';
-import type { Knight } from '../knight';
-import { nearestHero, party } from '../party';
+import { rnd } from '../rng.ts';
+import { resolveCircle } from '../collision.ts';
+import { HERO } from '../tuning.ts';
+import { boom, hiss } from '../spell-audio.ts';
+import { Boss, C, rand, RASP, wrap, type BossHooks } from '../bosses/kit.ts';
+import { Field } from '../bosses/field.ts';
+import type { Target } from '../target.ts';
+import { pickDecoy, type Decoy } from '../decoys.ts';
+import type { Knight } from '../knight.ts';
 
 /**
  * Рядовой моб Ордена Малины (wiki/design-mobs.md): облегчённый мозг мини-босса — без арены, ярости и сердца.
@@ -22,6 +22,21 @@ export interface MobHooks extends BossHooks {
   allies(): readonly Mob[];
   /** Призвать моба в стаю */
   spawn(kind: string, at: THREE.Vector3): Mob | null;
+  /** Отряд (общий бой): герои других игроков — моб гонится за ближайшим на ногах; пусто — только свой герой */
+  heroes?(): readonly Knight[];
+  /** Ударить героя отряда (не своего): урон уже с масштабом моба */
+  hurtKnight?(k: Knight, dmg: number, from: THREE.Vector3, knock: number): void;
+}
+
+/** Ближайший герой на ногах к точке at из своего и отряда; все без сил — свой */
+export function nearestHero(at: THREE.Vector3, local: Knight, others: readonly Knight[]): Knight {
+  let best = local, bd = local.down ? Infinity : Math.hypot(local.pos.x - at.x, local.pos.z - at.z);
+  for (const k of others) {
+    if (k.down) continue;
+    const d = Math.hypot(k.pos.x - at.x, k.pos.z - at.z);
+    if (d < bd) { bd = d; best = k; }
+  }
+  return best;
 }
 
 /** Зелёный свет лечения */
@@ -89,7 +104,7 @@ export abstract class Mob extends Boss {
   protected hitDone = false;
   /** Призванный, в которого целится моб (null — герой) */
   protected focus: Decoy | null = null;
-  /** Общий бой: ближайший герой отряда (src/party.ts); null — свой герой */
+  /** Общий бой: ближайший герой отряда (общий бой, MobHooks.heroes); null — свой герой */
   protected prey: Knight | null = null;
   /** Сетевой id в стае (снимок хоста, src/net/coop.ts) */
   net = 0;
@@ -117,10 +132,10 @@ export abstract class Mob extends Boss {
   private healed = 0;
   private healT = 0;
 
-  constructor(h: MobHooks, hp: number, at: THREE.Vector3, yaw = Math.random() * Math.PI * 2) {
+  constructor(h: MobHooks, hp: number, at: THREE.Vector3, yaw = rnd() * Math.PI * 2) {
     super(h, hp, at.clone().setY(0), yaw);
     // приманки (src/decoys.ts): пока моб целится в призванного, «герой» для него — приманка, и его удары идут ей
-    // общий бой: «герой» — ближайший из отряда (src/party.ts), его и бьём
+    // общий бой: «герой» — ближайший из отряда (MobHooks.heroes), его и бьём
     const base = this.h, me = this, local = base.hero;
     const hero = new Proxy(base.hero, {
       get(t, p) {
@@ -139,7 +154,7 @@ export abstract class Mob extends Boss {
         if (me.puppet) return;
         const f = me.focus;
         if (f?.alive) f.hurt(dmg, from);
-        else if (me.prey && me.prey !== local) party.hurt?.(me.prey, dmg * me.dmgMult, from, knock);
+        else if (me.prey && me.prey !== local) h.hurtKnight?.(me.prey, dmg * me.dmgMult, from, knock);
         else base.hurtHero(dmg, from, knock);
       },
     };
@@ -247,7 +262,7 @@ export abstract class Mob extends Boss {
     const v = Math.min(n, this.maxHp - this.hp);
     this.hp += v;
     this.healed += v;
-    if (Math.random() < 0.3) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.4, this.topY), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, 1.2, 0), life: 0.5, size: 0.1, color: HEAL, gravity: 0 });
+    if (rnd() < 0.3) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.4, this.topY), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, 1.2, 0), life: 0.5, size: 0.1, color: HEAL, gravity: 0 });
   }
 
   protected go(s: MobState, attack = ''): void { this.state = s; this.attack = attack; this.st = 0; this.hitDone = false; if (s === 'attack') this.attackSeq++; }
@@ -287,7 +302,11 @@ export abstract class Mob extends Boss {
     this.ward -= dt;
     this.auraFx(dt);
     // цель: ближайшая из героя и приманок; меняем только вне атаки, чтобы удар не перескочил на полпути
-    if (this.state !== 'attack') { if (party.allies.length) { const n = nearestHero(this.pos, this.mh.hero); this.prey = n === this.mh.hero ? null : n; } else this.prey = null; this.focus = null; this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro, this.hunter, this.reachY); }
+    if (this.state !== 'attack') {
+      const others = this.mh.heroes?.() ?? [];
+      if (others.length) { const n = nearestHero(this.pos, this.mh.hero, others); this.prey = n === this.mh.hero ? null : n; } else this.prey = null;
+      this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro, this.hunter, this.reachY);
+    }
     const hero = this.h.hero.pos;
     const dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, dist = Math.hypot(dx, dz);
     const rel = wrap(Math.atan2(dx, dz) - this.yaw);
@@ -351,17 +370,17 @@ export abstract class Mob extends Boss {
   private auraFx(dt: number): void {
     if (this.chillT > 0) {
       this.chillT -= dt;
-      if (Math.random() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.2, this.topY), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, -0.4, 0), life: 0.5, size: 0.07, color: FROST, gravity: 0 });
+      if (rnd() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.2, this.topY), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, -0.4, 0), life: 0.5, size: 0.07, color: FROST, gravity: 0 });
     }
     if (this.rally > 0) {
       this.rally -= dt;
-      if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
+      if (rnd() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
     }
   }
 
   /** Звёздочки оглушения над головой */
   private dazeFx(): void {
-    if (Math.random() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(this.time * 7) * 0.4, this.topY + 0.25, Math.sin(this.time * 7) * 0.4)), vel: new THREE.Vector3(0, 0.2, 0), life: 0.35, size: 0.08, color: C(3.4, 3, 1.2), gravity: 0 });
+    if (rnd() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(this.time * 7) * 0.4, this.topY + 0.25, Math.sin(this.time * 7) * 0.4)), vel: new THREE.Vector3(0, 0.2, 0), life: 0.35, size: 0.08, color: C(3.4, 3, 1.2), gravity: 0 });
   }
 
   /** Кадр куклы (гость общего боя): к месту и взгляду со снимка, шаг и поза — свои; пал — рассыпается, как живой */

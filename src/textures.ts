@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { makeCanvas } from './headless.ts';
 import { rng, type Rand } from './rng.ts';
 
 export { rng, type Rand };
@@ -27,8 +28,7 @@ function ctx2d(c: HTMLCanvasElement): Ctx {
 }
 
 function canvasTex(size: number, paint: Painter, seed = 1, { alpha = false } = {}): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
+  const c = makeCanvas(size, size);
   const g = ctx2d(c);
   if (!alpha) { g.fillStyle = '#000'; g.fillRect(0, 0, size, size); }
   paint(g, size, rng(seed));
@@ -294,7 +294,7 @@ export function makeTextures(): Textures {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(Math.floor(x / 4) % 2 ? '#f2ece0' : '#c4284f', r, 6));
   }, 25);
   T.sign = (() => {
-    const c = document.createElement('canvas'); c.width = 128; c.height = 40;
+    const c = makeCanvas(128, 40);
     const g = ctx2d(c);
     g.fillStyle = '#4a321c'; g.fillRect(0, 0, 128, 40);
     g.fillStyle = '#6b4a2b'; g.fillRect(3, 3, 122, 34);
@@ -470,7 +470,7 @@ export function makeTextures(): Textures {
     }
   }, 70);
   T.fire = (() => {
-    const c = document.createElement('canvas'); c.width = 16; c.height = 48;
+    const c = makeCanvas(16, 48);
     const g = ctx2d(c);
     const r = rng(67);
     for (let f = 0; f < 3; f++) {
@@ -1064,13 +1064,13 @@ export function makeTextures(): Textures {
   }, 254);
 
   T.square = (() => {
-    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const c = makeCanvas(64, 64);
     const g = ctx2d(c);
     g.strokeStyle = '#fff'; g.lineWidth = 5; g.strokeRect(5, 5, 54, 54);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   })();
   T.glow = (() => {
-    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const c = makeCanvas(64, 64);
     const g = ctx2d(c);
     const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
     gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
@@ -1093,8 +1093,7 @@ export function pixelTex(base: string, amt = 8, seed = 1): THREE.CanvasTexture {
  */
 export function checkerTex(a: string, b: string, cells: number, px0 = 16, line?: string): THREE.CanvasTexture {
   const size = cells * px0;
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
+  const c = makeCanvas(size, size);
   const g = ctx2d(c);
   for (let y = 0; y < cells; y++) for (let x = 0; x < cells; x++) {
     g.fillStyle = (x + y) % 2 ? b : a;

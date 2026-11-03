@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { bell, boom, hiss, voice } from '../spell-audio';
-import type { Rect } from './arena';
-import { C, RASP, rand, type BossHooks } from './kit';
-import { MiniBoss, type MiniState } from './mini';
+import { bell, boom, hiss, voice } from '../spell-audio.ts';
+import type { Rect } from './arena.ts';
+import { C, RASP, rand, type BossHooks } from './kit.ts';
+import { MiniBoss, type MiniState } from './mini.ts';
 
 /**
  * Ночной всадник — мини-босс (wiki/design-bosses.md, раздел 2): призрачный конь из полупрозрачных тёмно-синих кубов,

@@ -1,15 +1,15 @@
 import type * as THREE from 'three';
-import type { Mob, MobHooks } from './mob';
-import { BerryHealer, EmberMage, VineSummoner } from './mages';
-import { BannerBearer, Crossbowman, Hammerer, ShieldKnight, Spearman, Squire } from './knights';
-import { Berryling, RaspWolf, WitheredGardener } from './critters';
-import { Reaper, BoneArcher, Wisp, Crow, Scarecrow } from './fallen';
-import { Boarlet, BurrowBeetle, VineSpider, Bee, Hive } from './beasts';
-import { BasketMimic, DruseGolemling, HopPot, JamKeg, WardObelisk } from './constructs';
-import { SunKnight } from './soller';
-import { BeaverGnawer, BerryRunner, CrystalShellback, FrostImp, PollenMoth, RainbowHopper, Sporeling, VineRam, StumpSapper, VineBallista } from './td-foes';
-import { RaspberryBrute, SlimeQueen, SnowShaman } from './td-chiefs';
-import { BerrySlime, BerrySlimeMid, BerrySlimeSmall, BudSpitter, ThornBall, ThornHorror, VineWhip } from './bush';
+import type { Mob, MobHooks } from './mob.ts';
+import { BerryHealer, EmberMage, VineSummoner } from './mages.ts';
+import { BannerBearer, Crossbowman, Hammerer, ShieldKnight, Spearman, Squire } from './knights.ts';
+import { Berryling, RaspWolf, WitheredGardener } from './critters.ts';
+import { Reaper, BoneArcher, Wisp, Crow, Scarecrow } from './fallen.ts';
+import { Boarlet, BurrowBeetle, VineSpider, Bee, Hive } from './beasts.ts';
+import { BasketMimic, DruseGolemling, HopPot, JamKeg, WardObelisk } from './constructs.ts';
+import { SunKnight } from './soller.ts';
+import { BeaverGnawer, BerryRunner, CrystalShellback, FrostImp, PollenMoth, RainbowHopper, Sporeling, VineRam, StumpSapper, VineBallista } from './td-foes.ts';
+import { RaspberryBrute, SlimeQueen, SnowShaman } from './td-chiefs.ts';
+import { BerrySlime, BerrySlimeMid, BerrySlimeSmall, BudSpitter, ThornBall, ThornHorror, VineWhip } from './bush.ts';
 
 /** Рядовые мобы (wiki/design-mobs.md): id → имя и класс. Номера — из списка тридцати */
 export type MobCtor = new (h: MobHooks, at: THREE.Vector3) => Mob;

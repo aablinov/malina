@@ -1,5 +1,5 @@
-import { enchantDef, type EnchantId, type Item } from './items';
-import type { WeaponCategory } from './weapons';
+import { enchantDef, type EnchantId, type Item } from './items.ts';
+import type { WeaponCategory } from './weapons.ts';
 
 /**
  * Закалка оружия (wiki/design-weapon-arts.md): зачарования ближнего боя меняют, как выглядит и бьёт оружие.

@@ -25,7 +25,10 @@ export class WallView {
   private readonly leaves: THREE.Group[] = [];
   private readonly mats: THREE.Material[] = [];
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, readonly spec: TdWall, ent: EntityState) {
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  readonly spec: TdWall;
+  constructor(scene: THREE.Scene, fx: FX, spec: TdWall, ent: EntityState) { this.scene = scene; this.fx = fx; this.spec = spec;
     this.out = new THREE.Vector3(spec.out[0], 0, spec.out[1]);
     this.pos = new THREE.Vector3(spec.breach[0], 0, spec.breach[1]);
     this.hp = this.maxHp = spec.hp;

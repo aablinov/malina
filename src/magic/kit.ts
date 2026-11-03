@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import type { ArtifactStats } from '../items';
-import type { School, Spells } from '../spells';
+import { rnd } from '../rng.ts';
+import type { ArtifactStats } from '../items.ts';
+import type { School, Spells } from '../spells.ts';
 
 /**
  * Общее для всех заклинаний (wiki/design-spells.md): стартовых (starters.ts), базовых у торговца (base-*.ts) и с боссов.
@@ -29,7 +30,7 @@ export interface Spell {
 }
 
 export const C = (r: number, g: number, b: number): THREE.Color => new THREE.Color(r, g, b);
-export const rand = (a: number, b: number): number => a + Math.random() * (b - a);
+export const rand = (a: number, b: number): number => a + rnd() * (b - a);
 
 /** Заглушка, пока заклинание не сделано: замах, удар по площади у курсора, вспышка */
 export function placeholder(school: School, tier: Tier, title: string): Spell {

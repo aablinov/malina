@@ -23,7 +23,10 @@ export class LairView {
   private time = 0;
   private burstT = 0;
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, readonly lane: TdLane, ent: EntityState) {
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  readonly lane: TdLane;
+  constructor(scene: THREE.Scene, fx: FX, lane: TdLane, ent: EntityState) { this.scene = scene; this.fx = fx; this.lane = lane;
     const [x, z] = lane.points[0], [nx, nz] = lane.points[1] ?? lane.points[0];
     this.pos = new THREE.Vector3(x, 0, z);
     this.dir = new THREE.Vector3(nx - x, 0, nz - z);

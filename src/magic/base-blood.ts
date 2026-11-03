@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import type { ArtifactStats, BossSpellKind } from '../items';
-import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio';
-import type { Spells } from '../spells';
-import { bleed, payHp } from './blood-core';
-import { rand, type Spell } from './kit';
+import { rnd } from '../rng.ts';
+import type { ArtifactStats, BossSpellKind } from '../items.ts';
+import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import { bleed, payHp } from './blood-core.ts';
+import { rand, type Spell } from './kit.ts';
 
 /**
  * Базовые заклинания (wiki/design-spells.md, раздел «Базовые заклинания»). Малиновая кровь — как магия крови Elden Ring:
@@ -82,7 +83,7 @@ function bloodclaws(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
         // вырывается с перелётом, держится, уходит в землю
         const up = tt < 0.14 ? (tt / 0.14) * 1.15 : tt < 0.24 ? 1.15 - ((tt - 0.14) / 0.1) * 0.15 : tt < 0.65 ? 1 : Math.max(0.01, 1 - (tt - 0.65) / (T - 0.65));
         g.scale.set(1, up, 1);
-        if (Math.random() < 0.6) fx.particle({ pos: p.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(0.2, h * up), rand(-0.25, 0.25))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(1, 2.4), rand(-0.3, 0.3)), life: rand(0.25, 0.45), size: rand(0.05, 0.09), color: Math.random() < 0.6 ? s.a : s.b, gravity: -1.5 });
+        if (rnd() < 0.6) fx.particle({ pos: p.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(0.2, h * up), rand(-0.25, 0.25))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(1, 2.4), rand(-0.3, 0.3)), life: rand(0.25, 0.45), size: rand(0.05, 0.09), color: rnd() < 0.6 ? s.a : s.b, gravity: -1.5 });
       }, () => { /* общие материалы освобождаются ниже */ });
       fx.burst(p.clone().setY(p.y + 0.2), [s.a, s.b, '#ffb0c8'], 10, { speed: 2.5, up: 4, size: 0.07, life: 0.6, glow: true, gravity: 9 });
     });
@@ -100,7 +101,7 @@ function bloodclaws(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     let left = 1.4;
     kit.proc((dt) => {
       left -= dt;
-      if (Math.random() < 0.5) fx.particle({ pos: c.clone().add(new THREE.Vector3(rand(-1, 1), 0.08, rand(-1, 1))), vel: new THREE.Vector3(0, rand(0.4, 1), 0), life: 0.5, size: 0.05, color: s.a, gravity: -0.3 });
+      if (rnd() < 0.5) fx.particle({ pos: c.clone().add(new THREE.Vector3(rand(-1, 1), 0.08, rand(-1, 1))), vel: new THREE.Vector3(0, rand(0.4, 1), 0), life: 0.5, size: 0.05, color: s.a, gravity: -0.3 });
       return left > 0;
     });
   });
@@ -132,9 +133,9 @@ function bloodswarm(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     for (let i = 0; i < (live ? 9 : 0); i++) {
       const ang = Math.atan2(dir.x, dir.z) + rand(-half, half), sp = rand(5, 8), life = (R / sp) * rand(0.6, 1);
       const v = new THREE.Vector3(Math.sin(ang) * sp, rand(-0.6, 0.8), Math.cos(ang) * sp);
-      fx.particle({ pos: hand.clone().add(new THREE.Vector3(rand(-0.15, 0.15), rand(-0.15, 0.15), rand(-0.15, 0.15))), vel: v, life, size: rand(0.035, 0.06), color: Math.random() < 0.7 ? s.a : s.b, gravity: rand(-1, 1), spin: 20, drag: 0.4, shrink: false });
+      fx.particle({ pos: hand.clone().add(new THREE.Vector3(rand(-0.15, 0.15), rand(-0.15, 0.15), rand(-0.15, 0.15))), vel: v, life, size: rand(0.035, 0.06), color: rnd() < 0.7 ? s.a : s.b, gravity: rand(-1, 1), spin: 20, drag: 0.4, shrink: false });
     }
-    if (live && Math.random() < 0.5) {
+    if (live && rnd() < 0.5) {
       const p = hand.clone().addScaledVector(dir, rand(1, R)).add(new THREE.Vector3(rand(-0.6, 0.6), rand(-0.3, 0.5), rand(-0.6, 0.6)));
       fx.particle({ pos: p, vel: new THREE.Vector3(rand(-2, 2), rand(-1, 1), rand(-2, 2)), life: 0.4, size: 0.04, color: s.b, gravity: 0, spin: 25 });
     }
@@ -203,8 +204,8 @@ function bloodblade(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
       const on = kit.buffs.some((b) => b.id === 'bloodblade');
       const hand = kit.hand();
       if (on && t < dur) {
-        for (let i = 0; i < 2; i++) if (Math.random() < 0.7) fx.particle({ pos: hand.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(-0.1, 0.7), rand(-0.25, 0.25))), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(-0.6, 0.2), rand(-0.2, 0.2)), life: rand(0.4, 0.7), size: rand(0.06, 0.1), color: Math.random() < 0.7 ? s.a : s.b, gravity: 9 });
-        if (Math.random() < 0.15) fx.flash(hand.clone().setY(hand.y + rand(0, 0.6)), s.a.clone().multiplyScalar(0.5), 0.7, 0.2);
+        for (let i = 0; i < 2; i++) if (rnd() < 0.7) fx.particle({ pos: hand.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(-0.1, 0.7), rand(-0.25, 0.25))), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(-0.6, 0.2), rand(-0.2, 0.2)), life: rand(0.4, 0.7), size: rand(0.06, 0.1), color: rnd() < 0.7 ? s.a : s.b, gravity: 9 });
+        if (rnd() < 0.15) fx.flash(hand.clone().setY(hand.y + rand(0, 0.6)), s.a.clone().multiplyScalar(0.5), 0.7, 0.2);
         return true;
       }
       // высыхание: сок темнеет до розовой пыли и осыпается

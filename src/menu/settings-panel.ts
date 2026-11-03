@@ -1,6 +1,6 @@
-import { setVolume } from '../audio';
-import { setMusicVolume } from '../music';
-import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './settings';
+import { setVolume } from '../audio.ts';
+import { setMusicVolume } from '../music.ts';
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './settings.ts';
 
 /**
  * Окно настроек — одно и в главном меню, и на паузе в бою (wiki/design-main-menu.md).

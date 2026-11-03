@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { Level, type LevelJSON } from '../src/level/level.ts';
 import { crowdMult } from '../src/td/scaling.ts';
+import type { TdSpec } from '../src/td/types.ts';
 
 /**
  * Карты сетевой игры — карты обороны куста из assets/maps (у них есть `meta.td`, src/td/types.ts).
@@ -13,8 +15,10 @@ export const MAX_XP_PER_MATCH = 50_000;
 
 export class MapCatalog {
   private readonly maps = new Map<string, NetMap>();
+  private readonly dir: string;
 
   constructor(dir: string) {
+    this.dir = dir;
     for (const f of readdirSync(dir)) {
       if (!f.endsWith('.json')) continue;
       try {
@@ -39,4 +43,12 @@ export class MapCatalog {
   }
 
   waves(id: string): number { return this.maps.get(id)?.waves ?? 0; }
+
+  /** Уровень карты для серверного боя (каждый матч — свой, стены ломают блоки); null — нет такой */
+  load(id: string): { level: Level; td: TdSpec } | null {
+    if (!this.maps.has(id)) return null;
+    const j = JSON.parse(readFileSync(join(this.dir, `${id}.json`), 'utf8')) as LevelJSON;
+    const level = Level.fromJSON(j);
+    return { level, td: level.meta.td as TdSpec };
+  }
 }

@@ -1,5 +1,5 @@
-import { itemDef, PRICE, type ItemDef, type Rarity } from './items';
-import { getWeapon, weaponMetrics } from './weapons';
+import { itemDef, PRICE, type ItemDef, type Rarity } from './items.ts';
+import { getWeapon, weaponMetrics } from './weapons.ts';
 
 /**
  * Цены лавок (wiki/design-inventory.md, раздел «Торговцы»): каждый предмет продаётся по своей цене — от характеристик,

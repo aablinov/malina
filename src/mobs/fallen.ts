@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { hiss, voice } from '../spell-audio';
-import { C, rand, RASP } from '../bosses/kit';
-import { Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { pixelTex } from '../textures.ts';
+import { hiss, voice } from '../spell-audio.ts';
+import { C, rand, RASP } from '../bosses/kit.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * Павшие садовники (wiki/design-mobs.md, семья D): нежить Ордена — сборщик с серпом, костяной лучник, огонёк-плакальщик,
@@ -19,7 +20,7 @@ interface Bones { legs: THREE.Group[]; arms: THREE.Group[]; head: THREE.Group }
 /** Скелет: тонкие ноги и руки, рёбра под рваной малиновой накидкой, череп со светящимися глазами */
 function buildSkeleton(m: Mob, body: THREE.Group, seed: number): Bones {
   const bone = m.lam(BONE, pixelTex(BONE, 8, seed)), dark = m.lam('#3a3430'), rag = m.lam('#7a2a3a', pixelTex('#7a2a3a', 10, seed + 1));
-  const eye = m.shimmer(C(3.4, 1.2, 2.2), SOUL, Math.random() * 6, 1.8);
+  const eye = m.shimmer(C(3.4, 1.2, 2.2), SOUL, rnd() * 6, 1.8);
   const B = m.box.bind(m);
   const legs = [-1, 1].map((s) => {
     const g = new THREE.Group();

@@ -1,12 +1,12 @@
 import type * as THREE from 'three';
-import type { MapMarker } from '../hud/automap';
-import { MOBS } from '../mobs/roster';
+import type { MapMarker } from '../hud/automap.ts';
+import { MOBS } from '../mobs/roster.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { isChief, type SimPad, type SimTd } from '../sim/td.ts';
 import type { SimTower } from '../sim/tower.ts';
 import type { SimWall } from '../sim/wall.ts';
-import { voice } from '../spell-audio';
-import { menuKey, SELL_BACK, TOWERS, type TowerKind } from '../td/towers';
+import { voice } from '../spell-audio.ts';
+import { menuKey, SELL_BACK, TOWERS, type TowerKind } from '../td/towers.ts';
 import '../td/td.css';
 
 /** Цвет полосы стены в HUD */

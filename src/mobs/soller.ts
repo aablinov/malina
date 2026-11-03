@@ -1,9 +1,11 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, glowMat, rand } from '../bosses/kit';
-import { groundGlow, lightBeam } from '../loot-look';
-import { Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { makeCanvas } from '../headless.ts';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, glowMat, rand } from '../bosses/kit.ts';
+import { groundGlow, lightBeam } from '../loot-look.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * 31. Соллер, Рыцарь Солнца (wiki/design-mobs.md, раздел 2G) — редкий одиночка, не из Ордена: славит солнце, которое
@@ -29,8 +31,7 @@ const sfx = {
 
 /** Холст в пикселях: рисуем по точкам, без сглаживания */
 function canvas(w: number, h: number, paint: (px: (x: number, y: number, c: string) => void) => void): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
+  const c = makeCanvas(w, h);
   const g = c.getContext('2d')!;
   paint((x, y, col) => { g.fillStyle = col; g.fillRect(x, y, 1, 1); });
   const t = new THREE.CanvasTexture(c);
@@ -307,8 +308,8 @@ export class SunKnight extends Mob {
     this.beam.group.position.set(this.pos.x, 0, this.pos.z);
     this.beam.mats.forEach((x, i) => x.color.copy(this.beamBase[i]).multiplyScalar(k));
     this.spot.material.opacity = 0.9 * k;
-    if (k > 0.4 && Math.random() < 0.12 * k) {
-      const a = Math.random() * Math.PI * 2, r = Math.random() * 0.9;
+    if (k > 0.4 && rnd() < 0.12 * k) {
+      const a = rnd() * Math.PI * 2, r = rnd() * 0.9;
       this.h.fx.particle({ pos: new THREE.Vector3(this.pos.x + Math.cos(a) * r, rand(0.3, 4.5), this.pos.z + Math.sin(a) * r), vel: new THREE.Vector3(rand(-0.1, 0.1), rand(-0.25, 0.2), rand(-0.1, 0.1)), life: 1.4, size: rand(0.04, 0.08), color: SUN.clone().multiplyScalar(0.7), gravity: 0 });
     }
   }

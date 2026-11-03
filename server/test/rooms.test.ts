@@ -101,43 +101,13 @@ test('старт: только хост и только когда все гот
   assert.equal(lb.matchId, bs.matchId);
   assert.equal(lb.players, 3);
   assert.equal((await h.p.state((m) => m.seats.length === 3)).seats[2].name, 'Опоздал');
-  // и награда опоздавшему засчитывается
-  late.p.send({ t: 'battle.loot', matchId: bs.matchId, berries: 5, xp: 0 });
-  await late.p.next('profile.updated');
+  // и в серверном матче у него своё место и герой
+  assert.equal(s.app.games.get(bs.matchId)?.seats.size, 3);
 });
 
-test('ретрансляция: ввод гостя — только хосту, снимок хоста — всем гостям или одному месту', async () => {
+test('лимиты: поток сообщений закрывает соединение', async () => {
   s = await startServer();
-  const { heroes: [h, g1, g2] } = await party(3);
-  g1.p.send({ t: 'relay', d: { t: 'in', seq: 1 } });
-  h.p.send({ t: 'room.start' });
-  await g1.p.next('battle.start');
-  await g2.p.next('battle.start');
-  // до старта ретрансляции нет
-  assert.equal((await g1.p.next('error')).code, 'not-in-battle');
-  const input = { t: 'in', seq: 7, move: [1, 0], aim: [3, 0, 4], attack: true, roll: false };
-  g1.p.send({ t: 'relay', to: 2, d: input });
-  const got = await h.p.next('relay');
-  assert.equal(got.from, 1);
-  assert.deepEqual(got.d, input);
-  h.p.send({ t: 'relay', d: { t: 'snap', tick: 1 } });
-  assert.equal((await g1.p.next('relay')).from, 0);
-  assert.equal((await g2.p.next('relay')).from, 0);
-  h.p.send({ t: 'relay', to: 2, d: { t: 'ev', only: 2 } });
-  assert.deepEqual((await g2.p.next('relay')).d, { t: 'ev', only: 2 });
-  await sleep(50);
-  assert.ok(!g1.p.inbox.some((m) => m.t === 'relay'), 'гость 1 не получает чужое');
-  assert.ok(!g2.p.inbox.some((m) => m.t === 'relay' && m.from === 1), 'гости не слышат друг друга');
-});
-
-test('лимиты: лишний ввод отброшен, поток сообщений закрывает соединение', async () => {
-  s = await startServer();
-  const { heroes: [h, g] } = await party(2);
-  h.p.send({ t: 'room.start' });
-  await g.p.next('battle.start');
-  for (let i = 0; i < 80; i++) g.p.send({ t: 'relay', d: { t: 'in', seq: i } });
-  await sleep(150);
-  assert.equal(h.p.inbox.filter((m) => m.t === 'relay').length, NET_LIMITS.inputPerSecond);
+  const { heroes: [, g] } = await party(2);
   // две «секунды» с превышением подряд — закрыть (часы сервера двигаем вручную)
   for (let i = 0; i < NET_LIMITS.perSecond + 5; i++) g.p.send({ t: 'ping' });
   await sleep(100);
@@ -146,36 +116,42 @@ test('лимиты: лишний ввод отброшен, поток сооб�
   assert.equal((await g.p.waitClose()).code, CLOSE.flood);
 });
 
-test('итог боя: история, награды с потолком, профили, комната снова лобби', async () => {
+/** Кадры серверного боя: раннер крутится по таймеру с фейковыми часами (dt 0), поэтому шаги даём сами */
+const frames = (n: number): void => { for (let i = 0; i < n; i++) s.app.games.frame(0.05); };
+
+test('итог боя: матч считает сервер — куст отбит, история, награды с потолком, профили, комната снова лобби', async () => {
   s = await startServer();
   const { heroes: [h, g] } = await party(2);
   h.p.send({ t: 'room.start' });
   const { matchId } = await g.p.next('battle.start');
+  const match = s.app.games.get(matchId)!;
+  assert.ok(match && match.seats.size === 2, 'матч в раннере с двумя героями');
+  frames(10);
+  assert.ok(match.tick > 0, 'бой идёт');
   s.clock.t += 60_000;
-  g.p.send({ t: 'battle.end', result: 'won', wave: 10, rewards: [] });
-  assert.equal((await g.p.next('error')).code, 'not-host');
-  h.p.send({ t: 'battle.end', result: 'won', wave: 10, rewards: [{ playerId: h.id, berries: 100, xp: 50 }, { playerId: g.id, berries: 10 ** 8, xp: 10 }, { playerId: 'чужой', berries: 5, xp: 5 }] });
+  // гость потратился на башню — награда ему меньше; хост получает всю стартовую казну
+  assert.ok(match.td.command(1, { t: 'td', a: 'build:arrow', pad: 0 }));
+  const left = match.td.berries(1), full = match.td.berries(0);
+  match.td.state = 'won';
+  frames(120);
   const over = await g.p.next('battle.over');
   assert.deepEqual([over.matchId, over.result, over.wave], [matchId, 'won', 10]);
   const pu = await g.p.next('profile.updated');
-  const cap = new MapCatalog(MAPS).maxBerries('td', 2); // все награды волн × 1,5
-  assert.equal((pu.data as { berries: number }).berries, 250 + cap);
+  assert.equal((pu.data as { berries: number }).berries, 250 + left);
   const hp = await h.p.next('profile.updated');
-  assert.equal((hp.data as { berries: number; level: number; xp: number }).berries, 350);
-  assert.equal((hp.data as { level: number }).level, 2); // 50 опыта — 40 до второго уровня
+  assert.equal((hp.data as { berries: number }).berries, 250 + full);
   await h.p.state((m) => m.room.state === 'lobby' && m.seats.every((x) => !x.ready));
-  // повторный итог не засчитывается: боя уже нет
-  h.p.send({ t: 'battle.end', result: 'won', wave: 10, rewards: [{ playerId: h.id, berries: 100, xp: 0 }] });
-  assert.equal((await h.p.next('error')).code, 'not-in-battle');
+  assert.equal(s.app.games.get(matchId), null, 'матч убран из раннера');
 
   const mine = await api(s, 'GET', '/api/matches', undefined, g.token);
   assert.equal(mine.body.length, 1);
-  assert.equal(mine.body[0].berries, cap);
+  assert.equal(mine.body[0].berries, left);
   assert.equal(mine.body[0].result, 'won');
   const rec = await api(s, 'GET', '/api/records?map=td');
   assert.deepEqual(rec.body, { map: 'td', bestWave: 10, wins: 1, fastestWinMs: 60_000 });
   const prof = await api(s, 'GET', '/api/profile', undefined, g.token);
   assert.equal(prof.body.version, 2);
+  assert.ok(new MapCatalog(MAPS).maxBerries('td', 2) >= full, 'потолок выше стартовой казны');
 });
 
 test('обрыв связи: место держится, возврат с тем же токеном; срок вышел — место свободно, хост передан', async () => {
@@ -199,7 +175,7 @@ test('обрыв связи: место держится, возврат с те
   assert.equal(st.room.hostId, g.id);
 });
 
-test('хост ушёл из боя — бой продолжает следующий; ушли все — прерван; кик', async () => {
+test('хост ушёл из боя — бой идёт дальше у остальных; ушли все — прерван; кик', async () => {
   s = await startServer();
   const { heroes: [h, g1, g2, g3] } = await party(4);
   h.p.send({ t: 'room.kick', playerId: g3.id });
@@ -207,26 +183,26 @@ test('хост ушёл из боя — бой продолжает следую
   await h.p.state((m) => m.seats.length === 3);
   h.p.send({ t: 'room.start' });
   const { matchId } = await g1.p.next('battle.start');
+  const match = s.app.games.get(matchId)!;
   h.p.send({ t: 'room.leave' });
-  // хост — следующий на связи, бой идёт
-  const nh = await g2.p.next('battle.host');
-  assert.deepEqual([nh.matchId, nh.hostSeat], [matchId, 1]);
+  // корона — следующему, бой идёт на сервере без героя хоста
   const st = await g1.p.state((m) => m.seats.length === 2 && m.room.hostId === g1.id);
   assert.equal(st.room.state, 'battle');
-  assert.equal(st.room.hostId, g1.id);
-  // новый хост пишет снимки — гость их получает
-  g1.p.send({ t: 'relay', d: { t: 'snap', tick: 1 } });
-  assert.equal((await g2.p.next('relay')).from, 1);
-  // хост пропал (обрыв): место его держится коротко, потом хост — следующий
+  assert.equal(match.seats.size, 2);
+  frames(5);
+  assert.ok(!match.ended);
+  // обрыв гостя: место держится graceMs, потом герой уходит из матча
   g1.p.close();
   await g2.p.state((m) => !m.seats.find((x) => x.seat === 1)?.online);
-  s.clock.t += NET_LIMITS.hostGraceMs + 1;
+  s.clock.t += NET_LIMITS.graceMs + 1;
   s.app.rooms.sweep();
-  assert.equal((await g2.p.next('battle.host')).hostSeat, 2);
+  await g2.p.state((m) => m.seats.length === 1);
+  assert.equal(match.seats.size, 1);
   // последний ушёл — бой прерван, комната закрыта
   g2.p.send({ t: 'room.leave' });
   await g2.p.next('room.left');
   assert.equal((s.app.db.prepare('SELECT result FROM matches WHERE id = ?').get(matchId) as { result: string }).result, 'abandoned');
+  assert.equal(s.app.games.get(matchId), null);
 });
 
 test('«Ещё раз»: хост начинает новый бой тем же составом без готовности', async () => {
@@ -234,7 +210,8 @@ test('«Ещё раз»: хост начинает новый бой тем же
   const { heroes: [h, g] } = await party(2);
   h.p.send({ t: 'room.start' });
   const first = await g.p.next('battle.start');
-  h.p.send({ t: 'battle.end', result: 'lost', wave: 3, rewards: [] });
+  s.app.games.get(first.matchId)!.td.state = 'lost';
+  frames(120);
   await g.p.next('battle.over');
   g.p.send({ t: 'room.again' });
   assert.equal((await g.p.next('error')).code, 'not-host');
@@ -318,38 +295,4 @@ test('перезапуск: лобби остаётся, бой — abandoned, �
   assert.equal(s.app.rooms.roomOfPlayer(h.id), null);
   assert.equal(s.app.rooms.roomOfPlayer(g.id)?.hostId, g.id);
   assert.equal(s.app.rooms.roomOfPlayer(h2.id), null, 'пустая комната закрыта');
-});
-
-test('своя награда за бой: каждый сам, один раз, с потолком, в течение окна после конца', async () => {
-  s = await startServer();
-  const { heroes: [h, g] } = await party(2);
-  h.p.send({ t: 'room.start' });
-  const { matchId } = await g.p.next('battle.start');
-  // гость сдаёт малину ещё до конца боя (ушёл в лагерь) — засчитано
-  g.p.send({ t: 'battle.loot', matchId, berries: 120, xp: 50 });
-  const pu = await g.p.next('profile.updated');
-  assert.equal((pu.data as { berries: number }).berries, 250 + 120);
-  assert.equal((pu.data as { level: number }).level, 2);
-  // второй раз — нет
-  g.p.send({ t: 'battle.loot', matchId, berries: 120, xp: 0 });
-  await sleep(100);
-  assert.ok(!g.p.inbox.some((m) => m.t === 'profile.updated'));
-  // хост — после конца, с потолком по карте
-  h.p.send({ t: 'battle.end', result: 'won', wave: 10, rewards: [] });
-  await h.p.next('battle.over');
-  h.p.send({ t: 'battle.loot', matchId, berries: 10 ** 8, xp: 0 });
-  const hp = await h.p.next('profile.updated');
-  const cap = new MapCatalog(MAPS).maxBerries('td', 2);
-  assert.equal((hp.data as { berries: number }).berries, 250 + cap);
-  const mine = await api(s, 'GET', '/api/matches', undefined, g.token);
-  assert.equal(mine.body[0].berries, 120);
-  // окно вышло — не принимается
-  const { heroes: [h2] } = await party(1);
-  h2.p.send({ t: 'room.start' });
-  const b2 = await h2.p.next('battle.start');
-  h2.p.send({ t: 'battle.end', result: 'lost', wave: 1, rewards: [] });
-  await h2.p.next('battle.over');
-  s.clock.t += NET_LIMITS.lootMs + 1;
-  h2.p.send({ t: 'battle.loot', matchId: b2.matchId, berries: 5, xp: 0 });
-  assert.equal((await h2.p.next('error')).code, 'not-in-battle');
 });

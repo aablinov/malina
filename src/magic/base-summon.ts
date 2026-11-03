@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import type { ArtifactStats, BossSpellKind } from '../items';
-import { additiveSprite, glowTex } from '../loot-look';
-import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio';
-import type { Spells } from '../spells';
-import type { Target } from '../target';
-import { C, rand, type Spell } from './kit';
-import { summon, type Minion } from './minions';
+import { rnd } from '../rng.ts';
+import type { ArtifactStats, BossSpellKind } from '../items.ts';
+import { additiveSprite, glowTex } from '../loot-look.ts';
+import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { C, rand, type Spell } from './kit.ts';
+import { summon, type Minion } from './minions.ts';
 
 /**
  * Базовые заклинания (wiki/design-spells.md, раздел «Базовые заклинания»). Призыв: стая волков, малый элементаль,
@@ -141,7 +142,7 @@ function wolves(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3,
             P.head.rotation.x = e * 0.5;
             P.legs.forEach((l, j) => { l.rotation.x = (j < 2 ? -1 : 1) * e * 0.9; });
           }
-          if (walking && Math.random() < 0.25) fx.particle({ pos: mn.pos.clone().add(new THREE.Vector3(rand(-0.2, 0.2), rand(0.3, 0.8), rand(-0.2, 0.2))), vel: new THREE.Vector3(0, rand(0.3, 0.8), 0), life: 0.4, size: 0.05, color: s.a, gravity: 0 });
+          if (walking && rnd() < 0.25) fx.particle({ pos: mn.pos.clone().add(new THREE.Vector3(rand(-0.2, 0.2), rand(0.3, 0.8), rand(-0.2, 0.2))), vel: new THREE.Vector3(0, rand(0.3, 0.8), 0), life: 0.4, size: 0.05, color: s.a, gravity: 0 });
           void dt;
         },
       });
@@ -175,7 +176,7 @@ function elemShot(kit: Spells, from: THREE.Vector3, t: Target, power: number, el
   let tt = 0;
   // выстрел
   if (el === 'fire') hiss({ dur: 0.25, vol: 0.12, f: 400, f1: 1600, q: 0.6, type: 'lowpass', verb: 0.2 });
-  else if (el === 'ice') voice({ type: 'triangle', f: deg(1046.5, 3 + ((Math.random() * 4) | 0)), dur: 0.2, vol: 0.05, verb: 0.4 });
+  else if (el === 'ice') voice({ type: 'triangle', f: deg(1046.5, 3 + ((rnd() * 4) | 0)), dur: 0.2, vol: 0.05, verb: 0.4 });
   else hiss({ dur: 0.08, vol: 0.14, f: 5000, type: 'highpass', verb: 0.2 });
   kit.proc((dt) => {
     tt += dt;
@@ -183,7 +184,7 @@ function elemShot(kit: Spells, from: THREE.Vector3, t: Target, power: number, el
     shot.position.copy(start).lerp(end, e);
     shot.position.y += Math.sin(e * Math.PI) * 0.6;
     shot.rotation.x += dt * 12; shot.rotation.y += dt * 9;
-    fx.particle({ pos: shot.position.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0, 0.6), rand(-0.3, 0.3)), life: 0.25, size: 0.06, color: Math.random() < 0.5 ? L.a : L.b, gravity: el === 'fire' ? -1 : 0 });
+    fx.particle({ pos: shot.position.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0, 0.6), rand(-0.3, 0.3)), life: 0.25, size: 0.06, color: rnd() < 0.5 ? L.a : L.b, gravity: el === 'fire' ? -1 : 0 });
     if (e < 1) return true;
     kit.h.scene.remove(shot); mat.dispose();
     if (!t.alive) return false;
@@ -242,7 +243,7 @@ function elemental(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
           o.position.set(Math.cos(ang) * 0.45, Math.sin(t * 4 + i) * 0.15, Math.sin(ang) * 0.45);
           o.rotation.x += dt * 5;
         });
-        if (Math.random() < 0.35) fx.particle({ pos: P.float.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(rand(-0.2, 0.2), rand(-0.2, 0.2), rand(-0.2, 0.2))), vel: new THREE.Vector3(0, el === 'fire' ? rand(0.6, 1.2) : rand(-0.4, 0.2), 0), life: 0.4, size: 0.05, color: Math.random() < 0.5 ? L.a : L.b, gravity: 0 });
+        if (rnd() < 0.35) fx.particle({ pos: P.float.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(rand(-0.2, 0.2), rand(-0.2, 0.2), rand(-0.2, 0.2))), vel: new THREE.Vector3(0, el === 'fire' ? rand(0.6, 1.2) : rand(-0.4, 0.2), 0), life: 0.4, size: 0.05, color: rnd() < 0.5 ? L.a : L.b, gravity: 0 });
       },
     });
     onEnd(kit, m, life, () => farewell(kit, m, 1.2));
@@ -316,7 +317,7 @@ function golem(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
         P.body.rotation.z = Math.sin(t) * 0.05 * w;
         P.body.position.y = w * Math.abs(Math.sin(t)) * 0.05;
         // тяжёлые шаги — пыль
-        if (walking && Math.abs(Math.sin(t)) < 0.08 && Math.random() < 0.5) fx.burst(mn.pos.clone().setY(mn.pos.y + 0.1), ['#c8bba0', '#a89c82'], 3, { speed: 1, up: 1, size: 0.08, life: 0.5, gravity: 8 });
+        if (walking && Math.abs(Math.sin(t)) < 0.08 && rnd() < 0.5) fx.burst(mn.pos.clone().setY(mn.pos.y + 0.1), ['#c8bba0', '#a89c82'], 3, { speed: 1, up: 1, size: 0.08, life: 0.5, gravity: 8 });
         let arm = Math.sin(t + Math.PI) * 0.3 * w;
         // удар: кулаки над головой — и в землю
         if (swing >= 0) arm = swing < 0.45 ? -2.8 * (swing / 0.45) : swing < 0.55 ? -2.8 + 2.3 * ((swing - 0.45) / 0.1) : -0.5 * (1 - (swing - 0.55) / 0.45);

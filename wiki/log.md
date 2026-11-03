@@ -400,3 +400,7 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-11-04] код | Оборона: симуляция отделена от вида
 Правила обороны, башни, стены, куст, логова и кучки малины — в `src/sim/` (без сцены, DOM и `Math.random`, сид в `world.rng`), вид — в `src/cgame/` по записям сущностей и событиям через `SnapshotView`, меню и HUD — `td-ui.ts`; `src/td/td.ts`, `tower.ts`, `wall.ts`, `bush.ts`, `lair.ts` удалены. Хост-режим общего боя (`src/net/coop.ts`) удалён до серверного боя, сетевые Playwright-тесты пропущены. Тесты симуляции — `server/test/sim-td.test.ts`.
 Страницы: [design-tower-defence.md](design-tower-defence.md), [design-multiplayer.md](design-multiplayer.md).
+
+## [2026-11-04] код | Безголовый бой: герой, снаряжение и мобы в Node
+Вместо переписывания героя, магии (6400 строк) и 30 видов мобов — те же классы без рендера: `src/headless.ts` (канвас-заглушка, `nullFx`), `rnd()`/`useRng` в `src/rng.ts` (все `Math.random` героя, снаряжения, магии и мобов — через него, на время `world.step` — сид мира), приманки по мирам (`useDecoys`), `party.ts` удалён — отряд через `MobHooks`. Весь `src` грузится Node: импорты с `.ts`, свойства-параметры конструкторов переписаны в поля. Тест `server/test/headless.test.ts`: настоящая волна на `td` и детерминизм.
+Страницы: [design-multiplayer.md](design-multiplayer.md), [dev-testing.md](dev-testing.md).

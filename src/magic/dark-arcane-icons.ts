@@ -1,4 +1,4 @@
-import type { Draw } from '../icons';
+import type { Draw } from '../icons.ts';
 
 /** Пиксельные иконки 16 × 16 для заклинаний тьмы и арканы (src/magic/dark-arcane.ts) */
 export const ICONS: Record<string, Draw> = {

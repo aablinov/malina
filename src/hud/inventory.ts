@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { auraLines } from '../aura-offense';
-import { iconImg, iconURL } from '../icons';
+import { auraLines } from '../aura-offense.ts';
+import { iconImg, iconURL } from '../icons.ts';
 import {
   armorHealth, enchantDef, itemDef, PERK_TEXT, powerMult, RARITY, salvageValue, SLOT_TITLE, spentPoints, xpToNext,
   type EnchantDef, type Item, type ItemSlot, type Profile,
-} from '../items';
-import { emptyInput, Knight } from '../knight';
-import { rng, type Textures } from '../textures';
-import { DEFAULT_WEAPONS, getWeapon, weaponMetrics } from '../weapons';
-import { RESONANCE, synergiesOf, TEMPER_LOOK, temperOf, WEAPON_SPECIAL } from '../temper';
+} from '../items.ts';
+import { emptyInput, Knight } from '../knight.ts';
+import { rng, type Textures } from '../textures.ts';
+import { DEFAULT_WEAPONS, getWeapon, weaponMetrics } from '../weapons.ts';
+import { RESONANCE, synergiesOf, TEMPER_LOOK, temperOf, WEAPON_SPECIAL } from '../temper.ts';
 import './inventory.css';
 
 /**
@@ -54,7 +54,9 @@ export class Inventory {
   onClose?: () => void;
   onChange?: () => void;
 
-  constructor(parent: HTMLElement, private readonly profile: Profile, private readonly T: Textures) {
+  private readonly profile: Profile;
+  private readonly T: Textures;
+  constructor(parent: HTMLElement, profile: Profile, T: Textures) { this.profile = profile; this.T = T;
     const el = document.createElement('div');
     el.className = 'inv';
     el.innerHTML = `
@@ -483,7 +485,8 @@ class Preview {
   private armor = '-';
   private last = 0;
 
-  constructor(private readonly canvas: HTMLCanvasElement, T: Textures) {
+  private readonly canvas: HTMLCanvasElement;
+  constructor(canvas: HTMLCanvasElement, T: Textures) { this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0, 0);

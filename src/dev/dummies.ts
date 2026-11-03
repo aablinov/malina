@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import type { Target } from '../target';
-import { pixelTex } from '../textures';
+import type { Target } from '../target.ts';
+import { pixelTex } from '../textures.ts';
 
 /**
  * Соломенные чучела плейграунда — цели для меча: неподвижные и на рельсе.
@@ -52,7 +52,9 @@ export class Dummy implements Target {
   railA = 0;
   railB = 0;
 
-  constructor(scene: THREE.Scene, overlay: HTMLElement, readonly kind: DummyKind, x: number, z: number, facing = 0, readonly name = '') {
+  readonly kind: DummyKind;
+  readonly name: string;
+  constructor(scene: THREE.Scene, overlay: HTMLElement, kind: DummyKind, x: number, z: number, facing = 0, name: string = '') { this.kind = kind; this.name = name;
     this.pos = new THREE.Vector3(x, 0, z);
     scene.add(this.group);
     this.group.position.copy(this.pos);

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import type { FX } from '../fx';
+import type { FX } from '../fx.ts';
 import type { Level } from '../level/level.ts';
-import { glowTex } from '../loot-look';
-import { C, glowMat } from '../bosses/kit';
+import { glowTex } from '../loot-look.ts';
+import { C, glowMat } from '../bosses/kit.ts';
 
 /**
  * Живая лава (wiki/design-tower-defence.md, раздел 7): над каждым разломом — мягкая оранжевая **дымка** (плоскости с
@@ -19,7 +19,9 @@ export class LavaFx {
   private readonly hazes: { mat: THREE.MeshBasicMaterial; mesh: THREE.Mesh; phase: number; base: number }[] = [];
   private time = 0;
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, level: Level) {
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  constructor(scene: THREE.Scene, fx: FX, level: Level) { this.scene = scene; this.fx = fx;
     const b = level.getBounds();
     if (!b) return;
     const tiles = new Map<string, { n: number; sx: number; sz: number; y: number }>();

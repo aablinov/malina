@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import type { BossSpellKind } from '../items';
-import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio';
-import type { Spells } from '../spells';
-import type { Target } from '../target';
-import { C, rand, type Spell } from './kit';
+import { rnd } from '../rng.ts';
+import type { BossSpellKind } from '../items.ts';
+import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { C, rand, type Spell } from './kit.ts';
 
 /** Земля и природа: разлом, малиновый куст, облик титана (wiki/design-spells.md, раздел 3) */
 
@@ -63,11 +64,11 @@ const sound = {
     boom(90, 26, 1.6, 0.8, 0, 0.5);
     hiss({ dur: 0.9, vol: 0.3, f: 1600, f1: 140, q: 0.5, type: 'lowpass', verb: 0.5 });
     [0, 7, 12, 16].forEach((s, i) => voice({ type: 'triangle', f: 98 * Math.pow(2, s / 12), dur: 1.8, vol: 0.06, detune: 10, lp: 2000, lp1: 400, delay: i * 0.04, verb: 0.6 }));
-    for (let i = 0; i < 10; i++) hiss({ dur: 0.05, vol: 0.08, f: rand(1200, 3000), q: 2, delay: 0.2 + Math.random() * 1.2, verb: 0.2 });
+    for (let i = 0; i < 10; i++) hiss({ dur: 0.05, vol: 0.08, f: rand(1200, 3000), q: 2, delay: 0.2 + rnd() * 1.2, verb: 0.2 });
   },
   step() { boom(75, 35, 0.3, 0.3, 0, 0.15); hiss({ dur: 0.1, vol: 0.06, f: 400, q: 0.8, verb: 0.1 }); },
   crumble() {
-    for (let i = 0; i < 12; i++) hiss({ dur: 0.06, vol: 0.09, f: rand(700, 2400), q: 1.5, delay: i * 0.05 + Math.random() * 0.05, verb: 0.2 });
+    for (let i = 0; i < 12; i++) hiss({ dur: 0.06, vol: 0.09, f: rand(700, 2400), q: 1.5, delay: i * 0.05 + rnd() * 0.05, verb: 0.2 });
     boom(110, 45, 0.5, 0.3);
     [12, 7, 0].forEach((s, i) => bell(98 * 2 * Math.pow(2, s / 12), 0.9, 0.04, i * 0.08, 0.6));
   },
@@ -115,13 +116,13 @@ const rift: Spell = {
           const y = kit.h.terrain.floorAt(p.x, p.z, from.y + 2);
           p.y = Number.isFinite(y) ? y : from.y;
           // трещина: тёмно-коричневое пятно и янтарный отсвет из глубины
-          fx.decal(p, kit.tex.scorch(), '#ffffff', 1.1 + Math.random() * 0.4, 3.5, false, 0.8);
+          fx.decal(p, kit.tex.scorch(), '#ffffff', 1.1 + rnd() * 0.4, 3.5, false, 0.8);
           fx.decal(p, kit.tex.glow(), AMBER.clone().multiplyScalar(0.25), 0.9, 1.2, true);
           // каменные шипы: 1–2 бруска вырастают и наклоняются от оси
           for (let j = 0; j < (placed % 2 ? 1 : 2); j++) spike(kit, p.clone().addScaledVector(side, rand(-0.5, 0.5)), (0.8 + k * 0.7) * rand(0.7, 1.2), side.clone().multiplyScalar(rand(-0.4, 0.4)));
           debris(kit, p.clone().setY(p.y + 0.2), 4, 2.5, 4);
           if (placed % 2 === 0) sound.spike(placed);
-          if (Math.random() < 0.5) fx.particle({ pos: p.clone().setY(p.y + 0.1), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.5, size: 0.06, color: AMBER, gravity: 2 });
+          if (rnd() < 0.5) fx.particle({ pos: p.clone().setY(p.y + 0.1), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.5, size: 0.06, color: AMBER, gravity: 2 });
           placed++;
         }
         // удар по всем, кого догнал фронт трещины, — вверх и в стороны
@@ -152,12 +153,12 @@ const rift: Spell = {
 /** Каменный шип: вырастает из земли за 0,12 с, держится, медленно уходит обратно */
 function spike(kit: Spells, p: THREE.Vector3, h: number, tilt: THREE.Vector3): void {
   const g = new THREE.Group();
-  const mat = STONE[(Math.random() * STONE.length) | 0];
-  const w = 0.32 + Math.random() * 0.15;
-  g.add(box(mat, w, h, w, 0, h / 2, 0), box(STONE[(Math.random() * STONE.length) | 0], w * 0.6, h * 0.35, w * 0.6, 0, h + h * 0.15, 0));
+  const mat = STONE[(rnd() * STONE.length) | 0];
+  const w = 0.32 + rnd() * 0.15;
+  g.add(box(mat, w, h, w, 0, h / 2, 0), box(STONE[(rnd() * STONE.length) | 0], w * 0.6, h * 0.35, w * 0.6, 0, h + h * 0.15, 0));
   g.position.copy(p);
-  g.rotation.set(tilt.z * 0.8 + rand(-0.15, 0.15), Math.random() * Math.PI, -tilt.x * 0.8 + rand(-0.15, 0.15));
-  const life = 1.6 + Math.random() * 0.4;
+  g.rotation.set(tilt.z * 0.8 + rand(-0.15, 0.15), rnd() * Math.PI, -tilt.x * 0.8 + rand(-0.15, 0.15));
+  const life = 1.6 + rnd() * 0.4;
   kit.h.fx.custom(g, life, (t) => {
     const tt = t * life;
     const up = tt < 0.12 ? 1 - (1 - tt / 0.12) ** 3 : 1;
@@ -180,21 +181,21 @@ function makeBush(R: number): { g: THREE.Group; berries: THREE.Object3D[] } {
   const g = new THREE.Group(), berries: THREE.Object3D[] = [];
   const S = 0.6 + R * 0.12;
   for (let i = 0; i < 16; i++) {
-    const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * S * 0.9;
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * S * 0.9;
     const y = (1 - r / S) * S * 0.9 + rand(0, 0.25);
     const sz = rand(0.38, 0.62) * S;
-    const m = box(LEAF[(Math.random() * LEAF.length) | 0], sz, sz, sz, Math.cos(a) * r, y, Math.sin(a) * r);
-    m.rotation.set(rand(-0.3, 0.3), Math.random() * Math.PI, rand(-0.3, 0.3));
+    const m = box(LEAF[(rnd() * LEAF.length) | 0], sz, sz, sz, Math.cos(a) * r, y, Math.sin(a) * r);
+    m.rotation.set(rand(-0.3, 0.3), rnd() * Math.PI, rand(-0.3, 0.3));
     g.add(m);
   }
   for (let i = 0; i < 18; i++) {
-    const a = Math.random() * Math.PI * 2, e = rand(0.1, 1.2), r = S * 0.85;
+    const a = rnd() * Math.PI * 2, e = rand(0.1, 1.2), r = S * 0.85;
     const th = box(THORN, 0.05, 0.05, 0.3, Math.cos(a) * Math.cos(e) * r, S * 0.5 + Math.sin(e) * r * 0.8, Math.sin(a) * Math.cos(e) * r);
     th.lookAt(th.position.clone().multiplyScalar(2));
     g.add(th);
   }
   for (let i = 0; i < 12; i++) {
-    const a = Math.random() * Math.PI * 2, e = rand(0.2, 1.1), r = S * 0.92;
+    const a = rnd() * Math.PI * 2, e = rand(0.2, 1.1), r = S * 0.92;
     const b = new THREE.Group();
     b.add(box(BERRY, 0.17, 0.17, 0.17), box(BERRY_HI, 0.06, 0.06, 0.06, -0.05, 0.06, 0.07));
     b.position.set(Math.cos(a) * Math.cos(e) * r, S * 0.45 + Math.sin(e) * r * 0.85, Math.sin(a) * Math.cos(e) * r);
@@ -214,7 +215,7 @@ const raspberrybush: Spell = {
     kit.windup('earth', k);
     kit.groundSigil('earth', c, R, 0.35, dur, 0.22);
     for (let i = 0; i < 14; i++) {
-      const ang = Math.random() * Math.PI * 2, r = Math.random() * R;
+      const ang = rnd() * Math.PI * 2, r = rnd() * R;
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.1, Math.sin(ang) * r)), vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.4, size: 0.07, color: i % 3 ? MOSS : PINK, gravity: 2 });
     }
     kit.later(0.3, () => {
@@ -301,12 +302,12 @@ const titanform: Spell = {
     kit.proc((dt) => {
       rise -= dt;
       for (let i = 0; i < 4; i++) {
-        const ang = Math.random() * Math.PI * 2, r = rand(1.5, 3);
+        const ang = rnd() * Math.PI * 2, r = rand(1.5, 3);
         const from = hero.pos.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.1, Math.sin(ang) * r));
         const to = hero.pos.clone().setY(hero.pos.y + rand(0.5, 1.6)), life = 0.35;
-        fx.particle({ pos: from, vel: to.sub(from).divideScalar(life), life, size: rand(0.1, 0.16), color: Math.random() < 0.5 ? '#8a7a68' : '#a89880', gravity: 0, shrink: false }, false);
+        fx.particle({ pos: from, vel: to.sub(from).divideScalar(life), life, size: rand(0.1, 0.16), color: rnd() < 0.5 ? '#8a7a68' : '#a89880', gravity: 0, shrink: false }, false);
       }
-      if (Math.random() < 0.5) fx.particle({ pos: hero.pos.clone().setY(hero.pos.y + 0.1), vel: new THREE.Vector3(rand(-1, 1), rand(2, 4), rand(-1, 1)), life: 0.5, size: 0.06, color: AMBER, gravity: 3 });
+      if (rnd() < 0.5) fx.particle({ pos: hero.pos.clone().setY(hero.pos.y + 0.1), vel: new THREE.Vector3(rand(-1, 1), rand(2, 4), rand(-1, 1)), life: 0.5, size: 0.06, color: AMBER, gravity: 3 });
       fx.shake = Math.max(fx.shake, 0.15);
       return rise > 0;
     });
@@ -328,7 +329,7 @@ const titanform: Spell = {
         [0.2, 0.45, 0.24, 0.26], [-0.2, 0.45, 0.24, 0.26], [0.42, 2.0, 0, 0.26], [-0.42, 2.0, 0, 0.26], [0.36, 0.95, 0.22, 0.2], [-0.36, 0.95, 0.22, 0.2],
       ];
       for (const [x, y, z, sz] of spots) {
-        const m = box(STONE[(Math.random() * STONE.length) | 0], sz, sz * rand(0.6, 0.9), sz * 0.6, x, y, z);
+        const m = box(STONE[(rnd() * STONE.length) | 0], sz, sz * rand(0.6, 0.9), sz * 0.6, x, y, z);
         m.rotation.set(rand(-0.2, 0.2), rand(-0.3, 0.3), rand(-0.2, 0.2));
         skin.add(m); plates.push(m);
       }
@@ -343,7 +344,7 @@ const titanform: Spell = {
         if (ended) return false;
         // пульс трещин и редкие янтарные искры
         glow.scale.y = 0.5 + Math.sin(t * 6) * 0.08;
-        if (Math.random() < 0.25) fx.particle({ pos: hero.pos.clone().setY(hero.pos.y + rand(0.8, 2.6)), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(0.6, 1.4), rand(-0.4, 0.4)), life: 0.6, size: 0.06, color: AMBER, gravity: -0.5 });
+        if (rnd() < 0.25) fx.particle({ pos: hero.pos.clone().setY(hero.pos.y + rand(0.8, 2.6)), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(0.6, 1.4), rand(-0.4, 0.4)), life: 0.6, size: 0.06, color: AMBER, gravity: -0.5 });
         // тяжёлые шаги: пыль и тряска, когда великан идёт
         const moved = Math.hypot(hero.pos.x - lastPos.x, hero.pos.z - lastPos.z);
         lastPos.copy(hero.pos);

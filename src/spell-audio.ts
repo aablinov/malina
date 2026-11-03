@@ -1,4 +1,4 @@
-import { audioCore, busy, claimVoice } from './audio';
+import { audioCore, busy, claimVoice } from './audio.ts';
 
 /**
  * Звук заклинаний (wiki/design-spells.md, раздел 5): не «пищалки», а маленький оркестр в зале.
@@ -145,7 +145,8 @@ export class ChargeSound {
   private k = 0;
   private stopped = false;
 
-  constructor(private readonly kind: SpellSound) {
+  private readonly kind: SpellSound;
+  constructor(kind: SpellSound) { this.kind = kind;
     const a = audioCore();
     const P = PAL[kind];
     // вдох: свист вверх и мягкое «вумп»

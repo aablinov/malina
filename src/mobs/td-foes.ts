@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, rand, RASP } from '../bosses/kit';
-import { Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, rand, RASP } from '../bosses/kit.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * Враги обороны куста (wiki/design-tower-defence.md, раздел 5): рождены под дороги и башни, героя почти не замечают.
@@ -263,7 +264,7 @@ export class CrystalShellback extends Mob {
     this.body.add(this.shellMesh);
     for (let i = 0; i < 6; i++) {
       const a = i * 1.05, r = 0.25 + (i % 2) * 0.12;
-      const m = B(this.shellMesh, gem, 0.3, 0.6 + (i % 3) * 0.2, 0.3, Math.cos(a) * r, 1.0, Math.sin(a) * r - 0.1, (Math.random() - 0.5) * 0.5, a, (Math.random() - 0.5) * 0.5);
+      const m = B(this.shellMesh, gem, 0.3, 0.6 + (i % 3) * 0.2, 0.3, Math.cos(a) * r, 1.0, Math.sin(a) * r - 0.1, (rnd() - 0.5) * 0.5, a, (rnd() - 0.5) * 0.5);
       this.shards.push(m);
     }
     B(this.shellMesh, gem, 0.36, 0.9, 0.36, 0, 1.1, -0.15, 0, Math.PI / 4, 0);
@@ -367,7 +368,7 @@ export class Sporeling extends Mob {
       if (m === this || m.dead || m.hp >= m.maxHp) continue;
       if (Math.hypot(m.pos.x - this.pos.x, m.pos.z - this.pos.z) < 3) { const v = Math.min(3 * dt, m.maxHp - m.hp); m.heal(v); this.given += v; }
     }
-    if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), 1.2, rand(-0.4, 0.4))), vel: new THREE.Vector3(rand(-0.4, 0.4), 0.6, rand(-0.4, 0.4)), life: 1, size: 0.07, color: SPORE, gravity: -0.1 }, false);
+    if (rnd() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), 1.2, rand(-0.4, 0.4))), vel: new THREE.Vector3(rand(-0.4, 0.4), 0.6, rand(-0.4, 0.4)), life: 1, size: 0.07, color: SPORE, gravity: -0.1 }, false);
   }
 
   /** Лопнул: облако спор — все соседи в 3,5 м лечатся на 30 % */
@@ -613,7 +614,7 @@ export class StumpSapper extends Mob {
     const f = fusing ? this.fuseT / 1.6 : 0;
     this.spark.color.copy(FUSE).multiplyScalar(fusing ? 1 + Math.sin(this.time * (20 + f * 40)) : 0.6 + Math.sin(this.time * 6) * 0.3);
     this.keg.rotation.x = fusing ? Math.sin(this.time * 30) * 0.08 * f : 0;
-    if (fusing && Math.random() < 0.5) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(-Math.sin(this.yaw) * 0.55, 1.8, -Math.cos(this.yaw) * 0.55)), vel: new THREE.Vector3((Math.random() - 0.5) * 1.5, 1 + Math.random(), (Math.random() - 0.5) * 1.5), life: 0.3, size: 0.06, color: Math.random() < 0.5 ? FUSE : POWDER, gravity: 4 });
+    if (fusing && rnd() < 0.5) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(-Math.sin(this.yaw) * 0.55, 1.8, -Math.cos(this.yaw) * 0.55)), vel: new THREE.Vector3((rnd() - 0.5) * 1.5, 1 + rnd(), (rnd() - 0.5) * 1.5), life: 0.3, size: 0.06, color: rnd() < 0.5 ? FUSE : POWDER, gravity: 4 });
   }
 }
 

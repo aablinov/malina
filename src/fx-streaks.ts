@@ -64,7 +64,8 @@ export class Streaks {
   private next = 0;
   private time = 0;
 
-  constructor(scene: THREE.Scene, private readonly camera: THREE.Camera) {
+  private readonly camera: THREE.Camera;
+  constructor(scene: THREE.Scene, camera: THREE.Camera) { this.camera = camera;
     const nv = MAX * STRIPS * VPS;
     this.pos = new Float32Array(nv * 3);
     this.col = new Float32Array(nv * 3);

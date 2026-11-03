@@ -1,4 +1,4 @@
-import type { Boss } from './kit';
+import type { Boss } from './kit.ts';
 import './bosses.css';
 
 /** Полоса стража сверху экрана: имя, «страж малины», здоровье и жёлтый след, который догоняет его с задержкой */

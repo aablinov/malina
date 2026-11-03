@@ -1,0 +1,28 @@
+/* Имена над героями в общем бою (src/net/coop.ts) */
+.net-names { position: fixed; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
+.net-name { position: absolute; left: 0; top: 0; padding: 0.15em 0.5em; font: 600 13px/1.2 system-ui, sans-serif; color: #fff;
+  background: rgba(20, 18, 28, 0.55); border-radius: 0.3em; white-space: nowrap; text-shadow: 0 1px 0 #000; }
+.net-name.me { color: #ffd76a; }
+.net-name.down { opacity: 0.5; }
+
+/* Список игроков и чат (src/net/battle-ui.ts) */
+.net-roster { position: fixed; right: 12px; top: 120px; z-index: 7; display: flex; flex-direction: column; gap: 4px; pointer-events: none;
+  font: 600 12px/1.2 system-ui, sans-serif; color: #fff; }
+.net-row { display: grid; grid-template-columns: 9em 5em 4em; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(20, 18, 28, 0.6); border-radius: 4px; }
+.net-row.me b { color: #ffd76a; }
+.net-row.down { opacity: 0.55; }
+.net-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-row i { height: 6px; background: #3a3440; border-radius: 3px; overflow: hidden; }
+.net-row u { display: block; height: 100%; background: #e2405f; }
+.net-row span { text-align: right; color: #9fe39a; font-weight: 500; }
+.net-row span.bad { color: #ff8a6b; }
+.net-chat { position: fixed; left: 12px; bottom: 150px; z-index: 7; width: 360px; display: flex; flex-direction: column; gap: 4px;
+  font: 500 13px/1.3 system-ui, sans-serif; color: #fff; pointer-events: none; }
+.net-chat-log { display: flex; flex-direction: column; gap: 2px; }
+.net-chat-row { padding: 3px 8px; background: rgba(20, 18, 28, 0.55); border-radius: 4px; transition: opacity 1s; text-shadow: 0 1px 0 #000; }
+.net-chat-row b { color: #ffd76a; }
+.net-chat-row.sys { color: #9fb4bc; font-style: italic; }
+.net-chat-row.old { opacity: 0; }
+.net-chat.open .net-chat-row.old { opacity: 0.8; }
+.net-chat-input { display: none; pointer-events: auto; padding: 6px 8px; background: rgba(20, 18, 28, 0.85); border: 1px solid #8a8792; color: #fff; font: inherit; border-radius: 4px; outline: none; }
+.net-chat.open .net-chat-input { display: block; }

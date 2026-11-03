@@ -17,7 +17,9 @@ export class BoltView {
   private readonly tmp = new THREE.Vector3();
   private readonly kind: string;
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, ent: EntityState) {
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  constructor(scene: THREE.Scene, fx: FX, ent: EntityState) { this.scene = scene; this.fx = fx;
     const e = ent as BoltEnt;
     this.kind = e.kind;
     this.mesh = BoltView.build(e.kind);

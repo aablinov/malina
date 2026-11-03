@@ -9,7 +9,7 @@ import { checkClientMsg } from './validate.ts';
 /**
  * WebSocket-соединения: первое сообщение — `hello` с токеном, дальше разбор `ClientMsg` и передача в менеджер комнат.
  * Лимиты: размер — `maxPayload` (ws закроет сам), частота — NET_LIMITS.perSecond, две секунды с превышением подряд —
- * закрыть с CLOSE.flood. Ввод гостя сверх NET_LIMITS.inputPerSecond молча отбрасывается
+ * закрыть с CLOSE.flood. Бой идёт по отдельному WebSocket `/game` (server/game/game-hub.ts)
  */
 const HELLO_MS = 15_000;
 
@@ -20,7 +20,6 @@ class Client implements Conn {
   /** Счётчики текущей секунды */
   windowStart = 0;
   count = 0;
-  inputs = 0;
   strikes = 0;
   /** Последнее сообщение чата — не чаще NET_LIMITS.chatMs */
   chatAt = -Infinity;
@@ -88,7 +87,7 @@ export class Hub {
     const now = this.now();
     if (now - c.windowStart >= 1000) {
       c.strikes = c.count > NET_LIMITS.perSecond ? c.strikes + 1 : 0;
-      c.windowStart = now; c.count = 0; c.inputs = 0;
+      c.windowStart = now; c.count = 0;
     }
     if (++c.count > NET_LIMITS.perSecond) {
       if (c.strikes >= 1) c.ws.close(CLOSE.flood, 'flood');
@@ -123,14 +122,6 @@ export class Hub {
         R.chat(c, m.text);
         break;
       }
-      case 'relay': {
-        const d = m.d as { t?: unknown } | null;
-        if (d && d.t === 'in' && ++c.inputs > NET_LIMITS.inputPerSecond) return;
-        R.relay(c, m.to, m.d);
-        break;
-      }
-      case 'battle.end': R.end(c, m.result, m.wave, m.rewards); break;
-      case 'battle.loot': R.loot(c, m.matchId, m.berries, m.xp); break;
     }
   }
 }

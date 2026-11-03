@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import type { BossSpellKind } from '../items';
-import { boom, deg, hiss, pluck, voice } from '../spell-audio';
-import type { Spells } from '../spells';
-import type { Target } from '../target';
-import { C, rand, type Spell } from './kit';
+import { rnd } from '../rng.ts';
+import type { BossSpellKind } from '../items.ts';
+import { boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { C, rand, type Spell } from './kit.ts';
 
 /**
  * Базовые заклинания огня (wiki/design-spells.md, «Базовые заклинания»): огненная стена, огненный ураган, малый армагеддон.
@@ -32,7 +33,7 @@ function flames(kit: Spells, p: THREE.Vector3, n: number, h = 1): void {
   for (let i = 0; i < n; i++) kit.h.fx.particle({
     pos: p.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(0, 0.3), rand(-0.25, 0.25))),
     vel: new THREE.Vector3(rand(-0.3, 0.3), rand(1.4, 2.6) * h, rand(-0.3, 0.3)), life: rand(0.3, 0.55), size: rand(0.08, 0.15),
-    color: Math.random() < 0.55 ? FIRE_A : FIRE_B, gravity: -1.5,
+    color: rnd() < 0.55 ? FIRE_A : FIRE_B, gravity: -1.5,
   });
 }
 
@@ -45,7 +46,7 @@ const sfx = {
   },
   /** Ровный треск горения — короткий, повторяется тиками */
   crackle() {
-    for (let i = 0; i < 3; i++) hiss({ dur: 0.025, vol: 0.05, f: rand(2500, 5500), q: 3, delay: Math.random() * 0.4, verb: 0.1 });
+    for (let i = 0; i < 3; i++) hiss({ dur: 0.025, vol: 0.05, f: rand(2500, 5500), q: 3, delay: rnd() * 0.4, verb: 0.1 });
     hiss({ dur: 0.45, vol: 0.05, f: 400, q: 0.6, type: 'lowpass', verb: 0.2 });
   },
   /** Смерч закрутился: свист вверх, гул */
@@ -101,11 +102,11 @@ const firewall: Spell = {
         const p = A.clone().lerp(B, (i + 0.5) / cn);
         for (let j = 0; j < 2; j++) {
           const m = new THREE.Mesh(UNIT, mats[j]);
-          const base = (j ? 1.5 : 1) * (0.55 + Math.random() * 0.7) * (1 + k * 0.25);
+          const base = (j ? 1.5 : 1) * (0.55 + rnd() * 0.7) * (1 + k * 0.25);
           m.position.set(p.x, p.y, p.z);
           m.scale.set(j ? 0.42 : 0.24, 0.01, j ? 0.42 : 0.24);
-          m.rotation.y = Math.random() * Math.PI;
-          g.add(m); cols.push({ m, base, ph: Math.random() * 6 });
+          m.rotation.y = rnd() * Math.PI;
+          g.add(m); cols.push({ m, base, ph: rnd() * 6 });
         }
       }
       kit.h.scene.add(g);
@@ -128,10 +129,10 @@ const firewall: Spell = {
         }
         // языки пламени и марево
         for (let i = 0; i < 3 + k * 2; i++) {
-          const p = A.clone().lerp(B, Math.random());
+          const p = A.clone().lerp(B, rnd());
           if (fall > 0.2) flames(kit, p, 1, 1.2);
         }
-        if (Math.random() < 0.25) fx.particle({ pos: A.clone().lerp(B, Math.random()).setY(c.y + rand(1.2, 2)), vel: new THREE.Vector3(0, rand(0.6, 1.2), 0), life: 0.8, size: 0.06, color: WHITE.clone().multiplyScalar(0.3), gravity: -0.3 });
+        if (rnd() < 0.25) fx.particle({ pos: A.clone().lerp(B, rnd()).setY(c.y + rand(1.2, 2)), vel: new THREE.Vector3(0, rand(0.6, 1.2), 0), life: 0.8, size: 0.06, color: WHITE.clone().multiplyScalar(0.3), gravity: -0.3 });
         if (tick >= 0.5 && t < dur) { tick -= 0.5; hit(); sfx.crackle(); }
         if (t < dur) return true;
         kit.h.scene.remove(g);
@@ -204,12 +205,12 @@ const firestorm: Spell = {
         for (const rg of rings) rg.m.rotation.z += dt * rg.sp;
         // затягивает частицы с земли и выбрасывает угли сверху
         for (let i = 0; i < 3; i++) {
-          const ang = Math.random() * Math.PI * 2, r = R * rand(1.2, 2);
+          const ang = rnd() * Math.PI * 2, r = R * rand(1.2, 2);
           const from = pos.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.1, Math.sin(ang) * r)), life = 0.45;
           const v = pos.clone().setY(pos.y + rand(0.3, 1.5)).sub(from).divideScalar(life).add(new THREE.Vector3(-Math.sin(ang) * 3, 0, Math.cos(ang) * 3));
-          fx.particle({ pos: from, vel: v, life, size: rand(0.05, 0.09), color: Math.random() < 0.5 ? FIRE_A : FIRE_B, gravity: 0 });
+          fx.particle({ pos: from, vel: v, life, size: rand(0.05, 0.09), color: rnd() < 0.5 ? FIRE_A : FIRE_B, gravity: 0 });
         }
-        if (Math.random() < 0.5) fx.particle({ pos: pos.clone().setY(pos.y + 3), vel: new THREE.Vector3(rand(-2, 2), rand(1, 3), rand(-2, 2)), life: 0.7, size: 0.08, color: FIRE_B, gravity: 4 });
+        if (rnd() < 0.5) fx.particle({ pos: pos.clone().setY(pos.y + 3), vel: new THREE.Vector3(rand(-2, 2), rand(1, 3), rand(-2, 2)), life: 0.7, size: 0.08, color: FIRE_B, gravity: 4 });
         // колея: редкие следы, чтобы не копилось тёмное пятно
         if (trail <= 0 && pos.distanceTo(start) < len) { trail = 0.45; fx.decal(pos, kit.tex.scorch(), '#ffffff', R * 1.2, 3, false, 0.3); }
         if (tick >= 0.3 && t < dur) {
@@ -256,7 +257,7 @@ const armageddon: Spell = {
           .sort((u, v) => Math.hypot(u.pos.x - at.x, u.pos.z - at.z) - Math.hypot(v.pos.x - at.x, v.pos.z - at.z)) : [];
         let p: THREE.Vector3;
         if (near.length) p = near[Math.floor(i / 3) % Math.min(2, near.length)].pos.clone();
-        else { const ang = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R; p = hero.pos.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0, Math.sin(ang) * r)); }
+        else { const ang = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R; p = hero.pos.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0, Math.sin(ang) * r)); }
         const fy = kit.h.terrain.floorAt(p.x, p.z, p.y + 3);
         p.y = Number.isFinite(fy) ? fy : hero.pos.y;
         ball(kit, p, power, k, i, first);
@@ -287,7 +288,7 @@ function ball(kit: Spells, p: THREE.Vector3, power: number, k: number, i: number
   fx.custom(g, fall, (t) => {
     g.position.lerpVectors(from, p.clone().setY(p.y + 0.25), t * t);
     core.rotation.x += 0.3; shell.rotation.y -= 0.25;
-    fx.particle({ pos: g.position.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.5, 1.2), rand(-0.3, 0.3)), life: 0.35, size: 0.08, color: Math.random() < 0.5 ? FIRE_A : FIRE_B, gravity: -1 });
+    fx.particle({ pos: g.position.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.5, 1.2), rand(-0.3, 0.3)), life: 0.35, size: 0.08, color: rnd() < 0.5 ? FIRE_A : FIRE_B, gravity: -1 });
   }, () => { coreMat.dispose(); shellMat.dispose(); });
   kit.later(fall, () => {
     if (first) kit.impact('fireball', p, k, 12, 0.3);
@@ -300,7 +301,7 @@ function ball(kit: Spells, p: THREE.Vector3, power: number, k: number, i: number
     fx.decal(p, kit.tex.scorch(), '#ffffff', 1.8, 3.5, false, 0.6);
     // угли на месте ещё секунду
     let left = 1.2;
-    kit.proc((dt) => { left -= dt; if (Math.random() < 0.4) flames(kit, p, 1, 0.8); return left > 0; });
+    kit.proc((dt) => { left -= dt; if (rnd() < 0.4) flames(kit, p, 1, 0.8); return left > 0; });
   });
 }
 

@@ -1,12 +1,12 @@
-import type { Profile, ProfileData } from '../items';
+import type { Profile, ProfileData } from '../items.ts';
 import {
   CLOSE, NET_LIMITS, PROTOCOL,
   type AuthReply, type ClientMsg, type FriendInfo, type MatchSummary, type ProfileReply, type RoomInfo, type SeatInfo, type ServerMsg,
-} from './protocol';
+} from './protocol.ts';
 
 /**
  * Браузерный клиент сервера сетевой игры (server/, wiki/design-multiplayer.md): вход по имени, профиль героя
- * на сервере, комнаты лагеря, ретрансляция в бою.
+ * на сервере, комнаты лагеря; сам бой — по `/game` (src/cgame/net-battle.ts).
  *
  * Адрес сервера: `?server=http://…` (запоминается), иначе сохранённый, иначе тот же адрес, если игру отдал сам сервер
  * (`STATIC=dist npm run server`), иначе http://localhost:8787.
@@ -246,20 +246,6 @@ export class NetClient {
   /** «Ещё раз» после боя — хост: тем же составом */
   again(): void { this.send({ t: 'room.again' }); }
   chat(text: string): void { if (text.trim()) this.send({ t: 'chat', text }); }
-  /** Сообщение боя: только когда комната в бою (до входа страницы боя сервер ответил бы ошибкой); false — не ушло */
-  relay(d: unknown, to?: number): boolean {
-    if (this.room?.room.state !== 'battle' || this.ws?.readyState !== WebSocket.OPEN) return false;
-    this.send({ t: 'relay', to, d });
-    return true;
-  }
-  endBattle(result: 'won' | 'lost', wave: number): void { this.send({ t: 'battle.end', result, wave, rewards: [] }); }
-  /** Своя награда за бой: собранная и не потраченная малина, опыт (сервер засчитает один раз); false — нет связи */
-  sendLoot(matchId: string, berries: number, xp: number): boolean {
-    if (this.ws?.readyState !== WebSocket.OPEN) return false;
-    this.send({ t: 'battle.loot', matchId, berries: Math.max(0, Math.floor(berries)), xp: Math.max(0, Math.floor(xp)) });
-    return true;
-  }
-
   get isHost(): boolean { return !!this.room && this.room.room.hostId === this.auth?.playerId; }
 
   private handle(m: ServerMsg): void {
@@ -278,12 +264,6 @@ export class NetClient {
         break;
       case 'battle.over': write(sessionStorage, BATTLE_KEY, null); break;
       case 'pong': this.rtt = Math.round(performance.now() - this.pingAt); break;
-      case 'battle.host': {
-        // хост ушёл посреди боя: бой считает другое место
-        const b = netBattle();
-        if (b && b.matchId === m.matchId) write(sessionStorage, BATTLE_KEY, { ...b, hostSeat: m.hostSeat });
-        break;
-      }
       default: break;
     }
     this.emit(m);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import type { FX } from './fx';
-import { additive, additiveSprite } from './loot-look';
-import { markShared } from './fx';
+import type { FX } from './fx.ts';
+import { additive, additiveSprite } from './loot-look.ts';
+import { markShared } from './fx.ts';
 
 /**
  * Круги каста (wiki/design-spells.md, раздел 5): у каждой школы свой узор из слоёв — кольцо с засечками, квадраты и ромбы,
@@ -503,7 +503,8 @@ export class Sigil {
   private fade = 1;
 
   /** R — радиус круга, м; a, b — два цвета слоёв (ярче единицы — светятся) */
-  constructor(school: SigilSchool, private readonly R: number, a: THREE.Color, b: THREE.Color, glow = 0.4) {
+  private readonly R: number;
+  constructor(school: SigilSchool, R: number, a: THREE.Color, b: THREE.Color, glow = 0.4) { this.R = R;
     STYLE[school].forEach((layer, i) => {
       const mat = additive(layerTex(layer.key), (layer.alt ? b : a).clone().multiplyScalar(glow), 0);
       const mesh = new THREE.Mesh(LAYER_GEO(), mat);

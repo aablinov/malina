@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { markShared } from './fx';
+import { makeCanvas } from './headless.ts';
+import { markShared } from './fx.ts';
 
 /**
  * Общий вид сокровищ: мягкое свечение, лучи-звезда за трофеем и столб света. Текстуры рисуются кодом один раз.
@@ -15,8 +16,7 @@ export interface LootData {
 }
 
 const canvasTexture = (w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): THREE.CanvasTexture => {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
+  const c = makeCanvas(w, h);
   draw(c.getContext('2d') as CanvasRenderingContext2D);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;

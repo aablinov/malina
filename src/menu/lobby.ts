@@ -1,12 +1,12 @@
-import { sfx } from '../audio';
-import { iconImg, iconURL } from '../icons';
-import { itemDef, RARITY, xpToNext, type Item, type ItemSlot, type Profile } from '../items';
-import { Inventory } from '../hud/inventory';
-import type { Textures } from '../textures';
-import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign';
-import type { MenuScene } from './scene';
-import { battleUrl, loadMenuState, NET, netBattleUrl, saveMenuState, type GameMode } from './session';
-import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol';
+import { sfx } from '../audio.ts';
+import { iconImg, iconURL } from '../icons.ts';
+import { itemDef, RARITY, xpToNext, type Item, type ItemSlot, type Profile } from '../items.ts';
+import { Inventory } from '../hud/inventory.ts';
+import type { Textures } from '../textures.ts';
+import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
+import type { MenuScene } from './scene.ts';
+import { battleUrl, loadMenuState, NET, netBattleUrl, saveMenuState, type GameMode } from './session.ts';
+import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
 
 /**
  * Лагерь перед боем (wiki/design-main-menu.md) — как инвентарь и экран героя в Minecraft Dungeons:
@@ -55,7 +55,9 @@ export class Lobby {
   onBack?: () => void;
   onSettings?: () => void;
 
-  constructor(parent: HTMLElement, private readonly profile: Profile, T: Textures, private readonly scene: MenuScene) {
+  private readonly profile: Profile;
+  private readonly scene: MenuScene;
+  constructor(parent: HTMLElement, profile: Profile, T: Textures, scene: MenuScene) { this.profile = profile; this.scene = scene;
     const st = loadMenuState();
     this.map = campaignMap(st.map).id;
     this.won = st.won;

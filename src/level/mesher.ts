@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import type { Textures } from '../textures';
-import { Atlas } from './atlas';
+import type { Textures } from '../textures.ts';
+import { Atlas } from './atlas.ts';
 import { CH, chunkKey, type Level } from './level.ts';
 import { DIRS } from './obj.ts';
 import { paletteTextures, type BlockDef, type Layer } from './palette.ts';
 import { decorTextures } from './decor.ts';
 import { DecorRenderer } from './decor-render.ts';
-import { getShape } from './shapes';
-import type { Shape } from './obj';
+import { getShape } from './shapes.ts';
+import type { Shape } from './obj.ts';
 
 /**
  * Рендер уровня: на каждый чанк — по одной сетке на слой (opaque / cutout / water / fire).
@@ -214,7 +214,9 @@ function hash(x: number, y: number, z: number, s = 0): number {
  */
 class Bucket {
   pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = []; flow: number[] = []; bake: number[] = []; idx: number[] = [];
-  constructor(readonly liquid: boolean, readonly lit: boolean) {}
+  readonly liquid: boolean;
+  readonly lit: boolean;
+  constructor(liquid: boolean, lit: boolean) { this.liquid = liquid; this.lit = lit;}
   get empty(): boolean { return this.idx.length === 0; }
   /** Номер следующей вершины */
   get count(): number { return this.pos.length / 3; }
@@ -277,7 +279,9 @@ export class LevelRenderer {
   /** Свободный декор поверх блоков (src/level/decor.ts) */
   readonly decor: DecorRenderer;
 
-  constructor(private readonly scene: THREE.Scene, private readonly level: Level, T: Textures) {
+  private readonly scene: THREE.Scene;
+  private readonly level: Level;
+  constructor(scene: THREE.Scene, level: Level, T: Textures) { this.scene = scene; this.level = level;
     this.atlas = new Atlas(T, [...new Set([...paletteTextures(), ...decorTextures()])]);
     this.waterTex = T.water;
     this.acidTex = T.acid;

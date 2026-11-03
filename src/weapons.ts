@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { pixelTex } from './textures';
-import { SWORD, type SwingTuning } from './tuning';
+import { pixelTex } from './textures.ts';
+import { SWORD, type SwingTuning } from './tuning.ts';
 
 /**
  * Оружие ближнего боя: реестр, модели из блоков, баланс.

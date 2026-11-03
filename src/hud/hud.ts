@@ -1,6 +1,6 @@
-import { iconImg, iconURL } from '../icons';
-import { itemDef, MAX_SOULS, xpToNext, type Profile } from '../items';
-import { AutoMap, type MapMarker, type MapView } from './automap';
+import { iconImg, iconURL } from '../icons.ts';
+import { itemDef, MAX_SOULS, xpToNext, type Profile } from '../items.ts';
+import { AutoMap, type MapMarker, type MapView } from './automap.ts';
 import './hud.css';
 
 /**
@@ -50,7 +50,8 @@ export class Hud {
   onAura?: () => void;
   onSpecial?: () => void;
 
-  constructor(parent: HTMLElement, private readonly profile: Profile) {
+  private readonly profile: Profile;
+  constructor(parent: HTMLElement, profile: Profile) { this.profile = profile;
     const el = document.createElement('div');
     el.className = 'hud';
     const slot = (cls: string, key: string, inner = ''): string =>

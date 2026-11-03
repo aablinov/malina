@@ -1,4 +1,4 @@
-import type { TdLane, TdPad } from '../td/types';
+import type { TdLane, TdPad } from '../td/types.ts';
 import type { Level } from './level.ts';
 
 /**

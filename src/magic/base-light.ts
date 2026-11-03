@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import type { ArtifactStats, BossSpellKind } from '../items';
-import { additive, additiveSprite, raysTex } from '../loot-look';
-import { bell, boom, deg, hiss, voice } from '../spell-audio';
-import type { Spells } from '../spells';
-import type { Target } from '../target';
-import { rand, type Spell } from './kit';
+import { rnd } from '../rng.ts';
+import type { ArtifactStats, BossSpellKind } from '../items.ts';
+import { additive, additiveSprite, raysTex } from '../loot-look.ts';
+import { bell, boom, deg, hiss, voice } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { rand, type Spell } from './kit.ts';
 
 /** Базовые заклинания (wiki/design-spells.md, раздел «Базовые заклинания»). Свет: ослепляющая вспышка */
 
@@ -14,7 +15,7 @@ const ROOT = 523.25;
 function flashSound(k: number): void {
   boom(130 - k * 30, 50, 0.5, 0.35 + k * 0.15, 0, 0.3);
   [0, 2, 4, 7].forEach((d, i) => bell(deg(ROOT * 2, d), 1.2 + k * 0.4, 0.06, i * 0.03, 0.6));
-  for (let i = 0; i < 6; i++) voice({ type: 'triangle', f: deg(ROOT * 4, (Math.random() * 7) | 0), dur: 0.14, vol: 0.03, delay: 0.02 + Math.random() * 0.15, verb: 0.4 });
+  for (let i = 0; i < 6; i++) voice({ type: 'triangle', f: deg(ROOT * 4, (rnd() * 7) | 0), dur: 0.14, vol: 0.03, delay: 0.02 + rnd() * 0.15, verb: 0.4 });
   hiss({ dur: 0.18, vol: 0.18, f: 7000, type: 'highpass', verb: 0.3 });
 }
 
@@ -28,7 +29,7 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
   voice({ type: 'sine', f: ROOT, f1: ROOT * 2, dur: tele, vol: 0.04, attack: tele * 0.8, verb: 0.4 });
   const core = hero.pos.clone().setY(hero.pos.y + 1);
   for (let i = 0; i < 24; i++) {
-    const ang = Math.random() * Math.PI * 2, r = rand(1.5, R), life = rand(0.18, tele);
+    const ang = rnd() * Math.PI * 2, r = rand(1.5, R), life = rand(0.18, tele);
     const from = core.clone().add(new THREE.Vector3(Math.cos(ang) * r, rand(-0.6, 1.4), Math.sin(ang) * r));
     fx.particle({ pos: from, vel: core.clone().sub(from).divideScalar(life), life, size: rand(0.05, 0.08), color: i % 2 ? s.a : s.b, gravity: 0, shrink: false });
   }
@@ -68,7 +69,7 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
         const top = t.pos.y + Math.min(2.6, (t.topY ?? 1.8)) + 0.25;
         for (let j = 0; j < 3; j++) {
           const ang = kit.time * 6 + (j / 3) * Math.PI * 2;
-          if (Math.random() < 0.8) fx.particle({ pos: new THREE.Vector3(t.pos.x + Math.cos(ang) * 0.5, top, t.pos.z + Math.sin(ang) * 0.5), vel: new THREE.Vector3(0, 0.1, 0), life: 0.22, size: 0.12, color: j % 2 ? s.a : s.b, gravity: 0 });
+          if (rnd() < 0.8) fx.particle({ pos: new THREE.Vector3(t.pos.x + Math.cos(ang) * 0.5, top, t.pos.z + Math.sin(ang) * 0.5), vel: new THREE.Vector3(0, 0.1, 0), life: 0.22, size: 0.12, color: j % 2 ? s.a : s.b, gravity: 0 });
         }
       }
       return st < stun;
@@ -78,8 +79,8 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
     let left = 1.2;
     kit.proc((dt) => {
       left -= dt;
-      if (Math.random() < 0.6) {
-        const ang = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R;
+      if (rnd() < 0.6) {
+        const ang = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R;
         fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.1, Math.sin(ang) * r)), vel: new THREE.Vector3(0, rand(0.6, 1.4), 0), life: 0.7, size: 0.05, color: s.b, gravity: -0.3 });
       }
       return left > 0;

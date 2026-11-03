@@ -1,25 +1,25 @@
 import * as THREE from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import { makeTextures, textureByName } from '../textures';
+import { makeTextures, textureByName } from '../textures.ts';
 import { Level, type DecorItem, type LevelEntity, type LevelJSON } from '../level/level.ts';
-import { LevelRenderer } from '../level/mesher';
+import { LevelRenderer } from '../level/mesher.ts';
 import { BLOCKS, CATEGORIES, blockDef, type BlockDef } from '../level/palette.ts';
 import { raycastVoxels } from '../level/collide.ts';
 import { DIRS } from '../level/obj.ts';
-import { MAPS, ROOMS } from '../level/maps';
+import { MAPS, ROOMS } from '../level/maps.ts';
 import { buildFloor } from '../level/dungeon.ts';
 import { DECOR, decorDef, decorEuler } from '../level/decor.ts';
 import { decorMatrix } from '../level/decor-render.ts';
 import { attachedTo, placeDecor, type DecorPlacement } from '../level/decor-place.ts';
 import { GROUNDS, GROUND_TITLES, landscape } from '../level/kit.ts';
 import type { Layer } from '../level/palette.ts';
-import { Lighting } from '../lighting';
-import { Weather } from '../weather';
-import { LIGHT_DEFAULTS, WEATHER_TITLES, WORLD_DEFAULTS, WORLD_PRESETS, aimLight, lightData, makeLight, mergeWorld, setWorld, sunOffset, worldOf, type LightData, type WeatherKind, type WorldSettings } from '../world';
-import { GROUPS, Thumbs, catalog, loadUserPrefabs, saveUserPrefabs, stampUser, type Prefab, type UserPrefab } from './editor/prefabs';
-import { Outliner, type TreeNode } from './editor/outliner';
-import { Viewports, type Viewport } from './editor/viewports';
-import { PropGrid, closeMenus, h, icon, menuButton, popupMenu, splitter, type MenuItem } from './editor/ui';
+import { Lighting } from '../lighting.ts';
+import { Weather } from '../weather.ts';
+import { LIGHT_DEFAULTS, WEATHER_TITLES, WORLD_DEFAULTS, WORLD_PRESETS, aimLight, lightData, makeLight, mergeWorld, setWorld, sunOffset, worldOf, type LightData, type WeatherKind, type WorldSettings } from '../world.ts';
+import { GROUPS, Thumbs, catalog, loadUserPrefabs, saveUserPrefabs, stampUser, type Prefab, type UserPrefab } from './editor/prefabs.ts';
+import { Outliner, type TreeNode } from './editor/outliner.ts';
+import { Viewports, type Viewport } from './editor/viewports.ts';
+import { PropGrid, closeMenus, h, icon, menuButton, popupMenu, splitter, type MenuItem } from './editor/ui.ts';
 import './editor.css';
 
 /**
@@ -315,7 +315,7 @@ export function runEditor(): void {
     if (d === 'weapons') {
       if (!weaponsPanel) {
         weaponsHost.textContent = 'Загрузка…';
-        void import('./editor/weapons-panel').then((m) => { weaponsHost.textContent = ''; weaponsPanel = m.mountWeaponsPanel(weaponsHost); if (doc === 'weapons') weaponsPanel.show(); })
+        void import('./editor/weapons-panel.ts').then((m) => { weaponsHost.textContent = ''; weaponsPanel = m.mountWeaponsPanel(weaponsHost); if (doc === 'weapons') weaponsPanel.show(); })
           .catch((e: Error) => { weaponsHost.textContent = `Панель оружия не загрузилась: ${e.message}`; });
       } else weaponsPanel.show();
     } else { weaponsPanel?.hide(); vps.resize(); }

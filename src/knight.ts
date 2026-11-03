@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { resolveCircle, type Obstacle } from './collision';
+import { resolveCircle, type Obstacle } from './collision.ts';
 import { STEP, type Terrain } from './level/collide.ts';
-import { pixelTex, type Textures } from './textures';
-import { SwordTrail } from './trail';
-import { HERO, SWORD } from './tuning';
-import { buildWeaponModel, disposeWeaponModel, type WeaponCategory, type WeaponDef } from './weapons';
-import type { ArmorLook, BowLook } from './items';
+import { pixelTex, type Textures } from './textures.ts';
+import { SwordTrail } from './trail.ts';
+import { HERO, SWORD } from './tuning.ts';
+import { buildWeaponModel, disposeWeaponModel, type WeaponCategory, type WeaponDef } from './weapons.ts';
+import type { ArmorLook, BowLook } from './items.ts';
 
 /**
  * Герой: блочный персонаж в духе Minecraft Dungeons (крупная голова, короткие руки и ноги, плащ) со стандартным мечом.

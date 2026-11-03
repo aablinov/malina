@@ -2,7 +2,8 @@ import type * as THREE from 'three';
 import type { Obstacle } from '../collision.ts';
 import type { Level } from '../level/level.ts';
 import type { EntityState } from '../net/snapshot.ts';
-import { rng, type Rand } from '../rng.ts';
+import { useDecoys, type Decoy } from '../decoys.ts';
+import { rng, useRng, type Rand } from '../rng.ts';
 import type { Target } from '../target.ts';
 import type { TdSpec } from '../td/types.ts';
 import type { SimEvent } from './events.ts';
@@ -47,6 +48,8 @@ export interface SimHooks {
   setScale(level: number, players: number): void;
   /** Блоки уровня изменились (пролом, починка): пересчитать препятствия */
   levelChanged?(): void;
+  /** Шаг героев и стаи внутри шага мира — под игровой случайностью и приманками этого мира */
+  step?(dt: number): void;
 }
 
 export interface SimWorldOpts {
@@ -67,6 +70,8 @@ export class SimWorld {
   readonly h: SimHooks;
   readonly td: SimTd | null;
   readonly piles: Piles;
+  /** Приманки мобов этого мира: куст, стены, башни, призванные (src/decoys.ts) */
+  readonly decoys: Decoy[] = [];
   events: SimEvent[] = [];
   private nextId = 0;
 
@@ -91,12 +96,16 @@ export class SimWorld {
   /** События с прошлого забора — вид и снимок забирают их после шага; что случилось между шагами (удары героя), тоже тут */
   takeEvents(): SimEvent[] { const e = this.events; this.events = []; return e; }
 
-  /** Шаг мира */
+  /** Шаг мира: игровая случайность и приманки — этого мира, затем герои и стая (крючок), оборона, кучки */
   step(dt: number): void {
-    this.tick++;
-    this.time += dt;
-    this.td?.update(dt);
-    this.piles.update(dt);
+    const r1 = useRng(this.rng), r2 = useDecoys(this.decoys);
+    try {
+      this.tick++;
+      this.time += dt;
+      this.h.step?.(dt);
+      this.td?.update(dt);
+      this.piles.update(dt);
+    } finally { r2(); r1(); }
   }
 
   /** Записи всех сущностей для снимка (src/sim/entities.ts) */

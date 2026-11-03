@@ -12,7 +12,9 @@ export class FxPool<T> {
   private readonly where: Int32Array;
   private liveN = 0;
 
-  constructor(make: () => T, readonly capacity: number, private readonly overflow: 'steal-oldest' | 'drop' = 'steal-oldest') {
+  readonly capacity: number;
+  private readonly overflow: 'steal-oldest' | 'drop';
+  constructor(make: () => T, capacity: number, overflow: 'steal-oldest' | 'drop' = 'steal-oldest') { this.capacity = capacity; this.overflow = overflow;
     this.free = new Int32Array(capacity);
     this.liveIdx = new Int32Array(capacity);
     this.where = new Int32Array(capacity).fill(-1);

@@ -10,7 +10,9 @@ export class HpBar {
   private readonly fill: THREE.Sprite;
   private readonly fillMat: THREE.SpriteMaterial;
 
-  constructor(private readonly width: number, y: number, private readonly color?: string) {
+  private readonly width: number;
+  private readonly color?: string;
+  constructor(width: number, y: number, color?: string) { this.width = width; this.color = color;
     const bgMat = new THREE.SpriteMaterial({ color: '#1a1012', depthTest: false, transparent: true, opacity: 0.8 });
     this.fillMat = new THREE.SpriteMaterial({ color: color ?? '#6ad84a', depthTest: false, transparent: true });
     this.bg = new THREE.Sprite(bgMat);
