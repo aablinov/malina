@@ -20,7 +20,7 @@ import type { Level } from '../level/level.ts';
 import { BASE_TOWERS, menuKey, SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from './towers';
 import type { TdLane, TdPad, TdSpec } from './types';
 import './td.css';
-import type { TdCommand, TdSnap } from '../net/protocol';
+import type { QueueSnap, TdCommand, TdSnap } from '../net/protocol';
 
 /**
  * Режим «Оборона куста» (wiki/design-tower-defence.md): площадки под башни, меню постройки, башни, враги по дорогам.
@@ -97,6 +97,9 @@ export class Pad {
 /** Мини-босс обороны (src/mobs/td-chiefs.ts) */
 export const isChief = (kind: string): boolean => kind.startsWith('chief_');
 
+/** Кошелёк обороны: сколько малины и как её прибавить (отрицательное — заплатить) */
+export interface Purse { get(): number; add(n: number): void }
+
 export class TowerDefense {
   readonly spec: TdSpec;
   readonly pads: Pad[];
@@ -146,8 +149,19 @@ export class TowerDefense {
    * уходят хосту командой. null — бой свой (одиночный или хост)
    */
   remote: ((c: TdCommand) => void) | null = null;
+  /**
+   * Общий бой: у каждого игрока своя малина — собирает сам, платит за свои башни; награда за волну каждому —
+   * как в одиночной (без множителя игроков, он для общей казны). false — казна одна (одиночная игра)
+   */
+  personal = false;
+  /** Хост общего боя: волна отбита — награда гостям в их кошельки */
+  onBounty?: (n: number) => void;
+  /** Кошелёк, из которого платят и куда приходит малина: обычно малина профиля (в бою — казна); команда гостя — его предоплата */
+  private purse: Purse = { get: () => this.h.profile.data.berries, add: (n) => { this.h.profile.data.berries += n; } };
   /** Гость: идёт ли волна — со снимка хоста */
   private netRunning: boolean | null = null;
+  /** Гость: группы волны, которые ещё выходят у хоста — продолжить, если хостом станешь сам (`takeOver`) */
+  private netQueue: QueueSnap[] = [];
 
   constructor(h: TdHooks, spec: TdSpec, parent: HTMLElement) {
     this.h = h;
@@ -179,7 +193,7 @@ export class TowerDefense {
     h.profile.data.berries = spec.berries;
   }
 
-  get berries(): number { return this.h.profile.data.berries; }
+  get berries(): number { return this.purse.get(); }
   get menuOpen(): boolean { return this.menuPad !== null; }
   /** Препятствия от башен и ствола куста (герой, путь, враги) */
   get solids(): Obstacle[] {
@@ -203,10 +217,16 @@ export class TowerDefense {
   /** Починить стену за малину (F у стены) */
   repair(w: Wall): boolean {
     if (w.hp >= w.maxHp) return false;
-    if (this.remote) { this.remote({ t: 'td', a: 'repair', wall: w.id }); return false; }
+    if (this.remote) {
+      const cost = this.repairCost(w);
+      if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return false; }
+      this.purse.add(-cost);
+      this.remote({ t: 'td', a: 'repair', wall: w.id, paid: cost });
+      return false;
+    }
     const cost = this.repairCost(w);
     if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return false; }
-    this.h.profile.data.berries -= cost;
+    this.purse.add(-cost);
     w.repair();
     this.h.fx.text(w.pos.clone().setY(2.6), `−${cost} малины`, 'berry');
     return true;
@@ -279,8 +299,16 @@ export class TowerDefense {
     const p = this.menuPad;
     if (!p) return;
     if (this.remote && a !== 'close') {
-      this.remote({ t: 'td', a, pad: p.index });
+      // гость платит сам и сразу; не вышло у хоста — малина вернётся (`gain`)
+      const t = p.tower;
+      const cost = a.startsWith('build:') ? (t ? null : TOWERS[a.slice(6) as TowerKind]?.cost ?? null)
+        : a === 'upgrade' ? (t && !t.ruined ? t.nextCost : null) : a === 'repair' ? (t?.ruined ? t.repairCost : null) : 0;
+      if (cost === null) return;
+      if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return; }
+      if (cost) this.purse.add(-cost);
+      this.remote({ t: 'td', a, pad: p.index, paid: cost });
       if (a.startsWith('build:') || a === 'sell') this.closeMenu();
+      else this.renderMenu();
       return;
     }
     if (a.startsWith('build:')) { if (this.build(p, a.slice(6) as TowerKind)) this.closeMenu(); }
@@ -318,7 +346,7 @@ export class TowerDefense {
     const def = TOWERS[kind];
     if (!def || p.tower || !this.kinds.includes(kind)) return null;
     if (this.berries < def.cost) { this.h.toast(`Не хватает малины: нужно ${def.cost}`); return null; }
-    this.h.profile.data.berries -= def.cost;
+    this.purse.add(-def.cost);
     const t = this.placeTower(p, kind);
     const c = new THREE.Color(def.color).multiplyScalar(2);
     this.h.fx.burst(p.pos.clone().setY(0.4), ['#d8cfa8', '#9a8f70', c], 20, { speed: 3, up: 3, size: 0.12, life: 0.6, gravity: 8 });
@@ -343,7 +371,7 @@ export class TowerDefense {
     if (!t?.ruined) return false;
     const cost = t.repairCost;
     if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return false; }
-    this.h.profile.data.berries -= cost;
+    this.purse.add(-cost);
     t.repair();
     this.h.fx.text(p.pos.clone().setY(p.pos.y + 1.6), `−${cost} малины`, 'berry');
     return true;
@@ -399,7 +427,7 @@ export class TowerDefense {
     const cost = t.nextCost;
     if (cost === null) { this.h.toast('Башня на пределе'); return false; }
     if (this.berries < cost) { this.h.toast(`Не хватает малины: нужно ${cost}`); return false; }
-    this.h.profile.data.berries -= cost;
+    this.purse.add(-cost);
     t.upgrade();
     this.h.fx.text(p.pos.clone().setY(1.6), `−${cost} малины`, 'berry');
     return true;
@@ -409,7 +437,7 @@ export class TowerDefense {
     const t = p.tower;
     if (!t) return 0;
     const back = Math.round(t.spent * SELL_BACK);
-    this.h.profile.data.berries += back;
+    this.purse.add(back);
     this.towers.splice(this.towers.indexOf(t), 1);
     t.dispose();
     p.tower = null;
@@ -462,7 +490,7 @@ export class TowerDefense {
     if (this.remote) { this.remote({ t: 'td', a: 'wave' }); return false; }
     if (this.state !== 'play' || this.waveRunning || this.wave >= this.waves.length) return false;
     const bonus = this.earlyBonus;
-    if (bonus > 0) { this.h.profile.data.berries += bonus; this.h.toast(`Волна раньше срока: +${bonus} малины`); }
+    if (bonus > 0) { this.purse.add(bonus); if (!this.commanding) this.h.toast(`Волна раньше срока: +${bonus} малины`); }
     this.startWave();
     return true;
   }
@@ -500,8 +528,9 @@ export class TowerDefense {
     }
     if (this.wave > 0 && !this.waveRunning && this.next >= (this.spec.rest ?? 20)) {
       // волна отбита: награда и отдых; последняя — победа
-      const w = this.waves[this.wave - 1], bounty = scaledBounty(w.bounty, this.players);
-      this.h.profile.data.berries += bounty;
+      const w = this.waves[this.wave - 1], bounty = this.personal ? w.bounty : scaledBounty(w.bounty, this.players);
+      this.purse.add(bounty);
+      this.onBounty?.(bounty);
       this.h.fx.text(this.bush.pos.clone().setY(3.6), `+${bounty} малины`, 'berry');
       this.h.harvest?.();
       if (this.wave >= this.waves.length) { this.state = 'won'; this.h.banner('Куст отбит!<small>Все волны Ордена разбиты · N — сыграть снова</small>', 6); return; }
@@ -562,8 +591,20 @@ export class TowerDefense {
 
   // ---------- общий бой (src/net/coop.ts) ----------
 
-  /** Хост: команда гостя — то же, что меню площадки, починка стены и «волна сейчас» у своего героя */
-  command(c: TdCommand): boolean {
+  /**
+   * Хост: команда гостя — то же, что меню площадки, починка стены и «волна сейчас» у своего героя.
+   * Платит и получает (продажа, бонус волны) кошелёк гостя purse — его предоплата; что осталось, вернётся гостю
+   */
+  command(c: TdCommand, purse: Purse): boolean {
+    const own = this.purse;
+    this.purse = purse;
+    this.commanding = true;
+    try { return this.run(c); } finally { this.purse = own; this.commanding = false; }
+  }
+
+  private commanding = false;
+
+  private run(c: TdCommand): boolean {
     if (this.state !== 'play') return false;
     if (c.a === 'wave') return this.callWave();
     if (c.wall !== undefined) { const w = this.wall(c.wall); return !!w && this.repair(w); }
@@ -580,8 +621,10 @@ export class TowerDefense {
   snap(): TdSnap {
     return {
       state: this.state, wave: this.wave, next: Math.round(this.next * 10) / 10, running: this.waveRunning,
-      berries: this.berries, bush: Math.round(this.bush.hp), walls: this.walls.map((w) => Math.round(w.hp)),
-      towers: this.pads.map((p) => (p.tower ? [p.tower.kind, p.tower.level, Math.round(p.tower.hp)] : 0)),
+      bush: Math.round(this.bush.hp), walls: this.walls.map((w) => Math.round(w.hp)),
+      towers: this.pads.map((p) => (p.tower ? [p.tower.kind, p.tower.level, Math.round(p.tower.hp), Math.round(p.tower.frozen * 10) / 10] : 0)),
+      queue: this.queue.map((q) => [q.kind, q.lane, q.left, Math.round(q.t * 10) / 10, q.every]),
+      players: this.players,
     };
   }
 
@@ -591,9 +634,12 @@ export class TowerDefense {
    */
   applySnap(s: TdSnap): void {
     this.netRunning = s.running;
+    // волна сменилась: враги крепчают — и малина с них (кукол масштабирует только снимок здоровья)
+    if (s.wave !== this.wave && s.wave > 0) this.pack.setScale(waveLevel(s.wave, this.spec.level), this.players);
     this.wave = s.wave;
     this.next = s.next;
-    this.h.profile.data.berries = s.berries;
+    this.netQueue = s.queue ?? [];
+    if (s.players) this.players = s.players;
     const b = this.bush;
     if (s.bush < b.hp) b.hurt(b.hp - s.bush, b.pos);
     else if (s.bush > b.hp) { if (b.dead) b.reset(); b.hp = s.bush; }
@@ -618,8 +664,49 @@ export class TowerDefense {
       while (t.level < want[1] && t.upgrade()) { /* до уровня хоста */ }
       if (want[2] < t.hp) t.hurt(t.hp - want[2]);
       else if (want[2] > t.hp) { if (t.ruined) t.repair(); t.hp = want[2]; }
+      // заморозка колдунчиком — у гостя та же: лёд на башне
+      if ((want[3] ?? 0) > 0.2 && t.frozen <= 0) t.freeze(want[3]);
     });
     if (s.state !== this.state) this.state = s.state;
+  }
+
+  /**
+   * Гость стал хостом (прежний ушёл посреди боя, src/net/coop.ts): волны, враги и награды — дальше свои,
+   * с того места, что было в последнем снимке: группы волны продолжают выходить, куклы — снова враги на своих дорогах
+   */
+  takeOver(): void {
+    this.remote = null;
+    this.netRunning = null;
+    this.pack.mirror = false;
+    this.queue.length = 0;
+    for (const [kind, lane, left, t, every] of this.netQueue) this.queue.push({ kind, lane, left, t, every });
+    for (const m of this.pack.mobs) {
+      if (!m.puppet) continue;
+      const lane = m.laneId ? this.lane(m.laneId) : undefined;
+      if (lane) {
+        const w = lane.wall ? this.wall(lane.wall) : undefined;
+        const through = lane.inner && (!w || w.dead || m.ghost) ? lane.inner : [];
+        m.march = [...lane.points, ...through].map(([x, z]) => new THREE.Vector3(x, 0, z));
+        m.marchI = Math.min(m.marchI, m.march.length);
+        m.aggro = Math.min(m.aggro, 3.5);
+      }
+      m.unpuppet();
+    }
+  }
+
+  /**
+   * Гость общего боя: малина от хоста в свой кошелёк — награда за волну (сбор урожая и баннер, как у хоста),
+   * подобранная кучка (цифра над героем) или возврат и выручка по команде
+   */
+  gain(n: number, why: 'wave' | 'pick' | 'back'): void {
+    if (n <= 0) return;
+    this.purse.add(n);
+    const hero = this.h.hero.pos;
+    this.h.fx.text(why === 'pick' ? hero.clone().setY(hero.y + 1.6) : this.bush.pos.clone().setY(3.6), `+${n} малины`, 'berry');
+    if (why === 'wave') {
+      this.h.harvest?.();
+      this.h.banner(`Волна ${this.wave} отбита<small>+${n} малины · следующая через ${this.spec.rest ?? 20} с · G — сейчас</small>`, 3);
+    }
   }
 
   /** Всё заново: башни снесены, враги убраны, казна полная */

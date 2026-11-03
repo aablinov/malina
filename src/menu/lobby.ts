@@ -5,8 +5,8 @@ import { Inventory } from '../hud/inventory';
 import type { Textures } from '../textures';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign';
 import type { MenuScene } from './scene';
-import { battleUrl, loadMenuState, NET, saveMenuState, type GameMode } from './session';
-import type { ServerMsg, RoomInfo } from '../net/protocol';
+import { battleUrl, loadMenuState, NET, netBattleUrl, saveMenuState, type GameMode } from './session';
+import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol';
 
 /**
  * Лагерь перед боем (wiki/design-main-menu.md) — как инвентарь и экран героя в Minecraft Dungeons:
@@ -46,6 +46,12 @@ export class Lobby {
   private codeDraft = '';
   /** Публичные комнаты сервера: null — ещё не спрашивали */
   private rooms: RoomInfo[] | null = null;
+  /** Друзья: на связи ли, в какой комнате; набранное имя друга и сообщение чата */
+  private friends: FriendInfo[] = [];
+  private friendDraft = '';
+  private chatDraft = '';
+  /** Чат комнаты: последние сообщения */
+  private chatLog: { name: string; text: string }[] = [];
   onBack?: () => void;
   onSettings?: () => void;
 
@@ -87,13 +93,13 @@ export class Lobby {
   private onNet(m: ServerMsg): void {
     if (m.t === 'battle.start') {
       sfx.twinkle();
-      const u = new URL(battleUrl({ mode: 'online', map: m.map, players: m.players }));
-      u.searchParams.set('room', NET.room?.room.code ?? '');
-      window.location.href = u.toString();
+      window.location.href = netBattleUrl(m.map, m.players, NET.room?.room.code ?? '');
       return;
     }
+    if (m.t === 'chat') { this.chatLog.push({ name: m.name, text: m.text }); this.chatLog = this.chatLog.slice(-6); }
+    if (m.t === 'room.left') this.chatLog = [];
     if (m.t === 'room.state' && !NET.isHost) this.map = m.room.map;
-    if ((m.t === 'room.state' || m.t === 'room.left' || m.t === 'welcome') && this.open && this.mode === 'online') this.renderSel();
+    if ((m.t === 'room.state' || m.t === 'room.left' || m.t === 'welcome' || m.t === 'chat') && this.open && this.mode === 'online') this.renderSel();
   }
 
   get open(): boolean { return this.el.classList.contains('open'); }
@@ -177,7 +183,7 @@ export class Lobby {
         case 'start': this.startGame(); break;
         case 'change': this.openInventory(this.slot); break;
         case 'inventory': this.openInventory(); break;
-        case 'friend': this.flash('Друзья появятся позже — пока зови по коду комнаты'); break;
+        case 'friend-del': { const id = t.closest<HTMLElement>('[data-player]')?.dataset.player; if (id) void NET.removeFriend(id).then(() => this.loadFriends()); break; }
         case 'private': this.privateGame = !this.privateGame; this.renderSel(); break;
         case 'join-room': { const code = t.closest<HTMLElement>('[data-code]')?.dataset.code; if (code) NET.joinRoom(code); break; }
         case 'kick': { const id = t.closest<HTMLElement>('[data-player]')?.dataset.player; if (id) NET.kick(id); break; }
@@ -188,6 +194,8 @@ export class Lobby {
       const f = e.target as HTMLInputElement;
       if (f.dataset.field === 'name') this.nameDraft = f.value;
       if (f.dataset.field === 'code') this.codeDraft = f.value.toUpperCase();
+      if (f.dataset.field === 'friend') this.friendDraft = f.value;
+      if (f.dataset.field === 'chat') this.chatDraft = f.value;
     });
     this.el.addEventListener('dblclick', (e) => {
       const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as SlotId | undefined;
@@ -232,7 +240,10 @@ export class Lobby {
   private renderSel(): void {
     for (const e of this.el.querySelectorAll<HTMLElement>('[data-slot]')) e.classList.toggle('sel', e.dataset.slot === this.slot);
     for (const e of this.el.querySelectorAll<HTMLElement>('[data-map]')) e.classList.toggle('sel', e.dataset.map === this.map);
+    // перерисовка сетевой панели (пришло сообщение, сменился состав) не сбивает набор в поле
+    const focus = (document.activeElement as HTMLInputElement | null)?.dataset?.field;
     this.q('side').innerHTML = this.pane === 'gear' ? this.itemCard() : this.mapCard() + (this.mode === 'online' ? this.onlineHtml() : '');
+    if (focus) { const f = this.el.querySelector<HTMLInputElement>(`[data-field="${focus}"]`); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }
     const lock = this.mode === 'online' && !NET.room;
     const startBtn = this.el.querySelector('[data-act="start"]') as HTMLButtonElement;
     startBtn.classList.toggle('locked', lock);
@@ -315,7 +326,13 @@ export class Lobby {
       case 'host': NET.createRoom(this.map, this.privateGame); break;
       case 'join': if (this.codeDraft.trim()) NET.joinRoom(this.codeDraft.trim()); break;
       case 'leave': NET.leaveRoom(); this.renderSel(); break;
-      case 'refresh': void NET.list().then((r) => { this.rooms = r; this.renderSel(); if (!r.length) this.flash('Открытых комнат нет — создай свою'); }); break;
+      case 'refresh': void NET.list().then((r) => { this.rooms = r; this.renderSel(); if (!r.length) this.flash('Открытых комнат нет — создай свою'); }); this.loadFriends(); break;
+      case 'friend-add': {
+        const name = this.friendDraft.trim();
+        if (name) void NET.addFriend(name).then((ok) => { if (ok) { this.friendDraft = ''; this.loadFriends(); } });
+        break;
+      }
+      case 'chat': if (this.chatDraft.trim()) { NET.chat(this.chatDraft); this.chatDraft = ''; this.renderSel(); } break;
       default: break;
     }
   }
@@ -326,8 +343,34 @@ export class Lobby {
       void NET.syncProfile(this.profile).then(() => { if (this.open) this.render(); });
       NET.connect();
       void NET.list().then((r) => { this.rooms = r; if (this.open && this.mode === 'online') this.renderSel(); });
+      this.loadFriends();
     }
     if (this.open && this.mode === 'online') this.renderSel();
+  }
+
+  /** Друзья с сервера: на связи ли и в какой комнате */
+  private loadFriends(): void {
+    void NET.friends().then((f) => { this.friends = f; if (this.open && this.mode === 'online') this.renderSel(); });
+  }
+
+  /** Друзья: на связи — зелёная точка, в комнате с местом — «Войти» (и в идущий бой), ✕ — убрать */
+  private friendsHtml(esc: (v: string) => string): string {
+    const rows = this.friends.map((f) => {
+      const r = f.room, can = r && r.players < r.max && r.code !== NET.room?.room.code;
+      const where = r ? `${campaignMap(r.map).title}${r.state === 'battle' ? ' · в бою' : ''} · ${r.players}/${r.max}` : f.online ? 'на связи' : 'не в игре';
+      return `<li class="mm-friend${f.online ? ' on' : ''}" data-player="${f.playerId}"><b>${esc(f.name)}</b><i>${where}</i>
+        ${can ? `<button class="mm-btn small" data-act="join-room" data-code="${r.code}">Войти</button>` : ''}<button class="mm-btn small" data-act="friend-del" title="Убрать из друзей">✕</button></li>`;
+    }).join('');
+    return `<div class="mm-online-h"><b>Друзья</b></div>
+      <div class="mm-join"><input class="mm-field" data-field="friend" data-enter="friend-add" maxlength="16" placeholder="Имя героя" value="${esc(this.friendDraft)}"><button class="mm-btn small" data-act="friend-add">+ Добавить</button></div>
+      ${rows ? `<ul class="mm-rooms">${rows}</ul>` : '<div class="mm-online-empty">Друзей пока нет</div>'}`;
+  }
+
+  /** Чат комнаты: последние сообщения и поле */
+  private chatHtml(esc: (v: string) => string): string {
+    const log = this.chatLog.map((m) => `<div><b>${esc(m.name)}:</b> ${esc(m.text)}</div>`).join('');
+    return `<div class="mm-online-h"><b>Чат</b></div><div class="mm-chat">${log || '<i>Пока тихо</i>'}</div>
+      <div class="mm-join"><input class="mm-field" data-field="chat" data-enter="chat" maxlength="200" placeholder="Сообщение" value="${esc(this.chatDraft)}"><button class="mm-btn small" data-act="chat">→</button></div>`;
   }
 
   /** Панель сетевой игры по образцу MCD: вход, комната с местами, создать сессию, список сессий, вход по коду */
@@ -358,11 +401,13 @@ export class Lobby {
       <div class="mm-online-h"><b>Комната</b><span class="mm-code" title="Код для друзей">${r.room.code}</span></div>
       <ul class="mm-seats">${seats}${'<li class="mm-seat empty">свободно</li>'.repeat(Math.max(0, r.room.max - r.seats.length))}</ul>
       <p class="mm-note">${campaignMap(r.room.map).title}${r.room.private ? ' · закрытая' : ''} · ${NET.isHost ? 'все готовы — «Начать игру»' : '«Готов» — и ждём хоста'}</p>
+      ${this.chatHtml(esc)}
       <button class="mm-btn small" data-act="leave">Покинуть комнату</button>
+      ${this.friendsHtml(esc)}
     </div>`;
     }
     const list = this.rooms === null ? '<div class="mm-online-empty">…</div>'
-      : this.rooms.length ? `<ul class="mm-rooms">${this.rooms.map((x) => `<li><b>${esc(x.host)}</b><i>${campaignMap(x.map).title} · ${x.players}/${x.max}</i><button class="mm-btn small" data-act="join-room" data-code="${x.code}">Войти</button></li>`).join('')}</ul>`
+      : this.rooms.length ? `<ul class="mm-rooms">${this.rooms.map((x) => `<li><b>${esc(x.host)}</b><i>${campaignMap(x.map).title}${x.state === 'battle' ? ' · в бою' : ''} · ${x.players}/${x.max}</i><button class="mm-btn small" data-act="join-room" data-code="${x.code}">Войти</button></li>`).join('')}</ul>`
         : '<div class="mm-online-empty">Сессий не найдено</div>';
     return `<div class="mm-online">${who}
       <button class="mm-btn host" data-act="host">Создать онлайн-сессию</button>
@@ -371,8 +416,7 @@ export class Lobby {
       <div class="mm-join"><input class="mm-field" data-field="code" data-enter="join" maxlength="6" placeholder="ABCDEF" value="${esc(this.codeDraft)}"><button class="mm-btn small" data-act="join">Войти</button></div>
       <div class="mm-online-h"><b>Сессии</b><button class="mm-btn small" data-act="refresh">Обновить</button></div>
       ${list}
-      <div class="mm-online-h"><b>Друзья</b><button class="mm-btn small" data-act="friend">+ Добавить</button></div>
-      <div class="mm-online-empty">Друзей пока нет</div>
+      ${this.friendsHtml(esc)}
     </div>`;
   }
 }

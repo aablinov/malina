@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { BossHooks } from '../bosses/kit';
+import type { Knight } from '../knight';
 import type { Target } from '../target';
 import type { Mob, MobHooks } from './mob';
 import { MOBS } from './roster';
@@ -12,13 +13,16 @@ export class Pack {
   readonly mobs: Mob[] = [];
   private level = 1;
   private players = 1;
+  /** Стая гостя общего боя: куклы по снимку хоста */
+  mirror = false;
   /** Счётчик сетевых id (снимок хоста, src/net/coop.ts) */
   private seq = 0;
   private readonly hooks: MobHooks;
 
   /** loot — малина с павшего: где и сколько */
   constructor(h: BossHooks, private readonly loot: (at: THREE.Vector3, n: number) => void) {
-    this.hooks = { ...h, allies: () => this.mobs.filter((m) => m.alive), spawn: (kind, at) => this.spawn(kind, at) };
+    // куклы гостя (src/net/coop.ts) никого не призывают: призванных пришлёт снимок хоста
+    this.hooks = { ...h, allies: () => this.mobs.filter((m) => m.alive), spawn: (kind, at) => (this.mirror ? null : this.spawn(kind, at)) };
   }
 
   /** Моб из реестра в точке (null — нет такого) */
@@ -51,7 +55,9 @@ export class Pack {
   }
 
   /** Замедление героя от зон стаи */
-  get heroSlow(): number { return this.mobs.reduce((a, m) => Math.max(a, m.heroSlow), 0); }
+  get heroSlow(): number { return this.slowFor(null); }
+  /** Замедление героя от зон тех, кто за ним гонится (общий бой: k — герой гостя, null — свой) */
+  slowFor(k: Knight | null): number { return this.mobs.reduce((a, m) => ((m.target ?? null) === k ? Math.max(a, m.heroSlow) : a), 0); }
 
   targets(): Target[] { return [...this.mobs.filter((m) => m.alive), ...this.mobs.flatMap((m) => m.extras())]; }
 

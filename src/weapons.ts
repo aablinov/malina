@@ -533,17 +533,17 @@ export function onWeaponChange(f: (w: WeaponDef) => void): () => void {
 
 // ---------- игра ----------
 
-/** Записать числа оружия в SWORD — их читает герой и сцена */
-export function applyWeapon(def: WeaponDef): void {
+/** Записать числа оружия в SWORD (или в числа удара другого героя, Knight.tune) — их читает герой и сцена */
+export function applyWeapon(def: WeaponDef, into: typeof SWORD = SWORD): void {
   const s = def.stats, sp = s.speed > 0 ? s.speed : 1;
-  SWORD.comboWindow = s.comboWindow;
-  SWORD.chainFrom = s.chainFrom;
-  SWORD.finisherCd = s.finisherCd / sp;
-  SWORD.hitStop = s.hitStop;
-  SWORD.shockR = s.shockR;
+  into.comboWindow = s.comboWindow;
+  into.chainFrom = s.chainFrom;
+  into.finisherCd = s.finisherCd / sp;
+  into.hitStop = s.hitStop;
+  into.shockR = s.shockR;
   for (let i = 0; i < 3; i++) {
     const src = { ...s.swings[i], time: s.swings[i].time / sp };
-    if (SWORD.swings[i]) Object.assign(SWORD.swings[i], src); else SWORD.swings[i] = src;
+    if (into.swings[i]) Object.assign(into.swings[i], src); else into.swings[i] = src;
   }
 }
 

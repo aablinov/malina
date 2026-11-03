@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { FX } from './fx';
 import { iconCanvas } from './icons';
-import { itemDef, powerMult, RARITY, type ArtifactStats, type GearStats, type PlainArtifactKind, type Profile } from './items';
+import { itemDef, MAX_SOULS, powerMult, RARITY, type ArtifactStats, type GearStats, type PlainArtifactKind, type Profile } from './items';
 import { additive, additiveSprite, glowTex, groundGlow, lightBeam, raysTex, type LootData } from './loot-look';
 import type { Knight } from './knight';
 import type { Terrain } from './level/collide.ts';
@@ -13,6 +13,7 @@ import { applyWeapon, getWeapon, type WeaponDef } from './weapons';
 import { temperOf, type TemperSlot } from './temper';
 import { WeaponArts } from './weapon-arts';
 import type { HudBuff, HudState } from './hud/hud';
+import type { GearAction } from './net/protocol';
 
 /**
  * Снаряжение в бою (wiki/design-inventory.md): надетое из профиля (src/items.ts) превращается в числа и действия —
@@ -79,6 +80,8 @@ export class Gear {
   /** Попадания стрел (для тестов) */
   arrowHits = 0;
   arrowsShot = 0;
+  /** Общий бой (src/net/coop.ts): действие сработало — его повторит снаряжение этого героя у других игроков */
+  onAction?: (a: GearAction) => void;
 
   constructor(private readonly h: GearHooks, readonly profile: Profile) {
     const damage = (t: Target, v: number, from: THREE.Vector3, knock: number): void => {
@@ -131,7 +134,7 @@ export class Gear {
     hero.object.scale.setScalar(sc);
     const m = this.profile.equipped('melee');
     const w = this.weaponOverride ?? (m ? getWeapon(itemDef(m.def).weapon ?? '') : undefined);
-    if (w && w.id !== this.weaponId) { this.weaponId = w.id; applyWeapon(w); hero.setWeapon(w); this.arts.set(w, []); }
+    if (w && w.id !== this.weaponId) { this.weaponId = w.id; applyWeapon(w, hero.tune); hero.setWeapon(w); this.arts.set(w, []); }
     if (w) this.arts.set(w, this.temperOverride ?? temperOf(m));
     const max = HERO.hp + this.stats.maxHpBonus;
     if (max !== hero.maxHp) {
@@ -167,7 +170,7 @@ export class Gear {
 
   /** Q: спец-удар оружия, если шкала полна */
   special(aim: THREE.Vector3): boolean {
-    if (this.arts.special(aim)) return true;
+    if (this.arts.special(aim)) { this.onAction?.({ k: 'special', at: [aim.x, aim.z] }); return true; }
     if (!this.arts.ready && !this.h.hero.down) { this.h.toast(`${this.arts.specialTitle}: шкала ${Math.floor(this.arts.meter * 100)} % — бей врагов`); this.h.sound('empty'); }
     return false;
   }
@@ -203,6 +206,7 @@ export class Gear {
     const before = hero.hp;
     hero.hp = Math.min(hero.maxHp, hero.hp + heal);
     this.potionT = POTION_CD;
+    this.onAction?.({ k: 'potion' });
     this.h.fx.text(hero.pos.clone().setY(hero.pos.y + 0.6), `+${Math.round(hero.hp - before)}`, 'heal');
     this.h.fx.burst(hero.pos.clone().setY(hero.pos.y + 1), [new THREE.Color(3.2, 0.5, 0.8), new THREE.Color(3, 2.6, 2.6)], 18, { speed: 1.6, up: 3, size: 0.07, life: 0.8, glow: true, gravity: 1 });
     this.h.sound('potion');
@@ -292,6 +296,7 @@ export class Gear {
     if (this.artT[i][0] > 0 || this.h.hero.down || this.spells.charging) return false;
     this.spells.start(i, spell, a);
     this.apply();
+    this.onAction?.({ k: 'charge', i, at: [at.x, at.z] });
     return true;
   }
 
@@ -310,11 +315,13 @@ export class Gear {
     if (!au.kind) { this.h.toast('Гнездо ауры пустое — надень ауру в инвентаре (I)'); return false; }
     if (au.flareT > 0) return false;
     if (!au.ready) { this.h.toast(`Шкала ауры: ${Math.floor((au.meter / AURA_METER) * 100)} % — бей врагов, чтобы заполнить`); this.h.sound('empty'); return false; }
-    return au.flare();
+    const ok = au.flare();
+    if (ok) this.onAction?.({ k: 'aura' });
+    return ok;
   }
 
   /** Бросить заряд без каста (окно открылось, фокус ушёл) */
-  cancelCast(): void { if (this.spells.charging) { this.spells.cancel(); this.apply(); } }
+  cancelCast(): void { if (this.spells.charging) { this.spells.cancel(); this.apply(); this.onAction?.({ k: 'cancel' }); } }
 
   /** Артефакт в гнезде i (0..2): характеристики и урон (лечение) с учётом силы предмета; гнездо пустое — null */
   private artifactAt(i: number): { a: ArtifactStats; power: number } | null {
@@ -339,7 +346,34 @@ export class Gear {
     else this.plain(a.kind as PlainArtifactKind, a, power, at);
     this.artT[i] = [a.cd * this.stats.artifactCdMult, a.cd * this.stats.artifactCdMult];
     this.apply();
+    this.onAction?.({ k: 'art', i, at: [at.x, at.z], c: charge });
     return true;
+  }
+
+  /**
+   * Повторить действие героя другого игрока (общий бой, src/net/coop.ts): перезарядки, души и шкалы — его,
+   * поэтому здесь их не проверяем — открываем и делаем
+   */
+  perform(a: GearAction): void {
+    const y = this.h.hero.pos.y;
+    switch (a.k) {
+      case 'art':
+        // заряжал у себя — у нас заряд тоже шёл: отпустить и сотворить
+        if (this.spells.charging?.slot === a.i) { this.spells.release(); this.apply(); }
+        this.artT[a.i][0] = 0;
+        this.profile.data.souls = MAX_SOULS;
+        this.useArtifact(a.i, new THREE.Vector3(a.at[0], y, a.at[1]), a.c);
+        break;
+      case 'charge':
+        this.artT[a.i][0] = 0;
+        if (this.spells.charging) this.spells.cancel();
+        this.pressArtifact(a.i, new THREE.Vector3(a.at[0], y, a.at[1]));
+        break;
+      case 'cancel': this.cancelCast(); break;
+      case 'potion': this.potionT = 0; this.potion(); break;
+      case 'aura': this.auras.meter = AURA_METER; this.auras.flareT = 0; this.flareAura(); break;
+      case 'special': this.arts.meter = 1; this.special(new THREE.Vector3(a.at[0], y, a.at[1])); break;
+    }
   }
 
   /** Обычный артефакт без каста: power — урон или лечение с силой предмета; сапоги берут множитель скорости как есть */

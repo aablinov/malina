@@ -1,7 +1,7 @@
 import type { Profile, ProfileData } from '../items';
 import {
   CLOSE, NET_LIMITS, PROTOCOL,
-  type AuthReply, type ClientMsg, type MatchSummary, type ProfileReply, type RoomInfo, type SeatInfo, type ServerMsg,
+  type AuthReply, type ClientMsg, type FriendInfo, type MatchSummary, type ProfileReply, type RoomInfo, type SeatInfo, type ServerMsg,
 } from './protocol';
 
 /**
@@ -20,6 +20,8 @@ const VERSION_KEY = 'malina.net.version';
 /** Бой, в который ушла комната: место, сид, хост — читает страница боя */
 const BATTLE_KEY = 'malina.net.battle';
 export const DEFAULT_SERVER = 'http://localhost:8787';
+/** Пинг в бою — раз в столько мс */
+const PING_BATTLE_MS = 2000;
 
 export interface NetAuth { playerId: string; name: string; token: string }
 export interface RoomView { room: RoomInfo; seats: SeatInfo[]; you: number }
@@ -58,6 +60,11 @@ export class NetClient {
   private ws: WebSocket | null = null;
   private readonly listeners = new Set<(m: ServerMsg) => void>();
   private ping = 0;
+  /** Пинг до сервера, мс (по последнему pong; в бою меряется раз в PING_BATTLE_MS) */
+  rtt = 0;
+  private pingAt = 0;
+  /** Чаще мерить пинг — список игроков в бою */
+  private fastPing = false;
   private retry = 0;
   private stopped = false;
   private profile: Profile | null = null;
@@ -69,10 +76,10 @@ export class NetClient {
 
   // ---------- REST ----------
 
-  /** Проверить сервер (не дольше 1,5 с) */
+  /** Проверить сервер (не дольше 5 с: страница может быть занята) */
   async probe(): Promise<boolean> {
     try {
-      const r = await fetch(`${this.base}/api/health`, { signal: AbortSignal.timeout(1500) });
+      const r = await fetch(`${this.base}/api/health`, { signal: AbortSignal.timeout(5000) });
       this.available = r.ok && ((await r.json()) as { protocol?: number }).protocol === PROTOCOL;
     } catch { this.available = false; }
     return this.available;
@@ -102,6 +109,22 @@ export class NetClient {
     write(localStorage, AUTH_KEY, null);
     write(localStorage, VERSION_KEY, null);
   }
+
+  /** Друзья: на связи ли и в какой комнате */
+  async friends(): Promise<FriendInfo[]> {
+    if (!this.auth) return [];
+    const r = await this.api('GET', '/api/friends');
+    return r.ok ? ((await r.json()) as FriendInfo[]) : [];
+  }
+
+  /** Добавить друга по имени; false — нет такого (текст — в onError) */
+  async addFriend(name: string): Promise<boolean> {
+    const r = await this.api('POST', '/api/friends', { name });
+    if (!r.ok) this.onError?.(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'Не удалось добавить');
+    return r.ok;
+  }
+
+  async removeFriend(playerId: string): Promise<void> { await this.api('DELETE', `/api/friends?id=${encodeURIComponent(playerId)}`); }
 
   async matches(limit = 20): Promise<MatchSummary[]> {
     const r = await this.api('GET', `/api/matches?limit=${limit}`);
@@ -164,6 +187,17 @@ export class NetClient {
 
   // ---------- WebSocket ----------
 
+  /** Пинг раз в pingMs (в бою — чаще, для списка игроков) */
+  private startPing(): void {
+    window.clearInterval(this.ping);
+    const tick = (): void => { this.pingAt = performance.now(); this.send({ t: 'ping' }); };
+    tick();
+    this.ping = window.setInterval(tick, this.fastPing ? PING_BATTLE_MS : NET_LIMITS.pingMs);
+  }
+
+  /** Страница боя: пинг чаще */
+  battlePing(): void { this.fastPing = true; if (this.online) this.startPing(); }
+
   /** Подписка на сообщения сервера; вернёт отписку */
   on(f: (m: ServerMsg) => void): () => void { this.listeners.add(f); return () => { this.listeners.delete(f); }; }
 
@@ -209,9 +243,22 @@ export class NetClient {
   setMap(map: string): void { this.send({ t: 'room.map', map }); }
   kick(playerId: string): void { this.send({ t: 'room.kick', playerId }); }
   startBattle(): void { this.send({ t: 'room.start' }); }
-  /** Сообщение боя: только когда комната в бою (до входа страницы боя сервер ответил бы ошибкой) */
-  relay(d: unknown, to?: number): void { if (this.room?.room.state === 'battle') this.send({ t: 'relay', to, d }); }
+  /** «Ещё раз» после боя — хост: тем же составом */
+  again(): void { this.send({ t: 'room.again' }); }
+  chat(text: string): void { if (text.trim()) this.send({ t: 'chat', text }); }
+  /** Сообщение боя: только когда комната в бою (до входа страницы боя сервер ответил бы ошибкой); false — не ушло */
+  relay(d: unknown, to?: number): boolean {
+    if (this.room?.room.state !== 'battle' || this.ws?.readyState !== WebSocket.OPEN) return false;
+    this.send({ t: 'relay', to, d });
+    return true;
+  }
   endBattle(result: 'won' | 'lost', wave: number): void { this.send({ t: 'battle.end', result, wave, rewards: [] }); }
+  /** Своя награда за бой: собранная и не потраченная малина, опыт (сервер засчитает один раз); false — нет связи */
+  sendLoot(matchId: string, berries: number, xp: number): boolean {
+    if (this.ws?.readyState !== WebSocket.OPEN) return false;
+    this.send({ t: 'battle.loot', matchId, berries: Math.max(0, Math.floor(berries)), xp: Math.max(0, Math.floor(xp)) });
+    return true;
+  }
 
   get isHost(): boolean { return !!this.room && this.room.room.hostId === this.auth?.playerId; }
 
@@ -220,8 +267,7 @@ export class NetClient {
       case 'welcome':
         this.online = true;
         this.retry = 0;
-        window.clearInterval(this.ping);
-        this.ping = window.setInterval(() => this.send({ t: 'ping' }), NET_LIMITS.pingMs);
+        this.startPing();
         break;
       case 'room.state': this.room = { room: m.room, seats: m.seats, you: m.you }; break;
       case 'room.left': this.room = null; break;
@@ -231,6 +277,13 @@ export class NetClient {
         write(sessionStorage, BATTLE_KEY, { matchId: m.matchId, code: this.room?.room.code ?? '', map: m.map, players: m.players, seed: m.seed, hostSeat: m.hostSeat, seat: this.room?.you ?? 0, seats: m.seats } satisfies NetBattle);
         break;
       case 'battle.over': write(sessionStorage, BATTLE_KEY, null); break;
+      case 'pong': this.rtt = Math.round(performance.now() - this.pingAt); break;
+      case 'battle.host': {
+        // хост ушёл посреди боя: бой считает другое место
+        const b = netBattle();
+        if (b && b.matchId === m.matchId) write(sessionStorage, BATTLE_KEY, { ...b, hostSeat: m.hostSeat });
+        break;
+      }
       default: break;
     }
     this.emit(m);

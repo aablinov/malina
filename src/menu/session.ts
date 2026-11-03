@@ -32,6 +32,13 @@ export function battleUrl(s: GameSession): string {
   return u.toString();
 }
 
+/** Адрес сетевого боя: карта, игроков, код комнаты (страница боя войдёт в неё заново) */
+export function netBattleUrl(map: string, players: number, code: string): string {
+  const u = new URL(battleUrl({ mode: 'online', map, players }));
+  u.searchParams.set('room', code);
+  return u.toString();
+}
+
 /** Адрес меню: страница без параметров; lobby — сразу в лагерь, а не на стартовый экран */
 export function menuUrl(lobby = true): string {
   const u = new URL(window.location.href);

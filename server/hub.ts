@@ -22,6 +22,8 @@ class Client implements Conn {
   count = 0;
   inputs = 0;
   strikes = 0;
+  /** Последнее сообщение чата — не чаще NET_LIMITS.chatMs */
+  chatAt = -Infinity;
 
   constructor(ws: WebSocket, playerId: string, name: string) { this.ws = ws; this.playerId = playerId; this.name = name; }
 
@@ -44,6 +46,9 @@ export class Hub {
     this.wss = new WebSocketServer({ noServer: true, maxPayload: NET_LIMITS.maxMessage });
     this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => this.greet(ws, req));
   }
+
+  /** Игрок на связи (для друзей) */
+  isOnline(playerId: string): boolean { return this.online.has(playerId); }
 
   /** Сколько игроков на связи */
   get size(): number { return this.online.size; }
@@ -100,7 +105,7 @@ export class Hub {
   }
 
   private dispatch(c: Client, m: ClientMsg): void {
-    const R = this.d.rooms;
+    const R = this.d.rooms, now = this.now;
     switch (m.t) {
       case 'hello': break;
       case 'ping': c.send({ t: 'pong' }); break;
@@ -111,6 +116,13 @@ export class Hub {
       case 'room.map': R.setMap(c, m.map); break;
       case 'room.kick': R.kick(c, m.playerId); break;
       case 'room.start': R.start(c); break;
+      case 'room.again': R.start(c, true); break;
+      case 'chat': {
+        if (now() - c.chatAt < NET_LIMITS.chatMs) return;
+        c.chatAt = now();
+        R.chat(c, m.text);
+        break;
+      }
       case 'relay': {
         const d = m.d as { t?: unknown } | null;
         if (d && d.t === 'in' && ++c.inputs > NET_LIMITS.inputPerSecond) return;
@@ -118,6 +130,7 @@ export class Hub {
         break;
       }
       case 'battle.end': R.end(c, m.result, m.wave, m.rewards); break;
+      case 'battle.loot': R.loot(c, m.matchId, m.berries, m.xp); break;
     }
   }
 }

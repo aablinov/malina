@@ -59,7 +59,8 @@ export function checkClientMsg(v: unknown): ClientMsg | null {
   if (!isObj(v) || typeof v.t !== 'string') return null;
   switch (v.t) {
     case 'hello': return isStr(v.token, 100) && Number.isInteger(v.protocol) ? (v as ClientMsg) : null;
-    case 'ping': case 'room.leave': case 'room.start': return v as ClientMsg;
+    case 'ping': case 'room.leave': case 'room.start': case 'room.again': return v as ClientMsg;
+    case 'chat': return isStr(v.text, 1000) ? (v as ClientMsg) : null;
     case 'room.create': return isStr(v.map, 32) && isInt(v.max, 1, MAX_PLAYERS) && typeof v.private === 'boolean' ? (v as ClientMsg) : null;
     case 'room.join': return isStr(v.code, 12) ? (v as ClientMsg) : null;
     case 'room.ready': return typeof v.ready === 'boolean' ? (v as ClientMsg) : null;
@@ -71,6 +72,7 @@ export function checkClientMsg(v: unknown): ClientMsg | null {
       const ok = v.rewards.every((r) => isObj(r) && isStr(r.playerId, 64) && isInt(r.berries, 0, BIG) && isInt(r.xp, 0, BIG));
       return ok ? (v as ClientMsg) : null;
     }
+    case 'battle.loot': return isStr(v.matchId, 64) && isInt(v.berries, 0, BIG) && isInt(v.xp, 0, BIG) ? (v as ClientMsg) : null;
     default: return null;
   }
 }
