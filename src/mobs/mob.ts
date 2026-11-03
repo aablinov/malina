@@ -106,11 +106,11 @@ export abstract class Mob extends Boss {
   protected focus: Decoy | null = null;
   /** Общий бой: ближайший герой отряда (общий бой, MobHooks.heroes); null — свой герой */
   protected prey: Knight | null = null;
-  /** Сетевой id в стае (снимок хоста, src/net/coop.ts) */
+  /** Сетевой id в стае (записи снимка, src/game/match.ts) */
   net = 0;
   /**
-   * Кукла (гость общего боя): мозга нет — место, взгляд и здоровье приходят со снимка хоста (`puppetStep`),
-   * удары гостя только вспыхивают, урон считает хост
+   * Кукла (клиент сетевого боя): мозга нет — место, взгляд и здоровье приходят со снимка сервера (`puppetStep`),
+   * удары клиента только вспыхивают, урон считает сервер
    */
   puppet = false;
   readonly pupTo = new THREE.Vector3();

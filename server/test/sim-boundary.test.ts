@@ -12,7 +12,7 @@ const ROOT = join(import.meta.dirname, '..', '..');
 const PURE = ['src/sim', 'src/net'];
 const DIRS = [...PURE, 'src/game'];
 /** Клиентские модули, которым место в src/net ради общего протокола, но в Node они не грузятся (WebSocket браузера, DOM) */
-const CLIENT_ONLY = new Set(['src/net/client.ts', 'src/net/coop.ts', 'src/net/battle-ui.ts']);
+const CLIENT_ONLY = new Set(['src/net/client.ts', 'src/net/battle-ui.ts']);
 const BANNED: [RegExp, string][] = [
   [/from '[^']*\/(fx|textures|audio|spell-audio|weapon-audio|loot-look)(\.ts)?'/, 'вид и звук'],
   [/\.css'/, 'стили'],

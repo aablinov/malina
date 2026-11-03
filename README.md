@@ -68,11 +68,11 @@ npm run map:island  # карта 1 «Остров» из пресетов → as
 npm run map:td      # карта «Оборона куста» → assets/maps/td.json (map:td2 — поляна, map:td3 — замок)
 npm run prefabs     # библиотека пресетов → assets/prefabs/*.json и витрина assets/maps/prefabs.json
 npm run server      # сервер сетевой игры: http://localhost:8787, база ./data/malina.db
-npm run server:test # тесты сервера (node:test)
+npm run test:net    # тесты сервера, сети и симуляции без браузера (node:test), секунды
 ```
 
 ## Сервер сетевой игры
-`server/` — TypeScript без сборки (Node выполняет `.ts` сам) и SQLite (`node:sqlite`), WebSocket — `ws` (`wiki/design-multiplayer.md`). Модель хост-авторитарная: бой считает браузер хоста, сервер — вход по имени и токену, профили героев, комнаты лагеря (код, места, готовность, хост), ретрансляция сообщений боя, итог и история боёв. Переменные: `PORT`, `HOST`, `DB_PATH`, `STATIC=dist` (отдавать и игру), `MAPS`. Игра ищет сервер по `?server=http://…`, на своём адресе или на `localhost:8787`. Общий протокол — `src/net/protocol.ts`, клиент — `src/net/client.ts`. Общий бой (`src/net/coop.ts`): хост ведёт героев гостей по их вводу, мобы бьют ближайшего героя, гость видит бой по снимкам хоста и строит башни из общей казны.
+`server/` — TypeScript без сборки (Node выполняет `.ts` сам) и SQLite (`node:sqlite`), WebSocket — `ws` (`wiki/design-multiplayer.md`, `wiki/adr-005-server-authoritative-battle.md`). Модель серверно-авторитарная, как в Quake 3: сервер считает бой без рендера (`src/game/`, `src/sim/`, `src/headless.ts`) и шлёт дельты снимков по `/game`, клиент предсказывает своего героя (`src/cgame/net-battle.ts`); на `/ws` — вход по имени и токену, профили героев, комнаты лагеря (код, места, готовность, хост), чат, итог и история боёв с наградами от сервера. Переменные: `PORT`, `HOST`, `DB_PATH`, `STATIC=dist` (отдавать и игру), `MAPS`. Игра ищет сервер по `?server=http://…`, на своём адресе или на `localhost:8787`. Общий протокол — `src/net/protocol.ts` и `src/net/game-protocol.ts`, клиент лобби — `src/net/client.ts`. Быстрые тесты сети и симуляции без браузера — `npm run test:net`.
 
 ## Устройство кода
 - `src/level/` — уровни: `island-map.ts` генератор карты 1 «Остров», `level.ts` воксельная сетка и JSON, `palette.ts` палитра блоков, `obj.ts` и `shapes.ts` формы из OBJ, `atlas.ts` атлас текстур, `mesher.ts` рендер чанков и шейдер живой воды, `collide.ts` столкновения с высотой, `pathfind.ts` поиск пути героя по клику (A* по сетке 0,5 м с высотой), `playground-map.ts` генератор арены и витрины, `rooms.ts` комнаты-заготовки, `dungeon.ts` генератор этажа, `maps.ts` встроенные карты, `prefab-lib/` библиотека пресетов (типы, строители, запекание, постановка с поворотом), `prefabs-map.ts` витрина пресетов

@@ -13,7 +13,7 @@ import type { NetBattle, NetClient } from '../net/client.ts';
 import { MOB_FLAG, type Cmd, type GameClientMsg, type GameServerMsg, type HeroEnt, type MobEnt } from '../net/game-protocol.ts';
 import { CLOSE, PROTOCOL, type GearAction, type SeatInfo, type ServerMsg, type TdCommand } from '../net/protocol.ts';
 import { SnapshotView, type Delta, type EntityState } from '../net/snapshot.ts';
-import { WebSocketTransport } from '../net/ws-transport.ts';
+import { WebSocketTransport, type SocketLike } from '../net/ws-transport.ts';
 import type { SimEvent } from '../sim/events.ts';
 import type { SimTd } from '../sim/td.ts';
 import { SimTower } from '../sim/tower.ts';
@@ -163,7 +163,7 @@ export class NetBattleClient {
     const ws = new WebSocket(`${this.h.base.replace(/^http/, 'ws')}/game`);
     this.ws = ws;
     ws.onopen = () => {
-      const chan = new Channel<R, U>(new WebSocketTransport(ws), { clock: () => performance.now() });
+      const chan = new Channel<R, U>(new WebSocketTransport(ws as unknown as SocketLike), { clock: () => performance.now() });
       this.chan = chan;
       chan.onReliable = (m) => this.onReliable(m as GameServerMsg);
       chan.onUnreliable = (u) => this.onDelta(u as Delta<SimEvent>);
