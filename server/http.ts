@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize } from 'node:path';
-import { PROTOCOL, validName, type AuthReply } from '../src/net/protocol.ts';
+import { PROTOCOL, validName, type AuthReply, type FriendInfo } from '../src/net/protocol.ts';
 import type { Auth } from './auth.ts';
+import type { Friends } from './repo/friends.ts';
 import { nameKey, type PlayerRow, type Players } from './repo/players.ts';
 import type { Matches } from './repo/matches.ts';
 import type { Profiles } from './repo/profiles.ts';
@@ -15,7 +16,9 @@ import { checkProfile } from './validate.ts';
  * поэтому CORS открыт всем: игра открывается и с file://, и с localhost:5173
  */
 export interface HttpDeps {
-  auth: Auth; players: Players; profiles: Profiles; matches: Matches; rooms: RoomManager; maps: MapCatalog;
+  auth: Auth; players: Players; profiles: Profiles; matches: Matches; rooms: RoomManager; maps: MapCatalog; friends: Friends;
+  /** Игрок на связи (WebSocket открыт) */
+  online: (playerId: string) => boolean;
   /** Каталог собранной игры (dist) — отдавать на `/`; не задан — только API */
   staticDir?: string;
   now?: () => number;
@@ -89,6 +92,27 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
       return [200, d.matches.forPlayer(me(req).id, limit)];
     },
 
+    // друзья: добавить по имени, список (на связи ли, в какой комнате — войти по коду), убрать
+    'GET /api/friends': (req) => {
+      const list: FriendInfo[] = d.friends.list(me(req).id).map((f) => ({ ...f, online: d.online(f.playerId), room: d.rooms.roomOfPlayer(f.playerId) }));
+      return [200, list];
+    },
+
+    'POST /api/friends': async (req) => {
+      const p = me(req);
+      const body = (await readJson(req)) as { name?: unknown };
+      const other = typeof body.name === 'string' ? d.players.byName(body.name.trim()) : null;
+      if (!other) return [404, { error: 'Нет героя с таким именем' }];
+      if (other.id === p.id) return [400, { error: 'Это ты сам' }];
+      d.friends.add(p.id, other.id, now());
+      return [201, { playerId: other.id, name: other.name }];
+    },
+
+    'DELETE /api/friends': (req, url) => {
+      const id = url.searchParams.get('id') ?? '';
+      return d.friends.remove(me(req).id, id) ? [200, { ok: true }] : [404, { error: 'Нет такого друга' }];
+    },
+
     'GET /api/records': (_req, url) => {
       const map = url.searchParams.get('map') ?? '';
       if (!d.maps.has(map)) return [400, { error: 'Нет такой карты' }];
@@ -100,7 +124,7 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
     const url = new URL(req.url ?? '/', 'http://x');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     if (req.method === 'OPTIONS') { res.writeHead(204).end(); return; }
     const route = routes[`${req.method} ${url.pathname}`];
     if (!route) {

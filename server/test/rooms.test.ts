@@ -92,10 +92,18 @@ test('старт: только хост и только когда все гот
   assert.equal(bs.hostSeat, 0);
   assert.ok(bs.seed > 0);
   assert.equal((await h.p.next('battle.start')).matchId, bs.matchId);
-  // в идущий бой новых не пускают
+  // в идущий бой можно войти, пока есть место: опоздавший сразу получает battle.start, комната — в списке с «battle»
+  const code = (await h.p.state((m) => m.room.state === 'battle')).room.code;
+  assert.equal((await api(s, 'GET', '/api/rooms')).body[0].state, 'battle');
   const late = await hero('Опоздал');
-  late.p.send({ t: 'room.join', code: (await h.p.state((m) => m.room.state === 'battle')).room.code });
-  assert.equal((await late.p.next('error')).code, 'no-room');
+  late.p.send({ t: 'room.join', code });
+  const lb = await late.p.next('battle.start');
+  assert.equal(lb.matchId, bs.matchId);
+  assert.equal(lb.players, 3);
+  assert.equal((await h.p.state((m) => m.seats.length === 3)).seats[2].name, 'Опоздал');
+  // и награда опоздавшему засчитывается
+  late.p.send({ t: 'battle.loot', matchId: bs.matchId, berries: 5, xp: 0 });
+  await late.p.next('profile.updated');
 });
 
 test('ретрансляция: ввод гостя — только хосту, снимок хоста — всем гостям или одному месту', async () => {
@@ -191,20 +199,86 @@ test('обрыв связи: место держится, возврат с те
   assert.equal(st.room.hostId, g.id);
 });
 
-test('хост ушёл из боя — бой прерван, комната снова лобби; кик', async () => {
+test('хост ушёл из боя — бой продолжает следующий; ушли все — прерван; кик', async () => {
   s = await startServer();
-  const { heroes: [h, g1, g2] } = await party(3);
-  h.p.send({ t: 'room.kick', playerId: g2.id });
-  assert.equal((await g2.p.next('room.left')).reason, 'kick');
-  await h.p.state((m) => m.seats.length === 2);
+  const { heroes: [h, g1, g2, g3] } = await party(4);
+  h.p.send({ t: 'room.kick', playerId: g3.id });
+  assert.equal((await g3.p.next('room.left')).reason, 'kick');
+  await h.p.state((m) => m.seats.length === 3);
   h.p.send({ t: 'room.start' });
   const { matchId } = await g1.p.next('battle.start');
   h.p.send({ t: 'room.leave' });
-  const over = await g1.p.next('battle.over');
-  assert.deepEqual([over.matchId, over.result], [matchId, 'abandoned']);
-  const st = await g1.p.state((m) => m.room.state === 'lobby' && m.seats.length === 1);
+  // хост — следующий на связи, бой идёт
+  const nh = await g2.p.next('battle.host');
+  assert.deepEqual([nh.matchId, nh.hostSeat], [matchId, 1]);
+  const st = await g1.p.state((m) => m.seats.length === 2 && m.room.hostId === g1.id);
+  assert.equal(st.room.state, 'battle');
   assert.equal(st.room.hostId, g1.id);
+  // новый хост пишет снимки — гость их получает
+  g1.p.send({ t: 'relay', d: { t: 'snap', tick: 1 } });
+  assert.equal((await g2.p.next('relay')).from, 1);
+  // хост пропал (обрыв): место его держится коротко, потом хост — следующий
+  g1.p.close();
+  await g2.p.state((m) => !m.seats.find((x) => x.seat === 1)?.online);
+  s.clock.t += NET_LIMITS.hostGraceMs + 1;
+  s.app.rooms.sweep();
+  assert.equal((await g2.p.next('battle.host')).hostSeat, 2);
+  // последний ушёл — бой прерван, комната закрыта
+  g2.p.send({ t: 'room.leave' });
+  await g2.p.next('room.left');
+  assert.equal((s.app.db.prepare('SELECT result FROM matches WHERE id = ?').get(matchId) as { result: string }).result, 'abandoned');
 });
+
+test('«Ещё раз»: хост начинает новый бой тем же составом без готовности', async () => {
+  s = await startServer();
+  const { heroes: [h, g] } = await party(2);
+  h.p.send({ t: 'room.start' });
+  const first = await g.p.next('battle.start');
+  h.p.send({ t: 'battle.end', result: 'lost', wave: 3, rewards: [] });
+  await g.p.next('battle.over');
+  g.p.send({ t: 'room.again' });
+  assert.equal((await g.p.next('error')).code, 'not-host');
+  h.p.send({ t: 'room.again' });
+  const again = await g.p.next('battle.start');
+  assert.notEqual(again.matchId, first.matchId);
+  assert.equal(again.players, 2);
+});
+
+test('чат комнаты: всем в ней, с именем; пустое и частое — нет', async () => {
+  s = await startServer();
+  const { heroes: [h, g] } = await party(2);
+  g.p.send({ t: 'chat', text: '  привет,   хост!  ' });
+  const m = await h.p.next('chat');
+  assert.deepEqual([m.seat, m.text], [1, 'привет, хост!']);
+  assert.equal((await g.p.next('chat')).text, 'привет, хост!');
+  g.p.send({ t: 'chat', text: 'ещё' });
+  g.p.send({ t: 'chat', text: '   ' });
+  await sleep(100);
+  assert.ok(!h.p.inbox.some((x) => x.t === 'chat'), 'чаще chatMs и пустое не доходят');
+  s.clock.t += NET_LIMITS.chatMs + 1;
+  g.p.send({ t: 'chat', text: 'x'.repeat(500) });
+  assert.equal((await h.p.next('chat')).text.length, NET_LIMITS.chatMax);
+});
+
+test('друзья: добавить по имени, на связи и комната, убрать', async () => {
+  s = await startServer();
+  const a = await hero('Аня'), b = await hero('Боря');
+  assert.equal((await api(s, 'POST', '/api/friends', { name: 'нет такого' }, a.token)).status, 404);
+  assert.equal((await api(s, 'POST', '/api/friends', { name: 'Аня' }, a.token)).status, 400);
+  assert.equal((await api(s, 'POST', '/api/friends', { name: 'боря' }, a.token)).status, 201);
+  let list = (await api(s, 'GET', '/api/friends', undefined, a.token)).body;
+  assert.deepEqual(list.map((f: { name: string; online: boolean; room: unknown }) => [f.name, f.online, f.room]), [['Боря', true, null]]);
+  b.p.send({ t: 'room.create', map: 'td', max: 4, private: true });
+  const code = (await b.p.state()).room.code;
+  list = (await api(s, 'GET', '/api/friends', undefined, a.token)).body;
+  assert.equal(list[0].room.code, code);
+  b.p.close();
+  await sleep(50);
+  assert.equal((await api(s, 'GET', '/api/friends', undefined, a.token)).body[0].online, false);
+  assert.equal((await api(s, 'DELETE', `/api/friends?id=${b.id}`, undefined, a.token)).status, 200);
+  assert.deepEqual((await api(s, 'GET', '/api/friends', undefined, a.token)).body, []);
+});
+
 
 test('тот же игрок с другой вкладки вытесняет старое соединение', async () => {
   s = await startServer();
@@ -244,4 +318,38 @@ test('перезапуск: лобби остаётся, бой — abandoned, �
   assert.equal(s.app.rooms.roomOfPlayer(h.id), null);
   assert.equal(s.app.rooms.roomOfPlayer(g.id)?.hostId, g.id);
   assert.equal(s.app.rooms.roomOfPlayer(h2.id), null, 'пустая комната закрыта');
+});
+
+test('своя награда за бой: каждый сам, один раз, с потолком, в течение окна после конца', async () => {
+  s = await startServer();
+  const { heroes: [h, g] } = await party(2);
+  h.p.send({ t: 'room.start' });
+  const { matchId } = await g.p.next('battle.start');
+  // гость сдаёт малину ещё до конца боя (ушёл в лагерь) — засчитано
+  g.p.send({ t: 'battle.loot', matchId, berries: 120, xp: 50 });
+  const pu = await g.p.next('profile.updated');
+  assert.equal((pu.data as { berries: number }).berries, 250 + 120);
+  assert.equal((pu.data as { level: number }).level, 2);
+  // второй раз — нет
+  g.p.send({ t: 'battle.loot', matchId, berries: 120, xp: 0 });
+  await sleep(100);
+  assert.ok(!g.p.inbox.some((m) => m.t === 'profile.updated'));
+  // хост — после конца, с потолком по карте
+  h.p.send({ t: 'battle.end', result: 'won', wave: 10, rewards: [] });
+  await h.p.next('battle.over');
+  h.p.send({ t: 'battle.loot', matchId, berries: 10 ** 8, xp: 0 });
+  const hp = await h.p.next('profile.updated');
+  const cap = new MapCatalog(MAPS).maxBerries('td', 2);
+  assert.equal((hp.data as { berries: number }).berries, 250 + cap);
+  const mine = await api(s, 'GET', '/api/matches', undefined, g.token);
+  assert.equal(mine.body[0].berries, 120);
+  // окно вышло — не принимается
+  const { heroes: [h2] } = await party(1);
+  h2.p.send({ t: 'room.start' });
+  const b2 = await h2.p.next('battle.start');
+  h2.p.send({ t: 'battle.end', result: 'lost', wave: 1, rewards: [] });
+  await h2.p.next('battle.over');
+  s.clock.t += NET_LIMITS.lootMs + 1;
+  h2.p.send({ t: 'battle.loot', matchId: b2.matchId, berries: 5, xp: 0 });
+  assert.equal((await h2.p.next('error')).code, 'not-in-battle');
 });

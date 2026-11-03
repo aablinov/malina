@@ -12,6 +12,11 @@ export class Matches {
     for (const s of seats) ins.run(id, s.playerId, s.seat);
   }
 
+  /** Игрок вошёл в идущий бой — его строка (для награды) */
+  addPlayer(id: string, playerId: string, seat: number): void {
+    this.db.prepare('INSERT INTO match_players (match_id, player_id, seat) VALUES (?, ?, ?) ON CONFLICT DO NOTHING').run(id, playerId, seat);
+  }
+
   /** Закрыть матч; false — уже закрыт (повторный итог не засчитывается) */
   finish(id: string, result: MatchResult, wave: number, now: number): boolean {
     return !!this.db.prepare('UPDATE matches SET result = ?, wave = ?, ended_at = ? WHERE id = ? AND ended_at IS NULL').run(result, wave, now, id).changes;
@@ -19,6 +24,16 @@ export class Matches {
 
   reward(id: string, playerId: string, berries: number, xp: number): void {
     this.db.prepare('UPDATE match_players SET berries = ?, xp = ? WHERE match_id = ? AND player_id = ?').run(berries, xp, id, playerId);
+  }
+
+  /** Матч: карта, число игроков, конец (null — идёт) */
+  info(id: string): { map: string; players: number; ended_at: number | null } | null {
+    return (this.db.prepare('SELECT map, players, ended_at FROM matches WHERE id = ?').get(id) as { map: string; players: number; ended_at: number | null } | undefined) ?? null;
+  }
+
+  /** Награда игрока за бой — один раз; false — уже засчитана или игрока в матче нет */
+  loot(id: string, playerId: string, berries: number, xp: number): boolean {
+    return !!this.db.prepare('UPDATE match_players SET berries = ?, xp = ?, paid = 1 WHERE match_id = ? AND player_id = ? AND paid = 0').run(berries, xp, id, playerId).changes;
   }
 
   /** Бои, прерванные перезапуском сервера */

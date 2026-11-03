@@ -47,9 +47,9 @@ import { DEV_TOOLS, fromMenu, openEditor } from '../devflag';
 import { loadSettings, pixelRatio } from '../menu/settings';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel';
 import { BattleMenu } from '../menu/pause';
-import { markWon, NET, stashBerries, stashGear } from '../menu/session';
+import { markWon, NET, netBattleUrl, stashBerries, stashGear } from '../menu/session';
 import { netBattle } from '../net/client';
-import { CoopGuest, CoopHost } from '../net/coop';
+import { CoopGuest, CoopHost, type CoopHooks } from '../net/coop';
 import { campaignMap } from '../menu/campaign';
 import { TowerDefense, type Pad } from '../td/td';
 import { LavaFx } from '../td/lava-fx';
@@ -58,6 +58,9 @@ import type { TdSpec } from '../td/types';
 import { button, Panel, select, toggle } from './panel';
 import '../style.css';
 import './playground.css';
+
+/** Общий бой: звуки героев других игроков слышно ближе этого, м */
+const NET_HEAR = 14;
 
 declare global {
   interface Window { __malina?: unknown }
@@ -336,14 +339,12 @@ export function runPlayground(): void {
     hero.place(level.spawn[0], level.spawn[2], Math.atan2(Math.cos(a), Math.sin(a)), level.spawn[1]);
   }
   // снаряжение: оружие, броня, лук, артефакты, зелье, души и опыт (src/gear.ts)
+  const GEAR_SOUND = { shoot: sfx.dash, potion: sfx.ready, level: sfx.harvest, boom: sfx.blast, horn: sfx.shout, zap: sfx.zap, totem: sfx.plant, dash: sfx.dash, souls: sfx.wave, empty: sfx.empty, hit: sfx.hit } as const;
   const gear: Gear = new Gear({
     scene, fx, hero, terrain,
     targets: () => targets(),
     blast: (at, r, dmg) => props.blast(at, r, dmg),
-    sound: (k) => {
-      if (scripted) return;
-      ({ shoot: sfx.dash, potion: sfx.ready, level: sfx.harvest, boom: sfx.blast, horn: sfx.shout, zap: sfx.zap, totem: sfx.plant, dash: sfx.dash, souls: sfx.wave, empty: sfx.empty, hit: sfx.hit } as const)[k]();
-    },
+    sound: (k) => { if (!scripted) GEAR_SOUND[k](); },
     toast: (t) => toast(t),
     banner: (h) => hud.banner(h),
     quiet: () => scripted,
@@ -481,16 +482,17 @@ export function runPlayground(): void {
 
   /**
    * Удар меча: цели в дуге перед героем (и в волне добивающего), без стены между.
-   * who — герой гостя в общем бою (src/net/coop.ts): урон — базовый, без снаряжения, закалки и звука
+   * who и g — герой другого игрока и его снаряжение в общем бою (src/net/coop.ts): у хоста урон настоящий, у гостя — для вида;
+   * звук и тряска — только от своего
    */
-  function strike(s: Strike, who: Knight = hero): number {
+  function strike(s: Strike, who: Knight = hero, g: Gear = gear): number {
     const mine = who === hero;
     if (mine) lastStrike = { s, t: simTime };
     const fwd = new THREE.Vector3(Math.sin(s.yaw), 0, Math.cos(s.yaw));
     const finisher = s.step === 2;
     const impact = s.from.clone().addScaledVector(fwd, 1.5).setY(who.pos.y);
     const hit = new Set<Target>();
-    const waveR = SWORD.shockR * (mine ? gear.stats.waveMult : 1);
+    const waveR = who.tune.shockR * g.stats.waveMult;
     for (const t of targets()) {
       if (!t.alive || Math.abs(t.pos.y - who.pos.y) > 1.6) continue;
       const dx = t.pos.x - s.from.x, dz = t.pos.z - s.from.z, d = Math.hypot(dx, dz);
@@ -500,51 +502,40 @@ export function runPlayground(): void {
       if (terrain.blocked(s.from.x, s.from.z, t.pos.x, t.pos.z, who.pos.y + 0.5)) continue;
       hit.add(t);
     }
-    if (!mine) {
-      for (const t of hit) {
-        const dir = new THREE.Vector3(t.pos.x - s.from.x, 0, t.pos.z - s.from.z).normalize();
-        const point = t.pos.clone().setY(1.1).addScaledVector(dir, -t.radius);
-        t.hit(s.dmg, dir, point, s.knock);
-        fx.text(point, String(s.dmg), finisher ? 'crit' : '');
-        fx.burst(point, [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 8, { speed: 4, up: 2.5, size: 0.09, life: 0.45, glow: true, gravity: 8 });
-      }
-      if (finisher) fx.shock(impact.clone().setY(impact.y + 0.05), waveR, new THREE.Color(3.2, 2.4, 1.0), 0.4, 0.18);
-      return hit.size;
-    }
     let smite = false;
     for (const t of hit) {
       const dir = new THREE.Vector3(t.pos.x - s.from.x, 0, t.pos.z - s.from.z).normalize();
       const point = t.pos.clone().setY(1.1).addScaledVector(dir, -t.radius);
       // сила оружия и зачарования (src/gear.ts): острота, крит, огонь, отбрасывание
-      const d = gear.meleeDamage(s.dmg);
-      t.hit(d.dmg, dir, point, s.knock * gear.stats.knockMult);
+      const d = g.meleeDamage(s.dmg);
+      t.hit(d.dmg, dir, point, s.knock * g.stats.knockMult);
       fx.text(point, d.crit ? `${d.dmg}!` : String(d.dmg), finisher || d.crit ? 'crit' : '');
       fx.burst(point, finisher ? [new THREE.Color(3.4, 2.6, 1.1), '#e8c35a'] : [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 10, { speed: 4, up: 2.5, size: 0.09, life: 0.45, glow: true, gravity: 8 });
       // закалка: вспышка и эффект каждого зачарования (огонь, капли, души, разряд…) — src/weapon-arts.ts
-      gear.arts.onHitTarget(t, point, dir, d.crit, finisher);
-      gear.onHit(d.dmg, true, t.pos, t);
-      smite ||= !finisher && gear.stats.smiteChance > 0 && Math.random() < gear.stats.smiteChance;
+      g.arts.onHitTarget(t, point, dir, d.crit, finisher);
+      g.onHit(d.dmg, true, t.pos, t);
+      smite ||= !finisher && g.stats.smiteChance > 0 && Math.random() < g.stats.smiteChance;
     }
     if (smite) {
       // «Сокрушение»: обычный удар тоже даёт волну
-      const r = SWORD.shockR * 0.7;
+      const r = who.tune.shockR * 0.7;
       fx.shock(impact.clone().setY(impact.y + 0.05), r, new THREE.Color(2.4, 1.4, 3.4), 0.35, 0.15);
       for (const t of targets()) if (t.alive && !hit.has(t) && Math.hypot(t.pos.x - impact.x, t.pos.z - impact.z) - t.radius <= r) {
-        const v = Math.round(s.dmg * gear.stats.meleeMult * 0.5);
+        const v = Math.round(s.dmg * g.stats.meleeMult * 0.5);
         t.hit(v, new THREE.Vector3(t.pos.x - impact.x, 0, t.pos.z - impact.z).normalize(), t.pos.clone().setY(1), 1);
         fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
       }
     }
     // серп удара, шкала спец-удара, синергии закалки на добивающем
-    gear.arts.onStrike(s, [...hit], impact);
+    g.arts.onStrike(s, [...hit], impact);
     if (finisher) {
       // ударная волна: кольцо по земле, пыль и тряска
-      fx.shock(impact.clone().setY(impact.y + 0.05), SWORD.shockR * gear.stats.waveMult, new THREE.Color(3.2, 2.4, 1.0), 0.4, 0.18);
+      fx.shock(impact.clone().setY(impact.y + 0.05), who.tune.shockR * g.stats.waveMult, new THREE.Color(3.2, 2.4, 1.0), 0.4, 0.18);
       fx.burst(impact.clone().setY(impact.y + 0.1), ['#d8cfa8', '#b9ad88', '#9a8f70'], 14, { speed: 3.2, up: 2.2, size: 0.12, life: 0.5, gravity: 6 });
-      fx.shake = Math.max(fx.shake, 0.55);
-      if (!scripted) sfx.quake();
-    } else if (hit.size) fx.shake = Math.max(fx.shake, 0.18);
-    if (hit.size && !scripted) weaponHit(gear.arts.category, finisher);
+      if (mine) fx.shake = Math.max(fx.shake, 0.55);
+      if (mine && !scripted) sfx.quake();
+    } else if (hit.size && mine) fx.shake = Math.max(fx.shake, 0.18);
+    if (hit.size && !scripted && (mine || Math.hypot(who.pos.x - hero.pos.x, who.pos.z - hero.pos.z) < NET_HEAR)) weaponHit(g.arts.category, finisher);
     return hit.size;
   }
 
@@ -628,6 +619,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10'].includes(e.code)) e.preventDefault();
     initAudio();
     if (e.repeat) return;
+    // чат сетевого боя: пишем — игра клавиш не видит; Enter — открыть
+    if (coop?.typing) return;
+    if (coop && e.code === 'Enter' && !battle?.open) { e.preventDefault(); keys.clear(); coop.openChat(); return; }
     // пауза и итог боя из меню: клавиши — им
     if (battle?.key(e)) return;
     // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
@@ -935,7 +929,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   if (tdSpec && FROM_MENU) stashBerries(profile.data.berries);
   if (tdSpec) { stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); profile.tdKit(); }
   // сетевая игра (src/net/client.ts): страница боя заново входит на сервер — место в комнате держится.
-  // Общий бой (src/net/coop.ts): хост считает, гость ведёт своего героя и видит бой по снимкам; у гостя малина с павших не падает
+  // Общий бой (src/net/coop.ts): хост считает, гость ведёт своего героя и видит бой по снимкам;
+  // малина с врагов падает только у хоста — общая, кто подобрал, того и малина (гостю — кучками в снимке)
   const netRoom = FROM_MENU && !!query.get('room');
   const nb = netRoom ? netBattle() : null;
   const netGuest = !!nb && nb.seat !== nb.hostSeat;
@@ -947,8 +942,22 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   td?.setPlayers(bossPlayers);
   // без проверки /api/health: пока строится карта, страница занята и проверка не успевает; соединение само переподключается
   if (netRoom) NET.connect();
-  const coopHooks = nb && td ? { net: NET, battle: nb, scene, T, fx, hero, input, td, terrain, solids, strike, toast } : null;
-  const coop = coopHooks ? (netGuest ? new CoopGuest(coopHooks) : new CoopHost(coopHooks)) : null;
+  // снаряжение героя другого игрока: те же цели и взрывы, без подсказок и баннеров; звук — когда он рядом со своим
+  const hears = (k: Knight): boolean => !scripted && Math.hypot(k.pos.x - hero.pos.x, k.pos.z - hero.pos.z) < NET_HEAR;
+  const makeGear = (k: Knight, p: Profile): Gear => new Gear({
+    scene, fx, hero: k, terrain, targets: () => targets(), blast: (at, r, dmg) => props.blast(at, r, dmg),
+    sound: (kind) => { if (hears(k) && kind !== 'empty' && kind !== 'level') GEAR_SOUND[kind](); }, toast: () => {}, banner: () => {}, quiet: () => !hears(k),
+  }, p);
+  const inLava = (p: THREE.Vector3): boolean => !!lavaFx && level.nameAt(Math.round(p.x), Math.floor(p.y - 0.01), Math.round(p.z)) === 'lava';
+  const coopHooks: CoopHooks | null = nb && td ? {
+    net: NET, battle: nb, scene, T, fx, hero, gear, profile, input, bow: () => rmb && !scripted, td, props, terrain, solids, strike, makeGear, toast,
+    swing: (k, g, step) => { if (hears(k)) weaponSwing(g.arts.category, step); },
+    inLava, slowFor: (k) => Math.max(pack.slowFor(k), ...mobRooms.map((r) => r.pack.slowFor(k))),
+    replaced: (c) => { coop = c; },
+  } : null;
+  let coop: CoopHost | CoopGuest | null = coopHooks ? (netGuest ? new CoopGuest(coopHooks) : new CoopHost(coopHooks)) : null;
+  // сетевая комната начала новый бой («Ещё раз» у хоста) — на его страницу
+  if (netRoom) NET.on((m) => { if (m.t === 'battle.start' && m.matchId !== nb?.matchId) window.location.href = netBattleUrl(m.map, m.players, NET.room?.room.code ?? query.get('room') ?? ''); });
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
   function openInventory(): void { gear.cancelCast(); if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
@@ -990,7 +999,16 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   if (FROM_MENU) document.title = `Малина — ${tdSpec ? campaignMap(mapName).title : level.name}`;
   const battle = FROM_MENU ? new BattleMenu(document.body, new SettingsPanel(document.body), tdSpec ? campaignMap(mapName).title : level.name) : null;
   if (battle) {
-    battle.onRestart = () => { resetTargets(); if (hero.down) hero.revive(); else hero.hp = hero.maxHp; };
+    battle.onRestart = () => {
+      // сетевой бой: «Ещё раз» после боя — хост начинает новый всей комнате, посреди боя заново нельзя
+      if (netRoom) {
+        if (td?.state === 'play') toast('В сетевой игре заново — только после боя');
+        else if (NET.isHost) NET.again();
+        else toast('«Ещё раз» начинает хост');
+        return;
+      }
+      resetTargets(); if (hero.down) hero.revive(); else hero.hp = hero.maxHp;
+    };
     battle.settings.onChange = (st) => {
       postFX = st.postFX; sun.castShadow = st.shadows; helpOn = st.help;
       refreshControls();
@@ -1112,8 +1130,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       const trader = pad || wall ? null : merchants.find((m) => m.near(hero.pos));
       if (pad && td) { if (td.menuOpen) td.closeMenu(); else td.openMenu(pad); }
       else if (wall && td) td.repair(wall);
-      // у гостя общего боя казна — хоста: маркитант пока только у хоста
-      if (trader && !hero.down) { if (netGuest) toast('Маркитант — у хоста: казна общая'); else shop.show(trader.kind); }
+      if (trader && !hero.down) { shop.show(trader.kind); }
       const it = trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
     }
@@ -1191,7 +1208,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     const stop = fx.hitstop > 0 ? 0.04 : fx.slowmo > 0 ? 0.33 : 1;
     fx.updateReal(real);
     // инвентарь открыт — игра на паузе, как в одиночной MCD
-    if (!paused && !inventory.open && !shop.open && !battle?.pausing) acc += real * timeScale * stop;
+    // сетевой бой не встаёт на паузу: остальные играют дальше (пауза — только меню)
+    if (!paused && !inventory.open && !shop.open && (!battle?.pausing || netRoom)) acc += real * timeScale * stop;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     perf.begin();
     let n = 0;
@@ -1237,6 +1255,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     camera.position.copy(camTarget).addScaledVector(CAM_DIR, camDist * (1 + fx.zoom)).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh));
     camera.lookAt(camTarget.x, camTarget.y + 0.6, camTarget.z);
     look.follow(camTarget, camDist);
+    coop?.drawNames(camera);
     weather.update(real, camTarget);
     updateMotes(simTime);
 
@@ -1268,8 +1287,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   // ---------- Отладочный хук ----------
   window.__malina = {
-    /** Общий бой: CoopHost или CoopGuest (src/net/coop.ts), null — бой свой */
-    coop,
+    /** Общий бой: CoopHost или CoopGuest (src/net/coop.ts), null — бой свой; гость мог стать хостом */
+    get coop() { return coop; },
     mode: 'playground',
     hero, input, dummies, obstacles, camera, HERO, SWORD, props, level, terrain,
     /** Рендер уровня и декора */

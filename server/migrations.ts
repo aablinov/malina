@@ -65,4 +65,17 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX match_players_player ON match_players(player_id);
   `,
+  // 002_loot: награда игрока за бой (battle.loot) засчитана — второй раз не принимается
+  `
+  ALTER TABLE match_players ADD COLUMN paid INTEGER NOT NULL DEFAULT 0;
+  `,
+  // 003_friends: друзья — список «добавил по имени», в одну сторону
+  `
+  CREATE TABLE friends (
+    player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    friend_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (player_id, friend_id)
+  );
+  `,
 ];

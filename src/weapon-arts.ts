@@ -4,7 +4,6 @@ import type { Knight, SpecialMove, Strike, SwingLook } from './knight';
 import type { Terrain } from './level/collide.ts';
 import type { Target } from './target';
 import { SwordTrail } from './trail';
-import { SWORD } from './tuning';
 import { RESONANCE, SPECIAL_HITS, synergiesOf, TEMPER_LOOK, WEAPON_SPECIAL, type MeleeEnchant, type Synergy, type TemperSlot } from './temper';
 import { buildWeaponModel, disposeWeaponModel, type WeaponCategory, type WeaponDef } from './weapons';
 import { SYNERGY_FX } from './weapon-synergies';
@@ -217,7 +216,7 @@ export class WeaponArts {
   proc(at: THREE.Vector3, yaw: number, hits: Target[], mult: number): void {
     if (!this.syn.length) return;
     const res = this.syn.length >= 3;
-    const base = SWORD.swings[2].dmg * this.h.meleeMult() * mult * (res ? 0.7 : 1);
+    const base = this.h.hero.tune.swings[2].dmg * this.h.meleeMult() * mult * (res ? 0.7 : 1);
     for (const [i, s] of this.syn.entries()) {
       const a = this.temper.find((t) => t.id === s.pair[0])!, b = this.temper.find((t) => t.id === s.pair[1])!;
       const power = (a.tier + b.tier) / 6;
@@ -258,13 +257,13 @@ export class WeaponArts {
   private cue(c: SpecialCue): void { if (!this.h.quiet?.()) specialSound(this.category, c); }
 
   /** Урон спец-удара: от добивающего оружия */
-  private B(k: number): number { return Math.max(1, Math.round(SWORD.swings[2].dmg * this.h.meleeMult() * k)); }
+  private B(k: number): number { return Math.max(1, Math.round(this.h.hero.tune.swings[2].dmg * this.h.meleeMult() * k)); }
 
   private specialRun(cat: WeaponCategory, yaw: number): SpecialRun {
     const hero = this.h.hero, fx = this.h.fx, c = this.colors[0], c2 = this.colors[1 % this.colors.length];
     const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const start = hero.pos.clone();
-    const R = SWORD.swings[0].range + 0.6;
+    const R = this.h.hero.tune.swings[0].range + 0.6;
     const ground = (p: THREE.Vector3) => p.clone().setY(hero.pos.y + 0.06);
     switch (cat) {
       case 'меч': {
@@ -385,7 +384,7 @@ export class WeaponArts {
         return { move: 'reap', dur: 0.8, events: [[0.45, reap(true)], [0.72, reap(false)], [0.86, () => { this.cue('end'); this.proc(hero.pos.clone(), hero.yaw, this.near(hero.pos, 4), 1); }]] };
       }
       case 'катана': {
-        const reach = SWORD.swings[2].range + 1.6;
+        const reach = this.h.hero.tune.swings[2].range + 1.6;
         return {
           move: 'iai', dur: 0.95, events: [
             [0.12, () => { fx.darken(0.45); this.swirl(hero.pos.clone().setY(hero.pos.y + 0.4), c, 1.4, 14, true); }],
@@ -411,7 +410,7 @@ export class WeaponArts {
         };
       }
       case 'великий меч': {
-        const R2 = SWORD.swings[0].range + 0.8;
+        const R2 = this.h.hero.tune.swings[0].range + 0.8;
         const ring = (i: number) => () => {
           this.area(hero.pos, R2, this.B(0.55), 2, true);
           fx.ring(ground(hero.pos), R2, (i % 2 ? c2 : c).clone(), 0.35, 0.22);
@@ -456,7 +455,7 @@ export class WeaponArts {
     for (let i = 0; i < n; i++) events.push([0.12 + (i / n) * 0.76, () => {
       const col = L[i % 2], f = this.dir(hero.yaw);
       if (cat === 'рапира') {
-        const a = hero.yaw + (Math.random() - 0.5) * 0.3, R2 = SWORD.swings[0].range + 0.6;
+        const a = hero.yaw + (Math.random() - 0.5) * 0.3, R2 = this.h.hero.tune.swings[0].range + 0.6;
         fx.line(hero.pos.clone().addScaledVector(f, 0.3), a, R2, col.clone().multiplyScalar(0.6), 0.22, 0.12, hero.pos.y + 1);
         for (const t of this.onSegment(hero.pos, hero.pos.clone().addScaledVector(this.dir(a), R2), 0.6)) this.hurt(t, this.B(0.32), hero.pos, 0.3, true);
       } else {
@@ -472,7 +471,7 @@ export class WeaponArts {
     events.push([0.94, () => {
       const f = this.dir(hero.yaw), at = hero.pos.clone().addScaledVector(f, 1.4);
       if (cat === 'рапира') {
-        const R2 = SWORD.swings[2].range + 1.5;
+        const R2 = this.h.hero.tune.swings[2].range + 1.5;
         fx.line(hero.pos.clone(), hero.yaw, R2, L[0].clone().multiplyScalar(0.9), 0.6, 0.3, hero.pos.y + 1);
         fx.spray(at.clone().setY(hero.pos.y + 1), f, [L[0], L[1]], 18, { speed: 9, spread: 0.2, life: 0.35 });
         const v = this.onSegment(hero.pos, hero.pos.clone().addScaledVector(f, R2), 0.7);

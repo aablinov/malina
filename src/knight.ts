@@ -221,6 +221,11 @@ export class Knight {
   private downT = 0;
 
   /** Удар достиг середины: вернуть, сколько целей задето (для заминки) */
+  /**
+   * Числа удара оружия в руке (комбо, взмахи, волна): у своего героя — общий SWORD (его правит панель F1 и applyWeapon),
+   * у героев других игроков в общем бою — своя копия, чтобы чужое оружие не меняло удары своего
+   */
+  tune: typeof SWORD = SWORD;
   onStrike?: (s: Strike) => number;
   onSwing?: (step: number) => void;
   onLand?: (fallSpeed: number) => void;
@@ -642,7 +647,7 @@ export class Knight {
 
     // выпад во время удара
     if (this.combo >= 0 && this.hitStopT <= 0) {
-      const S = SWORD.swings[this.combo];
+      const S = this.tune.swings[this.combo];
       const a = S.windup, b = S.windup + S.strike;
       const k0 = (this.swingT - dt) / S.time, k1 = this.swingT / S.time;
       const lunge = (smooth((k1 - a) / (b - a)) - smooth((k0 - a) / (b - a))) * S.lunge;
@@ -723,13 +728,13 @@ export class Knight {
     this.attackCd = Math.max(0, this.attackCd - dt);
     if (this.combo < 0) {
       this.sinceSwing += dt;
-      if (this.sinceSwing > SWORD.comboWindow) this.lastCombo = -1;
+      if (this.sinceSwing > this.tune.comboWindow) this.lastCombo = -1;
       if (input.attack && !this.rolling && this.attackCd <= 0) this.startSwing((this.lastCombo + 1) % 3, aimYaw);
       return;
     }
     // заминка при попадании: удар замирает на миг
     if (this.hitStopT > 0) { this.hitStopT -= dt; return; }
-    const S = SWORD.swings[this.combo];
+    const S = this.tune.swings[this.combo];
     this.swingT += dt;
     const k = this.swingT / S.time;
     if (input.attack && k > 0.25) this.queued = true;
@@ -737,12 +742,12 @@ export class Knight {
       this.struck = true;
       const from = this.pos.clone().setY(this.pos.y + 1);
       const n = this.onStrike?.({ step: this.combo, from, yaw: this.yaw, range: S.range, half: THREE.MathUtils.degToRad(S.arc / 2), dmg: S.dmg, knock: S.knock }) ?? 0;
-      if (n > 0) this.hitStopT = SWORD.hitStop * (this.combo === 2 ? 1.8 : 1);
+      if (n > 0) this.hitStopT = this.tune.hitStop * (this.combo === 2 ? 1.8 : 1);
     }
-    if (this.queued && this.combo < 2 && k >= SWORD.chainFrom) { this.startSwing(this.combo + 1, aimYaw); return; }
+    if (this.queued && this.combo < 2 && k >= this.tune.chainFrom) { this.startSwing(this.combo + 1, aimYaw); return; }
     if (k >= 1) {
       this.lastCombo = this.combo;
-      if (this.combo === 2) { this.attackCd = SWORD.finisherCd; this.lastCombo = -1; }
+      if (this.combo === 2) { this.attackCd = this.tune.finisherCd; this.lastCombo = -1; }
       this.combo = -1;
       this.sinceSwing = 0;
     }
@@ -759,7 +764,7 @@ export class Knight {
         this.sampleOff();
       }
     } else if (this.combo >= 0) {
-      const S = SWORD.swings[this.combo];
+      const S = this.tune.swings[this.combo];
       const k = this.swingT / S.time;
       if (k >= S.windup * 0.8 && k <= S.windup + S.strike + 0.08) {
         const { base, tip } = this.blade();
@@ -783,7 +788,7 @@ export class Knight {
 
   /** Поза удара по доле k: замах → удар → возврат */
   private swingPose(step: number, k: number): Pose {
-    const S = SWORD.swings[step], [from, to] = STYLES[this.style][step];
+    const S = this.tune.swings[step], [from, to] = STYLES[this.style][step];
     const a = S.windup, b = S.windup + S.strike;
     if (k < a) return lerpPose(IDLE, from, smooth(k / a));
     if (k < b) return lerpPose(from, to, outCubic((k - a) / (b - a)));
@@ -847,7 +852,7 @@ export class Knight {
     // руки и корпус: удар или ходьба
     let pose: Pose;
     if (spc) pose = this.specialPose(spc.move, spc.t / spc.dur);
-    else if (this.combo >= 0) pose = this.swingPose(this.combo, this.swingT / SWORD.swings[this.combo].time);
+    else if (this.combo >= 0) pose = this.swingPose(this.combo, this.swingT / this.tune.swings[this.combo].time);
     else {
       pose = { ...IDLE };
       pose.ax += -s * 0.35;

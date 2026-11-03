@@ -436,6 +436,8 @@ export interface Pickup {
   landed?: boolean;
   /** Что именно (предмет снаряжения) — для сцены */
   data?: unknown;
+  /** Номер кучки (снимок общего боя, src/net/coop.ts) */
+  id?: number;
 }
 
 const LOOT_LOOK: Record<Exclude<LootKind, 'berry'>, { color: string; glow: [number, number, number]; size: [number, number, number] }> = {
@@ -595,6 +597,14 @@ export class Props {
   supplies: SupplyCrate[] = [];
   terminals: HealthTerminal[] = [];
   readonly pickups: Pickup[] = [];
+  /**
+   * Общий бой у хоста (src/net/coop.ts): герои других игроков тоже подбирают малину — летит к ближайшему,
+   * кто подобрал, тому и малина (take)
+   */
+  readonly collectors: { readonly pos: THREE.Vector3; readonly down: boolean; take(n: number): void }[] = [];
+  private pickSeq = 0;
+  /** Гость общего боя: кучки малины хоста — только для вида, подбирает хост */
+  private readonly mirrored = new Map<number, { mesh: THREE.Group; to: THREE.Vector3; t: number }>();
   /** Растёт, когда меняются препятствия (ящик разбит, бочка взорвалась) — пора пересобрать навигацию */
   version = 0;
   private solidsCache: Obstacle[] = [];
@@ -816,17 +826,24 @@ export class Props {
           this.fx.particle({ pos: p.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, this.rand() * 0.3, Math.sin(a) * r)), vel: new THREE.Vector3(0, 0.7 + this.rand() * 0.6, 0), life: 0.9, size: 0.05, color: this.rand() < 0.3 ? new THREE.Color(3, 3, 3) : ud.glow, gravity: -0.4, spin: 3 });
         }
       }
-      const d = Math.hypot(hero.pos.x - p.pos.x, hero.pos.z - p.pos.z);
+      // малина летит к ближайшему герою на ногах: свой или другого игрока (общий бой)
+      let to: { readonly pos: THREE.Vector3; readonly down: boolean } = hero, d = hero.down ? Infinity : Math.hypot(hero.pos.x - p.pos.x, hero.pos.z - p.pos.z);
+      if (p.kind === 'berry') for (const c of this.collectors) {
+        if (c.down) continue;
+        const dc = Math.hypot(c.pos.x - p.pos.x, c.pos.z - p.pos.z);
+        if (dc < d) { d = dc; to = c; }
+      }
       const reach = p.kind === 'berry' ? (this.harvestT > 0 ? Infinity : this.berryReach) : 1.7;
-      if (p.lock <= 0 && !hero.down && d < reach) {
+      if (p.lock <= 0 && !to.down && d < reach) {
         // притягивается к герою, всё быстрее
-        const pull = hero.pos.clone().setY(0.6).sub(p.pos).setLength((reach === Infinity ? 14 + d : Math.min(10, 3 + (reach - d) * 6)) * dt);
+        const pull = to.pos.clone().setY(0.6).sub(p.pos).setLength((reach === Infinity ? 14 + d : Math.min(10, 3 + (reach - d) * 6)) * dt);
         p.pos.add(pull);
         if (d < 0.6) {
           this.scene.remove(p.mesh);
           disposeOwned(p.mesh);
           this.pickups.splice(i, 1);
-          this.hooks.give(p.kind, p.amount, p.pos, p.data);
+          if (to === hero) this.hooks.give(p.kind, p.amount, p.pos, p.data);
+          else (to as (typeof this.collectors)[number]).take(p.amount);
           this.collect(p);
           continue;
         }
@@ -869,10 +886,49 @@ export class Props {
     this.drop('berry', amount, at.clone().setY(0.8), new THREE.Vector3((this.rand() - 0.5) * 2, 4, (this.rand() - 0.5) * 2), 0.4);
   }
 
+  /** Хост общего боя: кучки малины на земле и в полёте — номер и место */
+  berryPiles(): [number, number, number, number][] {
+    return this.pickups.filter((p) => p.kind === 'berry').map((p) => [p.id ?? 0, Math.round(p.pos.x * 100) / 100, Math.round(p.pos.y * 100) / 100, Math.round(p.pos.z * 100) / 100]);
+  }
+
+  /** Гость общего боя: кучки малины со снимка хоста — появляются, летят к месту, пропавшие (кто-то подобрал) гаснут искрой */
+  mirrorBerries(list: [number, number, number, number][]): void {
+    const seen = new Set<number>();
+    for (const [id, x, y, z] of list) {
+      seen.add(id);
+      let m = this.mirrored.get(id);
+      if (!m) {
+        const mesh = lootMesh('berry');
+        mesh.position.set(x, y, z);
+        this.scene.add(mesh);
+        m = { mesh, to: new THREE.Vector3(), t: this.rand() * 6 };
+        this.mirrored.set(id, m);
+      }
+      m.to.set(x, y, z);
+    }
+    for (const [id, m] of this.mirrored) {
+      if (seen.has(id)) continue;
+      this.fx.flash(m.mesh.position.clone(), BERRY_GLOW, 1.6, 0.2);
+      this.scene.remove(m.mesh);
+      disposeOwned(m.mesh);
+      this.mirrored.delete(id);
+    }
+  }
+
+  /** Кадр кучек со снимка: к месту хоста, покачиваются и крутятся */
+  mirrorStep(dt: number): void {
+    for (const m of this.mirrored.values()) {
+      m.t += dt;
+      m.mesh.position.lerp(m.to, Math.min(1, dt * 12));
+      if (m.to.y <= 0.15) m.mesh.position.y = 0.2 + Math.sin(m.t * 3) * 0.05;
+      m.mesh.rotation.y += dt * 1.8;
+    }
+  }
+
   private drop(kind: LootKind, amount: number, pos: THREE.Vector3, vel: THREE.Vector3, lock: number, mesh = lootMesh(kind), data?: unknown): Pickup {
     mesh.position.copy(pos);
     this.scene.add(mesh);
-    const p: Pickup = { kind, amount, pos, vel, mesh, lock, t: this.rand() * 6, data };
+    const p: Pickup = { kind, amount, pos, vel, mesh, lock, t: this.rand() * 6, data, id: ++this.pickSeq };
     this.pickups.push(p);
     return p;
   }

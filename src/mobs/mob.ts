@@ -100,6 +100,16 @@ export abstract class Mob extends Boss {
   puppet = false;
   readonly pupTo = new THREE.Vector3();
   pupYaw = 0;
+  /** Кукла: куда целится (по ней — замах, метки и удары, только для вида), атака со снимка и её номер */
+  readonly pupAim = new THREE.Vector3();
+  pupAttack = '';
+  pupSeq = 0;
+  /** Кукла: оглушена, замедлена, воодушевлена, заметила героя — со снимка (искры и лёд — те же, что у живого) */
+  pupDaze = false;
+  pupAlerted = false;
+  private seenSeq = 0;
+  /** Номер атаки: растёт с каждой — кукла гостя по нему начинает ту же атаку заново */
+  attackSeq = 0;
   protected flyY = 0;
   private dazeFor = 0;
   private deathT = 0;
@@ -114,6 +124,7 @@ export abstract class Mob extends Boss {
     const base = this.h, me = this, local = base.hero;
     const hero = new Proxy(base.hero, {
       get(t, p) {
+        if (me.puppet) { if (p === 'pos') return me.pupAim; if (p === 'down') return false; }
         const f = me.focus;
         if (f?.alive) { if (p === 'pos') return f.pos; if (p === 'down') return false; }
         const k = me.prey ?? t;
@@ -124,6 +135,8 @@ export abstract class Mob extends Boss {
     (this as unknown as { h: typeof base }).h = {
       ...base, hero,
       hurtHero: (dmg, from, knock) => {
+        // кукла бьёт только для вида: урон считает хост
+        if (me.puppet) return;
         const f = me.focus;
         if (f?.alive) f.hurt(dmg, from);
         else if (me.prey && me.prey !== local) party.hurt?.(me.prey, dmg * me.dmgMult, from, knock);
@@ -237,7 +250,11 @@ export abstract class Mob extends Boss {
     if (Math.random() < 0.3) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.4, this.topY), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, 1.2, 0), life: 0.5, size: 0.1, color: HEAL, gravity: 0 });
   }
 
-  protected go(s: MobState, attack = ''): void { this.state = s; this.attack = attack; this.st = 0; this.hitDone = false; }
+  protected go(s: MobState, attack = ''): void { this.state = s; this.attack = attack; this.st = 0; this.hitDone = false; if (s === 'attack') this.attackSeq++; }
+  /** Общий бой: герой отряда, за которым гонится (null — свой герой хоста) */
+  get target(): Knight | null { return this.prey; }
+  /** Куда целится (герой отряда или приманка) — для снимка хоста */
+  get aimPos(): THREE.Vector3 { return this.h.hero.pos; }
   chill(k: number, sec: number): void {
     if (this.dead) return;
     this.chillK = this.chillT > 0 ? Math.max(this.chillK, k) : k;
@@ -268,16 +285,9 @@ export abstract class Mob extends Boss {
   update(dt: number): void {
     this.st += dt;
     this.ward -= dt;
-    if (this.chillT > 0) {
-      this.chillT -= dt;
-      if (Math.random() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.2, this.topY), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, -0.4, 0), life: 0.5, size: 0.07, color: FROST, gravity: 0 });
-    }
-    if (this.rally > 0) {
-      this.rally -= dt;
-      if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
-    }
+    this.auraFx(dt);
     // цель: ближайшая из героя и приманок; меняем только вне атаки, чтобы удар не перескочил на полпути
-    if (this.state !== 'attack') { this.prey = party.allies.length ? nearestHero(this.pos, this.mh.hero) : null; this.focus = null; this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro, this.hunter, this.reachY); }
+    if (this.state !== 'attack') { if (party.allies.length) { const n = nearestHero(this.pos, this.mh.hero); this.prey = n === this.mh.hero ? null : n; } else this.prey = null; this.focus = null; this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro, this.hunter, this.reachY); }
     const hero = this.h.hero.pos;
     const dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, dist = Math.hypot(dx, dz);
     const rel = wrap(Math.atan2(dx, dz) - this.yaw);
@@ -309,7 +319,7 @@ export abstract class Mob extends Boss {
         if (this.act(this.attack, this.st, dt, dist) && this.state === 'attack') { this.cd = this.rest(); this.go('idle'); }
         break;
       case 'daze':
-        if (Math.random() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(this.time * 7) * 0.4, this.topY + 0.25, Math.sin(this.time * 7) * 0.4)), vel: new THREE.Vector3(0, 0.2, 0), life: 0.35, size: 0.08, color: C(3.4, 3, 1.2), gravity: 0 });
+        this.dazeFx();
         if (this.st > this.dazeFor) { this.cd = 0.4; this.go('idle'); }
         break;
       case 'dead': this.dying(dt); break;
@@ -330,22 +340,56 @@ export abstract class Mob extends Boss {
     this.place();
   }
 
+  /** Кукла стала живым врагом (гость стал хостом): мозг включается с того, что было в снимке */
+  unpuppet(): void {
+    this.puppet = false;
+    this.alerted = this.pupAlerted;
+    if (!this.dead && this.state !== 'spawn') { this.field.clear(); this.go('idle'); }
+  }
+
+  /** Искры холода и знамени (у живого и у куклы) */
+  private auraFx(dt: number): void {
+    if (this.chillT > 0) {
+      this.chillT -= dt;
+      if (Math.random() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.2, this.topY), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, -0.4, 0), life: 0.5, size: 0.07, color: FROST, gravity: 0 });
+    }
+    if (this.rally > 0) {
+      this.rally -= dt;
+      if (Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), this.topY + 0.1, rand(-0.3, 0.3))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.5, size: 0.08, color: RASP, gravity: 0 });
+    }
+  }
+
+  /** Звёздочки оглушения над головой */
+  private dazeFx(): void {
+    if (Math.random() < 0.2) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(this.time * 7) * 0.4, this.topY + 0.25, Math.sin(this.time * 7) * 0.4)), vel: new THREE.Vector3(0, 0.2, 0), life: 0.35, size: 0.08, color: C(3.4, 3, 1.2), gravity: 0 });
+  }
+
   /** Кадр куклы (гость общего боя): к месту и взгляду со снимка, шаг и поза — свои; пал — рассыпается, как живой */
   puppetStep(dt: number): void {
     this.st += dt;
+    this.auraFx(dt);
+    if (this.pupDaze && this.state !== 'dead') this.dazeFx();
     let walk = false;
     if (this.state === 'spawn') {
       this.body.position.y = -this.topY * Math.max(0, 1 - this.st / 0.45);
       if (this.st > 0.45) { this.body.position.y = 0; this.go('idle'); }
     } else if (this.state === 'dead') this.dying(dt);
     else {
+      // атака со снимка: та же у куклы — замах, метки на полу, выпады; удары никого не ранят
+      if (this.pupAttack && this.pupSeq !== this.seenSeq) { this.seenSeq = this.pupSeq; this.go('attack', this.pupAttack); }
       const dx = this.pupTo.x - this.pos.x, dz = this.pupTo.z - this.pos.z, d = Math.hypot(dx, dz), k = d > 4 ? 1 : Math.min(1, dt * 10);
       this.pos.x += dx * k; this.pos.z += dz * k;
       this.flyY += (this.pupTo.y - this.flyY) * Math.min(1, dt * 10);
       this.yaw += wrap(this.pupYaw - this.yaw) * Math.min(1, dt * 10);
-      walk = d > 0.03;
-      this.state = walk ? 'walk' : 'idle';
+      if (this.state === 'attack') {
+        const dist = Math.hypot(this.pupAim.x - this.pos.x, this.pupAim.z - this.pos.z);
+        if (this.act(this.attack, this.st, dt, dist) && this.state === 'attack') this.go('idle');
+      } else {
+        walk = d > 0.03;
+        this.state = walk ? 'walk' : 'idle';
+      }
     }
+    this.field.update(dt);
     this.tickLook(dt, this.state === 'dead' ? Math.max(0.1, 1 - this.st * 2) : 1);
     this.animate(dt, walk);
     this.place();

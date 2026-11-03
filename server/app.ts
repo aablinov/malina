@@ -6,6 +6,7 @@ import { Hub } from './hub.ts';
 import { MapCatalog } from './maps.ts';
 import { Matches } from './repo/matches.ts';
 import { Players } from './repo/players.ts';
+import { Friends } from './repo/friends.ts';
 import { Profiles } from './repo/profiles.ts';
 import { Rooms } from './repo/rooms.ts';
 import { RoomManager } from './rooms.ts';
@@ -38,7 +39,8 @@ export function createApp(cfg: AppConfig): App {
   const auth = new Auth(players);
   const rooms = new RoomManager({ db, rooms: roomRepo, matches, profiles, maps, nameOf: (id) => players.byId(id)?.name ?? '?', now: cfg.now });
   const hub = new Hub({ auth, players, rooms, now: cfg.now });
-  const http = createServer(httpHandler({ auth, players, profiles, matches, rooms, maps, staticDir: cfg.staticDir, now: cfg.now }));
+  const friends = new Friends(db);
+  const http = createServer(httpHandler({ auth, players, profiles, matches, rooms, maps, friends, online: (id) => hub.isOnline(id), staticDir: cfg.staticDir, now: cfg.now }));
   http.on('upgrade', (req, socket, head) => {
     if (new URL(req.url ?? '/', 'http://x').pathname !== '/ws') { socket.destroy(); return; }
     hub.wss.handleUpgrade(req, socket, head, (ws) => hub.wss.emit('connection', ws, req));
