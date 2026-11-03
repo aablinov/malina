@@ -1,6 +1,6 @@
 import type { Level } from './level.ts';
 import { decorDef } from './decor.ts';
-import { obstacle, type Obstacle } from '../collision';
+import { obstacle, type Obstacle } from '../collision.ts';
 import { DIRS } from './obj.ts';
 
 /**

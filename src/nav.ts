@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Obstacle } from './collision';
+import type { Obstacle } from './collision.ts';
 
 /**
  * Навигационная сетка для врагов: клетки 0,5 м, препятствия раздуты на радиус тела.

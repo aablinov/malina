@@ -1,4 +1,4 @@
-import type { TdWave } from './types';
+import type { TdWave } from './types.ts';
 
 /**
  * Волны обороны куста (wiki/design-tower-defence.md, раздел 5): десять волн по трём дорогам — west, north, east.

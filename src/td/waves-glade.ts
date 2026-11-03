@@ -1,4 +1,4 @@
-import type { TdWave } from './types';
+import type { TdWave } from './types.ts';
 
 /**
  * Волны кристальной поляны (wiki/design-tower-defence.md, раздел 8): вторая карта, на уровень сильнее — двенадцать волн,

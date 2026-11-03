@@ -1,10 +1,18 @@
 # Тесты: как запускать Playwright
 
-> Версия 1 · 24.10.2026
+> Версия 2 · 04.11.2026
 
 Тесты — `tests/playground.spec.ts`, конфиг — `playwright.config.ts`. Они открывают собранный `dist/index.html` без сервера, WebGL — программный (SwiftShader), симуляцию гоняют через `window.__malina`.
 
-## Рецепт (работает у агентов и в песочнице)
+## Быстрые тесты сети и симуляции — `npm run test:net`
+
+```bash
+mise exec -- npm run typecheck && mise exec -- npm run test:net
+```
+
+`server/test/*.test.ts` на `node:test` без браузера: сервер (вход, комнаты, итог), протокол и канал, кодек снимков, симуляция боя с сидом, матч над петлёй в памяти — секунды, не минуты. Гонять перед каждым коммитом; Playwright — только при правках вида и UI и в конце этапа. `sim-boundary.test.ts` — страж: модули `src/sim`, `src/net`, `src/game` общие для сервера и браузера, грузятся в Node и не трогают DOM, сцену three, FX, звук, `Math.random` и часы (`tsconfig.server.json` проверяет их без `lib: DOM`).
+
+## Рецепт Playwright (работает у агентов и в песочнице)
 
 ```bash
 mise exec -- npm run build

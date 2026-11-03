@@ -18,7 +18,8 @@
     "map:td3": "node scripts/export-map.ts td3",
     "prefabs": "node scripts/gen-prefabs.ts",
     "server": "node server/main.ts",
-    "server:test": "node --test 'server/test/*.test.ts'"
+    "server:test": "node --test 'server/test/*.test.ts'",
+    "test:net": "node --test 'server/test/*.test.ts'"
   },
   "dependencies": {
     "three": "^0.169.0",

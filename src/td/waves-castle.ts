@@ -1,4 +1,4 @@
-import type { TdWave } from './types';
+import type { TdWave } from './types.ts';
 
 /**
  * Волны осады замка — карта «Замок на лугу» `td3` (wiki/design-tower-defence.md, раздел 9). Враги идут с четырёх сторон:

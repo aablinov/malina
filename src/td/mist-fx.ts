@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { glowTex } from '../loot-look';
-import type { TdLane } from './types';
+import type { TdLane, TdMist } from './types.ts';
 
 /**
  * Туман у лагерей врагов (wiki/design-tower-defence.md, раздел 9): точки выхода не видны ни со двора, ни со стен.
@@ -8,7 +8,7 @@ import type { TdLane } from './types';
  * что у дымки лавы, но обычное смешивание, чтобы закрывать, а не светить) на трёх высотах; плотнее к центру,
  * медленно плывут и дышат. Включается полем `meta.td.mist` (`TdMist`).
  */
-export interface TdMist { radius: number; /** Плотность 0..1 */ density?: number; color?: string }
+export type { TdMist };
 
 interface Puff { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; base: number; phase: number; cx: number; cz: number; r: number; a: number; ay: number; ry: number }
 
