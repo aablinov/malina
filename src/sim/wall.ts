@@ -117,5 +117,28 @@ export class SimWall implements Decoy {
     if (was) this.onRepair?.();
   }
 
+  /** Зеркало сетевого боя: состояние со снимка сервера — блоки пролома и починки повторяются на своём уровне, без событий */
+  mirror(hp: number, dead: boolean, cracked: boolean): void {
+    if (dead && !this.dead) {
+      this.dead = true;
+      if (this.kind === 'wall') {
+        for (const c of this.cells) {
+          this.level.set(c.x, c.y, c.z, 'air');
+          if (c.y === this.spec.y0 && hash2(c.x, c.z, 32) < 0.4) this.level.set(c.x, c.y, c.z, hash2(c.x, c.z, 33) < 0.5 ? 'cobble_slab' : 'bricks_slab');
+        }
+        this.w.h.levelChanged?.();
+      }
+      this.onBreak?.();
+    } else if (!dead && this.dead) {
+      this.dead = false;
+      this.cracked = false;
+      if (this.kind === 'wall') { for (const c of this.cells) this.level.set(c.x, c.y, c.z, c.name, c.rot); this.w.h.levelChanged?.(); }
+      this.onRepair?.();
+    }
+    if (cracked && !this.cracked) { this.hp = hp; this.crack(); }
+    this.hp = hp;
+    this.cracked = cracked;
+  }
+
   entity(out: EntityState[]): void { out.push({ id: this.id, hp: Math.round(this.hp), maxHp: this.maxHp, dead: this.dead ? 1 : 0, cracked: this.cracked ? 1 : 0 }); }
 }

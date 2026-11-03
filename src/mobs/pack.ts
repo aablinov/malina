@@ -15,14 +15,14 @@ export class Pack {
   private players = 1;
   /** Стая гостя общего боя: куклы по снимку хоста */
   mirror = false;
-  /** Счётчик сетевых id (снимок хоста, src/net/coop.ts) */
+  /** Счётчик сетевых id (записи снимка, src/game/match.ts) */
   private seq = 0;
   private readonly hooks: MobHooks;
 
   /** loot — малина с павшего: где и сколько */
   private readonly loot: (at: THREE.Vector3, n: number) => void;
   constructor(h: BossHooks, loot: (at: THREE.Vector3, n: number) => void) { this.loot = loot;
-    // куклы гостя (src/net/coop.ts) никого не призывают: призванных пришлёт снимок хоста
+    // куклы клиента (src/cgame/net-battle.ts) никого не призывают: призванных пришлёт снимок сервера
     this.hooks = { ...h, allies: () => this.mobs.filter((m) => m.alive), spawn: (kind, at) => (this.mirror ? null : this.spawn(kind, at)) };
   }
 

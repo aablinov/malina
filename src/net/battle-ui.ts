@@ -1,5 +1,5 @@
 /**
- * Сетевой бой поверх игры (src/net/coop.ts): список игроков — имя, здоровье, пинг, хост — и чат комнаты.
+ * Сетевой бой поверх игры (src/cgame/net-battle.ts): список игроков — имя, здоровье, пинг, хост — и чат комнаты.
  * Enter — написать (ещё раз Enter — отправить, Esc — закрыть), сообщения живут 12 с
  */
 export interface RosterRow { seat: number; name: string; hp: number; maxHp: number; ping: number; host: boolean; me: boolean; down: boolean }

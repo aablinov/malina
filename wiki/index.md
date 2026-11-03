@@ -23,6 +23,7 @@
 | [adr-002-realistic-weapons-tactical-movement.md](adr-002-realistic-weapons-tactical-movement.md) | ~~Реальное оружие, тактическое передвижение, броня~~ — заменено ADR-004 |
 | [adr-003-visual-style.md](adr-003-visual-style.md) | Графика в стиле Minecraft Dungeons, без гиперреализма |
 | [adr-004-mystic-coop-melee.md](adr-004-mystic-coop-melee.md) | Назад к мистической кооп-зачистке — мечи, топоры, магия; без огнестрела |
+| [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md) | Серверно-авторитарный бой по образцу Quake 3: сервер считает, клиент предсказывает |
 
 ## Дизайн
 | Страница | О чём |

@@ -56,6 +56,10 @@ export class SimTd {
   onToast: ((seat: number, text: string) => void) | null = null;
   /** Башню грызут, заморозили или сломали */
   onAlarm: ((t: SimTower, why: 'hurt' | 'frozen' | 'ruin') => void) | null = null;
+  /** Клиент сетевого боя (src/cgame/net-battle.ts): зеркало серверной обороны — команды уходят серверу, волны не считаются */
+  remote: ((c: TdCommand) => void) | null = null;
+  /** Зеркало: идёт ли волна — со снимка сервера */
+  netRunning: boolean | null = null;
   private time = 0;
   private solidsCache: Obstacle[] = [];
   private solidsN = -1;
@@ -104,6 +108,8 @@ export class SimTd {
   }
   /** Стартовая казна карты — месту (каждому в общем бою) */
   fund(seat: number): void { this.purses.set(this.key(seat), this.spec.berries); }
+  /** Зеркало сетевого боя: малина места — со снимка сервера */
+  setBerries(seat: number, n: number): void { this.purses.set(this.key(seat), Math.max(0, n)); }
   get seats(): number[] { return [...this.purses.keys()]; }
 
   // ---------- геометрия ----------
@@ -149,6 +155,7 @@ export class SimTd {
   // ---------- команды ----------
   /** Действие игрока места seat; false — не вышло (подсказка — в onToast) */
   command(seat: number, c: TdCommand): boolean {
+    if (this.remote) { this.remote(c); return true; }
     if (this.state !== 'play') return false;
     if (c.a === 'wave') return this.callWave(seat);
     if (c.wall !== undefined) { const wl = this.wall(c.wall); return !!wl && this.repairWall(seat, wl); }
@@ -224,6 +231,7 @@ export class SimTd {
 
   /** Следующая волна сейчас (G): бонус за ожидание — в кошелёк позвавшего */
   callWave(seat = 0): boolean {
+    if (this.remote) { this.remote({ t: 'td', a: 'wave' }); return true; }
     if (this.state !== 'play' || this.waveRunning || this.wave >= this.waves.length) return false;
     const bonus = this.earlyBonus;
     if (bonus > 0) { this.gain(seat, bonus); this.w.emit({ t: 'wave.early', n: bonus, seat }); }
@@ -270,7 +278,7 @@ export class SimTd {
     return this.spec.lanes.filter((l) => ids.has(l.id));
   }
   get waves(): readonly TdWave[] { return this.spec.waves ?? []; }
-  get waveRunning(): boolean { return this.queue.length > 0 || this.w.h.foes().some((m) => !m.dead); }
+  get waveRunning(): boolean { if (this.netRunning !== null) return this.netRunning; return this.queue.length > 0 || this.w.h.foes().some((m) => !m.dead); }
   get earlyBonus(): number { return this.waveRunning || this.wave >= this.waves.length ? 0 : Math.round(this.next); }
   /** Следующая волна: кто и сколько (карточка в HUD) */
   preview(): { kind: string; n: number }[] {

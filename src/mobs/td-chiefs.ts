@@ -111,7 +111,7 @@ export class RaspberryBrute extends TdChief {
       this.h.fx.burst(at.clone().setY(0.3), ['#c8245a', '#8a5a34', RASP], 24, { speed: 5, up: 3, size: 0.12, life: 0.6, gravity: 8 });
       this.h.fx.shake = Math.max(this.h.fx.shake, 0.5);
       if (!this.quiet) boom(60, 30, 0.6, 0.5);
-      // кукла гостя (src/net/coop.ts) бьёт для вида: башни ломает хост
+      // кукла клиента (src/cgame/net-battle.ts) бьёт для вида: башни ломает сервер
       if (!this.puppet) for (const d of decoyList()) if (d.siege && d.alive && Math.hypot(d.pos.x - at.x, d.pos.z - at.z) < r + 0.75) d.hurt(40 * this.dmgMult, at);
       if (this.inCircle(at, r)) this.hurt(18, at, 6);
     });

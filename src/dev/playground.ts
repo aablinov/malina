@@ -58,6 +58,8 @@ import type { SimWall } from '../sim/wall.ts';
 import type { TowerKind } from '../td/towers.ts';
 import { TdUi } from '../cgame/td-ui.ts';
 import { TdView } from '../cgame/views/td-view.ts';
+import { NetBattleClient } from '../cgame/net-battle.ts';
+import '../cgame/net.css';
 import { playTdEvents } from '../cgame/effects.ts';
 import { LavaFx } from '../td/lava-fx.ts';
 import { MistFx } from '../td/mist-fx.ts';
@@ -638,6 +640,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (inventory.open) { inventory.key(e); return; }
     if (shop.open) { shop.key(e); return; }
     // меню площадки обороны: цифры — выбор башни, Esc / F — закрыть
+    if (netClient?.typing) return;
+    if (netClient && e.code === 'Enter' && !battle?.open) { e.preventDefault(); keys.clear(); netClient.openChat(); return; }
     if (tdUi?.menuOpen && tdUi.key(e)) return;
     if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
     keys.add(e.code);
@@ -947,10 +951,12 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
    */
   let purseMirror = 0;
   const syncPurse = (): void => {
-    if (!sim) return;
+    if (!sim || netClient) return;
     if (profile.data.berries !== purseMirror) sim.gain(0, profile.data.berries - purseMirror);
     profile.data.berries = purseMirror = sim.berries(0);
   };
+  /** Клиент сетевого боя (src/cgame/net-battle.ts): бой считает сервер; null — бой свой */
+  let netClient: NetBattleClient | null = null;
   /** Клиентская копия снимка: в одиночной игре — с собственного мира, тем же путём, что у гостя сетевого боя */
   const snapView = new SnapshotView<SimEvent>();
   if (tdSpec) {
@@ -975,6 +981,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   /** Шаг мира обороны и вид по его снимку и событиям (src/cgame/) */
   function stepTd(dt: number): void {
     if (!world || !sim || !tdView || !tdUi || !tdPack) return;
+    if (netClient) {
+      // сетевой бой: мир и куклы — по снимкам сервера (NetBattleClient.update), свой герой предсказан выше
+      netClient.update(dt);
+      tdUi.update(dt);
+      tdView.update(dt);
+      return;
+    }
     syncPurse();
     // стая — внутри шага мира: под его случайностью и приманками (крючок step)
     world.step(dt);
@@ -994,11 +1007,26 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     playTdEvents(evs, { fx, quiet: () => scripted, heroPos: () => hero.pos, bushPos: sim.bush.pos });
   }
   // сетевая игра (src/net/client.ts): страница боя заново входит на сервер — место в комнате держится.
-  // Общий бой по снимкам сервера — позже (wiki/design-multiplayer.md, фаза 5); пока на странице боя каждый играет свой мир
+  // Общий бой (src/cgame/net-battle.ts): бой считает сервер, сюда приходят снимки по /game
   const netRoom = FROM_MENU && !!query.get('room');
   const nb = netRoom ? netBattle() : null;
   // без проверки /api/health: пока строится карта, страница занята и проверка не успевает; соединение само переподключается
   if (netRoom) NET.connect();
+  // снаряжение героя другого игрока: те же цели и взрывы, без подсказок и баннеров; звук — когда он рядом со своим
+  const hears = (k: Knight): boolean => !scripted && Math.hypot(k.pos.x - hero.pos.x, k.pos.z - hero.pos.z) < NET_HEAR;
+  const makeGear = (k: Knight, p: Profile): Gear => new Gear({
+    scene, fx, hero: k, terrain, targets: () => targets(), blast: (at, r, dmg) => props.blast(at, r, dmg),
+    sound: (kind) => { if (hears(k) && kind !== 'empty' && kind !== 'level') GEAR_SOUND[kind](); }, toast: () => {}, banner: () => {}, quiet: () => !hears(k),
+  }, p);
+  if (nb && sim && world && tdView && tdUi && tdPack && NET.auth) {
+    netClient = new NetBattleClient({
+      net: NET, battle: nb, token: NET.auth.token, base: NET.base, scene, T, fx, hero, gear, profile, input, bow: () => rmb && !scripted,
+      sim, world, pack: tdPack, tdView, tdUi, terrain, solids, makeGear, toast,
+      swing: (k, g, step) => { if (hears(k)) weaponSwing(g.arts.category, step); },
+      quiet: () => scripted,
+      onOver: (result) => { if (result === 'abandoned') toast('Все вышли — бой прерван'); },
+    });
+  }
   // сетевая комната начала новый бой («Ещё раз» у хоста) — на его страницу
   if (netRoom) NET.on((m) => { if (m.t === 'battle.start' && m.matchId !== nb?.matchId) window.location.href = netBattleUrl(m.map, m.players, NET.room?.room.code ?? query.get('room') ?? ''); });
   const inventory = new Inventory(document.body, profile, T);
@@ -1314,6 +1342,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     const w = window.innerWidth, h = window.innerHeight;
     for (const d of dummies) d.drawLabel(camera, w, h);
     for (const m of merchants) m.drawLabel(camera, w, h);
+    netClient?.drawNames(camera);
     if (panel.open) panel.sync();
     updateHUD(real, fpsVal, frameMs);
 
@@ -1354,11 +1383,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     setPlayers(n: number) { s.setPlayers(n); }, reset() { s.reset(); pk.clear(); syncPurse(); },
     prompt: (p: SimPad) => ui.prompt(p), wallPrompt: (w: SimWall) => ui.wallPrompt(w),
     openMenu: (p: SimPad) => ui.openMenu(p), closeMenu: () => ui.closeMenu(), key: (e: KeyboardEvent) => ui.key(e),
-    /** Общий бой по снимкам сервера — позже; null — бой свой */
-    remote: null,
+    /** Сетевой бой: команды уходят серверу (src/cgame/net-battle.ts); null — бой свой */
+    get remote() { return netClient ? true : null; },
   }))(sim, tdUi, tdPack) : null;
   window.__malina = {
     mode: 'playground',
+    /** Клиент сетевого боя (src/cgame/net-battle.ts); null — бой свой */
+    get net() { return netClient; },
     hero, input, dummies, obstacles, camera, HERO, SWORD, props, level, terrain,
     /** Рендер уровня и декора */
     view,

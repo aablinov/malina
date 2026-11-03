@@ -436,7 +436,7 @@ export interface Pickup {
   landed?: boolean;
   /** Что именно (предмет снаряжения) — для сцены */
   data?: unknown;
-  /** Номер кучки (снимок общего боя, src/net/coop.ts) */
+  /** Номер кучки (сетевой бой: кучки идут из `src/sim/pile.ts`) */
   id?: number;
 }
 
@@ -598,7 +598,7 @@ export class Props {
   terminals: HealthTerminal[] = [];
   readonly pickups: Pickup[] = [];
   /**
-   * Общий бой у хоста (src/net/coop.ts): герои других игроков тоже подбирают малину — летит к ближайшему,
+   * Общий бой (прежняя хост-модель; в обороне кучки считает `src/sim/pile.ts`): герои других игроков тоже подбирают малину — летит к ближайшему,
    * кто подобрал, тому и малина (take)
    */
   readonly collectors: { readonly pos: THREE.Vector3; readonly down: boolean; take(n: number): void }[] = [];
