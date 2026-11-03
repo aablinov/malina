@@ -1,29 +1,22 @@
 import * as THREE from 'three';
-import type { Obstacle } from '../collision';
-import type { FX } from '../fx';
-import { pixelTex } from '../textures';
-import { C, glowMat, RASP, UNIT } from '../bosses/kit';
-import { addDecoy, type Decoy } from '../decoys';
-import { boom, hiss } from '../spell-audio';
+import { C, glowMat, RASP, UNIT } from '../../bosses/kit.ts';
+import type { FX } from '../../fx.ts';
+import type { EntityState } from '../../net/snapshot.ts';
+import type { SimEvent } from '../../sim/events.ts';
+import type { TdBush } from '../../td/types.ts';
+import { pixelTex } from '../../textures.ts';
 
 /**
- * Куст малины — что защищаем (wiki/design-tower-defence.md, раздел 4). Для мобов он приманка (src/decoys.ts) с taunt:
- * дошедшие до конца дороги бьют его, как героя, — урон идёт в hurt. Здоровье — из meta.td.bush; кончилось — куст засох.
- * Модель: пень-основание, тёмная листва кронами, гроздья малины-светильников и сердце-ягода, которое бьётся и тускнеет с уроном.
+ * Куст малины (`bush`) — что защищаем. Модель: пень-основание, тёмная листва кронами, гроздья малины-светильников
+ * и сердце-ягода, которое бьётся и тускнеет с уроном. Здоровье — из записи, удар — событие `bush.hurt` (вспышка листвы, дрожь);
+ * засох (`dead`) — крона съёживается и темнеет; ожил (сброс) — встаёт обратно
  */
-export class RaspberryBush implements Decoy {
+export class BushView {
   readonly pos: THREE.Vector3;
-  readonly radius = 1.3;
-  readonly taunt = 7;
   readonly group = new THREE.Group();
-  /** Ствол — препятствие для героя и врагов (крона — нет, чтобы мобы доставали) */
-  readonly solid: Obstacle;
-  hp: number;
-  maxHp: number;
-  dead = false;
-  /** Всего получено урона */
-  taken = 0;
-  onDeath?: () => void;
+  private hp: number;
+  private maxHp: number;
+  private dead = false;
   private readonly leaves: THREE.MeshLambertMaterial[] = [];
   private readonly berries: THREE.MeshBasicMaterial;
   private readonly heart: THREE.MeshBasicMaterial;
@@ -31,12 +24,10 @@ export class RaspberryBush implements Decoy {
   private flashT = 0;
   private time = 0;
   private hurtT = 0;
-  private readonly unreg: () => void;
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, x: number, z: number, hp: number, private readonly quiet: () => boolean) {
-    this.pos = new THREE.Vector3(x, 0, z);
-    this.hp = this.maxHp = hp;
-    this.solid = { x, z, hx: 0.45, hz: 0.45, rot: 0, h: 1.2 };
+  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, spec: TdBush, ent: EntityState) {
+    this.pos = new THREE.Vector3(spec.x, 0, spec.z);
+    this.hp = this.maxHp = spec.hp;
     this.group.position.copy(this.pos);
     const B = (parent: THREE.Object3D, mat: THREE.Material, w: number, h: number, d: number, px = 0, py = 0, pz = 0, rx = 0, ry = 0, rz = 0): THREE.Mesh => {
       const m = new THREE.Mesh(UNIT, mat);
@@ -65,50 +56,20 @@ export class RaspberryBush implements Decoy {
     B(this.crown, this.heart, 0.3, 0.3, 0.3, 0, 3.3, 0);
     B(this.crown, leafL, 0.5, 0.06, 0.2, 0.1, 3.3, 0.1, 0, 0.5, 0.3);
     scene.add(this.group);
-    this.unreg = addDecoy(this);
+    this.set(ent);
   }
 
-  get alive(): boolean { return !this.dead; }
-
-  /** Удар моба: урон, вспышка, цифра; кончилось — засох */
-  hurt(dmg: number, from: THREE.Vector3): void {
-    if (this.dead) return;
-    const v = Math.round(dmg);
-    this.hp = Math.max(0, this.hp - v);
-    this.taken += v;
-    this.flashT = 0.08;
-    this.hurtT = 0.4;
-    this.fx.text(this.pos.clone().setY(2.2), `−${v}`, 'bad');
-    const dir = new THREE.Vector3(this.pos.x - from.x, 0, this.pos.z - from.z).normalize();
-    this.fx.burst(this.pos.clone().setY(1.4).addScaledVector(dir, -0.8), ['#4a9a3a', '#2f6a2a', RASP], 8, { speed: 2.5, up: 2, size: 0.1, life: 0.5, gravity: 8 });
-    if (!this.quiet()) hiss({ dur: 0.1, vol: 0.08, f: 700, f1: 300, q: 1 });
-    if (this.hp <= 0) this.die();
+  set(ent: EntityState): void {
+    this.hp = ent.hp as number; this.maxHp = ent.maxHp as number;
+    const dead = ent.dead === 1;
+    if (dead === this.dead) return;
+    this.dead = dead;
+    // ожил (всё заново): крона на месте
+    if (!dead) { this.crown.scale.setScalar(1); this.crown.position.y = 0; }
   }
 
-  private die(): void {
-    this.dead = true;
-    this.fx.flash(this.pos.clone().setY(2.5), RASP, 4, 0.5);
-    this.fx.burst(this.pos.clone().setY(1.5), [RASP, '#4a9a3a', '#8a6a40'], 50, { speed: 5, up: 5, size: 0.12, life: 1.2, gravity: 7 });
-    this.fx.shake = Math.max(this.fx.shake, 1);
-    this.fx.darken(1.2);
-    if (!this.quiet()) boom(120, 30, 1.2, 0.5);
-    this.onDeath?.();
-  }
-
-  /** Заново: здоровье полное, крона на месте */
-  reset(): void {
-    this.hp = this.maxHp;
-    this.dead = false;
-    this.crown.scale.setScalar(1);
-    this.crown.position.y = 0;
-  }
-
-  dispose(): void {
-    this.unreg();
-    this.scene.remove(this.group);
-    for (const m of this.leaves) m.dispose();
-    this.berries.dispose();
-    this.heart.dispose();
+  onEvent(e: SimEvent): void {
+    if (e.t === 'bush.hurt') { this.flashT = 0.08; this.hurtT = 0.4; }
   }
 
   update(dt: number): void {
@@ -116,7 +77,7 @@ export class RaspberryBush implements Decoy {
     this.flashT = Math.max(0, this.flashT - dt);
     this.hurtT = Math.max(0, this.hurtT - dt);
     for (const m of this.leaves) m.emissive.setScalar(this.flashT > 0 ? 0.25 : 0);
-    const k = this.hp / this.maxHp;
+    const k = this.maxHp > 0 ? this.hp / this.maxHp : 0;
     // сердце бьётся: чем меньше здоровья, тем чаще и тусклее; ягоды гаснут вместе с ним
     const beat = 0.75 + 0.25 * Math.max(0, Math.sin(this.time * (2 + (1 - k) * 4)));
     this.heart.color.copy(RASP).multiplyScalar(this.dead ? 0.15 : (0.35 + k * 0.65) * beat);
@@ -132,5 +93,12 @@ export class RaspberryBush implements Decoy {
     const sway = Math.sin(this.time * 1.1) * 0.02 + (this.hurtT > 0 ? Math.sin(this.time * 40) * 0.05 * this.hurtT : 0);
     this.crown.rotation.z = sway; this.crown.rotation.x = Math.cos(this.time * 0.9) * 0.015;
     if (k < 0.5 && Math.random() < (0.5 - k) * 0.4) this.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 1.5 + Math.random(), (Math.random() - 0.5) * 2)), vel: new THREE.Vector3((Math.random() - 0.5) * 0.5, -0.6, (Math.random() - 0.5) * 0.5), life: 1.2, size: 0.09, color: '#8a6a40', gravity: 1 }, false);
+  }
+
+  dispose(): void {
+    this.scene.remove(this.group);
+    for (const m of this.leaves) m.dispose();
+    this.berries.dispose();
+    this.heart.dispose();
   }
 }

@@ -21,25 +21,26 @@ async function open(page: Page): Promise<void> {
 test('оборона: магнит малины в 6 м и сбор урожая после волны', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
-    const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
+    // кучки малины обороны — в мире симуляции (src/sim/pile.ts), не в складе props
+    const m = (window as any).__malina, td = m.td, piles = m.world.piles, V = m.hero.pos.constructor;
     m.hero.place(0, 10, 0); m.hero.god = true;
-    const reach = m.props.berryReach;
+    const reach = piles.reach;
     const b0 = m.berries;
-    m.props.berries(new V(4.5, 0, 10), 5);
+    piles.drop(new V(4.5, 0, 10), 5);
     m.step(3);
     const near = m.berries - b0;
     // далёкая малина лежит, пока волна идёт; волна отбита — летит к герою
-    m.props.berries(new V(-30, 0, -20), 7);
+    piles.drop(new V(-30, 0, -20), 7);
     td.callWave();
     let lying = 0;
     for (let i = 0; i < 600 && td.waveRunning; i++) {
       m.step(0.1);
       if (!td.queue.length) for (const x of td.pack.mobs) if (!x.dead && x.state !== 'spawn') x.vanish();
-      lying = Math.max(lying, m.props.berriesOnGround);
+      lying = Math.max(lying, piles.list.length);
     }
     const b1 = m.berries;
     m.step(4);
-    return { reach, near, lying, left: m.props.berriesOnGround, harvested: m.berries - b1 };
+    return { reach, near, lying, left: piles.list.length, harvested: m.berries - b1 };
   });
   expect(r.reach).toBe(6);
   expect(r.near).toBe(5);

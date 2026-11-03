@@ -298,10 +298,9 @@ test('оборона: логова на дорогах тревожатся пе
     td.callWave();
     m.step(3);
     const bursts = td.lairs.map((l: any) => l.spawned);
-    const veil = td.lairs[0].group.children.length;
     for (const x of td.pack.mobs) x.vanish();
     m.resetTargets();
-    return { lairs, next, warn0, warn1, hud, bursts, veil, after: td.lairs.map((l: any) => l.spawned) };
+    return { lairs, next, warn0, warn1, hud, bursts, after: td.lairs.map((l: any) => l.spawned) };
   });
   expect(r.lairs).toEqual(['west', 'north', 'east']);
   expect(r.next).toEqual(['west']);
@@ -311,7 +310,6 @@ test('оборона: логова на дорогах тревожатся пе
   expect(r.hud).toContain('западная тропа');
   expect(r.bursts[0]).toBeGreaterThan(1);
   expect(r.bursts[1]).toBe(0);
-  expect(r.veil).toBeGreaterThan(3);
   expect(r.after).toEqual([0, 0, 0]);
 });
 

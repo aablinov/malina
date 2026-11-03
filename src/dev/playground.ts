@@ -49,9 +49,16 @@ import { applyAudio, SettingsPanel } from '../menu/settings-panel';
 import { BattleMenu } from '../menu/pause';
 import { markWon, NET, netBattleUrl, stashBerries, stashGear } from '../menu/session';
 import { netBattle } from '../net/client';
-import { CoopGuest, CoopHost, type CoopHooks } from '../net/coop';
+import { SnapshotView } from '../net/snapshot.ts';
 import { campaignMap } from '../menu/campaign';
-import { TowerDefense, type Pad } from '../td/td';
+import { SimWorld } from '../sim/world.ts';
+import type { SimEvent } from '../sim/events.ts';
+import type { SimPad, SimTd } from '../sim/td.ts';
+import type { SimWall } from '../sim/wall.ts';
+import type { TowerKind } from '../td/towers';
+import { TdUi } from '../cgame/td-ui.ts';
+import { TdView } from '../cgame/views/td-view.ts';
+import { playTdEvents } from '../cgame/effects.ts';
 import { LavaFx } from '../td/lava-fx';
 import { MistFx } from '../td/mist-fx';
 import type { TdSpec } from '../td/types';
@@ -289,8 +296,14 @@ export function runPlayground(): void {
     props.addGroup('map', level.entities.filter((e) => kinds.has(e.kind)).map((e, i) => ({ id: `map:${i}`, kind: e.kind as 'chest' | 'barrel' | 'crate' | 'terminal', x: e.x, z: e.z, rot: e.rot ?? 0 })));
   }
   // лавки кузнеца и торговца — на плейграунде, в северо-западном углу (src/merchants.ts)
-  // режим «Оборона куста» (src/td/, wiki/design-tower-defence.md): на карте с meta.td — площадки, башни, враги по дорогам
-  let td: TowerDefense | null = null;
+  // режим «Оборона куста» (wiki/design-tower-defence.md): на карте с meta.td — мир симуляции (src/sim/world.ts) с правилами
+  // обороны (src/sim/td.ts), вид — модели и искры (src/cgame/views/td-view.ts), меню и HUD (src/cgame/td-ui.ts)
+  let world: SimWorld | null = null;
+  let sim: SimTd | null = null;
+  let tdUi: TdUi | null = null;
+  let tdView: TdView | null = null;
+  /** Стая врагов обороны: все, кто идёт к кусту */
+  let tdPack: Pack | null = null;
   const tdSpec = level.meta.td as TdSpec | undefined;
   // туман у лагерей врагов (src/td/mist-fx.ts): точки выхода скрыты
   const mistFx = tdSpec?.mist ? new MistFx(scene, tdSpec.lanes, tdSpec.mist) : null;
@@ -307,7 +320,7 @@ export function runPlayground(): void {
     }
     // решётки арены стража — пока подняты; башни обороны
     const gates = arenas.filter((a) => a.solids.length);
-    const towers = td ? td.solids : [];
+    const towers = world ? world.solids : [];
     if (!gates.length && !towers.length) return solidsCache;
     return solidsCache.concat(...gates.map((a) => a.solids), towers);
   };
@@ -368,7 +381,7 @@ export function runPlayground(): void {
   /** Препятствия врагов: уровень, декор и башни обороны (кэш, пока состав тот же) */
   let foeObsCache: Obstacle[] = [], foeObsKey: [Obstacle[], Obstacle[]] | null = null;
   const foeObstacles = (): Obstacle[] => {
-    const base = obstaclesNow(), towers = td ? td.foeSolids : [];
+    const base = obstaclesNow(), towers = world ? world.foeSolids : [];
     if (!towers.length) return base;
     if (!foeObsKey || foeObsKey[0] !== base || foeObsKey[1] !== towers) { foeObsCache = base.concat(towers); foeObsKey = [base, towers]; }
     return foeObsCache;
@@ -437,7 +450,7 @@ export function runPlayground(): void {
     for (const b of bosses) b.setScale(bossLevel(), bossPlayers);
     pack.setScale(bossLevel(), bossPlayers);
     for (const r of mobRooms) r.pack.setScale(bossLevel(), bossPlayers);
-    td?.setPlayers(bossPlayers);
+    sim?.setPlayers(bossPlayers);
   }
   rescaleBosses();
   const grimoires: Grimoire[] = [];
@@ -475,14 +488,14 @@ export function runPlayground(): void {
     for (const b of bosses) if (b.awake) list.push(...b.targets());
     list.push(...pack.targets());
     for (const r of mobRooms) list.push(...r.pack.targets());
-    if (td) list.push(...td.targets());
+    if (sim && tdPack) list.push(...sim.targets(), ...tdPack.targets());
     return list;
   };
   let lastStrike: { s: Strike; t: number } | null = null;
 
   /**
    * Удар меча: цели в дуге перед героем (и в волне добивающего), без стены между.
-   * who и g — герой другого игрока и его снаряжение в общем бою (src/net/coop.ts): у хоста урон настоящий, у гостя — для вида;
+   * who и g — герой другого игрока и его снаряжение в общем бою (серверный бой — позже): у хоста урон настоящий, у гостя — для вида;
    * звук и тряска — только от своего
    */
   function strike(s: Strike, who: Knight = hero, g: Gear = gear): number {
@@ -619,16 +632,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10'].includes(e.code)) e.preventDefault();
     initAudio();
     if (e.repeat) return;
-    // чат сетевого боя: пишем — игра клавиш не видит; Enter — открыть
-    if (coop?.typing) return;
-    if (coop && e.code === 'Enter' && !battle?.open) { e.preventDefault(); keys.clear(); coop.openChat(); return; }
     // пауза и итог боя из меню: клавиши — им
     if (battle?.key(e)) return;
     // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
     if (inventory.open) { inventory.key(e); return; }
     if (shop.open) { shop.key(e); return; }
     // меню площадки обороны: цифры — выбор башни, Esc / F — закрыть
-    if (td?.menuOpen && td.key(e)) return;
+    if (tdUi?.menuOpen && tdUi.key(e)) return;
     if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
     keys.add(e.code);
     switch (e.code) {
@@ -648,7 +658,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       case 'KeyU': look.unreal = !look.unreal; toast(look.unreal ? 'Свет как в Unreal' : 'Простой свет'); refreshControls(); break;
       case 'KeyB': postFX = !postFX; toast(postFX ? 'Постобработка включена' : 'Постобработка выключена'); refreshControls(); break;
       case 'KeyN': resetTargets(); break;
-      case 'KeyG': td?.callWave(); break;
+      case 'KeyG': sim?.callWave(0); break;
       case 'F1': panel.toggle(); break;
       case 'F2': overlays.colliders = !overlays.colliders; toast(`Коллайдеры: ${overlays.colliders ? 'вкл' : 'выкл'}`); break;
       case 'F3': overlays.aim = !overlays.aim; toast(`Дуга удара: ${overlays.aim ? 'вкл' : 'выкл'}`); break;
@@ -697,8 +707,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       raycaster.setFromCamera(mouseNdc, camera);
       groundAt(raycaster.ray, pointer.ground);
       pointer.hover = pickRay(raycaster.ray);
-      pointer.pad = td && !pointer.hover ? td.padAt(raycaster.ray) : null;
-      if (td) td.hoverPad = pointer.pad;
+      const padI = tdView && !pointer.hover ? tdView.padAt(raycaster.ray) : null;
+      pointer.pad = padI !== null && sim ? sim.pads[padI] ?? null : null;
+      if (tdView) tdView.hoverPad = padI;
     }
     input.roll = edges.roll;
   }
@@ -711,13 +722,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   // ---------- Мышь как в Minecraft Dungeons ----------
   // ЛКМ по земле — идти туда (держишь — идёт за курсором), ЛКМ по цели — подойти на длину меча и бить
   // (держишь — комбо), Shift + ЛКМ — бить на месте в сторону курсора. WASD отменяет приказ мыши.
-  const pointer = { down: false, shift: false, ground: new THREE.Vector3(), hover: null as Target | null, pad: null as Pad | null };
+  const pointer = { down: false, shift: false, ground: new THREE.Vector3(), hover: null as Target | null, pad: null as SimPad | null };
   let pointerWas = false;
   /** Режим текущего нажатия: идти, бить цель, бить на месте, подойти к площадке обороны */
   let pressMode: 'walk' | 'chase' | 'here' | 'pad' = 'walk';
   let goal: THREE.Vector3 | null = null;
   /** Площадка, к которой идём по клику: дошли — откроется меню */
-  let padGoal: Pad | null = null;
+  let padGoal: SimPad | null = null;
   let chase: Target | null = null;
   /** Сколько ударов было на момент приказа: отпустил ЛКМ — хватит одного удара по цели */
   let chaseSwings = 0;
@@ -816,7 +827,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       chase = null; goal = null; path = []; stuckRepaths = 0; repathT = 0; arrived = false; padGoal = null;
       if (pressMode === 'chase') { chase = pointer.hover; chaseSwings = hero.swings; }
       // клик по площадке обороны: подойти к её краю, там откроется меню
-      if (pressMode === 'pad' && td && pointer.pad) { padGoal = pointer.pad; goal = td.approach(pointer.pad, hero.pos); marker.position.set(goal.x, goal.y + 0.04, goal.z); marker.visible = true; markerT = 0.5; }
+      if (pressMode === 'pad' && sim && pointer.pad) { padGoal = pointer.pad; goal = sim.approach(pointer.pad, hero.pos); marker.position.set(goal.x, goal.y + 0.04, goal.z); marker.visible = true; markerT = 0.5; }
       if (pressMode === 'walk' && !keyMove) { marker.position.set(pointer.ground.x, pointer.ground.y + 0.04, pointer.ground.z); marker.visible = true; markerT = 0.5; }
     }
     if (pointer.down && pressMode === 'walk' && !keyMove) goal = pointer.ground.clone();
@@ -863,8 +874,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const g of grimoires.splice(0)) g.dispose();
     pack.clear();
     for (const r of mobRooms) fillRoom(r);
-    td?.reset();
-    toast(td ? 'Оборона заново: башни снесены, казна полная' : 'Чучела и склад на местах');
+    if (sim) { sim.reset(); tdPack?.clear(); syncPurse(); }
+    toast(sim ? 'Оборона заново: башни снесены, казна полная' : 'Чучела и склад на местах');
   }
 
   // ---------- Панель: переключатели ----------
@@ -898,8 +909,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id) && !TD_FOES.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
     button(row3, 'Убрать мобов', () => pack.clear());
     // оборона куста: враг на каждую дорогу
-    if (tdSpec) for (const l of tdSpec.lanes) button(row3, `На дорогу: ${l.title}`, () => td?.spawnOn(['berryling', 'gardener', 'wolf', 'runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper', 'sapper', 'ballista'][Math.floor(Math.random() * 11)], l.id));
-    if (tdSpec) button(row3, 'Волна сейчас (G)', () => td?.callWave());
+    if (tdSpec) for (const l of tdSpec.lanes) button(row3, `На дорогу: ${l.title}`, () => sim?.spawnOn(['berryling', 'gardener', 'wolf', 'runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper', 'sapper', 'ballista'][Math.floor(Math.random() * 11)], l.id));
+    if (tdSpec) button(row3, 'Волна сейчас (G)', () => sim?.callWave(0));
     for (const r of roomSpecs) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
     // масштаб стражей: уровень и число игроков
     refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
@@ -928,34 +939,65 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   // снаряжение откладывается всегда (и с ?map=td без меню — лагерь вернёт), в бой — набор нового героя (Profile.tdKit)
   if (tdSpec && FROM_MENU) stashBerries(profile.data.berries);
   if (tdSpec) { stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); profile.tdKit(); }
+  // число игроков партии: ?players=N
+  if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
+  /**
+   * Казна обороны живёт в симуляции (`sim.berries(0)`), малина профиля — её зеркало для HUD, лавок и лагеря:
+   * что изменили лавки, инвентарь и тесты, уходит в казну разницей; после — профиль равен казне
+   */
+  let purseMirror = 0;
+  const syncPurse = (): void => {
+    if (!sim) return;
+    if (profile.data.berries !== purseMirror) sim.gain(0, profile.data.berries - purseMirror);
+    profile.data.berries = purseMirror = sim.berries(0);
+  };
+  /** Клиентская копия снимка: в одиночной игре — с собственного мира, тем же путём, что у гостя сетевого боя */
+  const snapView = new SnapshotView<SimEvent>();
+  if (tdSpec) {
+    const pk = new Pack(bossHooks, (at, n) => { if (sim && world) { sim.fallen++; world.piles.drop(at, n); } });
+    tdPack = pk;
+    world = new SimWorld({
+      foes: () => pk.mobs.filter((m) => m.alive),
+      heroes: () => [{ pos: hero.pos, get down() { return hero.down; }, seat: 0 }],
+      spawnMob: (kind, at) => pk.spawn(kind, at),
+      setScale: (l, p) => pk.setScale(l, p),
+      levelChanged,
+    }, { seed: Number(query.get('seed')) || Date.now() % 2 ** 31, level, td: tdSpec, players: bossPlayers, personal: false });
+    sim = world.td!;
+    sim.fund(0);
+    // стартовая казна карты заменяет малину профиля (в лагере своя малина вернётся из отложенной — src/menu/session.ts)
+    profile.data.berries = purseMirror = sim.berries(0);
+    syncPurse();
+    tdView = new TdView({ scene, fx, quiet: () => scripted, spec: tdSpec, heroPos: () => hero.pos });
+    tdUi = new TdUi(document.body, sim, 0, { toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, heroPos: () => hero.pos, sync: syncPurse, alive: () => pk.mobs.filter((m) => !m.dead).length });
+  }
+  /** Шаг мира обороны и вид по его снимку и событиям (src/cgame/) */
+  function stepTd(dt: number): void {
+    if (!world || !sim || !tdView || !tdUi || !tdPack) return;
+    syncPurse();
+    tdPack.update(dt);
+    world.step(dt);
+    syncPurse();
+    flushTd();
+    tdUi.update(dt);
+    tdView.update(dt);
+  }
+  /** Записи и события мира — во вью, HUD и эффекты (после шага; фасад тестов зовёт и между шагами) */
+  function flushTd(): void {
+    if (!world || !sim || !tdView || !tdUi) return;
+    tdView.menuPad = tdUi.menuPad?.index ?? null;
+    const evs = world.takeEvents();
+    snapView.apply({ n: snapView.n + 1, base: 0, tick: world.tick, add: world.entities(), upd: [], del: [], ev: evs });
+    tdView.apply(snapView);
+    tdUi.events(evs);
+    playTdEvents(evs, { fx, quiet: () => scripted, heroPos: () => hero.pos, bushPos: sim.bush.pos });
+  }
   // сетевая игра (src/net/client.ts): страница боя заново входит на сервер — место в комнате держится.
-  // Общий бой (src/net/coop.ts): хост считает, гость ведёт своего героя и видит бой по снимкам;
-  // малина с врагов падает только у хоста — общая, кто подобрал, того и малина (гостю — кучками в снимке)
+  // Общий бой по снимкам сервера — позже (wiki/design-multiplayer.md, фаза 5); пока на странице боя каждый играет свой мир
   const netRoom = FROM_MENU && !!query.get('room');
   const nb = netRoom ? netBattle() : null;
-  const netGuest = !!nb && nb.seat !== nb.hostSeat;
-  if (tdSpec) td = new TowerDefense({ scene, fx, hero, profile, boss: bossHooks, loot: (at, n) => { if (!netGuest) props.berries(at, n); }, toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, level, levelChanged, harvest: () => props.harvest() }, tdSpec, document.body);
-  // оборона: малину с павших тянет издалека — в бою некогда бегать за каждой кучкой
-  if (tdSpec) props.berryReach = 6;
-  // число игроков партии (сетевая игра — позже): ?players=N
-  if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
-  td?.setPlayers(bossPlayers);
   // без проверки /api/health: пока строится карта, страница занята и проверка не успевает; соединение само переподключается
   if (netRoom) NET.connect();
-  // снаряжение героя другого игрока: те же цели и взрывы, без подсказок и баннеров; звук — когда он рядом со своим
-  const hears = (k: Knight): boolean => !scripted && Math.hypot(k.pos.x - hero.pos.x, k.pos.z - hero.pos.z) < NET_HEAR;
-  const makeGear = (k: Knight, p: Profile): Gear => new Gear({
-    scene, fx, hero: k, terrain, targets: () => targets(), blast: (at, r, dmg) => props.blast(at, r, dmg),
-    sound: (kind) => { if (hears(k) && kind !== 'empty' && kind !== 'level') GEAR_SOUND[kind](); }, toast: () => {}, banner: () => {}, quiet: () => !hears(k),
-  }, p);
-  const inLava = (p: THREE.Vector3): boolean => !!lavaFx && level.nameAt(Math.round(p.x), Math.floor(p.y - 0.01), Math.round(p.z)) === 'lava';
-  const coopHooks: CoopHooks | null = nb && td ? {
-    net: NET, battle: nb, scene, T, fx, hero, gear, profile, input, bow: () => rmb && !scripted, td, props, terrain, solids, strike, makeGear, toast,
-    swing: (k, g, step) => { if (hears(k)) weaponSwing(g.arts.category, step); },
-    inLava, slowFor: (k) => Math.max(pack.slowFor(k), ...mobRooms.map((r) => r.pack.slowFor(k))),
-    replaced: (c) => { coop = c; },
-  } : null;
-  let coop: CoopHost | CoopGuest | null = coopHooks ? (netGuest ? new CoopGuest(coopHooks) : new CoopHost(coopHooks)) : null;
   // сетевая комната начала новый бой («Ещё раз» у хоста) — на его страницу
   if (netRoom) NET.on((m) => { if (m.t === 'battle.start' && m.matchId !== nb?.matchId) window.location.href = netBattleUrl(m.map, m.players, NET.room?.room.code ?? query.get('room') ?? ''); });
   const inventory = new Inventory(document.body, profile, T);
@@ -1002,7 +1044,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     battle.onRestart = () => {
       // сетевой бой: «Ещё раз» после боя — хост начинает новый всей комнате, посреди боя заново нельзя
       if (netRoom) {
-        if (td?.state === 'play') toast('В сетевой игре заново — только после боя');
+        if (sim?.state === 'play') toast('В сетевой игре заново — только после боя');
         else if (NET.isHost) NET.again();
         else toast('«Ещё раз» начинает хост');
         return;
@@ -1042,8 +1084,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   function setHTML(id: string, v: string): void { if (cache[id] !== v) { cache[id] = v; $(id).innerHTML = v; } }
 
   function updateHUD(dt: number, _fps: number, _frameMs: number): void {
-    const pad = td && !td.menuOpen && !hero.down ? td.nearPad(hero.pos) : null;
-    const wall = td && !pad && !hero.down ? td.nearWall(hero.pos) : null;
+    const pad = sim && tdUi && !tdUi.menuOpen && !hero.down ? sim.nearPad(hero.pos) : null;
+    const wall = sim && !pad && !hero.down ? sim.nearWall(hero.pos) : null;
     const trader = hero.down || pad || wall ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
     const near = hero.down || trader || pad || wall ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
     // подошёл к сундуку — он тихо звенит
@@ -1052,8 +1094,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     lastNearChest = nearChest;
     const promptEl = $('pgPrompt');
     promptEl.style.display = (near || trader || pad || wall) && !inventory.open && !shop.open ? '' : 'none';
-    if (pad && td) setHTML('pgPrompt', `<kbd>F</kbd>${td.prompt(pad)}`);
-    else if (wall && td) setHTML('pgPrompt', `<kbd>F</kbd>${td.wallPrompt(wall)}`);
+    if (pad && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.prompt(pad)}`);
+    else if (wall && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.wallPrompt(wall)}`);
     else if (trader) setHTML('pgPrompt', `<kbd>F</kbd>Торговать: ${MERCHANT_TITLE[trader.kind].toLowerCase()}`);
     else if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
     hud.update(gear.hudState(), dt);
@@ -1066,7 +1108,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       ...props.supplies.map((c) => ({ x: c.pos.x, z: c.pos.z, icon: 'chest', dim: c.opened })),
       ...props.terminals.map((t) => ({ x: t.pos.x, z: t.pos.z, icon: 'heart' })),
       ...merchants.map((m) => ({ x: m.pos.x, z: m.pos.z, icon: m.kind === 'smith' ? 'hammer' : 'berry', always: true })),
-      ...(td?.alarmMarkers ?? []),
+      ...(tdUi?.alarmMarkers ?? []),
     ], [props.supplies.filter((c) => c.opened).length, props.supplies.length]); }
     helpT -= dt;
     $('pgHelp').style.opacity = helpOn && helpT > 0 ? String(Math.min(0.9, helpT)) : '0';
@@ -1119,25 +1161,24 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     const slow = Math.max(pack.heroSlow, ...mobRooms.map((r) => r.pack.heroSlow));
     hero.slow = Math.min(0.8, slow);
     hero.update(dt, input, solids(), terrain);
-    coop?.update(dt);
     // под крышей: срезать потолок и всё, что выше, — виден этаж, где стоит герой
     cutY = ceilingAt(level, hero.pos.x, hero.pos.z, hero.pos.y);
 
     if (interactReq) {
       interactReq = false;
-      const pad = td && !hero.down ? td.nearPad(hero.pos) : null;
-      const wall = td && !pad && !hero.down ? td.nearWall(hero.pos) : null;
+      const pad = sim && !hero.down ? sim.nearPad(hero.pos) : null;
+      const wall = sim && !pad && !hero.down ? sim.nearWall(hero.pos) : null;
       const trader = pad || wall ? null : merchants.find((m) => m.near(hero.pos));
-      if (pad && td) { if (td.menuOpen) td.closeMenu(); else td.openMenu(pad); }
-      else if (wall && td) td.repair(wall);
+      if (pad && tdUi) { if (tdUi.menuOpen) tdUi.closeMenu(); else tdUi.openMenu(pad); }
+      else if (wall && sim) { syncPurse(); sim.repairWall(0, wall); syncPurse(); }
       if (trader && !hero.down) { shop.show(trader.kind); }
       const it = trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
     }
     // шёл к площадке по клику: подошёл — меню; приказ сняли — забыть
-    if (td && padGoal) {
+    if (tdUi && padGoal) {
       const d = Math.hypot(hero.pos.x - padGoal.pos.x, hero.pos.z - padGoal.pos.z);
-      if (d < 2.3) { td.openMenu(padGoal); padGoal = null; goal = null; path = []; input.move.set(0, 0); }
+      if (d < 2.3) { tdUi.openMenu(padGoal); padGoal = null; goal = null; path = []; input.move.set(0, 0); }
       else if (!goal) padGoal = null;
     }
     // в лаве горит: урон раз в 0,4 с, искры и шипение; перекат не спасает — выходи на берег
@@ -1158,7 +1199,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
     pack.update(dt);
-    td?.update(dt);
+    stepTd(dt);
     lavaFx?.update(dt, hero.pos);
     mistFx?.update(dt);
     // комната думает, когда герой рядом или гарнизон в бою; пал весь, а герой вышел — гарнизон снова на постах
@@ -1190,7 +1231,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   /** Бой: проснувшийся страж или моб, поднявший тревогу, в 25 м от героя */
   const inFight = (): boolean =>
     bosses.some((b) => b.awake && !b.dead) ||
-    [pack, ...mobRooms.map((r) => r.pack), ...(td ? [td.pack] : [])].some((p) => p.mobs.some((m) => m.alerted && !m.dead && near(m.pos, 25)));
+    [pack, ...mobRooms.map((r) => r.pack), ...(tdPack ? [tdPack] : [])].some((p) => p.mobs.some((m) => m.alerted && !m.dead && near(m.pos, 25)));
 
   let acc = 0;
   let last = performance.now();
@@ -1218,11 +1259,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     perf.tickEnd();
     if (n >= 6) acc = 0;
     music.update(real, inFight(), hero.down ? 0 : hero.hp / hero.maxHp);
-    if (battle && td && td.state !== tdEndShown) {
-      tdEndShown = td.state;
-      if (td.state === 'won') markWon(mapName);
-      if (td.state !== 'play' && netRoom && !netGuest && NET.isHost) NET.endBattle(td.state, td.state === 'won' ? td.waves.length : Math.max(0, td.wave - 1));
-      if (td.state !== 'play') battle.end(td.state === 'won', `волн отбито ${td.state === 'won' ? td.waves.length : Math.max(0, td.wave - 1)} из ${td.waves.length}, врагов повержено ${td.fallen}`);
+    if (battle && sim && sim.state !== tdEndShown) {
+      tdEndShown = sim.state;
+      if (sim.state === 'won') markWon(mapName);
+      if (sim.state !== 'play') battle.end(sim.state === 'won', `волн отбито ${sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1)} из ${sim.waves.length}, врагов повержено ${sim.fallen}`);
     }
     perf.renderStart();
     render(real);
@@ -1255,7 +1295,6 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     camera.position.copy(camTarget).addScaledVector(CAM_DIR, camDist * (1 + fx.zoom)).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh));
     camera.lookAt(camTarget.x, camTarget.y + 0.6, camTarget.z);
     look.follow(camTarget, camDist);
-    coop?.drawNames(camera);
     weather.update(real, camTarget);
     updateMotes(simTime);
 
@@ -1286,9 +1325,38 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   frame();
 
   // ---------- Отладочный хук ----------
+  /**
+   * Оборона для тестов (tests/td*.spec.ts): фасад над симуляцией (src/sim/td.ts) и меню (src/cgame/td-ui.ts) с местом 0;
+   * действия с казной сразу зеркалят малину в профиль
+   */
+  const tdFacade = sim && tdUi && tdPack ? ((s: SimTd, ui: TdUi, pk: Pack) => ({
+    spec: s.spec, pads: s.pads, towers: s.towers, bush: s.bush, walls: s.walls, lairs: s.lairs, kinds: s.kinds, waves: s.waves, queue: s.queue, pack: pk,
+    get state() { return s.state; }, set state(v) { s.state = v; },
+    get wave() { return s.wave; }, set wave(v) { s.wave = v; },
+    get next() { return s.next; }, set next(v) { s.next = v; },
+    get berries() { return s.berries(0); },
+    get fallen() { return s.fallen; }, get spawned() { return s.spawned; }, get players() { return s.players; },
+    get waveRunning() { return s.waveRunning; }, get earlyBonus() { return s.earlyBonus; }, get nextLanes() { return s.nextLanes; },
+    get menuPad() { return ui.menuPad; }, get menuOpen() { return ui.menuOpen; }, menuEl: ui.menuEl, hudEl: ui.hudEl, alarms: ui.alarms,
+    get alarmMarkers() { return ui.alarmMarkers; },
+    build(pad: SimPad, kind: TowerKind) { syncPurse(); const t = s.build(0, pad, kind); syncPurse(); return t; },
+    upgrade(pad: SimPad) { syncPurse(); const ok = s.upgrade(0, pad); syncPurse(); return ok; },
+    sell(pad: SimPad) { syncPurse(); const n = s.sell(0, pad); syncPurse(); return n; },
+    repairTower(pad: SimPad) { syncPurse(); const ok = s.repairTower(0, pad); syncPurse(); return ok; },
+    repair(wall: SimWall) { syncPurse(); const ok = s.repairWall(0, wall); syncPurse(); return ok; },
+    callWave() { syncPurse(); const ok = s.callWave(0); syncPurse(); return ok; },
+    spawn: (kind: string, at: THREE.Vector3) => s.spawn(kind, at),
+    spawnOn: (kind: string, lane: string) => { const r = s.spawnOn(kind, lane); flushTd(); return r; },
+    wall: (id: string) => s.wall(id), lane: (id: string) => s.lane(id),
+    nearPad: (pos: THREE.Vector3) => s.nearPad(pos), nearWall: (pos: THREE.Vector3) => s.nearWall(pos), repairCost: (w: SimWall) => s.repairCost(w),
+    approach: (p: SimPad, from: THREE.Vector3) => s.approach(p, from), targets: () => s.targets(), preview: () => s.preview(),
+    setPlayers(n: number) { s.setPlayers(n); }, reset() { s.reset(); pk.clear(); syncPurse(); },
+    prompt: (p: SimPad) => ui.prompt(p), wallPrompt: (w: SimWall) => ui.wallPrompt(w),
+    openMenu: (p: SimPad) => ui.openMenu(p), closeMenu: () => ui.closeMenu(), key: (e: KeyboardEvent) => ui.key(e),
+    /** Общий бой по снимкам сервера — позже; null — бой свой */
+    remote: null,
+  }))(sim, tdUi, tdPack) : null;
   window.__malina = {
-    /** Общий бой: CoopHost или CoopGuest (src/net/coop.ts), null — бой свой; гость мог стать хостом */
-    get coop() { return coop; },
     mode: 'playground',
     hero, input, dummies, obstacles, camera, HERO, SWORD, props, level, terrain,
     /** Рендер уровня и декора */
@@ -1311,8 +1379,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     bossScale(level: number | 'hero', players = bossPlayers) { bossLevelPick = String(level); bossPlayers = players; rescaleBosses(); return { level: bossLevel(), players: bossPlayers }; },
     /** Рядовые мобы (src/mobs/): pack.mobs; вызвать моба в точку */
     pack,
-    /** Оборона куста (src/td/): pads, towers, build(pad, kind), pack врагов, walls (осада); lavaFx — дымка и искры лавы (cells) */
-    td, lavaFx, mistFx,
+    /** Оборона куста: фасад (pads, towers, build(pad, kind), pack врагов, walls); world и sim — мир симуляции (src/sim/); lavaFx — дымка и искры лавы (cells) */
+    td: tdFacade, world, sim, tdView, tdUi, lavaFx, mistFx,
     /** Комнаты мобов: spec (посты, вход) и стая гарнизона; fillRoom — заново на постах */
     mobRooms, fillRoom,
     spawnMob(kind: string, x: number, z: number) { return pack.spawn(kind, new THREE.Vector3(x, 0, z)); },
@@ -1356,7 +1424,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Нажатие пробела: перекат */
     press(what: 'roll') { input[what] = true; },
     /** Нажать ЛКМ в точке на земле (shift — удар на месте); цель в этой точке — подойти и бить */
-    click(x: number, z: number, shift = false, y?: number) { pointer.ground.set(x, y ?? terrain.floorAt(x, z, hero.pos.y + 4), z); pointer.hover = pickAt(x, z); pointer.pad = td && !pointer.hover ? td.nearPad(new THREE.Vector3(x, y ?? 0, z)) : null; pointer.shift = shift; pointer.down = true; },
+    click(x: number, z: number, shift = false, y?: number) { pointer.ground.set(x, y ?? terrain.floorAt(x, z, hero.pos.y + 4), z); pointer.hover = pickAt(x, z); pointer.pad = sim && !pointer.hover ? sim.nearPad(new THREE.Vector3(x, y ?? 0, z)) : null; pointer.shift = shift; pointer.down = true; },
     /** Отпустить ЛКМ */
     release() { pointer.down = false; },
     get goal() { return goal; },
