@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { glowTex } from '../loot-look';
-import { C, glowMat, rand, UNIT, type BossHooks } from './kit';
+import { rnd } from '../rng.ts';
+import { glowTex } from '../loot-look.ts';
+import { C, glowMat, rand, UNIT, type BossHooks } from './kit.ts';
 
 /**
  * Сила боя — на полу (wiki/design-bosses.md, раздел 2): метки атак (круг, полоса), снаряды по дуге, опасные зоны.
@@ -53,7 +54,8 @@ export class Field {
   /** Замедление героя от зон (0..1) */
   heroSlow = 0;
 
-  constructor(private readonly h: BossHooks) {}
+  private readonly h: BossHooks;
+  constructor(h: BossHooks) { this.h = h;}
 
   /** Круг-метка: наливается dur секунд, потом done (там и бьют) */
   markCircle(at: THREE.Vector3, r: number, dur: number, done: () => void, color = RED): void {
@@ -128,7 +130,7 @@ export class Field {
       l.mesh.position.lerpVectors(l.from, l.to, k);
       l.mesh.position.y = THREE.MathUtils.lerp(l.from.y, 0.3, k) + Math.sin(Math.PI * k) * l.h;
       l.mesh.rotation.set(l.t * 6, l.t * 4, 0);
-      if (Math.random() < 0.7) this.h.fx.particle({ pos: l.mesh.position.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.2, 0.8), rand(-0.3, 0.3)), life: 0.4, size: rand(0.08, 0.16), color: l.trail, gravity: -0.5 });
+      if (rnd() < 0.7) this.h.fx.particle({ pos: l.mesh.position.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.2, 0.8), rand(-0.3, 0.3)), life: 0.4, size: rand(0.08, 0.16), color: l.trail, gravity: -0.5 });
       if (k >= 1) { this.lobs.splice(i, 1); this.disposeMesh(l.mesh); l.land(l.to.clone()); }
     }
     const hero = this.h.hero.pos;
@@ -137,7 +139,7 @@ export class Field {
       const z = this.hazards[i];
       z.t -= dt;
       if (z.t <= 0) { this.hazards.splice(i, 1); continue; }
-      if (Math.random() < 0.3 * Math.min(1, z.t)) this.h.fx.particle({ pos: z.pos.clone().add(new THREE.Vector3(rand(-z.r, z.r) * 0.6, 0.05, rand(-z.r, z.r) * 0.6)), vel: new THREE.Vector3(0, rand(0.8, 1.8), 0), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: z.color, gravity: -1 });
+      if (rnd() < 0.3 * Math.min(1, z.t)) this.h.fx.particle({ pos: z.pos.clone().add(new THREE.Vector3(rand(-z.r, z.r) * 0.6, 0.05, rand(-z.r, z.r) * 0.6)), vel: new THREE.Vector3(0, rand(0.8, 1.8), 0), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: z.color, gravity: -1 });
       if (Math.hypot(hero.x - z.pos.x, hero.z - z.pos.z) < z.r) { dps = Math.max(dps, z.dps); slow = Math.max(slow, z.slow); }
     }
     this.heroSlow = slow;

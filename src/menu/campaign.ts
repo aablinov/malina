@@ -1,5 +1,5 @@
-import { mapByName } from '../level/maps';
-import type { TdSpec } from '../td/types';
+import { mapByName } from '../level/maps.ts';
+import type { TdSpec } from '../td/types.ts';
 
 /**
  * Карты обороны куста для выбора в лагере (wiki/design-main-menu.md): по возрастанию сложности.

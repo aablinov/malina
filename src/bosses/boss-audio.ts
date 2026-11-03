@@ -1,6 +1,6 @@
-import { duck } from '../audio';
-import { bell, boom, deg, hiss, semi, voice } from '../spell-audio';
-import { rand } from './kit';
+import { duck } from '../audio.ts';
+import { bell, boom, deg, hiss, semi, voice } from '../spell-audio.ts';
+import { rand } from './kit.ts';
 
 /**
  * Звук стражей (wiki/design-bosses.md). Как у заклинаний: сила — из низа (boom через насыщение), рёв — пила сквозь

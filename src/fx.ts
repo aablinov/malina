@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import type { Textures } from './textures';
-import { FxPool } from './pool';
-import { Bolts, Cubes } from './fx-bolts';
-import { Streaks, type StreakOptions } from './fx-streaks';
+import type { Textures } from './textures.ts';
+import { FxPool } from './pool.ts';
+import { Bolts, Cubes } from './fx-bolts.ts';
+import { Streaks, type StreakOptions } from './fx-streaks.ts';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -68,7 +68,9 @@ class Pool {
   private n = 0;
   private oldest = 0;
 
-  constructor(scene: THREE.Scene, private readonly max: number, material: THREE.Material, private readonly ground = true) {
+  private readonly max: number;
+  private readonly ground: boolean;
+  constructor(scene: THREE.Scene, max: number, material: THREE.Material, ground: boolean = true) { this.max = max; this.ground = ground;
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, max);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
@@ -229,12 +231,15 @@ export class FX {
   private readonly titleEl: HTMLDivElement;
   private titleT = 0;
 
+  private readonly scene: THREE.Scene;
+  private readonly camera: THREE.Camera;
+  private readonly T: Textures;
+  private readonly overlay: HTMLElement;
   constructor(
-    private readonly scene: THREE.Scene,
-    private readonly camera: THREE.Camera,
-    private readonly T: Textures,
-    private readonly overlay: HTMLElement,
-  ) {
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+    T: Textures,
+    overlay: HTMLElement) { this.scene = scene; this.camera = camera; this.T = T; this.overlay = overlay;
     this.solid = new Pool(scene, 900, new THREE.MeshLambertMaterial());
     const meshSlot = (): Slot<THREE.MeshBasicMaterial> => {
       const mat = markShared(additive(new THREE.Color('#fff')));

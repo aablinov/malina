@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { resolveCircle } from '../collision';
-import { HERO } from '../tuning';
-import type { Target } from '../target';
-import { boom, hiss, voice } from '../spell-audio';
-import type { Rect } from './arena';
-import { Field } from './field';
-import { Boss, C, glowMat, rand, RASP, UNIT, wrap, type BossHooks } from './kit';
+import { resolveCircle } from '../collision.ts';
+import { HERO } from '../tuning.ts';
+import type { Target } from '../target.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import type { Rect } from './arena.ts';
+import { Field } from './field.ts';
+import { Boss, C, glowMat, rand, RASP, UNIT, wrap, type BossHooks } from './kit.ts';
 
 /**
  * Мини-босс в духе Minecraft Dungeons (wiki/design-bosses.md, раздел 1): тело из нескольких крупных кубов, не больше
@@ -33,7 +33,9 @@ export class Minion implements Target {
   /** Тает (призрак): прозрачность 0..1 */
   ghost = false;
 
-  constructor(private readonly h: BossHooks, at: THREE.Vector3, readonly look: { body: string; head: string; eye: THREE.Color; size?: number; hp?: number; dmg?: number; speed?: number; ghost?: boolean }) {
+  private readonly h: BossHooks;
+  readonly look: { body: string; head: string; eye: THREE.Color; size?: number; hp?: number; dmg?: number; speed?: number; ghost?: boolean };
+  constructor(h: BossHooks, at: THREE.Vector3, look: { body: string; head: string; eye: THREE.Color; size?: number; hp?: number; dmg?: number; speed?: number; ghost?: boolean }) { this.h = h; this.look = look;
     const s = look.size ?? 1;
     this.radius = 0.4 * s;
     this.topY = 1.5 * s;
@@ -138,8 +140,9 @@ export abstract class MiniBoss extends Boss {
   /** Тело твёрдое: расталкивает героя (под землёй, в тумане — нет) */
   protected get solid(): boolean { return true; }
 
-  constructor(h: BossHooks, hp: number, home: THREE.Vector3, homeYaw: number, readonly arena: Rect) {
-    super(h, hp, home, homeYaw);
+  readonly arena: Rect;
+  constructor(h: BossHooks, hp: number, home: THREE.Vector3, homeYaw: number, arena: Rect) {
+    super(h, hp, home, homeYaw); this.arena = arena;
     this.field = new Field(this.h);
     this.setPlayers(1);
     this.group.add(this.body);

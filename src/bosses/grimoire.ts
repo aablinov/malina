@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import type { FX } from '../fx';
-import { iconCanvas } from '../icons';
-import { itemDef, RARITY } from '../items';
-import { additiveSprite, glowTex, groundGlow, lightBeam, raysTex } from '../loot-look';
-import { bossSfx } from './boss-audio';
-import { C, glowMat, RASP, UNIT } from './kit';
+import type { FX } from '../fx.ts';
+import { iconCanvas } from '../icons.ts';
+import { itemDef, RARITY } from '../items.ts';
+import { additiveSprite, glowTex, groundGlow, lightBeam, raysTex } from '../loot-look.ts';
+import { bossSfx } from './boss-audio.ts';
+import { C, glowMat, RASP, UNIT } from './kit.ts';
 
 /**
  * Гримуар со стража (wiki/design-spells.md, раздел 1): столб света, замедление, хор; книга поднимается из лопнувшего
@@ -51,7 +51,12 @@ export class Grimoire {
   private readonly floor: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly rays: THREE.Sprite;
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, at: THREE.Vector3, readonly item: string, readonly power: number, private readonly quiet: () => boolean) {
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  readonly item: string;
+  readonly power: number;
+  private readonly quiet: () => boolean;
+  constructor(scene: THREE.Scene, fx: FX, at: THREE.Vector3, item: string, power: number, quiet: () => boolean) { this.scene = scene; this.fx = fx; this.item = item; this.power = power; this.quiet = quiet;
     this.pos = at.clone();
     const def = itemDef(item);
     const c = new THREE.Color(RARITY[def.rarity].color);

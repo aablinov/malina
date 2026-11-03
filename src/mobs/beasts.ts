@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit';
-import { Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * Звери Ордена (wiki/design-mobs.md, семья E): ягодный кабанчик, жук-ягодник, лозоплёт, улей со шмелями.
@@ -67,7 +68,7 @@ export class Boarlet extends Mob {
       this.field.markLine(this.pos.clone(), this.dir, 10, 1.3, 0.8, () => undefined);
     }
     // роет копытом 0,8 с — и несётся 10 м
-    if (t < 0.8) { if (Math.random() < 0.3) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#8a6a40', gravity: 6 }); return false; }
+    if (t < 0.8) { if (rnd() < 0.3) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#8a6a40', gravity: 6 }); return false; }
     const blocked = this.dash(this.dir, 10, dt);
     this.ran += 10 * dt;
     if (!this.hitDone && this.inCircle(this.pos, this.radius + 0.2)) { this.hitDone = true; this.hurt(10, this.pos.clone().addScaledVector(this.dir, -1), 8); if (!this.quiet) boom(160, 60, 0.3, 0.35); }
@@ -148,7 +149,7 @@ export class BurrowBeetle extends Mob {
     if (t < 2.4 && d > 0.3 && !this.hitDone) {
       const sp = 4.5 * dt;
       this.pos.x += (dx / d) * Math.min(sp, d); this.pos.z += (dz / d) * Math.min(sp, d);
-      if (Math.random() < 0.4) this.h.fx.particle({ pos: this.pos.clone().setY(0.15), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#7a5a3a', gravity: 6 });
+      if (rnd() < 0.4) this.h.fx.particle({ pos: this.pos.clone().setY(0.15), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#7a5a3a', gravity: 6 });
       return false;
     }
     if (!this.hitDone) {

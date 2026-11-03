@@ -8,7 +8,9 @@ import { test } from 'node:test';
  * и не тянуть сцену three, DOM, FX, звук, стили и недетерминированные источники — они общие для сервера и клиента.
  */
 const ROOT = join(import.meta.dirname, '..', '..');
-const DIRS = ['src/sim', 'src/net', 'src/game'];
+/** Чистые каталоги: без вида, DOM и случайности; src/game — безголовый бой на тех же классах, что в браузере: только грузится в Node */
+const PURE = ['src/sim', 'src/net'];
+const DIRS = [...PURE, 'src/game'];
 /** Клиентские модули, которым место в src/net ради общего протокола, но в Node они не грузятся (WebSocket браузера, DOM) */
 const CLIENT_ONLY = new Set(['src/net/client.ts', 'src/net/coop.ts', 'src/net/battle-ui.ts']);
 const BANNED: [RegExp, string][] = [
@@ -30,12 +32,13 @@ function walk(dir: string): string[] {
   return out;
 }
 
-const files = DIRS.flatMap((d) => { try { return walk(join(ROOT, d)); } catch { return []; } })
+const list = (dirs: string[]): string[] => dirs.flatMap((d) => { try { return walk(join(ROOT, d)); } catch { return []; } })
   .map((p) => relative(ROOT, p)).filter((p) => !CLIENT_ONLY.has(p));
+const pure = list(PURE), files = list(DIRS);
 
 test('модули симуляции и сети не трогают DOM, сцену и случайность', () => {
   const bad: string[] = [];
-  for (const f of files) {
+  for (const f of pure) {
     const src = readFileSync(join(ROOT, f), 'utf8');
     for (const [re, why] of BANNED) {
       const m = re.exec(src);

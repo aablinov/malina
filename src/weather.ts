@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { WeatherKind } from './world';
+import type { WeatherKind } from './world.ts';
 
 /**
  * Погода: частицы в коробке вокруг точки интереса (камеры или героя) — дождь штрихами, снег хлопьями, листопад,

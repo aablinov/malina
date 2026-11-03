@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import type { Spells } from '../spells';
-import { bell, boom, hiss, voice } from '../spell-audio';
-import type { Target } from '../target';
-import { rand } from './kit';
+import type { Spells } from '../spells.ts';
+import { bell, boom, hiss, voice } from '../spell-audio.ts';
+import type { Target } from '../target.ts';
+import { rand } from './kit.ts';
 
 /**
  * Малиновая кровь (wiki/design-spells.md, «Базовые заклинания»), как магия крови в Elden Ring:

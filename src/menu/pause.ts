@@ -1,5 +1,5 @@
-import { menuUrl } from './session';
-import type { SettingsPanel } from './settings-panel';
+import { menuUrl } from './session.ts';
+import type { SettingsPanel } from './settings-panel.ts';
 
 /**
  * Меню боя, пришедшего из главного меню (`?from=menu`, wiki/design-main-menu.md):
@@ -12,7 +12,9 @@ export class BattleMenu {
   onRestart?: () => void;
   onLeave?: () => void;
 
-  constructor(parent: HTMLElement, readonly settings: SettingsPanel, private readonly mapTitle: string) {
+  readonly settings: SettingsPanel;
+  private readonly mapTitle: string;
+  constructor(parent: HTMLElement, settings: SettingsPanel, mapTitle: string) { this.settings = settings; this.mapTitle = mapTitle;
     const el = document.createElement('div');
     el.className = 'pz';
     parent.appendChild(el);

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, rand, RASP, wrap } from '../bosses/kit';
-import { Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, rand, RASP, wrap } from '../bosses/kit.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * Рядовые без доспехов (wiki/design-mobs.md): малинёныш (порождения куста, C), увядший садовник (павшие садовники, D),
@@ -96,7 +97,7 @@ export class WitheredGardener extends Mob {
     const skin = this.lam('#7aa060', pixelTex('#7aa060', 12, 641)), shirt = this.lam('#3e8f8a', pixelTex('#3e8f8a', 10, 642));
     const pants = this.lam('#4a4a8a', pixelTex('#4a4a8a', 8, 643)), stain = this.lam('#a8204a');
     const straw = this.lam('#e0c060', pixelTex('#e0c060', 12, 644)), wood = this.lam('#7a5232'), iron = this.lam('#9aa0a8');
-    const eye = this.shimmer(C(1.2, 3.4, 1), RASP, Math.random() * 6, 1.4);
+    const eye = this.shimmer(C(1.2, 3.4, 1), RASP, rnd() * 6, 1.4);
     const B = this.box.bind(this);
     this.legs = [-1, 1].map((s) => {
       const g = new THREE.Group();
@@ -167,7 +168,7 @@ export class RaspWolf extends Mob {
   private readonly legs: THREE.Group[];
   private readonly head = new THREE.Group();
   /** В какую сторону кружит */
-  private readonly side = Math.random() < 0.5 ? -1 : 1;
+  private readonly side = rnd() < 0.5 ? -1 : 1;
   private readonly leapDir = new THREE.Vector3();
   private leapLen = 0;
 
@@ -179,7 +180,7 @@ export class RaspWolf extends Mob {
     this.mass = 0.9;
     const fur = this.lam('#8d8f96', pixelTex('#8d8f96', 12, 651)), light = this.lam('#c9cbd0'), mane = this.lam('#b8285a', pixelTex('#b8285a', 12, 652));
     const dark = this.lam('#3a3a40'), gold = this.lam('#e8b84a');
-    const eye = this.shimmer(C(3.4, 1.6, 2.6), RASP, Math.random() * 6, 2);
+    const eye = this.shimmer(C(3.4, 1.6, 2.6), RASP, rnd() * 6, 2);
     const B = this.box.bind(this);
     B(this.body, fur, 0.5, 0.48, 1.0, 0, 0.72, 0);
     // малиновая грива по хребту и ошейник Ордена с ягодой

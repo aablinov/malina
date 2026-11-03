@@ -13,7 +13,10 @@ export class PadView {
   private readonly disc: THREE.Mesh;
   private readonly discMat: THREE.MeshBasicMaterial;
 
-  constructor(private readonly scene: THREE.Scene, readonly spec: TdPad, readonly index: number) {
+  private readonly scene: THREE.Scene;
+  readonly spec: TdPad;
+  readonly index: number;
+  constructor(scene: THREE.Scene, spec: TdPad, index: number) { this.scene = scene; this.spec = spec; this.index = index;
     this.pos = new THREE.Vector3(spec.x, spec.y ?? 0, spec.z);
     this.group.position.copy(this.pos);
     // кольцо-подсветка: тускло всегда, ярко под курсором; каменный круг площадки рисует карта блоками

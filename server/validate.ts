@@ -2,8 +2,7 @@ import { ITEMS, type ProfileData } from '../src/items.ts';
 import { MAX_PLAYERS, NET_LIMITS, type ClientMsg } from '../src/net/protocol.ts';
 
 /**
- * Проверка входящих данных без внешних библиотек. Бой считает хост, поэтому от читов это не защищает —
- * отсекаем мусор, переполнения и ссылки в никуда
+ * Проверка входящих данных без внешних библиотек: отсекаем мусор, переполнения и ссылки в никуда
  */
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -66,13 +65,6 @@ export function checkClientMsg(v: unknown): ClientMsg | null {
     case 'room.ready': return typeof v.ready === 'boolean' ? (v as ClientMsg) : null;
     case 'room.map': return isStr(v.map, 32) ? (v as ClientMsg) : null;
     case 'room.kick': return isStr(v.playerId, 64) ? (v as ClientMsg) : null;
-    case 'relay': return (v.to === undefined || isInt(v.to, 0, MAX_PLAYERS - 1)) && 'd' in v ? (v as ClientMsg) : null;
-    case 'battle.end': {
-      if ((v.result !== 'won' && v.result !== 'lost') || !isInt(v.wave, 0, 1000) || !Array.isArray(v.rewards) || v.rewards.length > MAX_PLAYERS) return null;
-      const ok = v.rewards.every((r) => isObj(r) && isStr(r.playerId, 64) && isInt(r.berries, 0, BIG) && isInt(r.xp, 0, BIG));
-      return ok ? (v as ClientMsg) : null;
-    }
-    case 'battle.loot': return isStr(v.matchId, 64) && isInt(v.berries, 0, BIG) && isInt(v.xp, 0, BIG) ? (v as ClientMsg) : null;
     default: return null;
   }
 }

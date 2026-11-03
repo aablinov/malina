@@ -74,12 +74,12 @@ export class SimTd {
     this.pads = spec.pads.map((p, i) => new SimPad(p, i));
     this.next = spec.rest ?? 20;
     this.bush = new SimBush(w, spec.bush.x, spec.bush.z, spec.bush.hp);
-    this.undecoy.push(addDecoy(this.bush));
+    this.undecoy.push(addDecoy(this.bush, w.decoys));
     this.lairs = spec.lanes.map((l) => new SimLair(w, l));
     this.kinds = (spec.towers ?? TOWER_ORDER.slice(0, BASE_TOWERS)).filter((k): k is TowerKind => k in TOWERS);
     this.walls = w.level ? (spec.walls ?? []).map((ws) => new SimWall(w, w.level!, ws)) : [];
     for (const wall of this.walls) {
-      this.undecoy.push(addDecoy(wall));
+      this.undecoy.push(addDecoy(wall, w.decoys));
       wall.onBreak = () => { this.breach(wall); };
       wall.onRepair = () => { this.solidsN = -1; };
     }
@@ -169,7 +169,7 @@ export class SimTd {
     t.onAlarm = (why) => this.onAlarm?.(t, why);
     p.tower = t;
     this.towers.push(t);
-    this.decoyOf.set(t, addDecoy(t));
+    this.decoyOf.set(t, addDecoy(t, this.w.decoys));
     this.w.emit({ t: 'tower.build', id: t.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, kind, cost: def.cost, seat });
     return t;
   }

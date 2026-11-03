@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { h, icon, menuButton, type MenuItem } from './ui';
+import { h, icon, menuButton, type MenuItem } from './ui.ts';
 
 /**
  * Вьюпорты редактора, как в Unreal: один большой или четыре (перспектива, сверху, спереди, сбоку).
@@ -45,7 +45,9 @@ export class Viewport {
   /** Камера летит к цели (F) */
   private fly: { from: THREE.Vector3; to: THREE.Vector3; camFrom: THREE.Vector3; camTo: THREE.Vector3; zoomTo: number; t: number } | null = null;
 
-  constructor(readonly owner: Viewports, readonly index: number, kind: ViewKind, persp: THREE.PerspectiveCamera) {
+  readonly owner: Viewports;
+  readonly index: number;
+  constructor(owner: Viewports, index: number, kind: ViewKind, persp: THREE.PerspectiveCamera) { this.owner = owner; this.index = index;
     this.kind = kind;
     this.persp = persp;
     this.el = h('div.ue-vp');
@@ -218,7 +220,9 @@ export class Viewports {
   onHome?: (vp: Viewport) => void;
   onLayout?: () => void;
 
-  constructor(readonly canvas: HTMLCanvasElement, readonly renderer: THREE.WebGLRenderer, mainCamera: THREE.PerspectiveCamera) {
+  readonly canvas: HTMLCanvasElement;
+  readonly renderer: THREE.WebGLRenderer;
+  constructor(canvas: HTMLCanvasElement, renderer: THREE.WebGLRenderer, mainCamera: THREE.PerspectiveCamera) { this.canvas = canvas; this.renderer = renderer;
     this.el.append(canvas);
     const kinds: ViewKind[] = ['persp', 'top', 'front', 'right'];
     kinds.forEach((k, i) => {

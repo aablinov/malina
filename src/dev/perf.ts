@@ -67,7 +67,8 @@ export class Perf {
   /** Включён ли сбор (иначе ничего не стоит) */
   enabled = true;
 
-  constructor(private readonly renderer: THREE.WebGLRenderer) {
+  private readonly renderer: THREE.WebGLRenderer;
+  constructor(renderer: THREE.WebGLRenderer) { this.renderer = renderer;
     // info сбрасывается руками: композер делает несколько проходов за кадр, и автосброс считал бы только последний
     renderer.info.autoReset = false;
     this.gpu = initGpuTimer(renderer);

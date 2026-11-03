@@ -1,4 +1,4 @@
-import { audioCore } from './audio';
+import { audioCore } from './audio.ts';
 
 /**
  * Фоновая музыка кодом (Web Audio, без файлов): тихая генеративная пьеса на пентатонике.

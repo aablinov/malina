@@ -1,18 +1,19 @@
+import { makeCanvas } from './headless.ts';
 /**
  * Пиксельные иконки предметов и HUD в духе Minecraft Dungeons: сетка 16 × 16, рисуются кодом,
  * тёмный контур добавляется сам вокруг закрашенных пикселей. Отдаются как data-URL — в CSS их растягивают
  * с image-rendering: pixelated. Внешних картинок нет (как и у текстур).
  */
 
-import { ICONS as AURA_ICONS } from './aura-icons';
-import { ICONS as DARK_ARCANE_ICONS } from './magic/dark-arcane-icons';
-import { ICONS as EARTH_ICONS } from './magic/earth-icons';
-import { ICONS as FIRE_ICE_ICONS } from './magic/fire-ice-icons';
-import { ICONS as STORM_LIGHT_ICONS } from './magic/storm-light-icons';
-import { ICONS as BASE_FIRE_ICONS } from './magic/base-fire-icons';
-import { ICONS as BASE_SUMMON_ICONS } from './magic/base-summon-icons';
-import { ICONS as BASE_BLOOD_ICONS } from './magic/base-blood-icons';
-import { ICONS as BASE_LIGHT_ICONS } from './magic/base-light-icons';
+import { ICONS as AURA_ICONS } from './aura-icons.ts';
+import { ICONS as DARK_ARCANE_ICONS } from './magic/dark-arcane-icons.ts';
+import { ICONS as EARTH_ICONS } from './magic/earth-icons.ts';
+import { ICONS as FIRE_ICE_ICONS } from './magic/fire-ice-icons.ts';
+import { ICONS as STORM_LIGHT_ICONS } from './magic/storm-light-icons.ts';
+import { ICONS as BASE_FIRE_ICONS } from './magic/base-fire-icons.ts';
+import { ICONS as BASE_SUMMON_ICONS } from './magic/base-summon-icons.ts';
+import { ICONS as BASE_BLOOD_ICONS } from './magic/base-blood-icons.ts';
+import { ICONS as BASE_LIGHT_ICONS } from './magic/base-light-icons.ts';
 
 export type Draw = (p: Pen) => void;
 
@@ -690,8 +691,7 @@ export function iconCanvas(name: string, mono?: string): HTMLCanvasElement {
   const draw = ICONS[name] ?? ICONS.grid;
   const pen = new Pen();
   draw(pen);
-  const c = document.createElement('canvas');
-  c.width = c.height = N;
+  const c = makeCanvas(N, N);
   const g = c.getContext('2d');
   if (!g) return c;
   if (!mono) {

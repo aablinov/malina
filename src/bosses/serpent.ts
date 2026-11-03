@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import type { Target } from '../target';
-import { boom, hiss, voice } from '../spell-audio';
-import type { Rect } from './arena';
-import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit';
-import { MiniBoss, type MiniState } from './mini';
+import { pixelTex } from '../textures.ts';
+import type { Target } from '../target.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import type { Rect } from './arena.ts';
+import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
+import { MiniBoss, type MiniState } from './mini.ts';
 
 /**
  * Рдяный Змей — босс этажа (wiki/design-bosses.md, раздел 4): огромный огненный змей — тупая кубическая голова
@@ -50,7 +50,9 @@ class Bush implements Target {
   private readonly mats: THREE.Material[] = [];
   private readonly leaf: THREE.MeshLambertMaterial;
 
-  constructor(private readonly h: BossHooks, at: THREE.Vector3, private readonly chopped: () => void) {
+  private readonly h: BossHooks;
+  private readonly chopped: () => void;
+  constructor(h: BossHooks, at: THREE.Vector3, chopped: () => void) { this.h = h; this.chopped = chopped;
     this.pos = at.clone().setY(0);
     this.leaf = new THREE.MeshLambertMaterial({ color: '#3a5a22' });
     const dark = new THREE.MeshLambertMaterial({ color: '#2a3a1a' });

@@ -1,10 +1,10 @@
-import { auraLines } from '../aura-offense';
-import { iconImg, iconURL } from '../icons';
-import { armorHealth, ITEMS, itemDef, PERK_TEXT, powerMult, PRICE, RARITY, SLOT_TITLE, type Item, type ItemDef, type ItemSlot, type Profile } from '../items';
-import { MERCHANT_TITLE, type MerchantKind } from '../merchants';
-import { priceOf } from '../prices';
-import { WEAPON_SPECIAL } from '../temper';
-import { getWeapon, weaponMetrics } from '../weapons';
+import { auraLines } from '../aura-offense.ts';
+import { iconImg, iconURL } from '../icons.ts';
+import { armorHealth, ITEMS, itemDef, PERK_TEXT, powerMult, PRICE, RARITY, SLOT_TITLE, type Item, type ItemDef, type ItemSlot, type Profile } from '../items.ts';
+import { MERCHANT_TITLE, type MerchantKind } from '../merchants.ts';
+import { priceOf } from '../prices.ts';
+import { WEAPON_SPECIAL } from '../temper.ts';
+import { getWeapon, weaponMetrics } from '../weapons.ts';
 import './shop.css';
 
 /**
@@ -55,7 +55,8 @@ export class Shop {
   /** Звук: купили или не хватает */
   onSound?: (ok: boolean) => void;
 
-  constructor(parent: HTMLElement, private readonly profile: Profile) {
+  private readonly profile: Profile;
+  constructor(parent: HTMLElement, profile: Profile) { this.profile = profile;
     const el = document.createElement('div');
     el.className = 'trade';
     parent.appendChild(el);

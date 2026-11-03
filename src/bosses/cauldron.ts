@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import type { Rect } from './arena';
-import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit';
-import { MiniBoss } from './mini';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import type { Rect } from './arena.ts';
+import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
+import { MiniBoss } from './mini.ts';
 
 /**
  * Котёл Ордена — мини-босс (wiki/design-bosses.md, раздел 2): медный котёл на коротких ножках, в нём кипит малиновое

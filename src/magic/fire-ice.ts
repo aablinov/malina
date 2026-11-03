@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { duck } from '../audio';
-import type { BossSpellKind } from '../items';
-import { additiveSprite, glowTex } from '../loot-look';
-import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio';
-import type { Spells } from '../spells';
-import type { Target } from '../target';
-import { C, rand, type Spell } from './kit';
+import { rnd } from '../rng.ts';
+import { duck } from '../audio.ts';
+import type { BossSpellKind } from '../items.ts';
+import { additiveSprite, glowTex } from '../loot-look.ts';
+import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { C, rand, type Spell } from './kit.ts';
 
 /**
  * Огонь и лёд (wiki/design-spells.md, раздел 3): небесный молот, пламенный змей, пепельная корона,
@@ -32,8 +33,8 @@ function burnSpots(kit: Spells, spots: THREE.Vector3[], dur: number, rate = 0.35
   kit.proc((dt) => {
     left -= dt;
     const fade = Math.min(1, left);
-    for (const p of spots) if (Math.random() < rate * fade) {
-      fx.particle({ pos: p.clone().add(new THREE.Vector3(rand(-0.2, 0.2), 0.05, rand(-0.2, 0.2))), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: Math.random() < 0.6 ? FIRE_A : FIRE_B, gravity: -1.5 });
+    for (const p of spots) if (rnd() < rate * fade) {
+      fx.particle({ pos: p.clone().add(new THREE.Vector3(rand(-0.2, 0.2), 0.05, rand(-0.2, 0.2))), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: rnd() < 0.6 ? FIRE_A : FIRE_B, gravity: -1.5 });
     }
     return left > 0;
   });
@@ -54,7 +55,7 @@ function iceShards(kit: Spells, c: THREE.Vector3, R: number, n: number): void {
     m.scale.set(s, s * rand(1, 2.2), s);
     m.position.copy(c);
     g.add(m);
-    const a = Math.random() * Math.PI * 2;
+    const a = rnd() * Math.PI * 2;
     return { m, v: new THREE.Vector3(Math.cos(a), rand(0.2, 0.9), Math.sin(a)).multiplyScalar(R * rand(1.2, 2.2)), spin: new THREE.Vector3(rand(-9, 9), rand(-9, 9), rand(-9, 9)) };
   });
   const dur = 0.9;
@@ -82,7 +83,7 @@ const sfx = {
     hiss({ dur: 0.18, vol: 0.45, f: 1200, q: 0.5, verb: 0.3 });
     hiss({ dur: 1.6, vol: 0.3, f: 1400, f1: 120, q: 0.4, type: 'lowpass', verb: 0.5 });
     [0, 7, 12, 19].forEach((s, i) => voice({ type: 'sawtooth', f: semi(98, s), dur: 1.2, vol: 0.05, detune: 10, lp: 2800, lp1: 220, delay: i * 0.02, verb: 0.55 }));
-    for (let i = 0; i < 10; i++) voice({ type: 'triangle', f: rand(180, 420), dur: 0.08, vol: 0.05, delay: 0.25 + Math.random() * 1, verb: 0.2 });
+    for (let i = 0; i < 10; i++) voice({ type: 'triangle', f: rand(180, 420), dur: 0.08, vol: 0.05, delay: 0.25 + rnd() * 1, verb: 0.2 });
   },
   /** Змей проснулся: рык и шипение */
   serpentWake() {
@@ -111,7 +112,7 @@ const sfx = {
   /** Лёд схватился: стеклянный хруст и высокий аккорд */
   freeze() {
     hiss({ dur: 0.3, vol: 0.25, f: 6000, type: 'highpass', verb: 0.4 });
-    for (let i = 0; i < 7; i++) voice({ type: 'triangle', f: deg(1567.98, (Math.random() * 7) | 0), dur: 0.2, vol: 0.04, delay: i * 0.025, verb: 0.4 });
+    for (let i = 0; i < 7; i++) voice({ type: 'triangle', f: deg(1567.98, (rnd() * 7) | 0), dur: 0.2, vol: 0.04, delay: i * 0.025, verb: 0.4 });
     [0, 4, 7].forEach((s) => bell(semi(783.99, s), 1.4, 0.05, 0.05, 0.7));
     boom(140, 50, 0.5, 0.4);
   },
@@ -124,7 +125,7 @@ const sfx = {
   shatter(k: number) {
     boom(120 - k * 30, 30, 0.9, 0.7, 0, 0.45);
     hiss({ dur: 0.5, vol: 0.35, f: 4500, type: 'highpass', verb: 0.45 });
-    for (let i = 0; i < 16; i++) voice({ type: 'triangle', f: deg(2093, (Math.random() * 9) | 0), dur: 0.15, vol: 0.035, delay: Math.random() * 0.35, verb: 0.4 });
+    for (let i = 0; i < 16; i++) voice({ type: 'triangle', f: deg(2093, (rnd() * 9) | 0), dur: 0.15, vol: 0.035, delay: rnd() * 0.35, verb: 0.4 });
     [0, 4, 7, 12, 16].forEach((s, i) => bell(semi(523.25, s), 1.8, 0.05, 0.04 + i * 0.03, 0.7));
   },
   /** Шип гребня вырос: нота вверх по гамме и хруст */
@@ -182,8 +183,8 @@ const meteor: Spell = {
       g.rotation.set(t * 9, t * 6, t * 4);
       shell.scale.setScalar(size * (1.4 + Math.sin(t * 60) * 0.12));
       light.position.copy(g.position); light.intensity = 8 + t * 10;
-      for (let i = 0; i < 4; i++) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(size * 0.5)), vel: new THREE.Vector3(rand(-1, 1), rand(1, 3), rand(-1, 1)), life: rand(0.3, 0.6), size: size * rand(0.15, 0.3), color: Math.random() < 0.5 ? FIRE_A : FIRE_B, gravity: -2 });
-      if (Math.random() < 0.4) fx.flash(g.position.clone(), FIRE_A.clone().multiplyScalar(0.5), size * 3, 0.15);
+      for (let i = 0; i < 4; i++) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(size * 0.5)), vel: new THREE.Vector3(rand(-1, 1), rand(1, 3), rand(-1, 1)), life: rand(0.3, 0.6), size: size * rand(0.15, 0.3), color: rnd() < 0.5 ? FIRE_A : FIRE_B, gravity: -2 });
+      if (rnd() < 0.4) fx.flash(g.position.clone(), FIRE_A.clone().multiplyScalar(0.5), size * 3, 0.15);
     }, () => { coreMat.dispose(); shellMat.dispose(); rockMat.dispose(); halo.material.dispose(); });
     kit.later(fall, () => {
       // удар: кратер, камни, огненные кубы, кольца
@@ -224,7 +225,7 @@ const meteor: Spell = {
       // послевкусие: выжженное пятно, тлеющий свет, огонь на полу
       fx.decal(c, kit.tex.scorch(), '#ffffff', R * 2.6, 6, false, 0.75);
       fx.decal(c, kit.tex.glow(), FIRE_A.clone().multiplyScalar(0.35), R * 2, 2.5, true);
-      const spots = Array.from({ length: 6 + Math.round(k * 5) }, () => { const ang = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R * 0.9; return c.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.05, Math.sin(ang) * r)); });
+      const spots = Array.from({ length: 6 + Math.round(k * 5) }, () => { const ang = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R * 0.9; return c.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.05, Math.sin(ang) * r)); });
       burnSpots(kit, spots, 3.5 + k, 0.4);
     });
   },
@@ -309,7 +310,7 @@ const flameserpent: Spell = {
         }
         light.position.copy(segs[0].position); light.intensity = 6 + Math.sin(t * 20) * 1.5;
         // пламя с тела
-        for (let i = 0; i < N; i += 3) if (Math.random() < 0.4) fx.particle({ pos: segs[i].position.clone(), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(1, 2.2), rand(-0.4, 0.4)), life: rand(0.25, 0.5), size: rand(0.06, 0.12), color: Math.random() < 0.5 ? FIRE_A : FIRE_B, gravity: -1.5 });
+        for (let i = 0; i < N; i += 3) if (rnd() < 0.4) fx.particle({ pos: segs[i].position.clone(), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(1, 2.2), rand(-0.4, 0.4)), life: rand(0.25, 0.5), size: rand(0.06, 0.12), color: rnd() < 0.5 ? FIRE_A : FIRE_B, gravity: -1.5 });
         // горящая колея
         dropT -= dt;
         if (dropT <= 0) { dropT = 0.18; const p = segs[N - 1].position.clone().setY(head.y + 0.03); rut.push(p); fx.decal(p, kit.tex.scorch(), '#ffffff', 0.9, 3.5, false, 0.55); }
@@ -389,8 +390,8 @@ const ashcrown: Spell = {
         ring.scale.setScalar(r); wall.scale.set(r, 1 - t * 0.6, r);
         ringMat.opacity = 1 - t * 0.7; wallMat.opacity = 0.8 * (1 - t);
         for (let i = 0; i < 10; i++) {
-          const ang = Math.random() * Math.PI * 2;
-          fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.15, Math.sin(ang) * r)), vel: new THREE.Vector3(Math.cos(ang) * 2, rand(1.5, 3), Math.sin(ang) * 2), life: rand(0.25, 0.45), size: rand(0.07, 0.13), color: Math.random() < 0.5 ? FIRE_A : FIRE_B, gravity: -1 });
+          const ang = rnd() * Math.PI * 2;
+          fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.15, Math.sin(ang) * r)), vel: new THREE.Vector3(Math.cos(ang) * 2, rand(1.5, 3), Math.sin(ang) * 2), life: rand(0.25, 0.45), size: rand(0.07, 0.13), color: rnd() < 0.5 ? FIRE_A : FIRE_B, gravity: -1 });
         }
         for (const tg of kit.within(c, r)) {
           if (hit.has(tg)) continue;
@@ -427,7 +428,7 @@ function crystal(kit: Spells, p: THREE.Vector3, h: number, w: number): { g: THRE
     g.add(m);
   }
   g.position.copy(p);
-  g.rotation.y = Math.random() * Math.PI;
+  g.rotation.y = rnd() * Math.PI;
   kit.h.scene.add(g);
   return { g, mat, edge };
 }
@@ -462,7 +463,7 @@ const icetomb: Spell = {
         const grow = Math.min(1, t / 0.2);
         cr.g.scale.set(1, 1 - (1 - grow) ** 3, 1);
         cr.edge.opacity = 0.7 + Math.sin(t * 8) * 0.25;
-        if (Math.random() < 0.3) fx.particle({ pos: c.clone().add(new THREE.Vector3(rand(-w, w) * 0.6, rand(0.2, h), rand(-w, w) * 0.6)), vel: new THREE.Vector3(0, rand(0.2, 0.6), 0), life: 0.6, size: 0.05, color: ICE_B, gravity: -0.2 });
+        if (rnd() < 0.3) fx.particle({ pos: c.clone().add(new THREE.Vector3(rand(-w, w) * 0.6, rand(0.2, h), rand(-w, w) * 0.6)), vel: new THREE.Vector3(0, rand(0.2, 0.6), 0), life: 0.6, size: 0.05, color: ICE_B, gravity: -0.2 });
         // трещит всё чаще, под конец дрожит
         creakT -= dt;
         if (creakT <= 0) { creakT = Math.max(0.06, 0.35 * (1 - t / hold)); sfx.creak(n++); }
@@ -543,7 +544,7 @@ const frostridge: Spell = {
       let left = L / speed + 1.8;
       kit.proc((dt) => {
         left -= dt;
-        if (Math.random() < 0.6) {
+        if (rnd() < 0.6) {
           const ang = base + rand(-spread, spread), dist = rand(1, L);
           fx.particle({ pos: from.clone().add(new THREE.Vector3(Math.sin(ang) * dist, 0.15, Math.cos(ang) * dist)), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.1, 0.4), rand(-0.3, 0.3)), life: 1, size: rand(0.1, 0.16), color: ICE_B.clone().multiplyScalar(0.5), gravity: -0.1, drag: 1 });
         }
@@ -576,7 +577,7 @@ const absolutezero: Spell = {
     kit.proc((dt) => {
       pre -= dt;
       for (let i = 0; i < 4; i++) {
-        const ang = Math.random() * Math.PI * 2, r = R * rand(0.8, 1.1), life = 0.5;
+        const ang = rnd() * Math.PI * 2, r = R * rand(0.8, 1.1), life = 0.5;
         const from = c.clone().add(new THREE.Vector3(Math.cos(ang) * r, rand(0.3, 3), Math.sin(ang) * r));
         fx.particle({ pos: from, vel: c.clone().setY(c.y + 1).sub(from).divideScalar(life * 1.6), life, size: 0.08, color: i % 2 ? ICE_A : ICE_B, gravity: 0 });
       }
@@ -603,7 +604,7 @@ const absolutezero: Spell = {
       });
       // снег в куполе почти висит — время стоит
       const flakes: { p: THREE.Vector3; v: THREE.Vector3 }[] = Array.from({ length: 60 }, () => {
-        const ang = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R * 0.9;
+        const ang = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R * 0.9;
         return { p: c.clone().add(new THREE.Vector3(Math.cos(ang) * r, rand(0.3, R * 0.6), Math.sin(ang) * r)), v: new THREE.Vector3(rand(-0.05, 0.05), -rand(0.02, 0.08), rand(-0.05, 0.05)) };
       });
       fx.decal(c, kit.tex.frost(), ICE_A.clone().multiplyScalar(0.08), R * 2.3, hold + 3, true, 0.85);
@@ -613,7 +614,7 @@ const absolutezero: Spell = {
         const e = Math.min(1, t / 0.4);
         dome.scale.setScalar(R * (1 - (1 - e) ** 3));
         domeMat.opacity = 0.22 + Math.sin(t * 3) * 0.04;
-        for (const f of flakes) { f.p.addScaledVector(f.v, dt); if (Math.random() < 0.12) fx.particle({ pos: f.p.clone(), vel: f.v.clone(), life: 0.25, size: 0.06, color: ICE_B, gravity: 0, shrink: false }); }
+        for (const f of flakes) { f.p.addScaledVector(f.v, dt); if (rnd() < 0.12) fx.particle({ pos: f.p.clone(), vel: f.v.clone(), life: 0.25, size: 0.06, color: ICE_B, gravity: 0, shrink: false }); }
         for (const { cr } of frozen) { cr.g.scale.set(1, Math.min(1, t / 0.25), 1); cr.edge.opacity = 0.6 + Math.sin(t * 6) * 0.2; }
         tick -= dt;
         if (tick <= 0) {

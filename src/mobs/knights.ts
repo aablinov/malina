@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, rand, RASP } from '../bosses/kit';
-import type { Target } from '../target';
-import { Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, rand, RASP } from '../bosses/kit.ts';
+import type { Target } from '../target.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * Рыцари Малины (wiki/design-mobs.md, семья B): скелет «голем» — две ноги, корпус, шлем, две руки. Белые доспехи
@@ -37,7 +38,7 @@ function buildKnight(m: Mob, body: THREE.Group, seed: number, plume: boolean): R
   const dark = m.lam('#2a2630');
   const cape = m.lam('#b3122e', pixelTex('#b3122e', 6, seed + 1));
   const snow = m.lam('#fff6ee'), leaf = m.lam('#5aa03a');
-  const eye = m.shimmer(EYE, RASP, Math.random() * 6, 2);
+  const eye = m.shimmer(EYE, RASP, rnd() * 6, 2);
   const B = m.box.bind(m);
   const legs = [-1, 1].map((s) => {
     const g = new THREE.Group();
@@ -347,7 +348,9 @@ class Standard implements Target {
   up = false;
   readonly group = new THREE.Group();
 
-  constructor(private readonly owner: Mob, private readonly scene: THREE.Scene, mats: { pole: THREE.Material; cloth: THREE.Material; trim: THREE.Material; berry: THREE.Material }) {
+  private readonly owner: Mob;
+  private readonly scene: THREE.Scene;
+  constructor(owner: Mob, scene: THREE.Scene, mats: { pole: THREE.Material; cloth: THREE.Material; trim: THREE.Material; berry: THREE.Material }) { this.owner = owner; this.scene = scene;
     const B = owner.box.bind(owner);
     B(this.group, mats.pole, 0.1, 2.8, 0.1, 0, 1.4, 0);
     B(this.group, mats.trim, 0.9, 0.08, 0.08, 0.38, 2.7, 0);

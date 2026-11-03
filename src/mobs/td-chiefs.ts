@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, rand, RASP } from '../bosses/kit';
-import { decoys } from '../decoys';
-import { HpBar } from '../td/hpbar';
-import { Mob, type MobHooks } from './mob';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, rand, RASP } from '../bosses/kit.ts';
+import { decoyList, type Decoy } from '../decoys.ts';
+import { HpBar } from '../td/hpbar.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * Мини-боссы обороны куста (wiki/design-tower-defence.md, раздел 11): каждую третью волну один идёт вместе со стаей.
@@ -47,8 +47,8 @@ abstract class TdChief extends Mob {
   override stun(): void { /* не оглушается */ }
 
   /** Целые башни в радиусе r */
-  protected towersNear(r: number): typeof decoys {
-    return decoys.filter((d) => d.siege && d.alive && Math.hypot(d.pos.x - this.pos.x, d.pos.z - this.pos.z) < r);
+  protected towersNear(r: number): Decoy[] {
+    return decoyList().filter((d) => d.siege && d.alive && Math.hypot(d.pos.x - this.pos.x, d.pos.z - this.pos.z) < r);
   }
 }
 
@@ -112,7 +112,7 @@ export class RaspberryBrute extends TdChief {
       this.h.fx.shake = Math.max(this.h.fx.shake, 0.5);
       if (!this.quiet) boom(60, 30, 0.6, 0.5);
       // кукла гостя (src/net/coop.ts) бьёт для вида: башни ломает хост
-      if (!this.puppet) for (const d of decoys) if (d.siege && d.alive && Math.hypot(d.pos.x - at.x, d.pos.z - at.z) < r + 0.75) d.hurt(40 * this.dmgMult, at);
+      if (!this.puppet) for (const d of decoyList()) if (d.siege && d.alive && Math.hypot(d.pos.x - at.x, d.pos.z - at.z) < r + 0.75) d.hurt(40 * this.dmgMult, at);
       if (this.inCircle(at, r)) this.hurt(18, at, 6);
     });
   }

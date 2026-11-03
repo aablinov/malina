@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import type { ArtifactStats, StarterSpellKind } from '../items';
-import { additiveSprite, glowTex, lightBeam } from '../loot-look';
-import { spellSfx } from '../spell-audio';
-import type { Spells } from '../spells';
-import type { Target } from '../target';
-import { C, rand, type Spell } from './kit';
+import { rnd } from '../rng.ts';
+import type { ArtifactStats, StarterSpellKind } from '../items.ts';
+import { additiveSprite, glowTex, lightBeam } from '../loot-look.ts';
+import { spellSfx } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { C, rand, type Spell } from './kit.ts';
 
 /**
  * Стартовые заклинания (wiki/design-spells.md, раздел 2): искра, огненный шар, ледяной дождь, лечение — у каждого героя с начала.
@@ -69,10 +70,10 @@ function spark(kit: Spells, a: ArtifactStats, dmg: number, at: THREE.Vector3, k:
     let left = 1 + k * 0.6;
     kit.proc((dt) => {
       left -= dt;
-      if (Math.random() < 0.5) {
+      if (rnd() < 0.5) {
         const c = (first?.alive ? first.pos : hitAt).clone().setY(hitAt.y + rand(0.1, 1.6));
         const e = c.clone().add(new THREE.Vector3(rand(-0.5, 0.5), rand(-0.4, 0.4), rand(-0.5, 0.5)));
-        if (Math.random() < 0.3) kit.bolt(c, e, s.a, 0.02, 0, 0.08);
+        if (rnd() < 0.3) kit.bolt(c, e, s.a, 0.02, 0, 0.08);
         fx.particle({ pos: c, vel: new THREE.Vector3(rand(-2, 2), rand(1, 3), rand(-2, 2)), life: 0.25, size: 0.04, color: s.b, gravity: 6 });
       }
       return left > 0;
@@ -125,8 +126,8 @@ function fireball(kit: Spells, a: ArtifactStats, dmg: number, at: THREE.Vector3,
     shell.scale.setScalar(size * (1.5 + Math.sin(kit.time * 40) * 0.15));
     light.position.copy(g.position); light.intensity = 5 + k * 4;
     // хвост: угли и искры
-    for (let i = 0; i < 3 + k * 3; i++) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(size * 0.6)), vel: dir.clone().multiplyScalar(-rand(1, 3)).add(new THREE.Vector3(rand(-0.6, 0.6), rand(0.4, 1.6), rand(-0.6, 0.6))), life: rand(0.25, 0.5), size: size * rand(0.25, 0.45), color: Math.random() < 0.5 ? s.a : s.b, gravity: -2 });
-    if (Math.random() < 0.3) fx.flash(prev, s.a, size * 4, 0.15);
+    for (let i = 0; i < 3 + k * 3; i++) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(size * 0.6)), vel: dir.clone().multiplyScalar(-rand(1, 3)).add(new THREE.Vector3(rand(-0.6, 0.6), rand(0.4, 1.6), rand(-0.6, 0.6))), life: rand(0.25, 0.5), size: size * rand(0.25, 0.45), color: rnd() < 0.5 ? s.a : s.b, gravity: -2 });
+    if (rnd() < 0.3) fx.flash(prev, s.a, size * 4, 0.15);
     // задел цель, упёрся в стену или долетел
     for (const t of kit.h.targets()) if (t.alive && Math.hypot(t.pos.x - g.position.x, t.pos.z - g.position.z) < t.radius + size) { explode(g.position); return false; }
     const wall = kit.h.terrain.wallHit(prev.x, prev.z, g.position.x, g.position.z, g.position.y - 0.4);
@@ -156,7 +157,7 @@ function fireBoom(kit: Spells, c: THREE.Vector3, R: number, dmg: number, k: numb
   let left = 2.2 + k;
   kit.proc((dt) => {
     left -= dt;
-    for (const p of spots) if (Math.random() < 0.35 * Math.min(1, left)) fx.particle({ pos: p.clone().add(new THREE.Vector3(rand(-0.2, 0.2), 0, rand(-0.2, 0.2))), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: Math.random() < 0.6 ? s.a : s.b, gravity: -1.5 });
+    for (const p of spots) if (rnd() < 0.35 * Math.min(1, left)) fx.particle({ pos: p.clone().add(new THREE.Vector3(rand(-0.2, 0.2), 0, rand(-0.2, 0.2))), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: rnd() < 0.6 ? s.a : s.b, gravity: -1.5 });
     return left > 0;
   });
 }
@@ -177,9 +178,9 @@ function icerain(kit: Spells, a: ArtifactStats, dmg: number, at: THREE.Vector3, 
   kit.proc((dt) => {
     tele0 -= dt;
     for (let i = 0; i < 3; i++) {
-      const a2 = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R;
+      const a2 = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R;
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a2) * r, 0.1, Math.sin(a2) * r)), vel: new THREE.Vector3(0, rand(0.6, 1.4), 0), life: 0.6, size: 0.07, color: s.b, gravity: -0.5 });
-      const a3 = kit.time * 4 + Math.random() * Math.PI * 2;
+      const a3 = kit.time * 4 + rnd() * Math.PI * 2;
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a3) * R * 0.8, 7.5, Math.sin(a3) * R * 0.8)), vel: new THREE.Vector3(-Math.sin(a3) * 5, 0, Math.cos(a3) * 5), life: 0.4, size: 0.1, color: s.a, gravity: 0 });
     }
     return tele0 > 0;
@@ -200,8 +201,8 @@ function icerain(kit: Spells, a: ArtifactStats, dmg: number, at: THREE.Vector3, 
     let left = dur + 1.5;
     kit.proc((dt) => {
       left -= dt;
-      if (Math.random() < 0.7) {
-        const a2 = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R;
+      if (rnd() < 0.7) {
+        const a2 = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R;
         fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a2) * r, 0.15, Math.sin(a2) * r)), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(0.1, 0.4), rand(-0.4, 0.4)), life: 1.1, size: rand(0.1, 0.18), color: s.b.clone().multiplyScalar(0.5), gravity: -0.1, drag: 1 });
       }
       return left > 0;
@@ -213,12 +214,12 @@ function icerain(kit: Spells, a: ArtifactStats, dmg: number, at: THREE.Vector3, 
 function icicle(kit: Spells, c: THREE.Vector3, R: number, delay: number): void {
   kit.later(delay, () => {
     const fx = kit.h.fx, s = kit.color('icerain');
-    const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R;
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R;
     const p = c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
     const m = new THREE.Mesh(ICICLE, icicleMat);
     const sc = rand(0.8, 1.5);
     m.scale.setScalar(sc);
-    m.rotation.y = Math.random() * Math.PI;
+    m.rotation.y = rnd() * Math.PI;
     const fall = 0.28, top = 9;
     let landed = false;
     fx.custom(m, fall + 0.6, (t) => {
@@ -276,10 +277,10 @@ function heal(kit: Spells, amount: number, k: number): void {
     let left = 2 + k;
     kit.proc((dt) => {
       left -= dt;
-      if (Math.random() < 0.6 * Math.min(1, left)) {
-        const a = Math.random() * Math.PI * 2, r = rand(0.3, 1.6);
+      if (rnd() < 0.6 * Math.min(1, left)) {
+        const a = rnd() * Math.PI * 2, r = rand(0.3, 1.6);
         _v.set(hero.pos.x + Math.cos(a) * r, hero.pos.y + rand(2, 3), hero.pos.z + Math.sin(a) * r);
-        fx.particle({ pos: _v, vel: new THREE.Vector3(rand(-0.5, 0.5), -0.3, rand(-0.5, 0.5)), life: 1.6, size: rand(0.05, 0.08), color: Math.random() < 0.5 ? PINK : s.a, gravity: 0.8, drag: 1.5, spin: 4 });
+        fx.particle({ pos: _v, vel: new THREE.Vector3(rand(-0.5, 0.5), -0.3, rand(-0.5, 0.5)), life: 1.6, size: rand(0.05, 0.08), color: rnd() < 0.5 ? PINK : s.a, gravity: 0.8, drag: 1.5, spin: 4 });
       }
       return left > 0;
     });
@@ -292,7 +293,7 @@ export const STARTERS: Record<StarterSpellKind, Spell> = {
     school: 'spark', tier: 'common', title: 'Искра',
     // пока заряжается, по ладони бегут молнии
     charging(kit, hand, k) {
-      if (Math.random() < 0.15 + k * 0.4) kit.bolt(hand, hand.clone().add(new THREE.Vector3(rand(-0.7, 0.7), rand(-0.5, 0.6), rand(-0.7, 0.7))), kit.color('spark').a, 0.025, 0, 0.1);
+      if (rnd() < 0.15 + k * 0.4) kit.bolt(hand, hand.clone().add(new THREE.Vector3(rand(-0.7, 0.7), rand(-0.5, 0.6), rand(-0.7, 0.7))), kit.color('spark').a, 0.025, 0, 0.1);
     },
     cast: spark,
   },
@@ -302,7 +303,7 @@ export const STARTERS: Record<StarterSpellKind, Spell> = {
     orb: (k) => 0.5 + k * 1.3,
     charging(kit, hand, k) {
       const s = kit.color('fireball');
-      if (Math.random() < 0.6) kit.h.fx.particle({ pos: hand.clone(), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(0.8, 1.8), rand(-0.4, 0.4)), life: 0.35, size: 0.07 + k * 0.05, color: Math.random() < 0.5 ? s.a : s.b, gravity: -1 });
+      if (rnd() < 0.6) kit.h.fx.particle({ pos: hand.clone(), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(0.8, 1.8), rand(-0.4, 0.4)), life: 0.35, size: 0.07 + k * 0.05, color: rnd() < 0.5 ? s.a : s.b, gravity: -1 });
     },
     cast: fireball,
   },

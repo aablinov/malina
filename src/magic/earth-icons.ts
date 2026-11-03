@@ -1,4 +1,4 @@
-import type { Draw } from '../icons';
+import type { Draw } from '../icons.ts';
 
 /** Пиксельные иконки 16 × 16 для заклинаний земли и природы (src/magic/earth.ts) */
 export const ICONS: Record<string, Draw> = {

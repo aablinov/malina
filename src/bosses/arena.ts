@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import type { Obstacle } from '../collision';
-import type { FX } from '../fx';
-import type { Knight } from '../knight';
-import { bossSfx } from './boss-audio';
-import type { BossBar } from './boss-bar';
-import { glowMat, RASP, UNIT, type Boss } from './kit';
+import type { Obstacle } from '../collision.ts';
+import type { FX } from '../fx.ts';
+import type { Knight } from '../knight.ts';
+import { bossSfx } from './boss-audio.ts';
+import type { BossBar } from './boss-bar.ts';
+import { glowMat, RASP, UNIT, type Boss } from './kit.ts';
 
 /**
  * Арена стража (wiki/design-bosses.md, раздел 1): невидимый квадрат у входа — герой вошёл, за спиной поднимаются решётки,
@@ -37,7 +37,12 @@ export class Arena {
   onWin?: (at: THREE.Vector3) => void;
   onStart?: () => void;
 
-  constructor(scene: THREE.Scene, private readonly fx: FX, readonly spec: ArenaSpec, readonly boss: Boss, private readonly bar: BossBar, private readonly quiet: () => boolean) {
+  private readonly fx: FX;
+  readonly spec: ArenaSpec;
+  readonly boss: Boss;
+  private readonly bar: BossBar;
+  private readonly quiet: () => boolean;
+  constructor(scene: THREE.Scene, fx: FX, spec: ArenaSpec, boss: Boss, bar: BossBar, quiet: () => boolean) { this.fx = fx; this.spec = spec; this.boss = boss; this.bar = bar; this.quiet = quiet;
     const iron = new THREE.MeshLambertMaterial({ color: '#2e2a30' });
     const rust = new THREE.MeshLambertMaterial({ color: '#5a3a2e' });
     const berry = glowMat(RASP);

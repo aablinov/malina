@@ -11,7 +11,9 @@ export class PoolView {
   private readonly at = new THREE.Vector3();
   private r = 2.2;
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, ent: EntityState) {
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  constructor(scene: THREE.Scene, fx: FX, ent: EntityState) { this.scene = scene; this.fx = fx;
     const e = ent as PoolEnt;
     this.r = e.r;
     this.mat = new THREE.MeshBasicMaterial({ color: TAR, transparent: true, opacity: 0.85, depthWrite: false });

@@ -1,12 +1,14 @@
 import { randomInt } from 'node:crypto';
 import { Profile, type ProfileData } from '../src/items.ts';
-import { MAX_PLAYERS, NET_LIMITS, type ErrorCode, type Reward, type RoomInfo, type SeatInfo, type ServerMsg } from '../src/net/protocol.ts';
+import { MAX_PLAYERS, NET_LIMITS, type ErrorCode, type RoomInfo, type SeatInfo, type ServerMsg } from '../src/net/protocol.ts';
+import { Match, type MatchEnd } from '../src/game/match.ts';
 import { newId } from './auth.ts';
 import { tx, type Db } from './db.ts';
 import { MAX_XP_PER_MATCH, type MapCatalog } from './maps.ts';
 import type { Matches } from './repo/matches.ts';
 import type { Profiles } from './repo/profiles.ts';
 import type { Rooms as RoomRepo, RoomRow } from './repo/rooms.ts';
+import type { MatchRunner } from './game/runner.ts';
 
 /**
  * Комнаты сетевой игры (wiki/design-multiplayer.md): живут в памяти, каждое изменение пишется в SQLite,
@@ -14,8 +16,8 @@ import type { Rooms as RoomRepo, RoomRow } from './repo/rooms.ts';
  *
  * Обрыв связи не выкидывает из комнаты сразу: место держится NET_LIMITS.graceMs. Это нужно и для «В бой» —
  * браузеры перезагружают страницу на адрес боя и входят заново. После перезапуска сервера места держатся RESTORE_MS.
- * Хост пропал посреди боя — через NET_LIMITS.hostGraceMs хостом становится следующий на связи и считает бой дальше
- * (`battle.host`); в идущий бой можно войти, если есть место.
+ * Бой считает сервер (`Match`, src/game/match.ts): старт создаёт матч в раннере, в идущий бой можно войти, пока есть место,
+ * уход хоста бой не прерывает (хост — только корона и права в лобби); все ушли — матч прерван.
  */
 
 export interface Conn {
@@ -48,6 +50,8 @@ export interface RoomDeps {
   matches: Matches;
   profiles: Profiles;
   maps: MapCatalog;
+  /** Идущие матчи */
+  games: MatchRunner;
   /** Имя игрока по id — для восстановления мест после перезапуска */
   nameOf: (playerId: string) => string;
   now?: () => number;
@@ -96,8 +100,7 @@ export class RoomManager {
     const m = this.member(room, c.playerId);
     if (m.conn !== c) return; // уже вошёл с другой вкладки
     m.conn = null;
-    const hostInBattle = room.row.state === 'battle' && m.playerId === room.row.host_id && room.members.some((x) => x.conn);
-    m.deadline = this.now() + (hostInBattle ? NET_LIMITS.hostGraceMs : NET_LIMITS.graceMs);
+    m.deadline = this.now() + NET_LIMITS.graceMs;
     this.saveMember(room, m);
     this.broadcast(room);
   }
@@ -126,11 +129,14 @@ export class RoomManager {
     if (room.members.length >= room.row.max) throw new RoomError('room-full', 'Комната заполнена');
     this.leave(c, 'leave');
     const matchId = room.matchId;
+    let seat = 0;
     tx(this.d.db, () => {
       const m = this.addMember(room, c);
+      seat = m.seat;
       // в идущий бой: строка в матче (для награды) — и сразу на страницу боя
       if (matchId) this.d.matches.addPlayer(matchId, m.playerId, m.seat);
     });
+    if (matchId) this.d.games.get(matchId)?.join({ seat, playerId: c.playerId, name: c.name, profile: this.profileOf(c.playerId) });
     this.broadcast(room);
     if (room.row.state === 'battle' && matchId) c.send(this.startMsg(room, matchId));
   }
@@ -195,6 +201,12 @@ export class RoomManager {
       this.saveRoom(room, false);
       this.d.matches.start(matchId, room.row.id, room.row.map, room.row.seed, room.members.map((m) => ({ playerId: m.playerId, seat: m.seat })), now);
     });
+    // серверный бой: мир с героями партии по их профилям
+    const map = this.d.maps.load(room.row.map);
+    if (!map) throw new RoomError('bad-map', `Нет карты ${room.row.map}`);
+    const match = new Match({ id: matchId, map, seed: room.row.seed, players: room.members.map((m) => ({ seat: m.seat, playerId: m.playerId, name: m.name, profile: this.profileOf(m.playerId) })) });
+    match.onEnd = (e) => this.finishMatch(room, matchId, e);
+    this.d.games.add(match);
     const msg = this.startMsg(room, matchId);
     this.each(room, (m) => m.conn?.send(msg));
     this.broadcast(room);
@@ -207,34 +219,34 @@ export class RoomManager {
 
   // ---------- Бой ----------
 
-  /**
-   * Ретрансляция: гость пишет только хосту, хост — всем гостям или одному месту. Содержимое не разбирается
-   */
-  relay(c: Conn, to: number | undefined, d: unknown): void {
-    const room = this.roomOf(c);
-    if (room.row.state !== 'battle') throw new RoomError('not-in-battle', 'Бой не идёт');
-    const me = this.member(room, c.playerId);
-    const msg: ServerMsg = { t: 'relay', from: me.seat, d };
-    if (c.playerId !== room.row.host_id) { this.member(room, room.row.host_id).conn?.send(msg); return; }
-    for (const m of room.members) if (m !== me && (to === undefined || m.seat === to)) m.conn?.send(msg);
+  /** Место игрока в матче (вход на `/game`); null — не в этом бою */
+  seatOf(matchId: string, playerId: string): number | null {
+    const room = [...this.byId.values()].find((r) => r.matchId === matchId);
+    const m = room?.members.find((x) => x.playerId === playerId);
+    return m ? m.seat : null;
+  }
+
+  /** Профиль героя для серверного боя: из базы, нет — стартовый */
+  private profileOf(playerId: string): ProfileData {
+    const p = this.d.profiles.get(playerId);
+    return p ? (p.data as ProfileData) : Profile.starter();
   }
 
   /**
-   * Итог боя от хоста: матч в историю, награды — в профили героев партии (с потолком по карте),
+   * Матч кончился (куст отбит, засох или все ушли): матч в историю, награды с потолком по карте — в профили героев партии,
    * комната — снова лобби
    */
-  end(c: Conn, result: 'won' | 'lost', wave: number, rewards: Reward[]): void {
-    const room = this.hostRoom(c);
-    const matchId = room.matchId;
-    if (room.row.state !== 'battle' || !matchId) throw new RoomError('not-in-battle', 'Бой не идёт');
+  private finishMatch(room: Room, matchId: string, e: MatchEnd): void {
+    this.d.games.remove(matchId);
+    if (room.matchId !== matchId) return;
     const now = this.now();
     const maxBerries = this.d.maps.maxBerries(room.row.map, room.members.length);
     const updated: { m: Member; version: number; data: ProfileData }[] = [];
     tx(this.d.db, () => {
-      if (!this.d.matches.finish(matchId, result, Math.min(wave, this.d.maps.waves(room.row.map)), now)) return;
-      for (const r of rewards) {
-        const m = room.members.find((x) => x.playerId === r.playerId);
-        if (!m) continue;
+      if (!this.d.matches.finish(matchId, e.result, Math.min(e.wave, this.d.maps.waves(room.row.map)), now)) return;
+      for (const m of room.members) {
+        const r = e.rewards.get(m.seat);
+        if (!r) continue;
         const berries = Math.min(r.berries, maxBerries), xp = Math.min(r.xp, MAX_XP_PER_MATCH);
         this.d.matches.reward(matchId, m.playerId, berries, xp);
         const prof = this.d.profiles.get(m.playerId);
@@ -248,33 +260,8 @@ export class RoomManager {
       this.toLobby(room);
     });
     for (const u of updated) u.m.conn?.send({ t: 'profile.updated', version: u.version, data: u.data });
-    this.each(room, (m) => m.conn?.send({ t: 'battle.over', matchId, result, wave }));
+    this.each(room, (m) => m.conn?.send({ t: 'battle.over', matchId, result: e.result, wave: e.wave }));
     this.broadcast(room);
-  }
-
-  /**
-   * Своя награда игрока за бой (собранная и не потраченная малина, опыт): один раз за матч, пока бой идёт
-   * или не позже NET_LIMITS.lootMs после конца; с потолком по карте — в профиль
-   */
-  loot(c: Conn, matchId: string, berries: number, xp: number): void {
-    const info = this.d.matches.info(matchId);
-    const now = this.now();
-    if (!info || (info.ended_at !== null && now - info.ended_at > NET_LIMITS.lootMs)) throw new RoomError('not-in-battle', 'Награда за этот бой уже не принимается');
-    berries = Math.min(berries, this.d.maps.maxBerries(info.map, info.players));
-    xp = Math.min(xp, MAX_XP_PER_MATCH);
-    let updated: { version: number; data: ProfileData } | null = null;
-    tx(this.d.db, () => {
-      if (!this.d.matches.loot(matchId, c.playerId, berries, xp)) return;
-      const prof = this.d.profiles.get(c.playerId);
-      if (!prof) return;
-      const p = new Profile(prof.data as ProfileData, false);
-      p.addBerries(berries);
-      p.addXp(xp);
-      const version = this.d.profiles.put(c.playerId, prof.version, p.data, now);
-      if (version !== null) updated = { version, data: p.data };
-    });
-    const u = updated as { version: number; data: ProfileData } | null;
-    if (u) c.send({ t: 'profile.updated', version: u.version, data: u.data });
   }
 
   // ---------- Обслуживание ----------
@@ -333,28 +320,19 @@ export class RoomManager {
   }
 
   /**
-   * Место освободилось. Ушёл хост: в лобби хостом становится следующий по месту, в бою бой прерван.
-   * Никого не осталось — комната закрыта
+   * Место освободилось: герой уходит из матча; ушёл хост — хостом становится следующий (в бою — только корона).
+   * Никого не осталось — комната закрыта, матч прерван
    */
   private removeMember(room: Room, m: Member): void {
     room.members = room.members.filter((x) => x !== m);
     if (this.byPlayer.get(m.playerId) === room) this.byPlayer.delete(m.playerId);
-    const matchId = room.matchId;
+    if (room.matchId) this.d.games.get(room.matchId)?.leave(m.seat);
     tx(this.d.db, () => {
       this.d.rooms.removeMember(room.row.id, m.playerId);
       if (!room.members.length) { this.close(room); return; }
       if (m.playerId === room.row.host_id) {
         const next = [...room.members].sort((a, b) => Number(!a.conn) - Number(!b.conn) || a.seat - b.seat)[0];
         room.row.host_id = next.playerId;
-        if (room.row.state === 'battle' && matchId) {
-          // бой продолжает следующий на связи; никого на связи — бой прерван
-          if (next.conn) this.each(room, (x) => x.conn?.send({ t: 'battle.host', matchId, hostSeat: next.seat }));
-          else {
-            this.d.matches.finish(matchId, 'abandoned', 0, this.now());
-            this.toLobby(room);
-            this.each(room, (x) => x.conn?.send({ t: 'battle.over', matchId, result: 'abandoned', wave: 0 }));
-          }
-        }
       }
       this.saveRoom(room, false);
     });
@@ -363,7 +341,11 @@ export class RoomManager {
 
   private close(room: Room): void {
     room.row.state = 'closed';
-    if (room.matchId) this.d.matches.finish(room.matchId, 'abandoned', 0, this.now());
+    if (room.matchId) {
+      const match = this.d.games.get(room.matchId);
+      this.d.games.remove(room.matchId);
+      this.d.matches.finish(room.matchId, 'abandoned', match ? Math.max(0, match.td.wave - 1) : 0, this.now());
+    }
     room.matchId = null;
     this.saveRoom(room, false);
     this.d.rooms.releaseCode(room.row.id);

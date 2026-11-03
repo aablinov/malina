@@ -1,4 +1,4 @@
-import { HERO, resetTuning, SWORD, tuningJSON } from '../tuning';
+import { HERO, resetTuning, SWORD, tuningJSON } from '../tuning.ts';
 
 /**
  * F1 — панель параметров. Ползунки правят объекты из tuning.ts напрямую, изменения применяются сразу.

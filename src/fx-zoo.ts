@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { bookMats, coverMat } from './bosses/grimoire';
-import { ITEMS } from './items';
-import { beamTex, glowTex, raysTex, starTex } from './loot-look';
-import { sigilTextures } from './sigils';
-import { frostTex, scorchTex } from './spells';
-import { shieldTex } from './auras';
-import type { Textures } from './textures';
+import { bookMats, coverMat } from './bosses/grimoire.ts';
+import { ITEMS } from './items.ts';
+import { beamTex, glowTex, raysTex, starTex } from './loot-look.ts';
+import { sigilTextures } from './sigils.ts';
+import { frostTex, scorchTex } from './spells.ts';
+import { shieldTex } from './auras.ts';
+import type { Textures } from './textures.ts';
 
 /**
  * Прогрев при загрузке (wiki/dev-performance.md): three компилирует шейдерную программу при первом появлении нового

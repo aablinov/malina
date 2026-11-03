@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { bell, boom, hiss, voice } from '../spell-audio';
-import type { Rect } from './arena';
-import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit';
-import { MiniBoss } from './mini';
+import { pixelTex } from '../textures.ts';
+import { bell, boom, hiss, voice } from '../spell-audio.ts';
+import type { Rect } from './arena.ts';
+import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
+import { MiniBoss } from './mini.ts';
 
 /**
  * Грозовой голем — мини-босс (wiki/design-bosses.md, раздел 2): глыба камня в позеленевшей меди, голова утоплена между

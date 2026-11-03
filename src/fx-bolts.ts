@@ -40,7 +40,8 @@ class Layer {
   /** Сколько экземпляров рисовать: верхняя граница занятых слотов */
   used = 0;
 
-  constructor(scene: THREE.Scene, readonly cap: number, additive: boolean) {
+  readonly cap: number;
+  constructor(scene: THREE.Scene, cap: number, additive: boolean) { this.cap = cap;
     const geo = new THREE.BoxGeometry(1, 1, 1);
     this.alpha = new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(1), 1);
     this.alpha.setUsage(THREE.DynamicDrawUsage);
@@ -83,7 +84,8 @@ export class Bolts {
   private readonly bolts: Bolt[] = [];
   private cursor = 0;
 
-  constructor(scene: THREE.Scene, private readonly cap = 2048) {
+  private readonly cap: number;
+  constructor(scene: THREE.Scene, cap: number = 2048) { this.cap = cap;
     this.core = new Layer(scene, cap, false);
     this.halo = new Layer(scene, cap, true);
     this.seg = new Float32Array(cap * SEG);
@@ -178,7 +180,8 @@ export class Cubes {
   private readonly d: Float32Array;
   private n = 0;
 
-  constructor(scene: THREE.Scene, private readonly cap = 512, additive = true) {
+  private readonly cap: number;
+  constructor(scene: THREE.Scene, cap: number = 512, additive = true) { this.cap = cap;
     this.layer = new Layer(scene, cap, additive);
     this.d = new Float32Array(cap * CUBE);
   }

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import type { Atlas } from './atlas';
+import type { Atlas } from './atlas.ts';
 import { decorDef, decorEuler, type DecorDef } from './decor.ts';
 import type { DecorItem, Level } from './level.ts';
 import type { Layer } from './palette.ts';
-import { getDecorShape } from './shapes';
+import { getDecorShape } from './shapes.ts';
 
 /**
  * Рендер декора: на каждую пару «предмет × слой» — один InstancedMesh, материалы общие с блоками
@@ -43,7 +43,10 @@ export class DecorRenderer {
   private builtVersion = -1;
   private builtMaxY = Infinity;
 
-  constructor(private readonly level: Level, private readonly atlas: Atlas, private readonly mats: Record<Layer, THREE.Material>) {}
+  private readonly level: Level;
+  private readonly atlas: Atlas;
+  private readonly mats: Record<Layer, THREE.Material>;
+  constructor(level: Level, atlas: Atlas, mats: Record<Layer, THREE.Material>) { this.level = level; this.atlas = atlas; this.mats = mats;}
 
   /** Геометрия одного слоя предмета: все части этого слоя, UV из атласа (огонь — своя текстура) */
   geometryOf(def: DecorDef, layer: Layer): THREE.BufferGeometry | null {

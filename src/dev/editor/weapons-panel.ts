@@ -3,8 +3,8 @@ import {
   activeWeaponId, applyWeapon, bladeOf, buildWeaponModel, CATEGORIES, deleteWeapon, disposeWeaponModel, duplicateWeapon,
   isDefaultWeapon, RARITIES, RARITY_COLOR, resetWeapon, saveWeapons, setActiveWeapon, weaponMetrics, weapons,
   type WeaponCategory, type WeaponDef, type WeaponRarity, type WeaponStats,
-} from '../../weapons';
-import type { SwingTuning } from '../../tuning';
+} from '../../weapons.ts';
+import type { SwingTuning } from '../../tuning.ts';
 import './weapons-panel.css';
 
 /**

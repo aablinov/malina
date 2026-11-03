@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Obstacle } from '../collision';
+import type { Obstacle } from '../collision.ts';
 
 /**
  * Отладочные оверлеи: F2 — коллайдеры и хитбоксы, F3 — луч прицела и конус разброса.
@@ -16,7 +16,8 @@ export class Overlays {
   private readonly aimLine: THREE.Line;
   private readonly coneLine: THREE.LineSegments;
 
-  constructor(private readonly scene: THREE.Scene, obstacles: readonly Obstacle[]) {
+  private readonly scene: THREE.Scene;
+  constructor(scene: THREE.Scene, obstacles: readonly Obstacle[]) { this.scene = scene;
     // рёбра каждого препятствия на его «пулевой» высоте
     const pts: number[] = [];
     for (const o of obstacles) {

@@ -1,12 +1,14 @@
 import * as THREE from 'three';
-import { AuraOffense, isOffense } from './aura-offense';
-import type { FX } from './fx';
-import { itemDef, powerMult, type AuraKind, type Item } from './items';
-import type { Knight } from './knight';
-import { additive, additiveSprite, glowTex } from './loot-look';
-import { Sigil } from './sigils';
-import { spellSfx } from './spell-audio';
-import type { Target } from './target';
+import { rnd } from './rng.ts';
+import { makeCanvas } from './headless.ts';
+import { AuraOffense, isOffense } from './aura-offense.ts';
+import type { FX } from './fx.ts';
+import { itemDef, powerMult, type AuraKind, type Item } from './items.ts';
+import type { Knight } from './knight.ts';
+import { additive, additiveSprite, glowTex } from './loot-look.ts';
+import { Sigil } from './sigils.ts';
+import { spellSfx } from './spell-audio.ts';
+import type { Target } from './target.ts';
 
 /**
  * Ауры (wiki/design-spells.md, раздел 4): четвёртое гнездо. Действуют всегда и видны вокруг героя — тусклый круг под ногами
@@ -50,14 +52,13 @@ export const AURA_COLOR: Record<AuraKind, string> = {
   inferno: '#e04a1a', frost: '#3aa8d8', storm: '#6a6ae0', halo: '#d8a82a', shade: '#6a3ab0', quake: '#9a6a2a', blades: '#c83aa8',
 };
 
-const rand = (a: number, b: number): number => a + Math.random() * (b - a);
+const rand = (a: number, b: number): number => a + rnd() * (b - a);
 
 let shieldT: THREE.Texture | null = null;
 /** Щит-руна для «Бастиона»: контур щита и знак внутри */
 export const shieldTex = (): THREE.Texture => {
   if (shieldT) return shieldT;
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = 128;
+  const cv = makeCanvas(128, 128);
   const g = cv.getContext('2d') as CanvasRenderingContext2D;
   g.strokeStyle = g.fillStyle = '#fff'; g.lineJoin = 'round';
   const shape = (k: number): void => {
@@ -97,7 +98,8 @@ export class Auras {
   /** Наступательная часть: жжёт, морозит, бьёт молнией… */
   readonly offense: AuraOffense;
 
-  constructor(private readonly h: AuraHooks) { this.offense = new AuraOffense(h); }
+  private readonly h: AuraHooks;
+  constructor(h: AuraHooks) { this.h = h; this.offense = new AuraOffense(h); }
 
   /** Множитель вспышки */
   private get m(): number { return this.flareT > 0 ? 3 : 1; }
@@ -244,7 +246,7 @@ export class Auras {
     fx.shake = Math.max(fx.shake, 0.55);
     fx.hitstop = Math.max(fx.hitstop, 0.08);
     for (let i = 0; i < 40; i++) {
-      const a = Math.random() * Math.PI * 2, r = rand(0.3, 1.2);
+      const a = rnd() * Math.PI * 2, r = rand(0.3, 1.2);
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.2, Math.sin(a) * r)), vel: new THREE.Vector3(Math.cos(a) * 1.5, rand(4, 8), Math.sin(a) * 1.5), life: rand(0.6, 1), size: rand(0.06, 0.1), color: i % 2 ? L.a : L.b, gravity: 2 });
     }
     this.offense.onFlare();
@@ -296,25 +298,25 @@ export class Auras {
       this.extras.forEach((s, i) => {
         const a = this.time * (flare ? 4 : 2) + (i / 3) * Math.PI * 2;
         s.position.set(hero.pos.x + Math.cos(a) * 0.6, hero.pos.y + 1.9 + Math.sin(this.time * 3 + i * 2) * 0.12, hero.pos.z + Math.sin(a) * 0.6);
-        if (Math.random() < 0.4 * busy) fx.particle({ pos: s.position.clone(), vel: new THREE.Vector3(0, -0.2, 0), life: 0.35, size: 0.05, color: L.a, gravity: 0 });
+        if (rnd() < 0.4 * busy) fx.particle({ pos: s.position.clone(), vel: new THREE.Vector3(0, -0.2, 0), life: 0.35, size: 0.05, color: L.a, gravity: 0 });
       });
     }
-    if (this.kind === 'rage' && Math.random() < 0.45 * busy) {
+    if (this.kind === 'rage' && rnd() < 0.45 * busy) {
       const hand = hero.pos.clone().add(new THREE.Vector3(Math.sin(hero.yaw + 0.8) * 0.45, 1, Math.cos(hero.yaw + 0.8) * 0.45));
-      fx.particle({ pos: hand.add(new THREE.Vector3(rand(-0.2, 0.2), rand(-0.3, 0.4), rand(-0.2, 0.2))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.8, 1.8), rand(-0.3, 0.3)), life: rand(0.3, 0.6), size: rand(0.04, 0.08), color: Math.random() < 0.5 ? L.a : L.b, gravity: -1 });
+      fx.particle({ pos: hand.add(new THREE.Vector3(rand(-0.2, 0.2), rand(-0.3, 0.4), rand(-0.2, 0.2))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.8, 1.8), rand(-0.3, 0.3)), life: rand(0.3, 0.6), size: rand(0.04, 0.08), color: rnd() < 0.5 ? L.a : L.b, gravity: -1 });
     }
-    if (this.kind === 'pact' && Math.random() < 0.15 * busy) {
-      const a = Math.random() * Math.PI * 2;
+    if (this.kind === 'pact' && rnd() < 0.15 * busy) {
+      const a = rnd() * Math.PI * 2;
       fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * 1.3, 0.1, Math.sin(a) * 1.3)), vel: new THREE.Vector3(0, rand(0.5, 1.2), 0), life: 0.7, size: 0.05, color: L.b, gravity: -0.3 });
     }
-    if (this.kind === 'thorns' && flare && Math.random() < 0.4) {
-      const a = Math.random() * Math.PI * 2;
-      fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * 1.4, 0.1, Math.sin(a) * 1.4)), vel: new THREE.Vector3(Math.cos(a), rand(1, 2), Math.sin(a)), life: 0.5, size: 0.06, color: Math.random() < 0.5 ? L.a : L.b, gravity: 3 });
+    if (this.kind === 'thorns' && flare && rnd() < 0.4) {
+      const a = rnd() * Math.PI * 2;
+      fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * 1.4, 0.1, Math.sin(a) * 1.4)), vel: new THREE.Vector3(Math.cos(a), rand(1, 2), Math.sin(a)), life: 0.5, size: 0.06, color: rnd() < 0.5 ? L.a : L.b, gravity: 3 });
     }
     // во время вспышки по краю большого круга поднимаются огоньки
-    if (flare && Math.random() < 0.8) {
-      const a = Math.random() * Math.PI * 2, r = this.radius * 0.5;
-      fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.1, Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.7, size: 0.06, color: Math.random() < 0.5 ? L.a : L.b, gravity: -0.5 });
+    if (flare && rnd() < 0.8) {
+      const a = rnd() * Math.PI * 2, r = this.radius * 0.5;
+      fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.1, Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.7, size: 0.06, color: rnd() < 0.5 ? L.a : L.b, gravity: -0.5 });
     }
   }
 }

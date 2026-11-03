@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit';
-import { HEAL, Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit.ts';
+import { HEAL, Mob, type MobHooks } from './mob.ts';
 
 /**
  * Маги Ордена (wiki/design-mobs.md, семья A): скелет «маг» — мантия без ног, голова иллагера в капюшоне, две руки,
@@ -19,7 +20,7 @@ interface Rig { robe: THREE.Group; head: THREE.Group; arms: THREE.Group[] }
 function buildMage(m: Mob, body: THREE.Group, robeColor: string, trimColor: string, eye: THREE.Color, seed: number): Rig {
   const robe = m.lam(robeColor, pixelTex(robeColor, 8, seed)), trim = m.lam(trimColor);
   const face = m.lam('#8a9098', pixelTex('#8a9098', 8, seed + 1)), nose = m.lam('#767c84'), brow = m.lam('#3a3a42');
-  const glow = m.shimmer(eye, RASP, Math.random() * 6, 1.6);
+  const glow = m.shimmer(eye, RASP, rnd() * 6, 1.6);
   const B = m.box.bind(m);
   const g = new THREE.Group();
   body.add(g);
@@ -185,7 +186,7 @@ export class EmberMage extends Mob {
     const hat = this.lam('#7a1236', pixelTex('#7a1236', 8, 673));
     B(this.rig.head, hat, 0.6, 0.36, 0.58, 0, 0.72, -0.03);
     B(this.rig.head, this.shimmer(FIRE, RASP, 0, 2), 0.2, 0.2, 0.04, 0, 0.72, 0.27);
-    for (const a of this.rig.arms) this.hands.push(B(a, this.shimmer(FIRE, C(4, 2.6, 0.8), Math.random() * 6, 3), 0.18, 0.14, 0.18, 0, -0.6, 0));
+    for (const a of this.rig.arms) this.hands.push(B(a, this.shimmer(FIRE, C(4, 2.6, 0.8), rnd() * 6, 3), 0.18, 0.14, 0.18, 0, -0.6, 0));
     B(this.rig.arms[0], this.lam('#6a3a24'), 0.36, 0.08, 0.28, 0.1, -0.66, 0.14);
     B(this.rig.arms[0], this.lam('#f4ecd8'), 0.32, 0.03, 0.24, 0.1, -0.61, 0.14);
     this.place();

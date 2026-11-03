@@ -1,14 +1,16 @@
 import * as THREE from 'three';
-import { duck } from './audio';
-import { Sigil } from './sigils';
-import { ChargeSound, spellSfx } from './spell-audio';
-import type { FX } from './fx';
-import type { ArtifactStats } from './items';
-import type { Knight } from './knight';
+import { rnd } from './rng.ts';
+import { makeCanvas } from './headless.ts';
+import { duck } from './audio.ts';
+import { Sigil } from './sigils.ts';
+import { ChargeSound, spellSfx } from './spell-audio.ts';
+import type { FX } from './fx.ts';
+import type { ArtifactStats } from './items.ts';
+import type { Knight } from './knight.ts';
 import type { Terrain } from './level/collide.ts';
-import { additiveSprite, glowTex } from './loot-look';
-import { type Spell, type Tier } from './magic/registry';
-import type { Target } from './target';
+import { additiveSprite, glowTex } from './loot-look.ts';
+import { type Spell, type Tier } from './magic/registry.ts';
+import type { Target } from './target.ts';
 
 /**
  * Заклинания (wiki/design-spells.md): заряд как в Elden Ring и каст в три фазы — замах, удар, послевкусие.
@@ -16,7 +18,7 @@ import type { Target } from './target';
  * Числа (урон, перезарядка) — в src/items.ts, слоты и души — в src/gear.ts.
  */
 
-export { spellOf } from './magic/registry';
+export { spellOf } from './magic/registry.ts';
 
 /** Школа: цвета, узор круга (src/sigils.ts) и звук заряда (src/spell-audio.ts). Стартовые названы по своему заклинанию */
 export type School = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane' | 'summon' | 'blood';
@@ -57,8 +59,7 @@ const SCHOOL: Record<School, SchoolLook> = {
 // ---------- текстуры, рисуются кодом один раз ----------
 
 const canvasTex = (size: number, draw: (g: CanvasRenderingContext2D, s: number) => void): THREE.CanvasTexture => {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
+  const c = makeCanvas(size, size);
   draw(c.getContext('2d') as CanvasRenderingContext2D, size);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -71,7 +72,7 @@ let scorchT: THREE.Texture | null = null, frostT: THREE.Texture | null = null;
 export const scorchTex = (): THREE.Texture => scorchT ??= canvasTex(128, (g, s) => {
   const c = s / 2;
   for (let i = 0; i < 26; i++) {
-    const a = Math.random() * Math.PI * 2, d = Math.random() * c * 0.45, r = c * (0.25 + Math.random() * 0.35);
+    const a = rnd() * Math.PI * 2, d = rnd() * c * 0.45, r = c * (0.25 + rnd() * 0.35);
     const x = c + Math.cos(a) * d, y = c + Math.sin(a) * d;
     const gr = g.createRadialGradient(x, y, 0, x, y, r);
     gr.addColorStop(0, 'rgba(48,30,18,0.22)'); gr.addColorStop(1, 'rgba(48,30,18,0)');
@@ -95,10 +96,10 @@ export const frostTex = (): THREE.Texture => frostT ??= canvasTex(256, (g, s) =>
       branch(bx, by, a + 0.7, len * 0.32, w * 0.6); branch(bx, by, a - 0.7, len * 0.32, w * 0.6);
     }
   };
-  for (let i = 0; i < 9; i++) branch(c, c, (i / 9) * Math.PI * 2 + Math.random() * 0.3, c * (0.6 + Math.random() * 0.35), 3);
+  for (let i = 0; i < 9; i++) branch(c, c, (i / 9) * Math.PI * 2 + rnd() * 0.3, c * (0.6 + rnd() * 0.35), 3);
 });
 
-const rand = (a: number, b: number): number => a + Math.random() * (b - a);
+const rand = (a: number, b: number): number => a + rnd() * (b - a);
 
 interface Charging { slot: number; spell: Spell; school: School; max: number; t: number; full: boolean; sound: ChargeSound; sigil: Sigil; orb: THREE.Sprite }
 interface Job { t: number; fn: () => void }
@@ -128,7 +129,8 @@ export class Spells {
   /** Текстуры следов на полу */
   readonly tex = { scorch: (): THREE.Texture => scorchTex(), frost: (): THREE.Texture => frostTex(), glow: (): THREE.Texture => glowTex() };
 
-  constructor(readonly h: SpellHooks) {}
+  readonly h: SpellHooks;
+  constructor(h: SpellHooks) { this.h = h;}
 
   /** Цвета школы */
   color(s: School): SchoolLook { return SCHOOL[s]; }
@@ -218,15 +220,15 @@ export class Spells {
         const R = 2.2 * (0.85 + k * 0.3);
         fx.shock(hero.pos.clone().setY(hero.pos.y + 0.08), R * (0.6 + opened * 0.15), opened % 2 ? s.b : s.a, 0.3, 0.1);
         for (let i = 0; i < 10 + opened * 4; i++) {
-          const a = Math.random() * Math.PI * 2;
-          fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * R * 0.95, 0.1, Math.sin(a) * R * 0.95)), vel: new THREE.Vector3(0, rand(2, 4.5), 0), life: rand(0.4, 0.7), size: rand(0.05, 0.09), color: Math.random() < 0.5 ? s.a : s.b, gravity: -1, shrink: true });
+          const a = rnd() * Math.PI * 2;
+          fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * R * 0.95, 0.1, Math.sin(a) * R * 0.95)), vel: new THREE.Vector3(0, rand(2, 4.5), 0), life: rand(0.4, 0.7), size: rand(0.05, 0.09), color: rnd() < 0.5 ? s.a : s.b, gravity: -1, shrink: true });
         }
         fx.shake = Math.max(fx.shake, 0.08 + opened * 0.05);
       }
     }
     // с третьей ступени по краю круга поднимаются огоньки
-    if (c.sigil.stage >= 2 && Math.random() < 0.5 + k * 0.4) {
-      const a = Math.random() * Math.PI * 2, R = 2.2 * (0.85 + k * 0.3);
+    if (c.sigil.stage >= 2 && rnd() < 0.5 + k * 0.4) {
+      const a = rnd() * Math.PI * 2, R = 2.2 * (0.85 + k * 0.3);
       fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * R, 0.1, Math.sin(a) * R)), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.6, size: 0.05, color: s.b, gravity: -0.5 });
     }
     // сгусток в руке (размер — по заклинанию)
@@ -236,10 +238,10 @@ export class Spells {
     // частицы стягиваются к руке: чем сильнее заряд, тем гуще и быстрее
     const n = 1 + Math.round(k * 3);
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2, e = rand(-0.6, 0.9), r = rand(1.2, 2.2);
+      const a = rnd() * Math.PI * 2, e = rand(-0.6, 0.9), r = rand(1.2, 2.2);
       const from = hand.clone().add(new THREE.Vector3(Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r, Math.sin(a) * Math.cos(e) * r));
       const life = rand(0.22, 0.35) / (1 + k);
-      fx.particle({ pos: from, vel: hand.clone().sub(from).divideScalar(life), life, size: rand(0.05, 0.09), color: Math.random() < 0.5 ? s.a : s.b, gravity: 0, shrink: false });
+      fx.particle({ pos: from, vel: hand.clone().sub(from).divideScalar(life), life, size: rand(0.05, 0.09), color: rnd() < 0.5 ? s.a : s.b, gravity: 0, shrink: false });
     }
     // своя картинка заряда: искры в ладони, растущий шар
     c.spell.charging?.(this, hand, k);

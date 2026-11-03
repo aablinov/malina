@@ -1,19 +1,20 @@
 import * as THREE from 'three';
-import type { FX } from './fx';
-import { iconCanvas } from './icons';
-import { itemDef, MAX_SOULS, powerMult, RARITY, type ArtifactStats, type GearStats, type PlainArtifactKind, type Profile } from './items';
-import { additive, additiveSprite, glowTex, groundGlow, lightBeam, raysTex, type LootData } from './loot-look';
-import type { Knight } from './knight';
+import { rnd } from './rng.ts';
+import type { FX } from './fx.ts';
+import { iconCanvas } from './icons.ts';
+import { itemDef, MAX_SOULS, powerMult, RARITY, type ArtifactStats, type GearStats, type PlainArtifactKind, type Profile } from './items.ts';
+import { additive, additiveSprite, glowTex, groundGlow, lightBeam, raysTex, type LootData } from './loot-look.ts';
+import type { Knight } from './knight.ts';
 import type { Terrain } from './level/collide.ts';
-import type { Target } from './target';
-import { AURA_COLOR, AURA_METER, Auras } from './auras';
-import { spellOf, Spells } from './spells';
-import { HERO } from './tuning';
-import { applyWeapon, getWeapon, type WeaponDef } from './weapons';
-import { temperOf, type TemperSlot } from './temper';
-import { WeaponArts } from './weapon-arts';
-import type { HudBuff, HudState } from './hud/hud';
-import type { GearAction } from './net/protocol';
+import type { Target } from './target.ts';
+import { AURA_COLOR, AURA_METER, Auras } from './auras.ts';
+import { spellOf, Spells } from './spells.ts';
+import { HERO } from './tuning.ts';
+import { applyWeapon, getWeapon, type WeaponDef } from './weapons.ts';
+import { temperOf, type TemperSlot } from './temper.ts';
+import { WeaponArts } from './weapon-arts.ts';
+import type { HudBuff, HudState } from './hud/hud.ts';
+import type { GearAction } from './net/protocol.ts';
 
 /**
  * Снаряжение в бою (wiki/design-inventory.md): надетое из профиля (src/items.ts) превращается в числа и действия —
@@ -83,7 +84,9 @@ export class Gear {
   /** Общий бой (src/net/coop.ts): действие сработало — его повторит снаряжение этого героя у других игроков */
   onAction?: (a: GearAction) => void;
 
-  constructor(private readonly h: GearHooks, readonly profile: Profile) {
+  private readonly h: GearHooks;
+  readonly profile: Profile;
+  constructor(h: GearHooks, profile: Profile) { this.h = h; this.profile = profile;
     const damage = (t: Target, v: number, from: THREE.Vector3, knock: number): void => {
       const dir = new THREE.Vector3(t.pos.x - from.x, 0, t.pos.z - from.z).normalize();
       t.hit(v, dir, t.pos.clone().setY(1), knock);
@@ -163,7 +166,7 @@ export class Gear {
     // «Сердце звезды» (синергия крита и вампиризма): следующие удары — гарантированный крит
     const forced = this.arts.forcedCrits > 0;
     if (forced) this.arts.forcedCrits--;
-    const crit = forced || (s.critChance > 0 && Math.random() < s.critChance);
+    const crit = forced || (s.critChance > 0 && rnd() < s.critChance);
     const fire = s.fireDmg;
     return { dmg: Math.round(base * s.meleeMult * (crit ? 3 : 1)) + fire, crit, fire };
   }
@@ -228,13 +231,13 @@ export class Gear {
     const yaw = Math.atan2(at.x - from.x, at.z - from.z);
     hero.shootPose(yaw, Math.max(0.45, this.shotT + 0.15));
     let n = def.shots ?? 1;
-    if (s.multishot > 0 && Math.random() < s.multishot) n += 2;
+    if (s.multishot > 0 && rnd() < s.multishot) n += 2;
     const dmg = Math.round(def.dmg * s.rangedMult);
     for (let i = 0; i < n; i++) {
       const a = yaw + (i - (n - 1) / 2) * 0.2;
       this.spawnArrow(from, a, def.speed, def.range, dmg, def.knock * s.rangedKnock, s.pierce, (def.shots ?? 1) > 1 || i > 0);
     }
-    if (!(s.infinity > 0 && Math.random() < s.infinity)) P.arrows = Math.max(0, P.arrows - 1);
+    if (!(s.infinity > 0 && rnd() < s.infinity)) P.arrows = Math.max(0, P.arrows - 1);
     this.arrowsShot++;
     this.h.sound('shoot');
     return true;
@@ -409,7 +412,7 @@ export class Gear {
   private magicBoom(at: THREE.Vector3, r: number, a: THREE.Color, b: THREE.Color): void {
     const fx = this.h.fx, c = at.clone().setY(at.y + 0.6);
     fx.flash(c, a.clone().multiplyScalar(1.2), Math.min(6, r * 1.6), 0.3);
-    for (let i = 0; i < 4; i++) fx.flash(c.clone().add(new THREE.Vector3((Math.random() - 0.5) * r, Math.random() * 0.8, (Math.random() - 0.5) * r)), (i % 2 ? b : a).clone(), r * 0.6, 0.3 + Math.random() * 0.15);
+    for (let i = 0; i < 4; i++) fx.flash(c.clone().add(new THREE.Vector3((rnd() - 0.5) * r, rnd() * 0.8, (rnd() - 0.5) * r)), (i % 2 ? b : a).clone(), r * 0.6, 0.3 + rnd() * 0.15);
     fx.burst(c, [a, b, new THREE.Color(3.2, 3, 2.6)], Math.round(14 + r * 7), { speed: r * 2.6, up: r * 1.2, size: 0.08, life: 0.6, glow: true, gravity: 3 });
     fx.shock(at, r, a, 0.4, 0.22);
     fx.shock(at, r * 0.65, b, 0.3, 0.15);
@@ -452,7 +455,7 @@ export class Gear {
       p.y += Math.sin(k * Math.PI) * 2.2;
       g.lookAt(p.clone().add(new THREE.Vector3(end.x - start.x, (1 - 2 * k) * 6, end.z - start.z)));
       g.position.copy(p);
-      if (Math.random() < 0.7) fx.burst(p, [new THREE.Color(3.4, 2.2, 0.6)], 1, { speed: 0.6, up: 0.5, size: 0.06, life: 0.3, glow: true, gravity: 0 });
+      if (rnd() < 0.7) fx.burst(p, [new THREE.Color(3.4, 2.2, 0.6)], 1, { speed: 0.6, up: 0.5, size: 0.06, life: 0.3, glow: true, gravity: 0 });
       if (k > 0.97 && !g.userData.boom) {
         g.userData.boom = true;
         this.magicBoom(end, r, new THREE.Color(3.4, 1.2, 2.2), new THREE.Color(3.4, 3, 0.8));
@@ -514,7 +517,7 @@ export class Gear {
     for (const a of this.artT) a[0] = Math.max(0, a[0] - dt);
     if (this.speedT > 0) {
       this.speedT -= dt;
-      if (Math.random() < 0.4 && hero.speed > 1) this.h.fx.burst(hero.pos.clone().setY(hero.pos.y + 0.1), [new THREE.Color(1, 2.2, 3.4)], 1, { speed: 0.4, up: 0.3, size: 0.06, life: 0.35, glow: true, gravity: 0 });
+      if (rnd() < 0.4 && hero.speed > 1) this.h.fx.burst(hero.pos.clone().setY(hero.pos.y + 0.1), [new THREE.Color(1, 2.2, 3.4)], 1, { speed: 0.4, up: 0.3, size: 0.06, life: 0.35, glow: true, gravity: 0 });
       if (this.speedT <= 0) this.apply();
     }
     if (!hero.down && this.stats.regen > 0) hero.hp = Math.min(hero.maxHp, hero.hp + this.stats.regen * dt);
@@ -524,7 +527,7 @@ export class Gear {
       t.mesh.children[t.mesh.children.length - 1].rotation.z += dt;
       if (!hero.down && Math.hypot(hero.pos.x - t.pos.x, hero.pos.z - t.pos.z) < t.r) {
         hero.hp = Math.min(hero.maxHp, hero.hp + t.heal * dt);
-        if (Math.random() < 0.15) this.h.fx.burst(hero.pos.clone().setY(hero.pos.y + 0.8), [new THREE.Color(0.6, 3, 1)], 1, { speed: 0.5, up: 1.5, size: 0.06, life: 0.6, glow: true, gravity: -1 });
+        if (rnd() < 0.15) this.h.fx.burst(hero.pos.clone().setY(hero.pos.y + 0.8), [new THREE.Color(0.6, 3, 1)], 1, { speed: 0.5, up: 1.5, size: 0.06, life: 0.6, glow: true, gravity: -1 });
       }
       if (t.t <= 0) { this.h.scene.remove(t.mesh); disposeGroup(t.mesh); this.totems.splice(i, 1); }
     }

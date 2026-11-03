@@ -40,7 +40,11 @@ export class RegionManager {
   /** Сколько регионов загружено и выгружено за всё время (для тестов и F8) */
   readonly stats = { loads: 0, unloads: 0 };
 
-  constructor(private readonly level: Level, private readonly source: RegionSource, private readonly hooks: RegionHooks, private readonly saveKey: string | null = null) {
+  private readonly level: Level;
+  private readonly source: RegionSource;
+  private readonly hooks: RegionHooks;
+  private readonly saveKey: string | null;
+  constructor(level: Level, source: RegionSource, hooks: RegionHooks, saveKey: string | null = null) { this.level = level; this.source = source; this.hooks = hooks; this.saveKey = saveKey;
     this.restore();
   }
 

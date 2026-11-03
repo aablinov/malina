@@ -1,4 +1,4 @@
-import { h, icon } from './ui';
+import { h, icon } from './ui.ts';
 
 /**
  * Аутлайнер — дерево объектов карты, как World Outliner в Unreal: глаз (видимость), имя, тип.
@@ -43,7 +43,8 @@ export class Outliner {
   private filter = '';
   private dirty = true;
 
-  constructor(private readonly o: OutlinerOpts) {
+  private readonly o: OutlinerOpts;
+  constructor(o: OutlinerOpts) { this.o = o;
     this.search = h('input.ue-search', { type: 'search', placeholder: 'Поиск…', spellcheck: 'false' });
     this.search.addEventListener('input', () => { this.filter = this.search.value.trim().toLowerCase(); this.invalidate(); });
     this.search.addEventListener('keydown', (e) => e.stopPropagation());

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { glowTex } from '../loot-look';
+import { glowTex } from '../loot-look.ts';
 import type { TdLane, TdMist } from './types.ts';
 
 /**
@@ -17,7 +17,9 @@ export class MistFx {
   private readonly puffs: Puff[] = [];
   private time = 0;
 
-  constructor(private readonly scene: THREE.Scene, lanes: readonly TdLane[], readonly spec: TdMist) {
+  private readonly scene: THREE.Scene;
+  readonly spec: TdMist;
+  constructor(scene: THREE.Scene, lanes: readonly TdLane[], spec: TdMist) { this.scene = scene; this.spec = spec;
     const tex = glowTex();
     const color = new THREE.Color(spec.color ?? '#dde6ec');
     const density = spec.density ?? 0.7;

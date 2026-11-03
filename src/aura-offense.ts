@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import type { FX } from './fx';
-import type { AuraStats, OffenseKind } from './items';
-import type { Knight } from './knight';
-import { spellSfx } from './spell-audio';
-import type { Target } from './target';
+import { rnd } from './rng.ts';
+import type { FX } from './fx.ts';
+import type { AuraStats, OffenseKind } from './items.ts';
+import type { Knight } from './knight.ts';
+import { spellSfx } from './spell-audio.ts';
+import type { Target } from './target.ts';
 
 /**
  * Наступательные ауры (wiki/design-spells.md, раздел 4): сами бьют врагов вокруг героя — жгут, морозят, бьют молнией,
@@ -81,7 +82,7 @@ export interface OffenseHooks {
   damage(t: Target, dmg: number, from: THREE.Vector3, knock: number): void;
 }
 
-const rand = (a: number, b: number): number => a + Math.random() * (b - a);
+const rand = (a: number, b: number): number => a + rnd() * (b - a);
 const glowMat = (c: THREE.Color, opacity = 1): THREE.MeshBasicMaterial =>
   new THREE.MeshBasicMaterial({ color: c, toneMapped: false, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
 
@@ -112,7 +113,8 @@ export class AuraOffense {
   dealt = 0;
   procs = 0;
 
-  constructor(private readonly h: OffenseHooks) {}
+  private readonly h: OffenseHooks;
+  constructor(h: OffenseHooks) { this.h = h;}
 
   set(kind: OffenseKind | null, value: number, pw: number, a: THREE.Color, b: THREE.Color): void {
     this.v = value; this.pw = pw;
@@ -247,9 +249,9 @@ export class AuraOffense {
   private inferno(flare: boolean): void {
     const fx = this.h.fx, c = this.h.hero.pos, R = flare ? OFF.inferno.flareReach : OFF.inferno.reach;
     // кольцо углей: языки пламени поднимаются по кругу
-    for (let i = 0, n = flare ? 3 : 1 + (Math.random() < 0.5 ? 1 : 0); i < n; i++) {
-      const a = Math.random() * Math.PI * 2, r = R * rand(0.55, 1);
-      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.08, Math.sin(a) * r)), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: Math.random() < 0.6 ? this.a : this.b, gravity: -1.5 });
+    for (let i = 0, n = flare ? 3 : 1 + (rnd() < 0.5 ? 1 : 0); i < n; i++) {
+      const a = rnd() * Math.PI * 2, r = R * rand(0.55, 1);
+      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.08, Math.sin(a) * r)), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: rnd() < 0.6 ? this.a : this.b, gravity: -1.5 });
     }
     if (this.tick > 0 || this.h.hero.down) return;
     this.tick += OFF.inferno.every;
@@ -265,9 +267,9 @@ export class AuraOffense {
   private frost(flare: boolean): void {
     const fx = this.h.fx, c = this.h.hero.pos, R = flare ? OFF.frost.flareReach : OFF.frost.reach;
     // снежинки кружат и опускаются, иней у ног
-    if (Math.random() < (flare ? 0.9 : 0.45)) {
-      const a = this.time * 1.5 + Math.random() * Math.PI * 2, r = R * rand(0.3, 1);
-      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(0.8, 1.8), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.sin(a) * 0.8, -0.6, Math.cos(a) * 0.8), life: rand(0.6, 1), size: rand(0.05, 0.08), color: Math.random() < 0.5 ? this.a : this.b, gravity: 0 });
+    if (rnd() < (flare ? 0.9 : 0.45)) {
+      const a = this.time * 1.5 + rnd() * Math.PI * 2, r = R * rand(0.3, 1);
+      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(0.8, 1.8), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.sin(a) * 0.8, -0.6, Math.cos(a) * 0.8), life: rand(0.6, 1), size: rand(0.05, 0.08), color: rnd() < 0.5 ? this.a : this.b, gravity: 0 });
     }
     if (this.tick > 0 || this.h.hero.down) return;
     this.tick += OFF.frost.every;
@@ -284,16 +286,16 @@ export class AuraOffense {
   private storm(flare: boolean): void {
     const fx = this.h.fx, hero = this.h.hero, c = hero.pos;
     // искры бегут по доспеху
-    if (Math.random() < (flare ? 0.8 : 0.35)) {
-      const a = Math.random() * Math.PI * 2;
-      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * 0.35, rand(0.5, 1.6), Math.sin(a) * 0.35)), vel: new THREE.Vector3(Math.cos(a) * rand(0.5, 1.5), rand(-0.5, 1), Math.sin(a) * rand(0.5, 1.5)), life: rand(0.08, 0.2), size: rand(0.04, 0.07), color: Math.random() < 0.6 ? this.a : this.b, gravity: 0, shrink: false });
+    if (rnd() < (flare ? 0.8 : 0.35)) {
+      const a = rnd() * Math.PI * 2;
+      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * 0.35, rand(0.5, 1.6), Math.sin(a) * 0.35)), vel: new THREE.Vector3(Math.cos(a) * rand(0.5, 1.5), rand(-0.5, 1), Math.sin(a) * rand(0.5, 1.5)), life: rand(0.08, 0.2), size: rand(0.04, 0.07), color: rnd() < 0.6 ? this.a : this.b, gravity: 0, shrink: false });
     }
     if (this.tick > 0 || hero.down) return;
     const near = this.foes(c, OFF.storm.reach);
     if (!near.length) { this.tick = 0.15; return; }
     this.tick += flare ? OFF.storm.flareEvery : OFF.storm.every;
     // молния с плеча в случайного врага и дальше перескоками
-    let from = c.clone().setY(c.y + 1.6), t = near[(Math.random() * near.length) | 0], dmg = this.v;
+    let from = c.clone().setY(c.y + 1.6), t = near[(rnd() * near.length) | 0], dmg = this.v;
     const done = new Set<Target>();
     for (let i = 0; i <= OFF.storm.jumps && t; i++) {
       done.add(t);
@@ -321,8 +323,8 @@ export class AuraOffense {
     ring.position.set(hero.pos.x, hero.pos.y + 2.15 + Math.sin(this.time * 2) * 0.04, hero.pos.z);
     ring.rotation.z = this.time * (flare ? 2 : 0.7);
     ring.scale.setScalar(flare ? 1.25 : 1);
-    if (Math.random() < (flare ? 0.6 : 0.2)) {
-      const a = Math.random() * Math.PI * 2;
+    if (rnd() < (flare ? 0.6 : 0.2)) {
+      const a = rnd() * Math.PI * 2;
       this.h.fx.particle({ pos: ring.position.clone().add(new THREE.Vector3(Math.cos(a) * 0.32, 0, Math.sin(a) * 0.32)), vel: new THREE.Vector3(0, -0.4, 0), life: 0.4, size: 0.05, color: this.b, gravity: 0 });
     }
   }
@@ -346,9 +348,9 @@ export class AuraOffense {
   private shade(flare: boolean): void {
     const fx = this.h.fx, hero = this.h.hero, c = hero.pos, R = flare ? OFF.shade.flareReach : OFF.shade.reach;
     // фиолетовая дымка у ног
-    if (Math.random() < (flare ? 0.9 : 0.4)) {
-      const a = Math.random() * Math.PI * 2, r = R * rand(0.2, 0.9);
-      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.1, Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * 0.3, rand(0.2, 0.6), -Math.sin(a) * 0.3), life: rand(0.6, 1), size: rand(0.08, 0.14), color: Math.random() < 0.7 ? this.a : this.b, gravity: -0.2 });
+    if (rnd() < (flare ? 0.9 : 0.4)) {
+      const a = rnd() * Math.PI * 2, r = R * rand(0.2, 0.9);
+      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.1, Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * 0.3, rand(0.2, 0.6), -Math.sin(a) * 0.3), life: rand(0.6, 1), size: rand(0.08, 0.14), color: rnd() < 0.7 ? this.a : this.b, gravity: -0.2 });
     }
     if (this.tick > 0 || hero.down) return;
     this.tick += OFF.shade.every;
@@ -356,7 +358,7 @@ export class AuraOffense {
     const hit = this.foes(c, R);
     for (const t of hit) {
       t.expose?.((this.v / 100) * (flare ? 3 : 1), OFF.shade.every + 0.3);
-      if (Math.random() < 0.5) fx.particle({ pos: t.pos.clone().setY(t.pos.y + (t.topY ?? 1.5) + 0.2), vel: new THREE.Vector3(0, 0.4, 0), life: 0.5, size: 0.09, color: this.a, gravity: 0 });
+      if (rnd() < 0.5) fx.particle({ pos: t.pos.clone().setY(t.pos.y + (t.topY ?? 1.5) + 0.2), vel: new THREE.Vector3(0, 0.4, 0), life: 0.5, size: 0.09, color: this.a, gravity: 0 });
       if (!flare) continue;
       // во вспышке тень пьёт: капли дугой от врага к герою
       const dmg = OFF.shade.drain * this.pw;
@@ -376,9 +378,9 @@ export class AuraOffense {
     const fx = this.h.fx, hero = this.h.hero, c = hero.pos, R = flare ? OFF.quake.flareReach : OFF.quake.reach;
     // камешки подпрыгивают у ног; перед толчком — чаще
     const soon = this.tick < 0.4 ? 3 : 1;
-    if (Math.random() < 0.12 * soon * (flare ? 2 : 1)) {
-      const a = Math.random() * Math.PI * 2, r = rand(0.3, R * 0.8);
-      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.05, Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(1, 2), 0), life: 0.4, size: rand(0.06, 0.1), color: Math.random() < 0.6 ? '#a8906a' : this.a, gravity: 9 }, false);
+    if (rnd() < 0.12 * soon * (flare ? 2 : 1)) {
+      const a = rnd() * Math.PI * 2, r = rand(0.3, R * 0.8);
+      fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.05, Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(1, 2), 0), life: 0.4, size: rand(0.06, 0.1), color: rnd() < 0.6 ? '#a8906a' : this.a, gravity: 9 }, false);
     }
     if (this.tick > 0 || hero.down) return;
     this.tick += flare ? OFF.quake.flareEvery : OFF.quake.every;
@@ -425,7 +427,7 @@ export class AuraOffense {
       g.position.set(hero.pos.x + Math.cos(a) * r, hero.pos.y + 0.9 + Math.sin(this.time * 3 + i) * 0.08, hero.pos.z + Math.sin(a) * r);
       // остриём по ходу вращения
       g.rotation.set(0, -a, 0);
-      if (Math.random() < (flare ? 0.5 : 0.25)) fx.particle({ pos: g.position.clone(), vel: new THREE.Vector3(0, 0.1, 0), life: 0.25, size: 0.06, color: i % 2 ? this.a : this.b, gravity: 0 });
+      if (rnd() < (flare ? 0.5 : 0.25)) fx.particle({ pos: g.position.clone(), vel: new THREE.Vector3(0, 0.1, 0), life: 0.25, size: 0.06, color: i % 2 ? this.a : this.b, gravity: 0 });
       for (const t of foes) {
         if (this.cut.has(t) || Math.hypot(t.pos.x - g.position.x, t.pos.z - g.position.z) - t.radius > B.reach) continue;
         this.cut.set(t, B.hitCd);

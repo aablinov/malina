@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import type { ArtifactStats, BossSpellKind } from '../items';
-import { additiveSprite, glowTex } from '../loot-look';
-import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio';
-import type { Spells } from '../spells';
-import type { Target } from '../target';
-import { C, rand, type Spell } from './kit';
+import { rnd } from '../rng.ts';
+import type { ArtifactStats, BossSpellKind } from '../items.ts';
+import { additiveSprite, glowTex } from '../loot-look.ts';
+import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { C, rand, type Spell } from './kit.ts';
 
 /**
  * Тьма, души и аркана (wiki/design-spells.md, раздел 3): хор мёртвых, гравитационный колодец, коса-череп, павшие стражи,
@@ -36,7 +37,7 @@ const drop = (g: THREE.Object3D, mats: THREE.Material[]): void => { g.parent?.re
 /** Шёпот: короткие шумы на частотах гласных, тихо и в зале */
 function whisper(dur = 1.2, vol = 0.05): void {
   const vowels = [700, 1100, 1800, 2600];
-  for (let i = 0; i < 7; i++) hiss({ dur: rand(0.15, 0.35), vol: vol * rand(0.5, 1), f: vowels[(Math.random() * 4) | 0], q: 7, attack: 0.06, delay: rand(0, dur), verb: 0.7 });
+  for (let i = 0; i < 7; i++) hiss({ dur: rand(0.15, 0.35), vol: vol * rand(0.5, 1), f: vowels[(rnd() * 4) | 0], q: 7, attack: 0.06, delay: rand(0, dur), verb: 0.7 });
 }
 /** Минорный аккорд тьмы */
 const voidChord = (vol: number, dur: number, delay = 0): void => [0, 3, 7, 12].forEach((s, i) => voice({ type: 'triangle', f: semi(VOID_ROOT, s), dur, vol, detune: 10, lp: 1800, lp1: 500, delay: delay + i * 0.03, verb: 0.6 }));
@@ -74,7 +75,7 @@ function deadchoir(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
   kit.proc((dt) => {
     t0 += dt;
     for (let i = 0; i < 3; i++) {
-      const an = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R;
+      const an = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R;
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0.1, Math.sin(an) * r)), vel: new THREE.Vector3(0, rand(0.4, 1.2), 0), life: 0.6, size: 0.07, color: s.b, gravity: -0.3 });
     }
     return t0 < tele;
@@ -91,14 +92,14 @@ function deadchoir(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
     const spots: { p: THREE.Vector3; t: Target | null }[] = kit.within(c, R).map((t) => ({ p: t.pos.clone().setY(c.y), t }));
     const n = Math.max(spots.length, 7 + Math.round(k * 5));
     while (spots.length < n) {
-      const an = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R * 0.9;
+      const an = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R * 0.9;
       spots.push({ p: c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0, Math.sin(an) * r)), t: null });
     }
     spots.forEach(({ p, t }, i) => {
       const mat = ghost((i % 2 ? s.b : s.a).clone().multiplyScalar(0.3), 0.8);
       const { g, fingers } = hand(mat);
-      const life = dur + 0.3, ph = Math.random() * 6, delay = Math.min(0.3, i * 0.04);
-      g.rotation.y = Math.random() * Math.PI * 2;
+      const life = dur + 0.3, ph = rnd() * 6, delay = Math.min(0.3, i * 0.04);
+      g.rotation.y = rnd() * Math.PI * 2;
       g.scale.setScalar(t ? 1.8 : rand(1.2, 1.6));
       g.position.copy(p).setY(p.y - 1.4);
       g.visible = false;
@@ -114,7 +115,7 @@ function deadchoir(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
         fingers.forEach((f, j) => { f.rotation.x = j < 4 ? curl : 0; });
         mat.opacity = 0.8 * (1 - sink) * (0.85 + Math.sin(kit.time * 20 + ph) * 0.15);
         // держит цель: души сочатся вниз
-        if (t && Math.random() < 0.3) fx.particle({ pos: t.pos.clone().setY(p.y + rand(0.3, 1.4)), vel: new THREE.Vector3(0, -rand(1, 2), 0), life: 0.5, size: 0.06, color: s.b, gravity: 0 });
+        if (t && rnd() < 0.3) fx.particle({ pos: t.pos.clone().setY(p.y + rand(0.3, 1.4)), vel: new THREE.Vector3(0, -rand(1, 2), 0), life: 0.5, size: 0.06, color: s.b, gravity: 0 });
       }, () => mat.dispose());
     });
     // урон волнами, каждая — глухой удар и шёпот
@@ -131,9 +132,9 @@ function deadchoir(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
       let left = 1.6;
       kit.proc((dt) => {
         left -= dt;
-        if (Math.random() < 0.6) {
-          const an = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R;
-          fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0.2, Math.sin(an) * r)), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(1.5, 3), rand(-0.3, 0.3)), life: 0.9, size: rand(0.06, 0.1), color: Math.random() < 0.5 ? s.a : s.b, gravity: -0.5 });
+        if (rnd() < 0.6) {
+          const an = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R;
+          fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0.2, Math.sin(an) * r)), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(1.5, 3), rand(-0.3, 0.3)), life: 0.9, size: rand(0.06, 0.1), color: rnd() < 0.5 ? s.a : s.b, gravity: -0.5 });
         }
         return left > 0;
       });
@@ -181,10 +182,10 @@ function gravitywell(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
     halo.scale.setScalar((3.5 + Math.sin(kit.time * 12) * 0.3) * (0.6 + e * 0.6));
     // втягивание: частицы со всего круга летят в ядро
     for (let i = 0; i < 4 + k * 3; i++) {
-      const an = Math.random() * Math.PI * 2, r = rand(R * 0.5, R);
+      const an = rnd() * Math.PI * 2, r = rand(R * 0.5, R);
       const from = c.clone().add(new THREE.Vector3(Math.cos(an) * r, rand(0.1, 2.6), Math.sin(an) * r));
       const life = from.distanceTo(mid) / (6 + k * 4);
-      fx.particle({ pos: from, vel: mid.clone().sub(from).divideScalar(life), life, size: rand(0.05, 0.09), color: Math.random() < 0.5 ? s.a : s.b, gravity: 0, shrink: false });
+      fx.particle({ pos: from, vel: mid.clone().sub(from).divideScalar(life), life, size: rand(0.05, 0.09), color: rnd() < 0.5 ? s.a : s.b, gravity: 0, shrink: false });
     }
     // и враги: каждые 0,35 с подтягивает к центру (без урона)
     if (t > tele) {
@@ -226,8 +227,8 @@ function wellBlast(kit: Spells, c: THREE.Vector3, R: number, power: number, k: n
   fx.shock(c, R * 0.75, s.b, 0.35, 0.15);
   // осколки тьмы разлетаются кольцом
   for (let i = 0; i < 50 + k * 30; i++) {
-    const an = Math.random() * Math.PI * 2, sp = rand(6, 12) + k * 4;
-    fx.particle({ pos: mid.clone(), vel: new THREE.Vector3(Math.cos(an) * sp, rand(-1, 3), Math.sin(an) * sp), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: Math.random() < 0.5 ? s.a : s.b, gravity: 4, drag: 2 });
+    const an = rnd() * Math.PI * 2, sp = rand(6, 12) + k * 4;
+    fx.particle({ pos: mid.clone(), vel: new THREE.Vector3(Math.cos(an) * sp, rand(-1, 3), Math.sin(an) * sp), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: rnd() < 0.5 ? s.a : s.b, gravity: 4, drag: 2 });
   }
   kit.h.aoe(c, R, Math.round(power), 2.5 + k * 1.5, true);
   // послевкусие: выжженный круг и медленный вихрь остатков
@@ -237,7 +238,7 @@ function wellBlast(kit: Spells, c: THREE.Vector3, R: number, power: number, k: n
   kit.proc((dt) => {
     left -= dt; an0 += dt * 4;
     for (let i = 0; i < 2; i++) {
-      const an = an0 + i * Math.PI + Math.random() * 0.4, r = rand(0.4, 1.6);
+      const an = an0 + i * Math.PI + rnd() * 0.4, r = rand(0.4, 1.6);
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0.2, Math.sin(an) * r)), vel: new THREE.Vector3(-Math.sin(an) * 2, rand(1, 2), Math.cos(an) * 2), life: 0.6, size: 0.06, color: s.b, gravity: -0.5 });
     }
     return left > 0;
@@ -308,7 +309,7 @@ function skullscythe(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
     gone += step;
     scythe.rotation.y += dt * 18;
     skull.position.y = Math.sin(kit.time * 20) * 0.04;
-    if (Math.random() < 0.8) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-0.15, 0.15), rand(-0.15, 0.15), rand(-0.15, 0.15))), vel: dir.clone().multiplyScalar(-1.5).add(new THREE.Vector3(0, 0.6, 0)), life: 0.4, size: rand(0.05, 0.09), color: Math.random() < 0.5 ? s.a : s.b, gravity: -1 });
+    if (rnd() < 0.8) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-0.15, 0.15), rand(-0.15, 0.15), rand(-0.15, 0.15))), vel: dir.clone().multiplyScalar(-1.5).add(new THREE.Vector3(0, 0.6, 0)), life: 0.4, size: rand(0.05, 0.09), color: rnd() < 0.5 ? s.a : s.b, gravity: -1 });
     for (const t of kit.h.targets()) if (t.alive && Math.hypot(t.pos.x - g.position.x, t.pos.z - g.position.z) < t.radius + size) { finish(g.position.clone(), t); return false; }
     const wall = kit.h.terrain.wallHit(prev.x, prev.z, g.position.x, g.position.z, g.position.y - 0.4);
     if (wall) { finish(new THREE.Vector3(wall.x, g.position.y, wall.z), null); return false; }
@@ -369,7 +370,7 @@ function fallenguards(kit: Spells, a: ArtifactStats, power: number, _at: THREE.V
           const e = (gd.t - dur) / 0.6;
           g.scale.set(1, Math.max(0.01, 1 - e), 1);
           for (const m of gd.mats) m.opacity = Math.max(0, 1 - e) * 0.85;
-          if (Math.random() < 0.6) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-0.3, 0.3), rand(0.2, 1.4), rand(-0.3, 0.3))), vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.6, size: 0.07, color: s.b, gravity: -0.5 });
+          if (rnd() < 0.6) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-0.3, 0.3), rand(0.2, 1.4), rand(-0.3, 0.3))), vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.6, size: 0.07, color: s.b, gravity: -0.5 });
           if (e >= 1) { drop(g, gd.mats); gd.t = -1; continue; }
           alive++; continue;
         }
@@ -410,7 +411,7 @@ function fallenguards(kit: Spells, a: ArtifactStats, power: number, _at: THREE.V
             }
           }
         } else gd.sword.rotation.x += (-0.4 - gd.sword.rotation.x) * Math.min(1, dt * 8);
-        if (Math.random() < 0.08) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(0.2, 1.5), rand(-0.25, 0.25))), vel: new THREE.Vector3(0, rand(0.3, 0.8), 0), life: 0.6, size: 0.05, color: s.b, gravity: -0.2 });
+        if (rnd() < 0.08) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(0.2, 1.5), rand(-0.25, 0.25))), vel: new THREE.Vector3(0, rand(0.3, 0.8), 0), life: 0.6, size: 0.05, color: s.b, gravity: -0.2 });
       }
       return alive > 0;
     });
@@ -470,7 +471,7 @@ function bladephalanx(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
       const dest = target?.alive ? target.pos.clone().setY(target.pos.y + 1) : aimP.clone().add(spread).setY(aimP.y + 0.3);
       const d = dest.clone().sub(g.position), len = d.length(), step = 24 * dt;
       g.lookAt(dest);
-      if (Math.random() < 0.9) fx.particle({ pos: g.position.clone(), vel: d.clone().normalize().multiplyScalar(-1.5), life: 0.25, size: 0.05, color: i % 2 ? s.b : s.a, gravity: 0 });
+      if (rnd() < 0.9) fx.particle({ pos: g.position.clone(), vel: d.clone().normalize().multiplyScalar(-1.5), life: 0.25, size: 0.05, color: i % 2 ? s.b : s.a, gravity: 0 });
       if (len > step) { g.position.addScaledVector(d.normalize(), step); return t < fireAt + 2; }
       // попал: урон, вспышка, нота — по очереди складывается аккорд
       drop(g, mats);

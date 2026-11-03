@@ -16,7 +16,9 @@ export class PileView {
   private t = 0;
   private first = true;
 
-  constructor(private readonly scene: THREE.Scene, private readonly fx: FX, ent: EntityState) {
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  constructor(scene: THREE.Scene, fx: FX, ent: EntityState) { this.scene = scene; this.fx = fx;
     this.mesh = lootMesh('berry');
     scene.add(this.mesh);
     this.set(ent);

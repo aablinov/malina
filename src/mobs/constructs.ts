@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, glowMat, rand, RASP } from '../bosses/kit';
-import { Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, glowMat, rand, RASP } from '../bosses/kit.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * Конструкты и реликвии (wiki/design-mobs.md, семья F): друзовый големчик, котелок-прыгун, обелиск-хранитель,
@@ -226,7 +227,7 @@ export class WardObelisk extends Mob {
     for (const m of this.mh.allies()) {
       if (m === this || Math.hypot(m.pos.x - this.pos.x, m.pos.z - this.pos.z) > WardObelisk.R) continue;
       m.ward = 0.3;
-      if (Math.random() < 0.05) this.h.fx.particle({ pos: m.pos.clone().setY(m.topY + 0.2), vel: new THREE.Vector3(0, 0.6, 0), life: 0.5, size: 0.08, color: VIOLET, gravity: 0 });
+      if (rnd() < 0.05) this.h.fx.particle({ pos: m.pos.clone().setY(m.topY + 0.2), vel: new THREE.Vector3(0, 0.6, 0), life: 0.5, size: 0.08, color: VIOLET, gravity: 0 });
     }
   }
 
@@ -372,7 +373,7 @@ export class JamKeg extends Mob {
       if (!this.quiet) hiss({ dur: 1.5, vol: 0.06, f: 3000, f1: 5000, q: 2, type: 'bandpass' });
       this.field.markCircle(this.pos.clone(), JamKeg.R, 1.5, () => { if (!this.dead) this.vanish(); }, JAM);
     }
-    if (Math.random() < 0.5) this.h.fx.particle({ pos: this.fuse.getWorldPosition(new THREE.Vector3()), vel: new THREE.Vector3(rand(-1, 1), 2, rand(-1, 1)), life: 0.3, size: 0.06, color: C(4, 2.6, 0.8), gravity: 4 });
+    if (rnd() < 0.5) this.h.fx.particle({ pos: this.fuse.getWorldPosition(new THREE.Vector3()), vel: new THREE.Vector3(rand(-1, 1), 2, rand(-1, 1)), life: 0.3, size: 0.06, color: C(4, 2.6, 0.8), gravity: 4 });
     return false;
   }
 

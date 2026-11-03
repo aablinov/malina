@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import type { Obstacle } from '../collision';
-import type { FX } from '../fx';
-import type { Knight } from '../knight';
+import { rnd } from '../rng.ts';
+import type { Obstacle } from '../collision.ts';
+import type { FX } from '../fx.ts';
+import type { Knight } from '../knight.ts';
 import type { Terrain } from '../level/collide.ts';
-import type { Target } from '../target';
-import { HERO } from '../tuning';
-import { dmgMult, hpMult, lootMult, type BossScale } from './scaling';
+import type { Target } from '../target.ts';
+import { HERO } from '../tuning.ts';
+import { dmgMult, hpMult, lootMult, type BossScale } from './scaling.ts';
 
 /**
  * Общее для стражей Малины (wiki/design-bosses.md): цель для меча и заклинаний, здоровье с множителем на игроков,
@@ -26,7 +27,7 @@ export interface BossHooks {
 }
 
 export const C = (r: number, g: number, b: number): THREE.Color => new THREE.Color(r, g, b);
-export const rand = (a: number, b: number): number => a + Math.random() * (b - a);
+export const rand = (a: number, b: number): number => a + rnd() * (b - a);
 /** Угол из [−π, π] */
 export const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 export const UNIT = new THREE.BoxGeometry(1, 1, 1);
@@ -73,7 +74,10 @@ export abstract class Boss implements Target {
   readonly scale: BossScale = { level: 1, players: 1 };
   protected readonly h: BossHooks;
 
-  constructor(hooks: BossHooks, readonly baseHp: number, readonly home: THREE.Vector3, readonly homeYaw = 0) {
+  readonly baseHp: number;
+  readonly home: THREE.Vector3;
+  readonly homeYaw: number;
+  constructor(hooks: BossHooks, baseHp: number, home: THREE.Vector3, homeYaw: number = 0) { this.baseHp = baseHp; this.home = home; this.homeYaw = homeYaw;
     // весь урон стража по героям — через hurtHero: здесь он домножается на масштаб (атаки, зоны, подручные)
     this.h = { ...hooks, hurtHero: (dmg, from, knock) => hooks.hurtHero(dmg * this.dmgMult, from, knock) };
     hooks.scene.add(this.group);
@@ -125,7 +129,7 @@ export abstract class Boss implements Target {
   }
 
   /** Светящийся материал с переливом между a и b */
-  shimmer(a: THREE.Color, b: THREE.Color, phase = Math.random() * 6, speed = 1.6): THREE.MeshBasicMaterial {
+  shimmer(a: THREE.Color, b: THREE.Color, phase = rnd() * 6, speed = 1.6): THREE.MeshBasicMaterial {
     const mat = glowMat(a);
     this.shimmers.push({ mat, a, b, phase, speed });
     return mat;

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio';
-import type { Rect } from './arena';
-import { C, glowMat, rand, RASP, wrap, type BossHooks } from './kit';
-import { MiniBoss } from './mini';
+import { pixelTex } from '../textures.ts';
+import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
+import type { Rect } from './arena.ts';
+import { C, glowMat, rand, RASP, wrap, type BossHooks } from './kit.ts';
+import { MiniBoss } from './mini.ts';
 
 /**
  * Золотой страж — мини-босс (wiki/design-bosses.md, раздел 2): всадник Ордена в золотых латах на бело-золотом коне под

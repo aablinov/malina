@@ -1,4 +1,4 @@
-import { iconCanvas } from '../icons';
+import { iconCanvas } from '../icons.ts';
 import type { Level } from '../level/level.ts';
 
 /**
@@ -41,7 +41,8 @@ export class AutoMap {
   private readonly icons = new Map<string, HTMLCanvasElement>();
 
   /** level — чтобы читать колонны; для статичной карты тайлы создаются сразу на всех границах */
-  constructor(private readonly level: Level, whole = true) {
+  private readonly level: Level;
+  constructor(level: Level, whole = true) { this.level = level;
     if (!whole) return;
     const b = level.getBounds();
     if (!b) return;

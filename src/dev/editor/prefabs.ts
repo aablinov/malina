@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { Level, type DecorItem, type LevelEntity } from '../../level/level.ts';
-import { LevelRenderer } from '../../level/mesher';
+import { LevelRenderer } from '../../level/mesher.ts';
 import { BLOCKS, CATEGORIES } from '../../level/palette.ts';
 import { DECOR, DECOR_CATEGORIES } from '../../level/decor.ts';
 import { bridgeX, cliffMass, floorRect, hayStack, hill, portal, rampart, riverBed, rockOutcrop, stairway, steppedWall, tree, waterfall } from '../../level/kit.ts';
-import type { Textures } from '../../textures';
+import type { Textures } from '../../textures.ts';
 import { LIBRARY, LIBRARY_CATEGORIES, stampPrefab, type LibraryPrefab, type PrefabData } from '../../level/prefab-lib/index.ts';
 
 /**
@@ -101,7 +101,8 @@ export class Thumbs {
   private readonly cam = new THREE.PerspectiveCamera(30, 1, 0.05, 200);
   private readonly listeners = new Set<(id: string, url: string) => void>();
 
-  constructor(private readonly T: Textures) {}
+  private readonly T: Textures;
+  constructor(T: Textures) { this.T = T;}
 
   get(p: Prefab): string | undefined {
     const c = this.cache.get(p.id);

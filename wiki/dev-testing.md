@@ -10,7 +10,7 @@
 mise exec -- npm run typecheck && mise exec -- npm run test:net
 ```
 
-`server/test/*.test.ts` на `node:test` без браузера: сервер (вход, комнаты, итог), протокол и канал, кодек снимков, симуляция боя с сидом, матч над петлёй в памяти — секунды, не минуты. Гонять перед каждым коммитом; Playwright — только при правках вида и UI и в конце этапа. `sim-boundary.test.ts` — страж: модули `src/sim`, `src/net`, `src/game` общие для сервера и браузера, грузятся в Node и не трогают DOM, сцену three, FX, звук, `Math.random` и часы (`tsconfig.server.json` проверяет их без `lib: DOM`).
+`server/test/*.test.ts` на `node:test` без браузера: сервер (вход, комнаты, итог), протокол и канал, кодек снимков, симуляция боя с сидом, матч над петлёй в памяти — секунды, не минуты. Гонять перед каждым коммитом; Playwright — только при правках вида и UI и в конце этапа. `headless.test.ts` — безголовый бой: настоящие `Knight`, `Gear` и стая `Pack` на карте `td` в Node со сценой без рендера и `nullFx` (`src/headless.ts`), волна до конца и хэш детерминизма. `sim-boundary.test.ts` — страж: модули `src/sim`, `src/net`, `src/game` общие для сервера и браузера, грузятся в Node и не трогают DOM, сцену three, FX, звук, `Math.random` и часы (`tsconfig.server.json` проверяет их без `lib: DOM`).
 
 ## Рецепт Playwright (работает у агентов и в песочнице)
 
@@ -19,6 +19,7 @@ mise exec -- npm run build
 PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise exec -- npx playwright test
 ```
 
+- **Код игры должен грузиться в Node** (type stripping): импорты только с `.ts`, без `enum` и свойств-параметров конструктора — иначе `headless.test.ts` падает на `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`; найти виновника — `node -e` со `stripTypeScriptTypes` из `node:module` по всем файлам.
 - **Node — через mise** (`mise.toml`: node 26.7.0). Без `mise exec` подхватывается чужой node из `PATH` (например `~/.hermes/node`).
 - **Браузер — установленный Google Chrome** через `PW_CHROMIUM` (`launchOptions.executablePath` в конфиге). Скачивать браузер не нужно.
 - **Не запускать `npx playwright install chromium`** в песочнице агента: в ней нет сети, загрузка виснет на первых сотнях КБ и оставляет `~/Library/Caches/ms-playwright/__dirlock` и недокачанную папку `chromium-*`. Если такое случилось — убить процессы `playwright install` / `oopDownloadBrowserMain` и удалить эти две папки.

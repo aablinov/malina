@@ -1,13 +1,14 @@
 import * as THREE from 'three';
-import { markShared, type FX } from './fx';
-import type { Knight, SpecialMove, Strike, SwingLook } from './knight';
+import { rnd } from './rng.ts';
+import { markShared, type FX } from './fx.ts';
+import type { Knight, SpecialMove, Strike, SwingLook } from './knight.ts';
 import type { Terrain } from './level/collide.ts';
-import type { Target } from './target';
-import { SwordTrail } from './trail';
-import { RESONANCE, SPECIAL_HITS, synergiesOf, TEMPER_LOOK, WEAPON_SPECIAL, type MeleeEnchant, type Synergy, type TemperSlot } from './temper';
-import { buildWeaponModel, disposeWeaponModel, type WeaponCategory, type WeaponDef } from './weapons';
-import { SYNERGY_FX } from './weapon-synergies';
-import { specialSound, weaponHit, type SpecialCue } from './weapon-audio';
+import type { Target } from './target.ts';
+import { SwordTrail } from './trail.ts';
+import { RESONANCE, SPECIAL_HITS, synergiesOf, TEMPER_LOOK, WEAPON_SPECIAL, type MeleeEnchant, type Synergy, type TemperSlot } from './temper.ts';
+import { buildWeaponModel, disposeWeaponModel, type WeaponCategory, type WeaponDef } from './weapons.ts';
+import { SYNERGY_FX } from './weapon-synergies.ts';
+import { specialSound, weaponHit, type SpecialCue } from './weapon-audio.ts';
 
 /**
  * Искусство оружия (wiki/design-weapon-arts.md): закалка зачарованиями и спец-удары.
@@ -98,7 +99,8 @@ export class WeaponArts {
   private flying: { obj: THREE.Object3D; base: number; tip: number } | null = null;
   private model: THREE.Group | null = null;
 
-  constructor(private readonly h: ArtsHooks) {
+  private readonly h: ArtsHooks;
+  constructor(h: ArtsHooks) { this.h = h;
     this.flyTrail = new SwordTrail(h.scene);
     this.flyTrail.life = 0.22;
   }
@@ -144,24 +146,24 @@ export class WeaponArts {
     const fx = this.h.fx, hero = this.h.hero;
     const c = this.swingColor(s.step);
     // каждый взмах немного свой: радиус, угол, высота серпа и куда слетают искры
-    const j = (a: number) => (Math.random() - 0.5) * a;
-    const y = hero.pos.y + 0.85 + j(0.25), yaw = s.yaw + j(0.22), R = (s.range + 0.2) * (0.92 + Math.random() * 0.16);
+    const j = (a: number) => (rnd() - 0.5) * a;
+    const y = hero.pos.y + 0.85 + j(0.25), yaw = s.yaw + j(0.22), R = (s.range + 0.2) * (0.92 + rnd() * 0.16);
     const fin = s.step === 2;
     if (s.half < 0.5) {
       fx.line(s.from, yaw, s.range + 0.3, c.clone().multiplyScalar(0.35), fin ? 0.5 : 0.35, 0.18, y);
       this.sparks(s.from.clone().addScaledVector(this.dir(yaw), s.range).setY(y), this.dir(yaw), c, fin ? 5 : 3, 1.2, 0.5);
     } else {
-      const half = Math.min(Math.PI, s.half) * (0.9 + Math.random() * 0.2);
+      const half = Math.min(Math.PI, s.half) * (0.9 + rnd() * 0.2);
       // серп: тонкий яркий край, мягкий широкий под ним, на добивающем — третий слой
       fx.arc(s.from, yaw, c.clone().multiplyScalar(0.32), R, half, y, 0.82);
       fx.arc(s.from, yaw, c.clone().multiplyScalar(0.12), R * 0.96, half, y - 0.05, 0.5);
       if (fin) fx.arc(s.from, yaw + j(0.3), c.clone().lerp(new THREE.Color(1, 1, 1), 0.4).multiplyScalar(0.2), R * 1.12, half * 0.8, y + 0.1, 0.9);
       // искры слетают с края серпа по касательной
-      const n = fin ? 6 : 3 + Math.floor(Math.random() * 2);
+      const n = fin ? 6 : 3 + Math.floor(rnd() * 2);
       for (let i = 0; i < n; i++) {
-        const a = yaw + (Math.random() * 2 - 1) * half;
+        const a = yaw + (rnd() * 2 - 1) * half;
         const p = s.from.clone().addScaledVector(this.dir(a), R).setY(y);
-        this.sparks(p, this.dir(a + (Math.random() < 0.5 ? 1.2 : -1.2)), c, 1, 1.1, 0.6);
+        this.sparks(p, this.dir(a + (rnd() < 0.5 ? 1.2 : -1.2)), c, 1, 1.1, 0.6);
       }
     }
     if (hits.length) this.meter = Math.min(1, this.meter + (1 + 0.25 * (hits.length - 1)) / SPECIAL_HITS);
@@ -171,9 +173,9 @@ export class WeaponArts {
   /** Попадание по цели: вспышка и эффект каждого зачарования */
   onHitTarget(t: Target, point: THREE.Vector3, dir: THREE.Vector3, crit: boolean, finisher: boolean): void {
     const fx = this.h.fx, hero = this.h.hero;
-    fx.flash(point, this.colors[0].clone().multiplyScalar(finisher ? 1.3 : 0.9), (finisher ? 2 : 1.3) * (0.85 + Math.random() * 0.3), 0.16);
+    fx.flash(point, this.colors[0].clone().multiplyScalar(finisher ? 1.3 : 0.9), (finisher ? 2 : 1.3) * (0.85 + rnd() * 0.3), 0.16);
     // брызги-ленты от удара: по направлению удара с разбросом, у каждой закалки — своего цвета
-    this.sparks(point, dir, this.temper.length ? this.colors[(Math.random() * this.colors.length) | 0] : this.colors[0], finisher ? 6 : 3, finisher ? 1.8 : 1.2, 1.1);
+    this.sparks(point, dir, this.temper.length ? this.colors[(rnd() * this.colors.length) | 0] : this.colors[0], finisher ? 6 : 3, finisher ? 1.8 : 1.2, 1.1);
     const yaw = Math.atan2(dir.x, dir.z);
     for (const { id, tier } of this.temper) {
       const c = rgb(id), n = 2 + tier;
@@ -202,7 +204,7 @@ export class WeaponArts {
           fx.fireCubes(point, 0.5, n, [c, new THREE.Color(3.4, 2.4, 0.5)], 0.16);
           break;
         case 'soulSiphon': this.orbs(point, c, 1 + Math.floor(tier / 2), 0.9); break;
-        case 'smiting': fx.bolt(point.clone().add(_v.set((Math.random() - 0.5) * 1.2, 2.2, (Math.random() - 0.5) * 1.2)), point, c, 0.05, 1, 0.14); break;
+        case 'smiting': fx.bolt(point.clone().add(_v.set((rnd() - 0.5) * 1.2, 2.2, (rnd() - 0.5) * 1.2)), point, c, 0.05, 1, 0.14); break;
       }
     }
   }
@@ -284,7 +286,7 @@ export class WeaponArts {
             [0.14, () => {
               fx.burst(start.clone().setY(start.y + 0.8), [new THREE.Color(0.6, 0.3, 1.2), c], 16, { speed: 2, up: 1, size: 0.1, life: 0.5, glow: true, gravity: 0 });
               // тень тянется за героем лентой, слегка петляя
-              const ph = Math.random() * 6.28;
+              const ph = rnd() * 6.28;
               fx.streak({ path: (k, out) => out.copy(hero.pos).setY(hero.pos.y + 0.8 + Math.sin(ph + k * 12) * 0.2), dur: 0.2, color: new THREE.Color(0.9, 0.4, 2), color2: c, width: 0.9, tail: 0.3, halo: 1.8 });
             }],
             [0.52, () => {
@@ -455,7 +457,7 @@ export class WeaponArts {
     for (let i = 0; i < n; i++) events.push([0.12 + (i / n) * 0.76, () => {
       const col = L[i % 2], f = this.dir(hero.yaw);
       if (cat === 'рапира') {
-        const a = hero.yaw + (Math.random() - 0.5) * 0.3, R2 = this.h.hero.tune.swings[0].range + 0.6;
+        const a = hero.yaw + (rnd() - 0.5) * 0.3, R2 = this.h.hero.tune.swings[0].range + 0.6;
         fx.line(hero.pos.clone().addScaledVector(f, 0.3), a, R2, col.clone().multiplyScalar(0.6), 0.22, 0.12, hero.pos.y + 1);
         for (const t of this.onSegment(hero.pos, hero.pos.clone().addScaledVector(this.dir(a), R2), 0.6)) this.hurt(t, this.B(0.32), hero.pos, 0.3, true);
       } else {
@@ -524,8 +526,8 @@ export class WeaponArts {
     let turned = false, spinAcc = 0;
     const T = 1.1;
     // настоящий бумеранг: уходит дугой в одну сторону, возвращается по другой; изгиб каждый раз свой
-    const side = new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar((Math.random() < 0.5 ? -1 : 1) * (1.2 + Math.random() * 1.6));
-    const lift = Math.random() * 0.6;
+    const side = new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar((rnd() < 0.5 ? -1 : 1) * (1.2 + rnd() * 1.6));
+    const lift = rnd() * 0.6;
     this.ent(T, (_dt, k) => {
       const out = k < 0.5;
       const back = hero.pos.clone().setY(hero.pos.y + 1);
@@ -595,26 +597,26 @@ export class WeaponArts {
     const { base, tip } = hero.blade();
     while (this.sparkAcc >= 1) {
       this.sparkAcc -= 1;
-      const t = this.temper.length ? this.temper[(Math.random() * this.temper.length) | 0] : null;
-      const p = base.clone().lerp(tip, 0.25 + Math.random() * 0.75);
+      const t = this.temper.length ? this.temper[(rnd() * this.temper.length) | 0] : null;
+      const p = base.clone().lerp(tip, 0.25 + rnd() * 0.75);
       this.spark(t?.id ?? 'sharpness', p);
     }
     if (this.temper.some((t) => t.id === 'smiting')) {
       this.boltAcc += dt * (swinging ? 6 : 1.5);
-      if (this.boltAcc >= 1) { this.boltAcc = 0; fx.bolt(base, tip.clone().add(_v.set((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4)), rgb('smiting'), 0.025, 0, 0.1); }
+      if (this.boltAcc >= 1) { this.boltAcc = 0; fx.bolt(base, tip.clone().add(_v.set((rnd() - 0.5) * 0.4, (rnd() - 0.5) * 0.4, (rnd() - 0.5) * 0.4)), rgb('smiting'), 0.025, 0, 0.1); }
     }
   }
 
   /** Одна искра закалки у лезвия */
   private spark(id: MeleeEnchant, p: THREE.Vector3): void {
-    const fx = this.h.fx, c = rgb(id), r = () => (Math.random() - 0.5);
+    const fx = this.h.fx, c = rgb(id), r = () => (rnd() - 0.5);
     switch (id) {
       case 'sharpness': fx.particle({ pos: p, vel: _v.set(r() * 0.4, 0.3, r() * 0.4).clone(), life: 0.35, size: 0.04, color: new THREE.Color(3, 3.2, 3.4), gravity: 0, spin: 12 }); break;
       case 'critical': fx.particle({ pos: p, vel: _v.set(r() * 0.6, 0.6, r() * 0.6).clone(), life: 0.5, size: 0.055, color: c, gravity: -0.4, spin: 14 }); break;
       case 'leeching': fx.particle({ pos: p, vel: _v.set(r() * 0.2, -0.2, r() * 0.2).clone(), life: 0.5, size: 0.05, color: c, gravity: 7, spin: 2 }); break;
       case 'knockback': fx.particle({ pos: p, vel: _v.set(r() * 0.8, 0.2, r() * 0.8).clone(), life: 0.5, size: 0.06, color: '#e8dcb0', gravity: 0.5, drag: 2 }, false); break;
-      case 'swirling': { const a = Math.random() * 6.28; fx.particle({ pos: p, vel: _v.set(Math.cos(a) * 0.9, 0.4, Math.sin(a) * 0.9).clone(), life: 0.45, size: 0.045, color: c, gravity: 0, drag: 3 }); break; }
-      case 'fireAspect': fx.particle({ pos: p, vel: _v.set(r() * 0.3, 0.9, r() * 0.3).clone(), life: 0.55, size: 0.06, color: Math.random() < 0.5 ? c : new THREE.Color(3.4, 2.4, 0.5), gravity: -2 }); break;
+      case 'swirling': { const a = rnd() * 6.28; fx.particle({ pos: p, vel: _v.set(Math.cos(a) * 0.9, 0.4, Math.sin(a) * 0.9).clone(), life: 0.45, size: 0.045, color: c, gravity: 0, drag: 3 }); break; }
+      case 'fireAspect': fx.particle({ pos: p, vel: _v.set(r() * 0.3, 0.9, r() * 0.3).clone(), life: 0.55, size: 0.06, color: rnd() < 0.5 ? c : new THREE.Color(3.4, 2.4, 0.5), gravity: -2 }); break;
       case 'soulSiphon': fx.particle({ pos: p, vel: _v.set(r() * 0.3, 0.5, r() * 0.3).clone(), life: 0.8, size: 0.06, color: c, gravity: -0.6, drag: 1.5, spin: 1 }); break;
       case 'smiting': fx.particle({ pos: p, vel: _v.set(r() * 1.6, r() * 1.6, r() * 1.6).clone(), life: 0.18, size: 0.04, color: c, gravity: 0, spin: 20 }); break;
     }
@@ -645,7 +647,7 @@ export class WeaponArts {
   /** Урон цели от точки from (отбрасывает от неё) */
   hurt(t: Target, v: number, from: THREE.Vector3, knock: number, melee = false): void {
     const d = new THREE.Vector3(t.pos.x - from.x, 0, t.pos.z - from.z);
-    if (d.lengthSq() < 1e-4) d.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+    if (d.lengthSq() < 1e-4) d.set(rnd() - 0.5, 0, rnd() - 0.5);
     this.h.hitTarget(t, v, d.normalize(), knock, melee);
   }
 
@@ -695,9 +697,9 @@ export class WeaponArts {
    * по дуге со случайным изгибом в сторону (bulge, доля расстояния), подъёмом (lift) и дрожью (wobble) — каждый раз своя
    */
   curve(from: THREE.Vector3, to: THREE.Vector3 | (() => THREE.Vector3), bulge = 0.4, lift = 0.3, wobble = 0.15): (k: number, out: THREE.Vector3) => THREE.Vector3 {
-    const p0 = from.clone(), side = Math.random() < 0.5 ? -1 : 1;
-    const bk = bulge * (0.5 + Math.random()) * side, lk = lift * (0.4 + Math.random() * 0.9);
-    const ph = Math.random() * 6.28, fq = 1.5 + Math.random() * 2.5, sk = Math.random() * 0.3;
+    const p0 = from.clone(), side = rnd() < 0.5 ? -1 : 1;
+    const bk = bulge * (0.5 + rnd()) * side, lk = lift * (0.4 + rnd() * 0.9);
+    const ph = rnd() * 6.28, fq = 1.5 + rnd() * 2.5, sk = rnd() * 0.3;
     const end = typeof to === 'function' ? to : () => to;
     const tmp = new THREE.Vector3(), perp = new THREE.Vector3();
     return (k, out) => {
@@ -719,9 +721,9 @@ export class WeaponArts {
     const fx = this.h.fx, sp = o.sparks ?? 0.35;
     fx.streak({
       path: this.curve(from, to, o.bulge ?? 0.45, o.lift ?? 0.35, o.wobble ?? 0.08),
-      dur: (o.dur ?? 0.5) * (0.8 + Math.random() * 0.45), color: c, color2: o.c2 ?? c.clone().multiplyScalar(0.45),
+      dur: (o.dur ?? 0.5) * (0.8 + rnd() * 0.45), color: c, color2: o.c2 ?? c.clone().multiplyScalar(0.45),
       width: o.width ?? 0.14, tail: o.tail ?? 0.22,
-      onHead: (p) => { if (Math.random() < sp) fx.particle({ pos: p.clone(), vel: _v.set((Math.random() - 0.5) * 1.2, Math.random() * 0.8, (Math.random() - 0.5) * 1.2).clone(), life: 0.3, size: 0.05, color: c, gravity: -0.5 }); },
+      onHead: (p) => { if (rnd() < sp) fx.particle({ pos: p.clone(), vel: _v.set((rnd() - 0.5) * 1.2, rnd() * 0.8, (rnd() - 0.5) * 1.2).clone(), life: 0.3, size: 0.05, color: c, gravity: -0.5 }); },
       onEnd: (p) => { fx.flash(p, c.clone(), 0.9, 0.14); o.onEnd?.(p); },
     });
   }
@@ -730,26 +732,26 @@ export class WeaponArts {
   orbs(from: THREE.Vector3, c: THREE.Color, n: number, size = 0.7): void {
     const hero = this.h.hero, chest = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
-      const p = from.clone().add(_v.set((Math.random() - 0.5) * 0.6, Math.random() * 0.5, (Math.random() - 0.5) * 0.6));
-      this.wisp(p, () => chest.copy(hero.pos).setY(hero.pos.y + 1), c, { dur: 0.45 + Math.random() * 0.25, width: 0.16 * size, bulge: 0.6, lift: 0.5, wobble: 0.06 });
+      const p = from.clone().add(_v.set((rnd() - 0.5) * 0.6, rnd() * 0.5, (rnd() - 0.5) * 0.6));
+      this.wisp(p, () => chest.copy(hero.pos).setY(hero.pos.y + 1), c, { dur: 0.45 + rnd() * 0.25, width: 0.16 * size, bulge: 0.6, lift: 0.5, wobble: 0.06 });
     }
   }
 
   /** Искры-ленты брызгами из точки: короткие кривые хвосты во все стороны вокруг направления dir */
   sparks(at: THREE.Vector3, dir: THREE.Vector3 | null, c: THREE.Color, n: number, len = 1.4, spread = Math.PI): void {
-    const base = dir ? Math.atan2(dir.x, dir.z) : Math.random() * 6.28;
+    const base = dir ? Math.atan2(dir.x, dir.z) : rnd() * 6.28;
     for (let i = 0; i < n; i++) {
-      const a = base + (Math.random() - 0.5) * spread * 2, l = len * (0.5 + Math.random() * 0.8);
-      const to = at.clone().add(_v.set(Math.sin(a) * l, (Math.random() - 0.3) * l * 0.6, Math.cos(a) * l));
-      this.h.fx.streak({ path: this.curve(at, to, 0.35, 0.15, 0.05), dur: 0.12 + Math.random() * 0.12, color: c, width: 0.06 + Math.random() * 0.05, tail: 0.12, halo: 3 });
+      const a = base + (rnd() - 0.5) * spread * 2, l = len * (0.5 + rnd() * 0.8);
+      const to = at.clone().add(_v.set(Math.sin(a) * l, (rnd() - 0.3) * l * 0.6, Math.cos(a) * l));
+      this.h.fx.streak({ path: this.curve(at, to, 0.35, 0.15, 0.05), dur: 0.12 + rnd() * 0.12, color: c, width: 0.06 + rnd() * 0.05, tail: 0.12, halo: 3 });
     }
   }
 
   /** Завиток: частицы кружат вокруг c по касательной и поднимаются */
   swirl(c: THREE.Vector3, col: THREE.Color, r: number, n: number, inward = false): void {
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
-      const p = c.clone().add(_v.set(Math.cos(a) * r, Math.random() * 0.4, Math.sin(a) * r));
+      const a = (i / n) * Math.PI * 2 + rnd() * 0.4;
+      const p = c.clone().add(_v.set(Math.cos(a) * r, rnd() * 0.4, Math.sin(a) * r));
       const sp = 3 + r * 1.5;
       const tang = _w.set(-Math.sin(a), 0, Math.cos(a)).multiplyScalar(sp);
       if (inward) tang.add(_v.set(-Math.cos(a), 0, -Math.sin(a)).multiplyScalar(sp * 0.5));
@@ -761,11 +763,11 @@ export class WeaponArts {
   skyBolt(at: THREE.Vector3, c: THREE.Color, width = 0.12): void {
     const fx = this.h.fx;
     // каждый раз с другой стороны неба и с другим изломом; толстое ядро-лента поверх ломаной
-    const top = at.clone().add(_v.set((Math.random() - 0.5) * 4, 8 + Math.random() * 3, (Math.random() - 0.5) * 4));
-    fx.bolt(top, at.clone(), c, width, 3 + Math.floor(Math.random() * 3), 0.3);
+    const top = at.clone().add(_v.set((rnd() - 0.5) * 4, 8 + rnd() * 3, (rnd() - 0.5) * 4));
+    fx.bolt(top, at.clone(), c, width, 3 + Math.floor(rnd() * 3), 0.3);
     fx.streak({ path: this.curve(top, at.clone(), 0.12, 0, 0.05), dur: 0.08, color: c.clone().lerp(new THREE.Color(1, 1, 1), 0.3).multiplyScalar(1.3), width: width * 2.2, tail: 0.22, halo: 3.5 });
     fx.flash(at.clone().setY(at.y + 0.6), c.clone(), 2.6, 0.22);
-    fx.ring(at.clone().setY(at.y + 0.06), 1.4 + Math.random() * 0.4, c, 0.3, 0.3, 0.6);
+    fx.ring(at.clone().setY(at.y + 0.06), 1.4 + rnd() * 0.4, c, 0.3, 0.3, 0.6);
     this.sparks(at.clone().setY(at.y + 0.3), null, c, 5, 1.2);
   }
 
@@ -778,7 +780,7 @@ export class WeaponArts {
       if (!t) break;
       done.add(t);
       const q = t.pos.clone().setY(this.ground + 1);
-      this.later(i * (0.05 + Math.random() * 0.05), ((a: THREE.Vector3, b: THREE.Vector3) => () => {
+      this.later(i * (0.05 + rnd() * 0.05), ((a: THREE.Vector3, b: THREE.Vector3) => () => {
         // дуга с провисом в случайную сторону: сочная лента и тонкая ломаная поверх
         this.h.fx.streak({ path: this.curve(a, b, 0.35, 0.25, 0.06), dur: 0.12, color: c.clone().multiplyScalar(1.2), color2: c, width: 0.2, tail: 0.3, halo: 3 });
         this.h.fx.bolt(a, b, c, 0.05, 1, 0.2);
@@ -806,7 +808,7 @@ export class WeaponArts {
     const done = new Set<Target>();
     const T = range / speed;
     // каждый серп загибает в свою сторону и чуть покачивается, разворачиваясь по ходу
-    const curl = (Math.random() - 0.5) * range * 0.35, ph = Math.random() * 6.28;
+    const curl = (rnd() - 0.5) * range * 0.35, ph = rnd() * 6.28;
     const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
     const at = (k: number, out: THREE.Vector3): THREE.Vector3 => out.copy(p0).addScaledVector(fwd, range * k).addScaledVector(side, curl * Math.sin(Math.PI * k) + Math.sin(ph + k * 9) * 0.12);
     const tip = new THREE.Vector3(), prev = new THREE.Vector3();
@@ -817,7 +819,7 @@ export class WeaponArts {
       m.rotation.y = Math.atan2(p.x - prev.x, p.z - prev.z) - Math.PI / 2;
       m.position.copy(p).addScaledVector(fwd, -w * 0.6);
       mat.opacity = Math.min(1, (1 - k) * 4);
-      if (Math.random() < 0.8) this.h.fx.particle({ pos: p.clone().add(_v.set((Math.random() - 0.5) * w, 0, (Math.random() - 0.5) * w)), vel: fwd.clone().multiplyScalar(-2), life: 0.3, size: 0.07, color: c, gravity: 0 });
+      if (rnd() < 0.8) this.h.fx.particle({ pos: p.clone().add(_v.set((rnd() - 0.5) * w, 0, (rnd() - 0.5) * w)), vel: fwd.clone().multiplyScalar(-2), life: 0.3, size: 0.07, color: c, gravity: 0 });
       for (const t of this.near(p, w * 0.9)) if (!done.has(t)) { done.add(t); this.hit(t, v, fwd.clone(), knock); }
     }, () => onEnd?.(at(1, tip).clone().setY(this.ground), [...done]));
   }

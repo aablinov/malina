@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { obstacle, type Obstacle } from './collision';
-import type { FX } from './fx';
-import { disposeOwned, markShared } from './fx';
-import type { Target } from './target';
-import type { Rand } from './textures';
-import { distToObstacle } from './nav';
-import { pixelTex } from './textures';
-import { additive, additiveSprite, glowTex, groundGlow, lightBeam, rainbow, raysTex, starTex, type LootData } from './loot-look';
+import { obstacle, type Obstacle } from './collision.ts';
+import type { FX } from './fx.ts';
+import { disposeOwned, markShared } from './fx.ts';
+import type { Target } from './target.ts';
+import type { Rand } from './textures.ts';
+import { distToObstacle } from './nav.ts';
+import { pixelTex } from './textures.ts';
+import { additive, additiveSprite, glowTex, groundGlow, lightBeam, rainbow, raysTex, starTex, type LootData } from './loot-look.ts';
 
 /**
  * Интерактивные предметы карты:
@@ -625,10 +625,14 @@ export class Props {
   /** Фонтан малины: ягоды, ещё не вылетевшие — выпускаются волнами по FOUNTAIN_PER_TICK за тик */
   private readonly fountainQueue: { at: THREE.Vector3; amount: number; i: number; n: number }[] = [];
 
+  private readonly scene: THREE.Scene;
+  private readonly fx: FX;
+  private readonly rand: Rand;
+  private readonly hooks: PropsHooks;
+  private readonly layout: PropsLayout;
   constructor(
-    private readonly scene: THREE.Scene, private readonly fx: FX, private readonly rand: Rand,
-    private readonly hooks: PropsHooks, private readonly layout: PropsLayout,
-  ) { this.spawn(); }
+    scene: THREE.Scene, fx: FX, rand: Rand,
+    hooks: PropsHooks, layout: PropsLayout) { this.scene = scene; this.fx = fx; this.rand = rand; this.hooks = hooks; this.layout = layout; this.spawn(); }
 
   private spawn(): void {
     this.barrels = this.layout.barrels.map(([x, z]) => new Barrel(this.scene, x, z));

@@ -1,5 +1,5 @@
-import { bell, boom, deg, hiss, pluck, voice } from './spell-audio';
-import type { WeaponCategory } from './weapons';
+import { bell, boom, deg, hiss, pluck, voice } from './spell-audio.ts';
+import type { WeaponCategory } from './weapons.ts';
 
 /**
  * Звук оружия (wiki/design-weapon-arts.md, раздел 6): у каждого вида — свой свист взмаха, свой звук попадания и свои

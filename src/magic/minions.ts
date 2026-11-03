@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { addDecoy } from '../decoys';
-import type { Spells, School } from '../spells';
-import type { Target } from '../target';
-import { rand } from './kit';
+import { rnd } from '../rng.ts';
+import { addDecoy } from '../decoys.ts';
+import type { Spells, School } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { rand } from './kit.ts';
 
 /**
  * Призванные (wiki/design-spells.md, «Базовые заклинания»): общий ход для волков, элементалей и големов.
@@ -89,7 +90,7 @@ export function summon(kit: Spells, spec: MinionSpec): Minion {
       const e = ((m.data.endT as number) += dt) / 0.6;
       g.scale.set(1, Math.max(0.01, 1 - e), 1);
       for (const mt of mats) mt.opacity = Math.max(0, 1 - e);
-      if (Math.random() < 0.7) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-0.3, 0.3), rand(0.1, spec.height), rand(-0.3, 0.3))), vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.6, size: 0.07, color: s.b, gravity: -0.5 });
+      if (rnd() < 0.7) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-0.3, 0.3), rand(0.1, spec.height), rand(-0.3, 0.3))), vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.6, size: 0.07, color: s.b, gravity: -0.5 });
       if (e < 1) return true;
       kit.h.scene.remove(g);
       for (const mt of mats) mt.dispose();

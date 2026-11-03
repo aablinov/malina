@@ -3,7 +3,7 @@
     "target": "ES2023",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
@@ -14,5 +14,5 @@
     "types": ["node"]
   },
   "include": ["server", "src/sim", "src/net", "src/game"],
-  "exclude": ["src/net/client.ts", "src/net/coop.ts", "src/net/battle-ui.ts"]
+  "exclude": ["src/net/client.ts", "src/net/battle-ui.ts"]
 }

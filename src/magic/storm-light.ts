@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import type { ArtifactStats, BossSpellKind } from '../items';
-import { lightBeam } from '../loot-look';
-import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio';
-import type { Spells } from '../spells';
-import type { Target } from '../target';
-import { C, rand, type Spell } from './kit';
+import { rnd } from '../rng.ts';
+import type { ArtifactStats, BossSpellKind } from '../items.ts';
+import { lightBeam } from '../loot-look.ts';
+import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio.ts';
+import type { Spells } from '../spells.ts';
+import type { Target } from '../target.ts';
+import { C, rand, type Spell } from './kit.ts';
 
 /**
  * Молния и свет (wiki/design-spells.md, раздел 3, 7–12): копьё громовержца, громовой прыжок, грозовая туча,
@@ -184,7 +185,7 @@ function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
     if (!thrown) {
       const q = Math.min(1, t / grow);
       place(kit.hand().add(new THREE.Vector3(0, 0.25, 0)), 0.2 + 0.8 * q);
-      if (Math.random() < 0.6) kit.bolt(spear.position.clone(), spear.position.clone().add(new THREE.Vector3(rand(-0.6, 0.6), rand(-0.4, 0.5), rand(-0.6, 0.6))), s.a, 0.025, 0, 0.08);
+      if (rnd() < 0.6) kit.bolt(spear.position.clone(), spear.position.clone().add(new THREE.Vector3(rand(-0.6, 0.6), rand(-0.4, 0.5), rand(-0.6, 0.6))), s.a, 0.025, 0, 0.08);
       if (t >= grow) {
         thrown = true;
         start.copy(spear.position);
@@ -203,7 +204,7 @@ function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
     const p = start.clone().addScaledVector(dir, travel);
     place(p, 1);
     // хвост искр
-    for (let i = 0; i < 4; i++) fx.particle({ pos: p.clone().addScaledVector(dir, -rand(0, len)), vel: new THREE.Vector3(rand(-1, 1), rand(-0.5, 1), rand(-1, 1)), life: 0.25, size: 0.05, color: Math.random() < 0.5 ? s.a : s.b, gravity: 2 });
+    for (let i = 0; i < 4; i++) fx.particle({ pos: p.clone().addScaledVector(dir, -rand(0, len)), vel: new THREE.Vector3(rand(-1, 1), rand(-0.5, 1), rand(-1, 1)), life: 0.25, size: 0.05, color: rnd() < 0.5 ? s.a : s.b, gravity: 2 });
     // пронзает всех на отрезке, пройденном за кадр
     const a0 = start.clone().addScaledVector(dir, prev);
     for (const tg of kit.h.targets()) {
@@ -237,7 +238,7 @@ function thunderleap(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
   // замах: присел — по ногам бегут искры, круг на месте приземления
   kit.groundSigil('spark', land, R * 0.7, 0.4, 0.5, 0.22);
   for (let i = 0; i < 16; i++) {
-    const an = Math.random() * Math.PI * 2;
+    const an = rnd() * Math.PI * 2;
     fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(an) * 0.6, 0.1, Math.sin(an) * 0.6)), vel: new THREE.Vector3(0, rand(2, 4), 0), life: 0.3, size: 0.05, color: s.b, gravity: 0 });
   }
   kit.later(0.15, () => {
@@ -257,8 +258,8 @@ function thunderleap(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
       const q = Math.min(1, t / airT);
       const want = from.clone().lerp(land, q);
       hero.pos.x = want.x; hero.pos.z = want.z;
-      for (let i = 0; i < 3; i++) fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), rand(0.2, 1.6), rand(-0.3, 0.3))), vel: new THREE.Vector3(rand(-0.5, 0.5), rand(-1, 0.5), rand(-0.5, 0.5)), life: 0.3, size: 0.05, color: Math.random() < 0.5 ? s.a : s.b, gravity: 0 });
-      if (Math.random() < 0.3) kit.bolt(hero.pos.clone().setY(hero.pos.y + 1), hero.pos.clone().add(new THREE.Vector3(rand(-1, 1), rand(0, 2), rand(-1, 1))), s.a, 0.025, 0, 0.08);
+      for (let i = 0; i < 3; i++) fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(rand(-0.3, 0.3), rand(0.2, 1.6), rand(-0.3, 0.3))), vel: new THREE.Vector3(rand(-0.5, 0.5), rand(-1, 0.5), rand(-0.5, 0.5)), life: 0.3, size: 0.05, color: rnd() < 0.5 ? s.a : s.b, gravity: 0 });
+      if (rnd() < 0.3) kit.bolt(hero.pos.clone().setY(hero.pos.y + 1), hero.pos.clone().add(new THREE.Vector3(rand(-1, 1), rand(0, 2), rand(-1, 1))), s.a, 0.025, 0, 0.08);
       if ((hero.grounded && t > 0.12) || t > 1.4 || hero.down) {
         landed = true;
         slam(kit, hero.pos.clone(), R, power, k);
@@ -301,10 +302,10 @@ function slam(kit: Spells, c: THREE.Vector3, R: number, power: number, k: number
   let left = 1.2;
   kit.proc((dt) => {
     left -= dt;
-    if (Math.random() < 0.6) {
-      const an = Math.random() * Math.PI * 2, r = rand(0.5, R);
+    if (rnd() < 0.6) {
+      const an = rnd() * Math.PI * 2, r = rand(0.5, R);
       const p = c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0.1, Math.sin(an) * r));
-      if (Math.random() < 0.35) kit.bolt(p, p.clone().add(new THREE.Vector3(rand(-0.6, 0.6), rand(0.1, 0.5), rand(-0.6, 0.6))), s.a, 0.02, 0, 0.08);
+      if (rnd() < 0.35) kit.bolt(p, p.clone().add(new THREE.Vector3(rand(-0.6, 0.6), rand(0.1, 0.5), rand(-0.6, 0.6))), s.a, 0.02, 0, 0.08);
       fx.particle({ pos: p, vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.3, size: 0.04, color: s.b, gravity: 4 });
     }
     return left > 0;
@@ -329,7 +330,7 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     const sz = rand(0.5, 1.05);
     m.scale.set(sz * rand(1, 1.5), sz * 0.75, sz);
     // кубы плотнее к середине и выше в центре — «шапка» тучи
-    const an = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 1.6;
+    const an = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 1.6;
     m.position.set(Math.cos(an) * r * 1.2, rand(-0.25, 0.25) + (1.6 - r) * 0.25, Math.sin(an) * r * 0.8);
     cloud.add(m);
   }
@@ -351,7 +352,7 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     flick = Math.max(0, flick - dt * 4);
     mat.emissive.setRGB(0.04 + flick * 0.5, 0.06 + flick * 0.7, 0.12 + flick * 1);
     // капли дождя
-    if (Math.random() < 0.7 * vanish) fx.particle({ pos: cloud.position.clone().add(new THREE.Vector3(rand(-1.5, 1.5), -0.5, rand(-1.2, 1.2))), vel: new THREE.Vector3(0, -9, 0), life: 0.4, size: 0.04, color: s.b.clone().multiplyScalar(0.5), gravity: 0, shrink: false });
+    if (rnd() < 0.7 * vanish) fx.particle({ pos: cloud.position.clone().add(new THREE.Vector3(rand(-1.5, 1.5), -0.5, rand(-1.2, 1.2))), vel: new THREE.Vector3(0, -9, 0), life: 0.4, size: 0.04, color: s.b.clone().multiplyScalar(0.5), gravity: 0, shrink: false });
     if (t >= next && t < dur) {
       next = t + every;
       // бьёт ближайшего к прицелу, если он под тучей (в радиусе от героя), иначе — ближайшего к герою
@@ -370,7 +371,7 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
         kit.h.damage(tg, Math.round(power), cloud.position, 0.5);
         sfx.cloudStrike(strikes);
         strikes++;
-      } else if (Math.random() < 0.4) {
+      } else if (rnd() < 0.4) {
         // целей нет — молния бьёт внутри тучи, глухой рокот
         kit.bolt(bottom.clone().setY(bottom.y + 0.6), bottom.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(-0.2, 0.3), rand(-1, 1))), s.a, 0.03, 0, 0.12);
         sfx.rumble(0.05);
@@ -402,9 +403,9 @@ function starfall(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
     beam.group.position.copy(hero.pos);
     const q = Math.min(1, bt / 0.3) * Math.min(1, Math.max(0, (dur + tele - bt) / 0.5));
     beam.mats.forEach((m) => { m.opacity = q * (0.8 + Math.sin(bt * 6) * 0.15); });
-    if (Math.random() < 0.5) {
-      const an = Math.random() * Math.PI * 2;
-      fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(an) * 0.7, 0.1, Math.sin(an) * 0.7)), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.8, size: 0.05, color: Math.random() < 0.5 ? s.a : s.b, gravity: -0.3 });
+    if (rnd() < 0.5) {
+      const an = rnd() * Math.PI * 2;
+      fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(an) * 0.7, 0.1, Math.sin(an) * 0.7)), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.8, size: 0.05, color: rnd() < 0.5 ? s.a : s.b, gravity: -0.3 });
     }
     if (bt < dur + tele) return true;
     beam.group.parent?.remove(beam.group);
@@ -421,7 +422,7 @@ function starfall(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
       let p: THREE.Vector3;
       const tg = n % 4 === 0 ? kit.nearest(c, R) : null;
       if (tg) p = tg.pos.clone();
-      else { const an = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R; p = c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0, Math.sin(an) * r)); }
+      else { const an = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R; p = c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0, Math.sin(an) * r)); }
       fallingStar(kit, p, power, n, k);
     });
   }
@@ -441,7 +442,7 @@ function fallingStar(kit: Spells, p: THREE.Vector3, power: number, n: number, k:
   fx.custom(star, fall, (q) => {
     star.position.copy(from).lerp(p.clone().setY(p.y + 0.2), q * q);
     star.rotation.x += 0.3; star.rotation.y += 0.2;
-    for (let j = 0; j < 2; j++) fx.particle({ pos: star.position.clone(), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(0, 0.6), rand(-0.4, 0.4)), life: 0.3, size: rand(0.05, 0.09), color: Math.random() < 0.5 ? s.a : s.b, gravity: 0 });
+    for (let j = 0; j < 2; j++) fx.particle({ pos: star.position.clone(), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(0, 0.6), rand(-0.4, 0.4)), life: 0.3, size: rand(0.05, 0.09), color: rnd() < 0.5 ? s.a : s.b, gravity: 0 });
   }, () => { core.geometry.dispose(); core.material.dispose(); shell.geometry.dispose(); shell.material.dispose(); });
   kit.later(fall, () => {
     if (n === 0) { kit.impact('star', p, k, 14, 0.45); kit.pomp('legendary', p, 'star'); }
@@ -492,10 +493,10 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
       orb.rotation.x += dt * 6; orb.rotation.y += dt * 4;
       oc.scale.setScalar(0.1 + q * 0.35); os.scale.setScalar(0.2 + q * 0.7);
       for (let i = 0; i < 4; i++) {
-        const an = Math.random() * Math.PI * 2, e = rand(-0.5, 0.8), r = rand(1.5, 2.6);
+        const an = rnd() * Math.PI * 2, e = rand(-0.5, 0.8), r = rand(1.5, 2.6);
         const from = hand.clone().add(new THREE.Vector3(Math.cos(an) * Math.cos(e) * r, Math.sin(e) * r, Math.sin(an) * Math.cos(e) * r));
         const life = 0.25;
-        fx.particle({ pos: from, vel: hand.clone().sub(from).divideScalar(life), life, size: 0.07, color: Math.random() < 0.5 ? s.a : s.b, gravity: 0, shrink: false });
+        fx.particle({ pos: from, vel: hand.clone().sub(from).divideScalar(life), life, size: 0.07, color: rnd() < 0.5 ? s.a : s.b, gravity: 0, shrink: false });
       }
       kit.face(focus(), 0.2);
       fx.zoom = Math.max(fx.zoom, 0.3 * q);
@@ -545,7 +546,7 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
     const g = end.clone();
     const fy = kit.h.terrain.floorAt(g.x, g.z, hero.pos.y + 2);
     g.y = Number.isFinite(fy) ? fy : hero.pos.y;
-    for (let i = 0; i < 4; i++) fx.particle({ pos: g.clone().setY(g.y + 0.3), vel: new THREE.Vector3(rand(-3, 3), rand(2, 5), rand(-3, 3)), life: 0.4, size: 0.06, color: Math.random() < 0.5 ? s.a : s.b, gravity: 8 });
+    for (let i = 0; i < 4; i++) fx.particle({ pos: g.clone().setY(g.y + 0.3), vel: new THREE.Vector3(rand(-3, 3), rand(2, 5), rand(-3, 3)), life: 0.4, size: 0.06, color: rnd() < 0.5 ? s.a : s.b, gravity: 8 });
     decalT -= dt;
     if (decalT <= 0) {
       decalT = 0.06;
@@ -554,7 +555,7 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
         const q = from.clone().addScaledVector(dir, d);
         const y = kit.h.terrain.floorAt(q.x, q.z, hero.pos.y + 2);
         q.y = Number.isFinite(y) ? y : hero.pos.y;
-        if (Math.random() < 0.3) fx.decal(q, kit.tex.scorch(), '#ffffff', 1.2 + width, 3.5, false, 0.45);
+        if (rnd() < 0.3) fx.decal(q, kit.tex.scorch(), '#ffffff', 1.2 + width, 3.5, false, 0.45);
       }
       fx.decal(g, kit.tex.glow(), s.a.clone().multiplyScalar(0.25), 1.6, 0.8, true);
     }
@@ -595,7 +596,7 @@ function judgement(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
   fx.custom(pre.group, tele, (q) => {
     pre.group.scale.set(0.4 + q * 0.6, q, 0.4 + q * 0.6);
     pre.mats.forEach((m) => { m.opacity = q; });
-    if (Math.random() < 0.6) fx.particle({ pos: c.clone().add(new THREE.Vector3(rand(-R, R) * 0.6, rand(5, 9), rand(-R, R) * 0.6)), vel: new THREE.Vector3(0, -6, 0), life: 0.6, size: 0.06, color: s.b, gravity: 0 });
+    if (rnd() < 0.6) fx.particle({ pos: c.clone().add(new THREE.Vector3(rand(-R, R) * 0.6, rand(5, 9), rand(-R, R) * 0.6)), vel: new THREE.Vector3(0, -6, 0), life: 0.6, size: 0.06, color: s.b, gravity: 0 });
   }, () => { pre.group.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); }); pre.mats.forEach((m) => m.dispose()); });
   kit.later(tele, () => {
     kit.impact('star', c, k, 18, 0.6);
@@ -624,9 +625,9 @@ function judgement(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
     let left = 2;
     kit.proc((dt) => {
       left -= dt;
-      if (Math.random() < 0.7 * Math.min(1, left)) {
-        const an = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R;
-        fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0.1, Math.sin(an) * r)), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: 1.2, size: rand(0.05, 0.08), color: Math.random() < 0.5 ? s.a : s.b, gravity: -0.2, drag: 0.5 });
+      if (rnd() < 0.7 * Math.min(1, left)) {
+        const an = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R;
+        fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(an) * r, 0.1, Math.sin(an) * r)), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: 1.2, size: rand(0.05, 0.08), color: rnd() < 0.5 ? s.a : s.b, gravity: -0.2, drag: 0.5 });
       }
       return left > 0;
     });

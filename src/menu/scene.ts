@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { itemDef, type Profile } from '../items';
-import { emptyInput, Knight } from '../knight';
-import { rng, type Textures } from '../textures';
-import { getWeapon } from '../weapons';
-import { pixelRatio, type Settings } from './settings';
+import { itemDef, type Profile } from '../items.ts';
+import { emptyInput, Knight } from '../knight.ts';
+import { rng, type Textures } from '../textures.ts';
+import { getWeapon } from '../weapons.ts';
+import { pixelRatio, type Settings } from './settings.ts';
 
 /**
  * Фон меню (wiki/design-main-menu.md): ночной лагерь у костра, как на экране выбора героя в Minecraft Dungeons —
@@ -40,7 +40,8 @@ export class MenuScene {
   private armor = '-';
   private bow = '-';
 
-  constructor(private readonly canvas: HTMLCanvasElement, T: Textures, settings: Settings) {
+  private readonly canvas: HTMLCanvasElement;
+  constructor(canvas: HTMLCanvasElement, T: Textures, settings: Settings) { this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(pixelRatio(settings));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;

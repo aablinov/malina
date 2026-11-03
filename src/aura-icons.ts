@@ -1,4 +1,4 @@
-import type { Draw } from './icons';
+import type { Draw } from './icons.ts';
 
 /** Пиксельные иконки 16 × 16 для наступательных аур (src/aura-offense.ts) */
 export const ICONS: Record<string, Draw> = {

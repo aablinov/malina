@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { pixelTex } from '../textures';
-import { boom, hiss, voice } from '../spell-audio';
-import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit';
-import { Mob, type MobHooks } from './mob';
+import { rnd } from '../rng.ts';
+import { pixelTex } from '../textures.ts';
+import { boom, hiss, voice } from '../spell-audio.ts';
+import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit.ts';
+import { Mob, type MobHooks } from './mob.ts';
 
 /**
  * Порождения куста (wiki/design-mobs.md, семья C): живая малина — слизень, колючий клубок, лоза-хлыст, бутон-плевун,
@@ -25,8 +26,9 @@ export class BerrySlime extends Mob {
   private readonly hopFrom = new THREE.Vector3();
 
   /** size: 2 — большой, 1 — средний, 0 — маленький */
-  constructor(h: MobHooks, at: THREE.Vector3, readonly size = 2) {
-    super(h, [8, 16, 36][size], at);
+  readonly size: number;
+  constructor(h: MobHooks, at: THREE.Vector3, size: number = 2) {
+    super(h, [8, 16, 36][size], at); this.size = size;
     const s = [0.5, 0.72, 1][size];
     this.radius = 0.55 * s;
     this.topY = 1.1 * s;
@@ -176,7 +178,7 @@ export class ThornBall extends Mob {
     this.rolled += 11 * dt;
     // задел героя — сбил с ног и остановился
     if (this.inCircle(this.pos, this.radius + 0.2)) { this.hurt(9, this.pos, 6); if (!this.quiet) boom(200, 80, 0.2, 0.25); return true; }
-    if (Math.random() < 0.5) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1, rand(-1, 1)), life: 0.3, size: 0.08, color: '#8a6a40', gravity: 6 });
+    if (rnd() < 0.5) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1, rand(-1, 1)), life: 0.3, size: 0.08, color: '#8a6a40', gravity: 6 });
     if (blocked) {
       // о стену: отскок и звёзды
       if (!this.quiet) boom(120, 40, 0.4, 0.5);
@@ -231,7 +233,7 @@ export class VineWhip extends Mob {
       parent = g;
     }
     B(parent, thorn, 0.36, 0.36, 0.36, 0, 0.8, 0);
-    B(parent, this.shimmer(RASP, C(3.4, 1.6, 2.2), Math.random() * 6, 2), 0.16, 0.16, 0.06, 0, 0.82, 0.19);
+    B(parent, this.shimmer(RASP, C(3.4, 1.6, 2.2), rnd() * 6, 2), 0.16, 0.16, 0.06, 0, 0.82, 0.19);
     this.place();
   }
 
