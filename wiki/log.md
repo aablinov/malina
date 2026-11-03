@@ -396,3 +396,7 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-11-04] код | Сеть: канал, транспорты и кодек снимков
 Сетевой слой выделен в чистый код с тестами на `node:test` (`channel.test.ts`, `snapshot.test.ts`): `Channel` с надёжной и ненадёжной полосами и seq/ack по образцу netchan Quake 3, транспорты над WebSocket и петля в памяти с потерями, `SnapshotRing`/`SnapshotView` — дельты снимков от подтверждённого клиентом. В игре пока не используется — подключится вместе с серверным боем.
 Страницы: [design-multiplayer.md](design-multiplayer.md).
+
+## [2026-11-04] код | Оборона: симуляция отделена от вида
+Правила обороны, башни, стены, куст, логова и кучки малины — в `src/sim/` (без сцены, DOM и `Math.random`, сид в `world.rng`), вид — в `src/cgame/` по записям сущностей и событиям через `SnapshotView`, меню и HUD — `td-ui.ts`; `src/td/td.ts`, `tower.ts`, `wall.ts`, `bush.ts`, `lair.ts` удалены. Хост-режим общего боя (`src/net/coop.ts`) удалён до серверного боя, сетевые Playwright-тесты пропущены. Тесты симуляции — `server/test/sim-td.test.ts`.
+Страницы: [design-tower-defence.md](design-tower-defence.md), [design-multiplayer.md](design-multiplayer.md).

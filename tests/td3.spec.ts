@@ -64,8 +64,8 @@ test('осада: замок — стены, бастионы с площадк�
     const walkAfter = t.floorAt(18, 0, 3.5);
     m.resetTargets();
     return {
-      name: L.name, pads: td.pads.length, high: td.pads.filter((p: any) => p.pos.y === 3).length, lanes: spec.lanes.map((l: any) => l.wall), kinds: td.kinds, walls: td.walls.map((w: any) => [w.id, w.kind, w.maxHp]),
-      bad, pits, climbed, padUp, padDown, hp0, breachAt, ignored, hole, banner, marchLen, bushTaken, nwId: nw?.id, cost, prompt, spent, ok, fixed, walkAfter,
+      name: L.name, pads: td.pads.length, high: td.pads.filter((p: any) => p.pos.y === 3).length, lanes: spec.lanes.map((l: any) => l.wall), kinds: td.kinds, walls: td.walls.map((w: any) => [w.wallId, w.kind, w.maxHp]),
+      bad, pits, climbed, padUp, padDown, hp0, breachAt, ignored, hole, banner, marchLen, bushTaken, nwId: nw?.wallId, cost, prompt, spent, ok, fixed, walkAfter,
       hud: document.querySelector('.td-walls')?.children.length,
       mist: m.mistFx?.count ?? 0, fogFar: L.meta.world.fog.far,
     };
