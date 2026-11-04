@@ -9,16 +9,19 @@ export interface SocketLike {
   onclose: ((e: { code: number }) => void) | null;
 }
 
-/** Транспорт над открытым WebSocket (readyState OPEN = 1) */
+/** Очередь событий клиента (src/cgame/events.ts): кадр сети доставляется при её разборе, перед тактами, а не в `onmessage` */
+export interface NetSink { push(e: { kind: 'net'; deliver: () => void }): void }
+
+/** Транспорт над открытым WebSocket (readyState OPEN = 1); с очередью — кадры и закрытие идут через неё */
 export class WebSocketTransport implements Transport {
   onMessage: ((frame: string) => void) | null = null;
   onClose: ((code: number) => void) | null = null;
   private readonly ws: SocketLike;
 
-  constructor(ws: SocketLike) {
+  constructor(ws: SocketLike, queue?: NetSink) {
     this.ws = ws;
-    ws.onmessage = (e) => { this.onMessage?.(String(e.data)); };
-    ws.onclose = (e) => { this.onClose?.(e.code); };
+    ws.onmessage = (e) => { const f = String(e.data); if (queue) queue.push({ kind: 'net', deliver: () => this.onMessage?.(f) }); else this.onMessage?.(f); };
+    ws.onclose = (e) => { if (queue) queue.push({ kind: 'net', deliver: () => this.onClose?.(e.code) }); else this.onClose?.(e.code); };
   }
 
   send(frame: string): void { if (this.ws.readyState === 1) this.ws.send(frame); }

@@ -8,6 +8,9 @@ import { FX } from '../fx.ts';
 import { Perf } from './perf.ts';
 import { warmUp } from '../fx-zoo.ts';
 import { emptyInput, Knight, type Strike } from '../knight.ts';
+import { bindDom, EventQueue } from '../cgame/events.ts';
+import { GameInput, type Action } from '../cgame/input.ts';
+import { MouseOrders } from '../cgame/orders.ts';
 import type { Target } from '../target.ts';
 import { makeTextures, rng } from '../textures.ts';
 import { Level, type LevelJSON } from '../level/level.ts';
@@ -603,15 +606,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     moteU.uCam.value.copy(camTarget);
   }
 
-  // ---------- Ввод ----------
-  const keys = new Set<string>();
-  const mouseNdc = new THREE.Vector2();
-  const mousePx = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-  let mouseSeen = false;
-  let lmb = false;
-  /** ПКМ держат — стрелять из лука */
-  let rmb = false;
-  const edges = { roll: false };
+  // ---------- Ввод (src/cgame/events.ts, input.ts, orders.ts; wiki/arch-layers.md) ----------
+  /** Очередь системных событий: обработчики только кладут, кадр разбирает перед тактами (Com_EventLoop) */
+  const events = new EventQueue();
+  /** Клавиши с защёлками, мышь, действия героя с клавиш — на такт */
+  const gi = new GameInput();
   const input = emptyInput();
   /** Ввод из теста (Playwright): клавиатура и мышь игнорируются */
   let scripted = false;
@@ -629,66 +628,76 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   let showTelemetry = !FROM_MENU;
   let showFps = false;
 
-  window.addEventListener('keydown', (e) => {
-    if (['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10'].includes(e.code)) e.preventDefault();
-    initAudio();
-    if (e.repeat) return;
-    // пауза и итог боя из меню: клавиши — им
-    if (battle?.key(e)) return;
-    // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
-    if (inventory.open) { inventory.key(e); return; }
-    if (shop.open) { shop.key(e); return; }
-    // меню площадки обороны: цифры — выбор башни, Esc / F — закрыть
-    if (netClient?.typing) return;
-    if (netClient && e.code === 'Enter' && !battle?.open) { e.preventDefault(); keys.clear(); netClient.openChat(); return; }
-    if (tdUi?.menuOpen && tdUi.key(e)) return;
-    if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
-    keys.add(e.code);
-    switch (e.code) {
-      case 'Space': edges.roll = true; break;
-      case 'Digit1': case 'Digit2': case 'Digit3': gear.pressArtifact(Number(e.code.slice(5)) - 1, aimPoint()); break;
-      case 'KeyE': gear.potion(); break;
-      case 'KeyR': gear.flareAura(); break;
-      case 'KeyQ': gear.special(aimPoint()); break;
-      case 'KeyF': interactReq = true; break;
-      case 'KeyI': openInventory(); break;
-      case 'KeyM': hud.toggleMap(); break;
-      case 'Tab': hud.toggleOverlay(); break;
-      case 'Escape': if (hud.mapOpen) hud.toggleMap(); else battle?.pause(); break;
-      case 'KeyH': helpOn = !helpOn; helpT = helpOn ? Infinity : 0; break;
-      case 'F9': toast(toggleMute() ? 'Звук выключен' : 'Звук включён'); break;
-      case 'KeyL': night = !night; applyNight(); toast(night ? 'Ночь' : 'День'); refreshControls(); break;
-      case 'KeyU': look.unreal = !look.unreal; toast(look.unreal ? 'Свет как в Unreal' : 'Простой свет'); refreshControls(); break;
-      case 'KeyB': postFX = !postFX; toast(postFX ? 'Постобработка включена' : 'Постобработка выключена'); refreshControls(); break;
-      case 'KeyN': resetTargets(); break;
-      case 'KeyG': sim?.callWave(0); break;
-      case 'F1': panel.toggle(); break;
-      case 'F2': overlays.colliders = !overlays.colliders; toast(`Коллайдеры: ${overlays.colliders ? 'вкл' : 'выкл'}`); break;
-      case 'F3': overlays.aim = !overlays.aim; toast(`Дуга удара: ${overlays.aim ? 'вкл' : 'выкл'}`); break;
-      case 'F4': showTelemetry = !showTelemetry; break;
-      case 'F6': hero.god = !hero.god; toast(`Бессмертие: ${hero.god ? 'вкл' : 'выкл'}`); refreshControls(); break;
-      case 'F7': timeScale = TIME_SCALES[(TIME_SCALES.indexOf(timeScale) + 1) % TIME_SCALES.length]; toast(`Время ×${timeScale}`); break;
-      case 'F8': showFps = !showFps; break;
-      case 'KeyP': paused = !paused; toast(paused ? 'Пауза' : 'Продолжаем'); break;
-      case 'Period': if (paused) stepOnce = true; break;
-      default: break;
+  /** Браузерное действие глушится в обработчике — отложить нельзя */
+  const PREVENT = new Set(['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10']);
+  bindDom(events, canvas, { prevent: (e) => PREVENT.has(e.code), gesture: initAudio });
+
+  /**
+   * Разбор очереди перед тактами кадра: сетевые кадры — каналу, колесо — камере, клавиши — по старшинству меню
+   * (пауза → инвентарь → лавка → чат → меню площадки → переключатели клиента), остальное — в состояние ввода такта
+   */
+  function drainEvents(): void {
+    events.drain((ev) => {
+      if (ev.kind === 'net') { ev.deliver(); return; }
+      if (ev.kind === 'wheel') { camDist = THREE.MathUtils.clamp(camDist + Math.sign(ev.dy) * 2, 12, 60); return; }
+      if (ev.kind === 'blur') { gear.cancelCast(); gi.feed(ev); return; }
+      if (ev.kind === 'key' && ev.down) {
+        const e = ev.e;
+        if (e.repeat) return;
+        // пауза и итог боя из меню: клавиши — им
+        if (battle?.key(e)) return;
+        // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
+        if (inventory.open) { inventory.key(e); return; }
+        if (shop.open) { shop.key(e); return; }
+        if (netClient?.typing) return;
+        if (netClient && e.code === 'Enter' && !battle?.open) { gi.clear(); netClient.openChat(); return; }
+        // меню площадки обороны: цифры — выбор башни, Esc / F — закрыть
+        if (tdUi?.menuOpen && tdUi.key(e)) return;
+        if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
+        if (clientKey(e.code)) return;
+      }
+      gi.feed(ev);
+    });
+  }
+
+  /** Переключатели клиента (не игра): окна, оверлеи, отладка. true — съедено */
+  function clientKey(code: string): boolean {
+    switch (code) {
+      case 'KeyI': openInventory(); return true;
+      case 'KeyM': hud.toggleMap(); return true;
+      case 'Tab': hud.toggleOverlay(); return true;
+      case 'Escape': if (hud.mapOpen) hud.toggleMap(); else battle?.pause(); return true;
+      case 'KeyH': helpOn = !helpOn; helpT = helpOn ? Infinity : 0; return true;
+      case 'F9': toast(toggleMute() ? 'Звук выключен' : 'Звук включён'); return true;
+      case 'KeyL': night = !night; applyNight(); toast(night ? 'Ночь' : 'День'); refreshControls(); return true;
+      case 'KeyU': look.unreal = !look.unreal; toast(look.unreal ? 'Свет как в Unreal' : 'Простой свет'); refreshControls(); return true;
+      case 'KeyB': postFX = !postFX; toast(postFX ? 'Постобработка включена' : 'Постобработка выключена'); refreshControls(); return true;
+      case 'KeyN': resetTargets(); return true;
+      case 'F1': panel.toggle(); return true;
+      case 'F2': overlays.colliders = !overlays.colliders; toast(`Коллайдеры: ${overlays.colliders ? 'вкл' : 'выкл'}`); return true;
+      case 'F3': overlays.aim = !overlays.aim; toast(`Дуга удара: ${overlays.aim ? 'вкл' : 'выкл'}`); return true;
+      case 'F4': showTelemetry = !showTelemetry; return true;
+      case 'F6': hero.god = !hero.god; toast(`Бессмертие: ${hero.god ? 'вкл' : 'выкл'}`); refreshControls(); return true;
+      case 'F7': timeScale = TIME_SCALES[(TIME_SCALES.indexOf(timeScale) + 1) % TIME_SCALES.length]; toast(`Время ×${timeScale}`); return true;
+      case 'F8': showFps = !showFps; return true;
+      case 'KeyP': paused = !paused; toast(paused ? 'Пауза' : 'Продолжаем'); return true;
+      case 'Period': if (paused) stepOnce = true; return true;
+      default: return false;
     }
-  });
-  window.addEventListener('keyup', (e) => {
-    keys.delete(e.code);
-    // заклинание заряжалось, пока клавиша была зажата, — отпустили, значит каст
-    if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') gear.releaseArtifact(Number(e.code.slice(5)) - 1, aimPoint());
-  });
-  window.addEventListener('blur', () => { keys.clear(); lmb = false; rmb = false; gear.cancelCast(); });
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  window.addEventListener('mousemove', (e) => {
-    mouseNdc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
-    mousePx.x = e.clientX; mousePx.y = e.clientY;
-    mouseSeen = true;
-  });
-  canvas.addEventListener('mousedown', (e) => { initAudio(); if (e.button === 0) lmb = true; if (e.button === 2) rmb = true; });
-  window.addEventListener('mouseup', (e) => { if (e.button === 0) lmb = false; if (e.button === 2) rmb = false; });
-  canvas.addEventListener('wheel', (e) => { camDist = THREE.MathUtils.clamp(camDist + Math.sign(e.deltaY) * 2, 12, 60); }, { passive: true });
+  }
+
+  /** Действие героя с клавиши — в такте, по порядку (кнопки usercmd): зелье, артефакты, аура, спец-удар, предмет, волна */
+  function act(a: Action): void {
+    switch (a.k) {
+      case 'potion': gear.potion(); break;
+      case 'aura': gear.flareAura(); break;
+      case 'special': gear.special(aimPoint()); break;
+      case 'interact': interactReq = true; break;
+      case 'wave': sim?.callWave(0); break;
+      case 'artifact': if (a.down) gear.pressArtifact(a.i, aimPoint()); else gear.releaseArtifact(a.i, aimPoint()); break;
+      case 'use': gear.useArtifact(a.i, aimPoint()); break;
+    }
+  }
 
   // экран вверх = мир (−1, −1)
   const FWD = new THREE.Vector2(-1, -1).normalize();
@@ -697,53 +706,31 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   function readInput(): void {
     if (scripted) return;
     // инвентарь или лавка открыты (сетевой бой идёт дальше): клавиши и кнопки им, герой стоит
-    if (inventory.open || shop.open) { keys.clear(); lmb = false; }
-    const m = new THREE.Vector2();
-    if (keys.has('KeyW') || keys.has('ArrowUp')) m.add(FWD);
-    if (keys.has('KeyS') || keys.has('ArrowDown')) m.sub(FWD);
-    if (keys.has('KeyD') || keys.has('ArrowRight')) m.add(RIGHT);
-    if (keys.has('KeyA') || keys.has('ArrowLeft')) m.sub(RIGHT);
-    if (m.lengthSq() > 1) m.normalize();
-    input.move.copy(m);
-    pointer.down = lmb && !panel.el.contains(document.activeElement);
-    pointer.shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
-    if (mouseSeen) {
+    if (inventory.open || shop.open) gi.clear();
+    gi.move(FWD, RIGHT, input.move);
+    pointer.down = gi.mouse.lmbHeld && !panel.el.contains(document.activeElement);
+    pointer.shift = gi.shift;
+    if (gi.mouse.seen) {
       // курсор на земле — верх блока под лучом камеры (срезанное над героем пропускаем), цель — по тому же лучу
-      raycaster.setFromCamera(mouseNdc, camera);
+      raycaster.setFromCamera(gi.mouse.ndc, camera);
       groundAt(raycaster.ray, pointer.ground);
       pointer.hover = pickRay(raycaster.ray);
       const padI = tdView && !pointer.hover ? tdView.padAt(raycaster.ray) : null;
       pointer.pad = padI !== null && sim ? sim.pads[padI] ?? null : null;
       if (tdView) tdView.hoverPad = padI;
     }
-    input.roll = edges.roll;
+    input.roll = gi.keys.tapped('Space');
   }
 
+  /** Конец такта: защёлки ввода (перекат, тапы, клик) сброшены */
   function clearEdges(): void {
-    edges.roll = false;
     input.roll = false;
+    gi.endTick();
   }
 
-  // ---------- Мышь как в Minecraft Dungeons ----------
-  // ЛКМ по земле — идти туда (держишь — идёт за курсором), ЛКМ по цели — подойти на длину меча и бить
-  // (держишь — комбо), Shift + ЛКМ — бить на месте в сторону курсора. WASD отменяет приказ мыши.
-  const pointer = { down: false, shift: false, ground: new THREE.Vector3(), hover: null as Target | null, pad: null as SimPad | null };
-  let pointerWas = false;
-  /** Режим текущего нажатия: идти, бить цель, бить на месте, подойти к площадке обороны */
-  let pressMode: 'walk' | 'chase' | 'here' | 'pad' = 'walk';
-  let goal: THREE.Vector3 | null = null;
-  /** Площадка, к которой идём по клику: дошли — откроется меню */
-  let padGoal: SimPad | null = null;
-  let chase: Target | null = null;
-  /** Сколько ударов было на момент приказа: отпустил ЛКМ — хватит одного удара по цели */
-  let chaseSwings = 0;
-  let stuckT = 0;
-  /** Путь в обход стен (src/level/pathfind.ts): точки, к которым идти, и куда он проложен */
-  let path: THREE.Vector3[] = [];
-  const pathTo = new THREE.Vector3(Infinity, 0, 0);
-  let repathT = 0;
-  let stuckRepaths = 0;
-  let arrived = false;
+  // ---------- Мышь как в Minecraft Dungeons (src/cgame/orders.ts) ----------
+  const orders = new MouseOrders({ hero, terrain, pathfinder, solids, scripted: () => scripted, approach: (pad) => (sim ? sim.approach(pad, hero.pos) : null) }, scene);
+  const pointer = orders.pointer;
   /** Срез над героем под крышей (всё выше не рисуется и не ловит клик) */
   let cutY = Infinity;
 
@@ -758,40 +745,6 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     return out;
   }
 
-  /**
-   * Проложить путь к to: заново — только если цель сдвинулась больше чем на 0,4 м (не чаще раза в 0,15 с, пока тянут курсор)
-   * или герой упёрся (repathT сброшен). Поиск дорогой — по таймеру путь не перекладываем.
-   */
-  function route(to: THREE.Vector3, dt: number): void {
-    repathT -= dt;
-    const moved = to.distanceTo(pathTo) >= 0.4;
-    // пришли (или ближе к недостижимой цели не подойти) — ждём, пока цель сдвинется
-    if (arrived && !moved) return;
-    if (path.length && !(moved && repathT <= 0) && repathT > -1e8) return;
-    arrived = false;
-    path = pathfinder.find(hero.pos, to, { solids: solids() });
-    pathTo.copy(to);
-    repathT = 0.15;
-  }
-
-  /** Шаг по пути: направление к ближайшей точке; true — пришли */
-  function walkPath(dt: number, slowAtEnd: boolean): boolean {
-    while (path.length > 1 && Math.hypot(path[0].x - hero.pos.x, path[0].z - hero.pos.z) < 0.35) path.shift();
-    const p = path[0];
-    if (!p) { input.move.set(0, 0); arrived = true; return true; }
-    const dx = p.x - hero.pos.x, dz = p.z - hero.pos.z, d = Math.hypot(dx, dz);
-    if (path.length === 1 && d < HERO.arrive) { path = []; input.move.set(0, 0); arrived = true; return true; }
-    // упёрся: перепроложить путь; не помогло трижды — приказ снимается, чтобы герой не толкался на месте
-    stuckT = hero.touching && hero.speed < 0.5 ? stuckT + dt : 0;
-    if (stuckT > 0.35) { stuckT = 0; repathT = -1e9; if (++stuckRepaths > 3) { path = []; input.move.set(0, 0); arrived = true; return true; } }
-    input.move.set(dx / d, dz / d).multiplyScalar(slowAtEnd && path.length === 1 ? Math.min(1, d / 0.6 + 0.35) : 1);
-    return false;
-  }
-  const marker = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.4, 24), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.8, 2), transparent: true, depthWrite: false, toneMapped: false }));
-  marker.rotation.x = -Math.PI / 2;
-  marker.visible = false;
-  scene.add(marker);
-  let markerT = 0;
 
   /** Цель под лучом камеры: ближайшая к камере, у которой луч проходит сквозь «столбик» тела */
   const _a = new THREE.Vector3(), _b = new THREE.Vector3();
@@ -818,59 +771,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     return best;
   }
 
-  /** Превратить мышь в ввод героя: направление движения, точка удара, удар */
-  function orders(dt: number): void {
-    const keyMove = !scripted ? input.move.lengthSq() > 0.01 : false;
-    const pressed = pointer.down && !pointerWas;
-    pointerWas = pointer.down;
-    // тест управляет вводом сам, пока не «кликает» мышью
-    if (scripted && !pointer.down && !goal && !chase) return;
-    input.attack = false;
-    if (keyMove) { goal = null; chase = null; }
-    if (pressed) {
-      pressMode = pointer.shift ? 'here' : pointer.hover ? 'chase' : pointer.pad ? 'pad' : 'walk';
-      chase = null; goal = null; path = []; stuckRepaths = 0; repathT = 0; arrived = false; padGoal = null;
-      if (pressMode === 'chase') { chase = pointer.hover; chaseSwings = hero.swings; }
-      // клик по площадке обороны: подойти к её краю, там откроется меню
-      if (pressMode === 'pad' && sim && pointer.pad) { padGoal = pointer.pad; goal = sim.approach(pointer.pad, hero.pos); marker.position.set(goal.x, goal.y + 0.04, goal.z); marker.visible = true; markerT = 0.5; }
-      if (pressMode === 'walk' && !keyMove) { marker.position.set(pointer.ground.x, pointer.ground.y + 0.04, pointer.ground.z); marker.visible = true; markerT = 0.5; }
-    }
-    if (pointer.down && pressMode === 'walk' && !keyMove) goal = pointer.ground.clone();
-    if (pointer.down && pressMode === 'here') {
-      input.attack = true;
-      input.aim.copy(pointer.ground);
-      if (!keyMove) input.move.set(0, 0);
-      return;
-    }
-    if (chase) {
-      if (!chase.alive) chase = null;
-      else {
-        const d = Math.hypot(chase.pos.x - hero.pos.x, chase.pos.z - hero.pos.z);
-        input.aim.copy(chase.pos);
-        const reach = SWORD.swings[0].range + chase.radius - 0.5;
-        // достаёт мечом: рядом, на той же высоте и без стены между — бить, иначе — идти в обход
-        const canHit = d <= reach && Math.abs(chase.pos.y - hero.pos.y) < 1 && !terrain.blocked(hero.pos.x, hero.pos.z, chase.pos.x, chase.pos.z, hero.pos.y + 0.5);
-        if (!canHit) { route(chase.pos, dt); walkPath(dt, false); }
-        else {
-          path = [];
-          input.move.set(0, 0);
-          if (pointer.down || hero.swings === chaseSwings) input.attack = true;
-          else if (!hero.attacking) chase = null;
-        }
-        return;
-      }
-    }
-    if (goal) {
-      route(goal, dt);
-      if (walkPath(dt, true) && !pointer.down) goal = null;
-      input.aim.copy(goal ?? hero.pos);
-      return;
-    }
-    if (!scripted || keyMove) input.aim.copy(pointer.ground);
-  }
 
   /** Куда целятся артефакты и лук: цель под курсором, иначе точка на земле */
-  function aimPoint(): THREE.Vector3 { return pointer.hover?.alive ? pointer.hover.pos.clone() : pointer.ground.clone(); }
+  const aimPoint = (): THREE.Vector3 => orders.aimPoint();
 
   function resetTargets(): void {
     for (const d of dummies) d.reset();
@@ -1020,7 +923,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   }, p);
   if (nb && sim && world && tdView && tdUi && tdPack && NET.auth) {
     netClient = new NetBattleClient({
-      net: NET, battle: nb, token: NET.auth.token, base: NET.base, scene, T, fx, hero, gear, profile, input, bow: () => rmb && !scripted,
+      net: NET, battle: nb, token: NET.auth.token, base: NET.base, scene, T, fx, hero, gear, profile, input, bow: () => gi.mouse.rmb && !scripted, events,
       sim, world, pack: tdPack, tdView, tdUi, terrain, solids, makeGear, toast,
       swing: (k, g, step) => { if (hears(k)) weaponSwing(g.arts.category, step); },
       quiet: () => scripted,
@@ -1030,13 +933,14 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   // сетевая комната начала новый бой («Ещё раз» у хоста) — на его страницу
   if (netRoom) NET.on((m) => { if (m.t === 'battle.start' && m.matchId !== nb?.matchId) window.location.href = netBattleUrl(m.map, m.players, NET.room?.room.code ?? query.get('room') ?? ''); });
   const inventory = new Inventory(document.body, profile, T);
-  inventory.onClose = () => { lmb = false; rmb = false; keys.clear(); };
+  inventory.onClose = () => gi.clear();
   function openInventory(): void { gear.cancelCast(); if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
   hud.onInventory = openInventory;
-  hud.onPotion = () => gear.potion();
-  hud.onArtifact = (i) => gear.useArtifact(i, aimPoint());
-  hud.onAura = () => gear.flareAura();
-  hud.onSpecial = () => gear.special(aimPoint());
+  // кнопки HUD — те же действия, в такте
+  hud.onPotion = () => gi.queue({ k: 'potion' });
+  hud.onArtifact = (i) => gi.queue({ k: 'use', i });
+  hud.onAura = () => gi.queue({ k: 'aura' });
+  hud.onSpecial = () => gi.queue({ k: 'special' });
   // карта с туманом войны: мини в углу, Tab — поверх игры, M — полная (src/hud/automap.ts)
   const automap = new AutoMap(level, !STREAM);
   hud.setMap(automap, new URLSearchParams(window.location.search).has('map') ? level.name : 'Плейграунд');
@@ -1087,7 +991,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   }
   /** Итог обороны уже показан (для этой партии) */
   let tdEndShown: 'play' | 'won' | 'lost' = 'play';
-  shop.onClose = () => { lmb = false; rmb = false; keys.clear(); };
+  shop.onClose = () => gi.clear();
   shop.onSound = (ok) => { if (!scripted) (ok ? sfx.pickup : sfx.empty)(); };
   /** Подсказка по управлению: первые 15 с, потом — по H */
   let helpOn = settings.help;
@@ -1162,10 +1066,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (toastT <= 0) $('pgToast').classList.remove('show');
 
     const ret = $('pgRet');
-    const show = mouseSeen && !scripted && !inventory.open && !shop.open && !hud.mapOpen;
+    const show = gi.mouse.seen && !scripted && !inventory.open && !shop.open && !hud.mapOpen;
     ret.style.display = show ? '' : 'none';
     if (show) {
-      ret.style.transform = `translate(${mousePx.x}px,${mousePx.y}px)`;
+      ret.style.transform = `translate(${gi.mouse.px.x}px,${gi.mouse.px.y}px)`;
       ret.classList.toggle('hover', !!pointer.hover && !pointer.shift);
       ret.classList.toggle('here', pointer.shift);
       ret.classList.toggle('pad', !!pointer.pad && !pointer.hover && !pointer.shift);
@@ -1180,12 +1084,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   function tick(dt: number): void {
     simTime += dt;
     readInput();
-    orders(dt);
-    gear.update(dt, rmb && !scripted, aimPoint());
-    markerT -= dt;
-    marker.visible = markerT > 0;
-    (marker.material as THREE.MeshBasicMaterial).opacity = Math.max(0, markerT * 2);
-    marker.scale.setScalar(1 + (0.5 - markerT));
+    // действия с клавиш — здесь, по порядку, а не в обработчике DOM
+    for (const a of gi.takeActions()) act(a);
+    orders.update(dt, input);
+    gear.update(dt, gi.mouse.rmb && !scripted, aimPoint());
+    orders.updateMarker(dt);
     // зоны мобов (паутина лозоплёта) замедляют героя
     const slow = Math.max(pack.heroSlow, ...mobRooms.map((r) => r.pack.heroSlow));
     hero.slow = Math.min(0.8, slow);
@@ -1204,12 +1107,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       const it = trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
     }
-    // шёл к площадке по клику: подошёл — меню; приказ сняли — забыть
-    if (tdUi && padGoal) {
-      const d = Math.hypot(hero.pos.x - padGoal.pos.x, hero.pos.z - padGoal.pos.z);
-      if (d < 2.3) { tdUi.openMenu(padGoal); padGoal = null; goal = null; path = []; input.move.set(0, 0); }
-      else if (!goal) padGoal = null;
-    }
+    // шёл к площадке по клику: подошёл — меню
+    if (tdUi) { const pad = orders.reachedPad(input); if (pad) tdUi.openMenu(pad); }
     // в лаве горит: урон раз в 0,4 с, искры и шипение; перекат не спасает — выходи на берег
     if (lavaFx && level.nameAt(Math.round(hero.pos.x), Math.floor(hero.pos.y - 0.01), Math.round(hero.pos.z)) === 'lava') {
       lavaT -= dt;
@@ -1269,6 +1168,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   function frame(): void {
     requestAnimationFrame(frame);
+    // Com_EventLoop: всё, что накопилось (ввод, сеть), — до тактов
+    drainEvents();
     const now = performance.now();
     const real = Math.min(0.1, (now - last) / 1000);
     last = now;
@@ -1334,7 +1235,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       for (const d of dummies) list.push({ x: d.pos.x, z: d.pos.z, r: d.radius, y: 0.05 });
       for (const t of props.targets) list.push({ x: t.pos.x, z: t.pos.z, r: t.radius, y: 0.05 });
       overlays.drawCircles(list);
-      overlays.drawPaths(path.length ? [[hero.pos, ...path]] : []);
+      overlays.drawPaths(orders.path.length ? [[hero.pos, ...orders.path]] : []);
     } else { overlays.drawCircles([]); overlays.drawPaths([]); }
     // F3: дуга последнего удара, пока он виден
     const ls = lastStrike && simTime - lastStrike.t < 0.4 ? lastStrike.s : null;
@@ -1449,7 +1350,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Нажать E */
     interact() { interactReq = true; },
     /** Ввод из теста: клавиатура и мышь перестают влиять на героя */
-    script(on = true) { scripted = on; if (on) { input.move.set(0, 0); input.attack = false; pointer.down = false; goal = null; chase = null; path = []; } },
+    script(on = true) { scripted = on; if (on) { input.move.set(0, 0); input.attack = false; orders.reset(); } },
     /** Прогнать симуляцию sec секунд без реального времени */
     step(sec: number) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) tick(STEP); syncView(sec); },
     /** Нарисовать кадр сейчас (вкладка в фоне не получает requestAnimationFrame) */
@@ -1460,10 +1361,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     click(x: number, z: number, shift = false, y?: number) { pointer.ground.set(x, y ?? terrain.floorAt(x, z, hero.pos.y + 4), z); pointer.hover = pickAt(x, z); pointer.pad = sim && !pointer.hover ? sim.nearPad(new THREE.Vector3(x, y ?? 0, z)) : null; pointer.shift = shift; pointer.down = true; },
     /** Отпустить ЛКМ */
     release() { pointer.down = false; },
-    get goal() { return goal; },
-    get path() { return path; },
+    get goal() { return orders.goal; },
+    get path() { return orders.path; },
     pathfinder,
-    get chase() { return chase; },
+    get chase() { return orders.chase; },
     resetTargets,
     setAim(x: number, z: number) { input.aim.set(x, hero.pos.y, z); },
     setCamTarget(x?: number, z?: number) { camOverride = x === undefined || z === undefined ? null : new THREE.Vector3(x, 0, z); },
