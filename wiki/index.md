@@ -14,6 +14,7 @@
 | Страница | О чём |
 |---|---|
 | [dev-testing.md](dev-testing.md) | Как запускать Playwright-тесты: node через mise, браузер — Google Chrome через `PW_CHROMIUM`, без `playwright install` |
+| [arch-layers.md](arch-layers.md) | Слои системы (sim, game, net, server, cgame, клиент) и их соответствие Quake III Arena: что перенесено (netchan, snapshots, usercmd, предсказание), что нет (очередь событий, botlib); порядок кадра клиента и сервера |
 | [dev-performance.md](dev-performance.md) | Производительность: оверлей F8 и перф-тест, замеры до/после, прогрев шейдеров, пулы и экземпляры эффектов, фонтан ягод волнами, тени раз в кадр; правила для нового кода и дорожная карта (регионы, сеть) |
 
 ## Решения (ADR)

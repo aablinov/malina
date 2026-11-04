@@ -11,7 +11,7 @@ export class MatchRunner {
   private last = 0;
   private readonly now: () => number;
 
-  constructor(now: () => number = Date.now) { this.now = now; }
+  constructor(now: () => number = () => performance.now()) { this.now = now; }
 
   get size(): number { return this.matches.size; }
   get(id: string): Match | null { return this.matches.get(id) ?? null; }

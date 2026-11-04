@@ -10,7 +10,7 @@ import type { Pack } from '../mobs/pack.ts';
 import { BattleNetUi, type RosterRow } from '../net/battle-ui.ts';
 import { Channel } from '../net/channel.ts';
 import type { NetBattle, NetClient } from '../net/client.ts';
-import { MOB_FLAG, type Cmd, type GameClientMsg, type GameServerMsg, type HeroEnt, type MobEnt } from '../net/game-protocol.ts';
+import { CMD_DUP, MOB_FLAG, TICK, type Cmd, type CmdBatch, type GameClientMsg, type GameServerMsg, type HeroEnt, type MobEnt } from '../net/game-protocol.ts';
 import { CLOSE, PROTOCOL, type GearAction, type SeatInfo, type ServerMsg, type TdCommand } from '../net/protocol.ts';
 import { SnapshotView, type Delta, type EntityState } from '../net/snapshot.ts';
 import { WebSocketTransport, type SocketLike } from '../net/ws-transport.ts';
@@ -24,7 +24,6 @@ import type { TowerKind } from '../td/towers.ts';
 import type { Textures } from '../textures.ts';
 import type { TdUi } from './td-ui.ts';
 import type { TdView } from './views/td-view.ts';
-import { playTdEvents } from './effects.ts';
 
 /**
  * Клиент сетевого боя — «cgame» (wiki/design-multiplayer.md, раздел 7): бой считает сервер (src/game/match.ts),
@@ -67,6 +66,12 @@ export interface NetBattleHooks {
 const CMD_HZ = 60;
 /** Чужие герои и куклы показываются с задержкой — между двумя снимками, без рывков при неровной связи, с */
 const RENDER_DELAY = 0.1;
+/** Оценка времени сервера (cl.serverTimeDelta Quake 3): сдвиг «время снимка − свои часы»; разошлось сильнее — сброс, с */
+const TIME_RESET = 0.5;
+/** Разошлось меньше сброса, но заметно — на полпути; иначе подползает по чуть-чуть за снимок */
+const TIME_JUMP = 0.1;
+const TIME_NUDGE_UP = 0.001;
+const TIME_NUDGE_DOWN = 0.002;
 /** Разошёлся со снимком дальше — свой герой встаёт на место сервера, м; меньше — подтягивается на CORRECT_K за снимок */
 const SNAP_DIST = 2.5;
 const CORRECT_K = 0.2;
@@ -77,7 +82,7 @@ const KIT_S = 3;
 const r2 = (v: number): number => Math.round(v * 100) / 100;
 const now = (): number => performance.now() / 1000;
 
-/** Буфер мест со снимков: место на момент t между двумя соседними (за последним — не дальше половины шага вперёд) */
+/** Буфер мест со снимков по времени сервера: место на момент t между двумя соседними (за последним — не дальше половины шага вперёд) */
 export class Track {
   private readonly s: { t: number; x: number; y: number; z: number; yaw: number }[] = [];
   push(t: number, x: number, y: number, z: number, yaw: number): void {
@@ -100,7 +105,7 @@ export class Track {
 interface Remote { seat: number; knight: Knight; gear: Gear; profile: Profile; input: KnightInput; bow: boolean; track: Track; to: THREE.Vector3; yawTo: number; hp: number; maxHp: number; ping: number; down: boolean }
 
 type R = GameClientMsg | GameServerMsg;
-type U = Cmd | Delta<SimEvent>;
+type U = CmdBatch | Delta<SimEvent>;
 
 export class NetBattleClient {
   readonly h: NetBattleHooks;
@@ -116,6 +121,11 @@ export class NetBattleClient {
   private rolled = false;
   private cmdT = 0;
   private readonly sent: { seq: number; x: number; z: number }[] = [];
+  /** Последние команды — уходят пачкой в каждом кадре (cl_packetdup) */
+  private readonly recent: Cmd[] = [];
+  /** Время сервера ≈ свои часы + timeDelta (по снимкам); до первого снимка не знаем */
+  private timeDelta = 0;
+  private timeKnown = false;
   private readonly names = document.createElement('div');
   private readonly labels = new Map<number, HTMLDivElement>();
   private rosterT = 0;
@@ -183,7 +193,7 @@ export class NetBattleClient {
 
   private onReliable(m: GameServerMsg): void {
     switch (m.t) {
-      case 'welcome': this.joined = true; this.retry = 0; this.sent.length = 0; break;
+      case 'welcome': this.joined = true; this.retry = 0; this.sent.length = 0; this.recent.length = 0; this.seq = 0; break;
       case 'kit': if (m.seat !== this.h.battle.seat) this.applyKit(m.seat, m.items, m.equip); break;
       case 'act': { const { t: _t, seat, ...a } = m; void _t; if (seat !== this.h.battle.seat) this.remote(seat).gear.perform(a as GearAction); break; }
       case 'toast': this.h.toast(m.text); break;
@@ -230,7 +240,7 @@ export class NetBattleClient {
   private onDelta(d: Delta<SimEvent>): void {
     if (!this.view.apply(d)) return;
     this.snaps++;
-    const t = now(), v = this.view, me = this.h.battle.seat;
+    const t = this.serverTime(d.tick * TICK), v = this.view, me = this.h.battle.seat;
     const seenMobs = new Set<number>();
     for (const e of v.ents.values()) {
       const id = e.id;
@@ -245,7 +255,15 @@ export class NetBattleClient {
     this.mirrorTd(v);
     this.h.tdView.apply(v);
     this.h.tdUi.events(v.events);
-    playTdEvents(v.events, { fx: this.h.fx, quiet: this.h.quiet, heroPos: () => this.h.hero.pos, bushPos: this.h.sim.bush.pos });
+  }
+
+  /** Время снимка — в оценку часов сервера; вернёт время снимка (ось буферов интерполяции) */
+  private serverTime(snapT: number): number {
+    const want = snapT - now(), diff = want - this.timeDelta;
+    if (!this.timeKnown || Math.abs(diff) > TIME_RESET) { this.timeDelta = want; this.timeKnown = true; }
+    else if (Math.abs(diff) > TIME_JUMP) this.timeDelta += diff / 2;
+    else this.timeDelta += Math.max(-TIME_NUDGE_DOWN, Math.min(TIME_NUDGE_UP, diff));
+    return snapT;
   }
 
   /** Свой герой по снимку: здоровье и «без сил» — сервера; место — сверка по подтверждённому вводу */
@@ -390,7 +408,7 @@ export class NetBattleClient {
   // ---------- кадр ----------
 
   update(dt: number): void {
-    const h = this.h, t = now() - RENDER_DELAY;
+    const h = this.h, t = now() + this.timeDelta - RENDER_DELAY;
     this.rolled ||= h.input.roll;
     // чужие герои: шаг — по вводу, место — из буфера снимков
     for (const o of this.heroes.values()) {
@@ -417,7 +435,9 @@ export class NetBattleClient {
     this.cmdT = 1 / CMD_HZ;
     const i = h.input, seq = ++this.seq;
     const c: Cmd = { seq, snap: this.view.n, move: [r2(i.move.x), r2(i.move.y)], aim: [r2(i.aim.x), r2(i.aim.y), r2(i.aim.z)], attack: i.attack, roll: this.rolled, bow: h.bow(), ping: h.net.rtt };
-    this.chan.sendUnreliable(c);
+    this.recent.push(c);
+    if (this.recent.length > CMD_DUP) this.recent.shift();
+    this.chan.sendUnreliable(this.recent.slice());
     this.chan.flush();
     this.rolled = false;
     this.sent.push({ seq, x: h.hero.pos.x, z: h.hero.pos.z });

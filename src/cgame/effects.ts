@@ -34,6 +34,8 @@ export interface FxCtx {
   quiet: () => boolean;
   /** Герой местного игрока (цифра подобранной малины) */
   heroPos: () => THREE.Vector3;
+  /** Место местного игрока: чьи подборы показывать цифрой */
+  seat: () => number;
   /** Куст: цифра награды за волну */
   bushPos: THREE.Vector3;
 }
@@ -206,7 +208,7 @@ export function playTdEvents(events: readonly SimEvent[], ctx: FxCtx): void {
         fx.burst(p, [BERRY_GLOW, C(3.4, 2.4, 2.8), C(3.2, 1.2, 1.8)], 22, { speed: 2.8, up: 3.5, size: 0.08, life: 0.6, glow: true, gravity: 5 });
         fx.burst(p, ['#e8245a', '#ff4a7e', '#a80e3c'], 10, { speed: 2.2, up: 3, size: 0.09, life: 0.6, gravity: 10 });
         // цифра — только над своим героем
-        if (num(e.seat) === 0) { const h = ctx.heroPos(); fx.text(h.clone().setY(h.y + 1.6), `+${num(e.n)} малины`, 'berry'); }
+        if (num(e.seat) === ctx.seat()) { const h = ctx.heroPos(); fx.text(h.clone().setY(h.y + 1.6), `+${num(e.n)} малины`, 'berry'); }
         break;
       }
 

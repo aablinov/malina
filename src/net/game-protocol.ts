@@ -46,6 +46,10 @@ export const MOB_FLAG = { summoned: 1, daze: 2, chill: 4, rally: 8, alerted: 16 
 export const TICK = 1 / 60;
 export const FRAME_MS = 50;
 export const CMD_BACKLOG = 8;
+/** Команд в одном кадре клиента: последняя и столько же предыдущих (cl_packetdup) — потеря кадра не теряет ввод */
+export const CMD_DUP = 3;
+/** Ненадёжная часть кадра клиента — пачка последних команд по возрастанию seq */
+export type CmdBatch = Cmd[];
 /** Снимков в кольце сервера */
 export const SNAP_RING = 32;
 /** Конец боя → итог через столько секунд: сбор урожая долетает в кошельки */

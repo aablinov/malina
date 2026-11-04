@@ -10,7 +10,7 @@ test('первый снимок без подтверждения — полны
   const d = ring.delta(0)!;
   assert.equal(d.base, 0);
   assert.equal(d.add.length, 2);
-  assert.deepEqual(d.ev, ['spawn']);
+  assert.deepEqual(d.ev, [['spawn']]);
   const v = new SnapshotView<string>();
   assert.ok(v.apply(d));
   assert.equal(v.n, 1);
@@ -31,11 +31,34 @@ test('дельта: изменённые поля, новые и пропавш�
   assert.deepEqual(d.upd, [{ id: 'h1', x: 2 }]);
   assert.deepEqual(d.add, [{ id: 'm2', hp: 5 }]);
   assert.deepEqual(d.del, ['m1']);
-  assert.deepEqual(d.ev, ['hit', 'die', 'spawn']);
+  assert.deepEqual(d.ev, [['hit'], ['die', 'spawn']]);
   const v = new SnapshotView<string>();
   assert.ok(v.apply(ring.delta(0)!));
   assert.equal(v.n, 3);
   assert.equal(v.ents.get('h1')!.x, 2);
+});
+
+test('клиент: дельта от прежней базы (подтверждение ещё в пути) — из истории, события только новые', () => {
+  const ring = new SnapshotRing<string>(8);
+  const v = new SnapshotView<string>();
+  ring.push(1, ents({ id: 'm0', x: 1 }), ['e1']);
+  assert.ok(v.apply(ring.delta(0)!));
+  ring.push(2, ents({ id: 'm0', x: 2 }, { id: 'm1', x: 0 }), ['e2']);
+  assert.ok(v.apply(ring.delta(1)!));
+  assert.deepEqual(v.events, ['e2']);
+  // сервер ещё не видел подтверждения снимка 2 — дельта 3 от базы 1
+  ring.push(3, ents({ id: 'm0', x: 3 }), ['e3']);
+  const d = ring.delta(1)!;
+  assert.equal(d.base, 1);
+  assert.ok(v.apply(d), 'база 1 в истории');
+  assert.equal(v.n, 3);
+  assert.deepEqual(new Map(v.ents), new Map([['m0', { id: 'm0', x: 3 }]]));
+  assert.deepEqual(v.removed.map((e) => e.id), ['m1'], 'разница — от прежнего текущего');
+  assert.deepEqual(v.events, ['e3'], 'e2 второй раз не играется');
+  assert.equal(v.rejected, 0);
+  // старый дубль — мимо, без отказа
+  assert.equal(v.apply(d), false);
+  assert.equal(v.rejected, 0);
 });
 
 test('клиент: применение по цепочке совпадает с полным снимком; чужая база — отказ и полный', () => {
@@ -66,5 +89,6 @@ test('клиент: применение по цепочке совпадает 
   const foreign = ring.delta(19)!;
   assert.equal(foreign.base, 19);
   assert.equal(v.apply(foreign), false);
+  assert.equal(v.rejected, 1);
   assert.equal(v.n, 20);
 });

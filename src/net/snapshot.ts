@@ -1,7 +1,9 @@
 /**
- * Снимки мира и дельты — по образцу sv_snapshot.c Quake 3: сервер хранит кольцо последних снимков, клиенту уходит
+ * Снимки мира и дельты — по образцу sv_snapshot.c и cl_parse.c Quake 3: сервер хранит кольцо последних снимков, клиенту уходит
  * разница с тем снимком, который тот подтвердил (`SnapAck` в его команде); подтверждения нет или оно старше кольца —
- * полный базовый снимок (`base: 0`). События (`ev`) — всех снимков после базового, чтобы ни одно не потерялось.
+ * полный базовый снимок (`base: 0`). Клиент тоже хранит кольцо принятых состояний (`cl.snapshots[PACKET_BACKUP]`): пока его
+ * подтверждение летит к серверу, дельты приходят от прежней базы — он восстанавливает её из истории, а не отбрасывает.
+ * События (`ev`) — по группам на каждый снимок после базового: клиент играет только те, что новее уже применённого.
  * Сущность — плоский объект с коротким ключом `id` (вид + номер: `h1`, `m23`, `t4`, `td`) и примитивными полями
  */
 export type Prim = number | string | boolean;
@@ -22,7 +24,8 @@ export interface Delta<E = unknown> {
   add: EntityState[];
   upd: ({ id: string } & Partial<Record<string, Prim>>)[];
   del: string[];
-  ev: E[];
+  /** События снимков `base+1 … n`, группа на снимок (полный — одна группа: события снимка n) */
+  ev: E[][];
 }
 
 export class SnapshotRing<E = unknown> {
@@ -60,52 +63,80 @@ export class SnapshotRing<E = unknown> {
       if (u) d.upd.push(u);
     }
     for (const id of base.ents.keys()) if (!cur.ents.has(id)) d.del.push(id);
-    for (const s of this.ring) if (s.n > base.n && s.n <= cur.n) d.ev.push(...s.events);
+    for (const s of this.ring) if (s.n > base.n && s.n <= cur.n) d.ev.push(s.events);
     return d;
   }
 }
 
-const full = <E>(s: Snapshot<E>): Delta<E> => ({ n: s.n, base: 0, tick: s.tick, add: [...s.ents.values()], upd: [], del: [], ev: s.events });
+const full = <E>(s: Snapshot<E>): Delta<E> => ({ n: s.n, base: 0, tick: s.tick, add: [...s.ents.values()], upd: [], del: [], ev: [s.events] });
 const empty = <E>(s: Snapshot<E>): Delta<E> => ({ n: s.n, base: s.n, tick: s.tick, add: [], upd: [], del: [], ev: [] });
 
-/** Клиентская копия мира: применяет дельты, помнит номер последнего применённого снимка (его и подтверждать) */
+type State = Map<string, EntityState>;
+
+/**
+ * Клиентская копия мира: применяет дельты и помнит последние `keep` принятых состояний. Текущие записи `ents` — одни и те же
+ * объекты от снимка к снимку (поля правятся на месте), история — копии. Подтверждать серверу — `n`
+ */
 export class SnapshotView<E = unknown> {
   n = 0;
   tick = 0;
-  readonly ents = new Map<string, EntityState>();
-  /** Что случилось в последней применённой дельте */
+  readonly ents: State = new Map();
+  /** Что изменилось относительно прежнего текущего состояния */
   added: EntityState[] = [];
   updated: EntityState[] = [];
   removed: EntityState[] = [];
+  /** События, ещё не игранные: снимков новее прежнего `n` */
   events: E[] = [];
+  /** Дельт от базы, которой нет в истории (нужен полный снимок) */
+  rejected = 0;
+  private readonly history = new Map<number, State>();
+  private readonly keep: number;
 
-  /** false — дельта от неизвестного базового снимка (пропущен или слишком старый), нужен полный */
+  constructor(keep = 32) { this.keep = keep; }
+
+  /** false — старый или дубль (`n` не больше текущего) либо база неизвестна (пропущена или старше истории) */
   apply(d: Delta<E>): boolean {
-    if (d.base !== 0 && d.base !== this.n) return false;
     if (d.n <= this.n && d.base !== 0) return false;
-    this.added = []; this.updated = []; this.removed = [];
+    let target: State;
+    let played = 0;
     if (d.base === 0) {
-      const keep = new Set(d.add.map((e) => e.id));
-      for (const [id, e] of this.ents) if (!keep.has(id)) { this.ents.delete(id); this.removed.push(e); }
-      for (const e of d.add) {
-        const old = this.ents.get(e.id);
-        const copy = { ...e };
-        this.ents.set(e.id, copy);
-        (old ? this.updated : this.added).push(copy);
-      }
+      target = new Map();
+      for (const e of d.add) target.set(e.id, { ...e });
     } else {
-      for (const e of d.add) { const copy = { ...e }; this.ents.set(e.id, copy); this.added.push(copy); }
+      const base = this.history.get(d.base);
+      if (!base) { this.rejected++; return false; }
+      target = new Map();
+      for (const [id, e] of base) target.set(id, { ...e });
+      for (const e of d.add) target.set(e.id, { ...e });
       for (const u of d.upd) {
-        const e = this.ents.get(u.id);
+        const e = target.get(u.id);
         if (!e) continue;
         for (const k in u) if (k !== 'id') e[k] = u[k] as Prim;
-        this.updated.push(e);
       }
-      for (const id of d.del) { const e = this.ents.get(id); if (e) { this.ents.delete(id); this.removed.push(e); } }
+      for (const id of d.del) target.delete(id);
+      // группы событий — снимков base+1 … n; уже игранные (до текущего n включительно) пропускаем
+      played = Math.max(0, Math.min(d.ev.length, this.n - d.base));
     }
-    this.events = d.ev;
+    this.sync(target);
+    this.events = d.ev.slice(played).flat();
+    this.history.set(d.n, target);
+    while (this.history.size > this.keep) { const first = this.history.keys().next().value as number; this.history.delete(first); }
     this.n = d.n;
     this.tick = d.tick;
     return true;
+  }
+
+  /** Текущие записи ← целевое состояние: на месте, с разницей для вью */
+  private sync(target: State): void {
+    this.added = []; this.updated = []; this.removed = [];
+    for (const [id, e] of this.ents) if (!target.has(id)) { this.ents.delete(id); this.removed.push(e); }
+    for (const [id, t] of target) {
+      const e = this.ents.get(id);
+      if (!e) { const copy = { ...t }; this.ents.set(id, copy); this.added.push(copy); continue; }
+      let changed = false;
+      for (const k in t) if (e[k] !== t[k]) { e[k] = t[k]; changed = true; }
+      for (const k in e) if (!(k in t)) { delete e[k]; changed = true; }
+      if (changed) this.updated.push(e);
+    }
   }
 }
