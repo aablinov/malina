@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { makeCanvas } from './headless.ts';
 import type { FX } from './fx.ts';
 import { additive, additiveSprite } from './loot-look.ts';
 import { markShared } from './fx.ts';
@@ -278,8 +279,7 @@ const texCache = new Map<string, THREE.Texture>();
 const layerTex = (key: string): THREE.Texture => {
   let t = texCache.get(key);
   if (t) return t;
-  const S = 512, cv = document.createElement('canvas');
-  cv.width = cv.height = S;
+  const S = 512, cv = makeCanvas(S, S);
   const g = cv.getContext('2d') as CanvasRenderingContext2D;
   g.strokeStyle = g.fillStyle = '#fff'; g.lineJoin = 'round';
   DRAW[key](g, S / 2, S / 2 - 8, S / 170);
@@ -300,8 +300,7 @@ let wallT: THREE.Texture | null = null;
 /** Стена света: вертикальные лучи разной яркости, к верху тают (повторяется по кругу) */
 const wallTex = (): THREE.Texture => {
   if (wallT) return wallT;
-  const cv = document.createElement('canvas');
-  cv.width = 128; cv.height = 64;
+  const cv = makeCanvas(128, 64);
   const g = cv.getContext('2d') as CanvasRenderingContext2D;
   for (let x = 0; x < 128; x++) {
     const v = 0.25 + 0.75 * Math.pow(Math.random(), 3);
@@ -318,8 +317,7 @@ const wallTex = (): THREE.Texture => {
 const glyphTex: THREE.Texture[] = [];
 const glyphSprite = (i: number): THREE.Texture => {
   if (!glyphTex[i]) {
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 64;
+    const cv = makeCanvas(64, 64);
     const g = cv.getContext('2d') as CanvasRenderingContext2D;
     g.strokeStyle = g.fillStyle = '#fff'; g.lineWidth = 4; g.lineCap = 'square';
     glyph(g, 32, 32, 20, 40 + i * 7);

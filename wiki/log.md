@@ -408,3 +408,7 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-11-04] код | Серверно-авторитарный бой: матч на сервере, клиент по снимкам
 Решение — [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md). `PROTOCOL = 2`: `relay`, `battle.end`, `battle.loot`, `battle.host` сняты; `src/game/battle.ts` + `match.ts` — безголовый бой партии и матч (команды по одной на такт, кольцо снимков, дельты, награды), `server/game/` — раннер и WebSocket `/game` над `Channel`; комнаты создают и закрывают матч, награды считает сервер. Клиент `src/cgame/net-battle.ts`: предсказание своего героя, чужие герои и куклы по записям, зеркало обороны, чат и имена. Тесты: `match.test.ts`, `rooms.test.ts` переписан, `tests/net.spec.ts` — дымовой на два браузера; `net-party.spec.ts` снят.
 Страницы: [design-multiplayer.md](design-multiplayer.md), [index.md](index.md), [dev-testing.md](dev-testing.md).
+
+## [2026-11-04] код | Сервер: руны без DOM, устойчивость матча к ошибкам
+Заряд заклинания ронял сервер: `src/sigils.ts` рисовал руну через `document.createElement` — теперь `makeCanvas` из `src/headless.ts`. Ошибка в обработке сообщения клиента или в шаге симуляции больше не роняет процесс: лог, игроку подсказка, при падении шага матч честно прерывается. Тест `server/test/headless-gear.test.ts`: все артефакты и заклинания, все ауры и спец-удары оружия творятся на безголовом сервере.
+Страницы: [design-multiplayer.md](design-multiplayer.md), [dev-testing.md](dev-testing.md).

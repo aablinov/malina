@@ -6,6 +6,12 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "STATIC=dist DB_PATH=:memory: PORT=8787 HOST=127.0.0.1 mise exec -- node server/main.ts"],
       "port": 8787
+    },
+    {
+      "name": "dev",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["dev"],
+      "port": 5173
     }
   ]
 }
