@@ -630,32 +630,33 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   /** Браузерное действие глушится в обработчике — отложить нельзя */
   const PREVENT = new Set(['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10']);
-  bindDom(events, canvas, { prevent: (e) => PREVENT.has(e.code), gesture: initAudio });
+  bindDom(events, canvas, { prevent: (e) => PREVENT.has(e.code), gesture: initAudio, keyNow: uiKey });
 
   /**
-   * Разбор очереди перед тактами кадра: сетевые кадры — каналу, колесо — камере, клавиши — по старшинству меню
-   * (пауза → инвентарь → лавка → чат → меню площадки → переключатели клиента), остальное — в состояние ввода такта
+   * Клавиши интерфейса — сразу в обработчике, по старшинству (пауза → инвентарь → лавка → чат → меню площадки →
+   * переключатели клиента): это не игра, им не нужен такт. true — съедена, в очередь не идёт
    */
+  function uiKey(e: KeyboardEvent): boolean {
+    if (e.repeat) return true;
+    // пауза и итог боя из меню: клавиши — им
+    if (battle?.key(e)) return true;
+    // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
+    if (inventory.open) { inventory.key(e); return true; }
+    if (shop.open) { shop.key(e); return true; }
+    if (netClient?.typing) return true;
+    if (netClient && e.code === 'Enter' && !battle?.open) { gi.clear(); netClient.openChat(); return true; }
+    // меню площадки обороны: цифры — выбор башни, Esc / F — закрыть
+    if (tdUi?.menuOpen && tdUi.key(e)) return true;
+    if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return true; }
+    return clientKey(e.code);
+  }
+
+  /** Разбор очереди перед тактами кадра (Com_EventLoop): сетевые кадры — каналу, колесо — камере, игровой ввод — в состояние такта */
   function drainEvents(): void {
     events.drain((ev) => {
       if (ev.kind === 'net') { ev.deliver(); return; }
       if (ev.kind === 'wheel') { camDist = THREE.MathUtils.clamp(camDist + Math.sign(ev.dy) * 2, 12, 60); return; }
-      if (ev.kind === 'blur') { gear.cancelCast(); gi.feed(ev); return; }
-      if (ev.kind === 'key' && ev.down) {
-        const e = ev.e;
-        if (e.repeat) return;
-        // пауза и итог боя из меню: клавиши — им
-        if (battle?.key(e)) return;
-        // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
-        if (inventory.open) { inventory.key(e); return; }
-        if (shop.open) { shop.key(e); return; }
-        if (netClient?.typing) return;
-        if (netClient && e.code === 'Enter' && !battle?.open) { gi.clear(); netClient.openChat(); return; }
-        // меню площадки обороны: цифры — выбор башни, Esc / F — закрыть
-        if (tdUi?.menuOpen && tdUi.key(e)) return;
-        if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return; }
-        if (clientKey(e.code)) return;
-      }
+      if (ev.kind === 'blur') gear.cancelCast();
       gi.feed(ev);
     });
   }
