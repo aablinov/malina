@@ -54,6 +54,8 @@ PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise 
 ## Запуск
 Без установки: открыть `dist/index.html` в браузере.
 
+Одной командой (node через mise): `make dev` — сервер сетевой игры на 8787 и клиент Vite на 5173 вместе (Ctrl+C гасит оба); `make play` — собрать и поднять один сервер, который отдаёт и игру, http://localhost:8787; `make check` — типы и быстрые тесты; `make e2e` — Playwright.
+
 Для разработки:
 ```
 npm install

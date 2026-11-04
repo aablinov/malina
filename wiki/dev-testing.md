@@ -10,7 +10,7 @@
 mise exec -- npm run typecheck && mise exec -- npm run test:net
 ```
 
-`server/test/*.test.ts` на `node:test` без браузера: сервер (вход, комнаты, итог), протокол и канал, кодек снимков, симуляция боя с сидом, матч над петлёй в памяти — секунды, не минуты. Гонять перед каждым коммитом; Playwright — только при правках вида и UI и в конце этапа. `headless.test.ts` — безголовый бой: настоящие `Knight`, `Gear` и стая `Pack` на карте `td` в Node со сценой без рендера и `nullFx` (`src/headless.ts`), волна до конца и хэш детерминизма. `sim-boundary.test.ts` — страж: модули `src/sim`, `src/net`, `src/game` общие для сервера и браузера, грузятся в Node и не трогают DOM, сцену three, FX, звук, `Math.random` и часы (`tsconfig.server.json` проверяет их без `lib: DOM`).
+`server/test/*.test.ts` на `node:test` без браузера: сервер (вход, комнаты, итог), протокол и канал, кодек снимков, симуляция боя с сидом, матч над петлёй в памяти — секунды, не минуты. Гонять перед каждым коммитом; Playwright — только при правках вида и UI и в конце этапа. `headless-gear.test.ts` — все артефакты, заклинания, ауры и спец-удары на безголовом сервере (ловит забытый `document`). `headless.test.ts` — безголовый бой: настоящие `Knight`, `Gear` и стая `Pack` на карте `td` в Node со сценой без рендера и `nullFx` (`src/headless.ts`), волна до конца и хэш детерминизма. `sim-boundary.test.ts` — страж: модули `src/sim`, `src/net`, `src/game` общие для сервера и браузера, грузятся в Node и не трогают DOM, сцену three, FX, звук, `Math.random` и часы (`tsconfig.server.json` проверяет их без `lib: DOM`).
 
 ## Рецепт Playwright (работает у агентов и в песочнице)
 

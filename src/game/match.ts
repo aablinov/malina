@@ -83,8 +83,9 @@ export class Match {
     if (s.chan && s.chan !== chan) s.chan.close(4009);
     s.chan = chan;
     s.snapAck = 0;
-    chan.onReliable = (m) => this.onReliable(s, m as GameClientMsg);
-    chan.onUnreliable = (u) => this.onCmd(s, u as Cmd);
+    // ошибка в обработке чужого сообщения не должна ронять сервер со всеми матчами: записать и жить дальше
+    chan.onReliable = (m) => { try { this.onReliable(s, m as GameClientMsg); } catch (e) { this.fail(s, e); } };
+    chan.onUnreliable = (u) => { try { this.onCmd(s, u as Cmd); } catch (e) { this.fail(s, e); } };
     chan.onClose = () => { if (s.chan === chan) s.chan = null; };
     chan.sendReliable({ t: 'welcome', seat, tick: this.tick });
     for (const o of this.seats.values()) chan.sendReliable(this.kitOf(o));
@@ -98,6 +99,12 @@ export class Match {
     const c = s.chan;
     s.chan = null;
     c.onReliable = null; c.onUnreliable = null; c.onClose = null;
+  }
+
+  /** Что-то упало при разборе сообщения места: в лог, игроку — подсказка */
+  private fail(s: Seat, e: unknown): void {
+    console.error(`матч ${this.id}, место ${s.player.seat}: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+    s.chan?.sendReliable({ t: 'toast', text: 'Сервер не смог выполнить действие' });
   }
 
   get connected(): number { return [...this.seats.values()].filter((s) => s.chan).length; }
@@ -152,7 +159,14 @@ export class Match {
     if (this.ended) return;
     this.acc += dt;
     let n = 0;
-    while (this.acc >= TICK && n < 6) { this.step(); this.acc -= TICK; n++; }
+    try {
+      while (this.acc >= TICK && n < 6) { this.step(); this.acc -= TICK; n++; }
+    } catch (e) {
+      // симуляция упала: матч прерван честно, остальные матчи живут
+      console.error(`матч ${this.id}: шаг упал — ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+      this.finish('abandoned');
+      return;
+    }
     if (n >= 6) this.acc = 0;
     this.snapshot();
     if (this.td.state !== 'play') {
