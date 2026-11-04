@@ -424,3 +424,7 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-11-04] код | Мозг мобов как бот Quake 3: мысль 10 Гц, движитель на такт, путь в обход, куклы по намерению
 `Mob.update` разделён на `think()` (раз в 0,1 с: цель, тревога, режим, атака) и `mover()` (каждый такт: дорога, патруль, погоня, путь). Погоня, упёршаяся в стену, просит путь у `MobHooks.route` (`Pathfinder`, бюджет 4 за такт мира — сервер и плейграунд). Снимок несёт направление шага моба, куклы клиента шагают по нему. Стражи переведены на `rnd()`, часы — на время боя; страж границы проверяет весь геймплей сервера. `src/nav.ts` удалён (`distToObstacle` — в `collision.ts`). Тест `mob-brain.test.ts`.
 Страницы: [design-mobs.md](design-mobs.md), [arch-layers.md](arch-layers.md), [design-multiplayer.md](design-multiplayer.md), [design-level-blocks.md](design-level-blocks.md), [design-level-decor.md](design-level-decor.md), [project-brief.md](project-brief.md).
+
+## [2026-11-04] код | Сеть: дубли команд только при потерях, permessage-deflate на /game, замеры трафика
+`Transport.lossy` — по WebSocket клиент шлёт одну команду в кадре (пачка из трёх утраивала исходящий поток до 27 КБ/с), дубли остаются для петли с потерями и будущего транспорта без TCP. `/game` сжат permessage-deflate с общим контекстом: на проводе вниз 16,5 → 1,3 КБ/с, вверх 10,7 → 2,7 КБ/с. Замеры и вывод про бинарный кодек — в [dev-performance.md](dev-performance.md). Тест: матч по петле с потерями 25 %.
+Страницы: [design-multiplayer.md](design-multiplayer.md), [dev-performance.md](dev-performance.md), [index.md](index.md).

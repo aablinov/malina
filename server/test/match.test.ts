@@ -45,20 +45,21 @@ class FakeClient {
     const c: Cmd = { seq: ++this.seq, snap: this.view.n, move: this.move, aim: [0, 0, 5], attack: this.attack, roll: this.roll, bow: false, ping: 30 };
     this.roll = false;
     this.recent.push(c);
-    if (this.recent.length > CMD_DUP) this.recent.shift();
+    const dup = this.chan.lossy ? CMD_DUP : 1;
+    while (this.recent.length > dup) this.recent.shift();
     this.chan.sendUnreliable(this.recent.slice());
   }
   ent(id: string) { return this.view.ents.get(id); }
 }
 
-function setup(players = 2, delayMs = 10) {
+function setup(players = 2, delayMs = 10, link: { loss?: number; rng?: () => number } = {}) {
   const clock = { t: 0 };
   const now = () => clock.t;
   const map = loadMap('td');
   const match = new Match({ id: 'm1', map, seed: 7, players: Array.from({ length: players }, (_, i) => ({ seat: i, playerId: `p${i}`, name: `Игрок ${i + 1}`, profile: Profile.starter() })) });
   const links: ReturnType<typeof loopbackPair>[] = [], clients: FakeClient[] = [];
   for (let i = 0; i < players; i++) {
-    const lb = loopbackPair({ clock: now, delayMs });
+    const lb = loopbackPair({ clock: now, delayMs, ...link });
     links.push(lb);
     const c = new FakeClient(lb, now);
     clients.push(c);
@@ -95,7 +96,8 @@ test('матч: приветствие и наборы, первый снимо�
   // у другого клиента тот же герой на том же месте
   assert.equal(a.ent('h1')!.x, h1.x);
   assert.ok(match.heroPos(1)!.x - x0 > 2);
-  // пачки по три команды: дубли не копятся в очереди сервера
+  // по петле без потерь — по одной команде в кадре; дубли не копятся в очереди сервера
+  assert.ok(!b.chan.lossy);
   assert.ok(match.seats.get(1)!.queue.length <= CMD_DUP, `очередь ${match.seats.get(1)!.queue.length}`);
 });
 
@@ -217,4 +219,17 @@ test('матч: действие с номером команды исполня
   b.chan.sendReliable({ t: 'act', seq: 1, k: 'aura' });
   run(1);
   assert.ok(a.got.some((m) => m.t === 'act' && m.k === 'aura'));
+});
+
+test('матч: по петле с потерями клиент дублирует команды (cl_packetdup) — ввод доходит, герой идёт', () => {
+  let x = 12345;
+  const r = () => { x = (x * 1103515245 + 12345) % 2 ** 31; return x / 2 ** 31; };
+  const { match, clients, run } = setup(2, 10, { loss: 0.25, rng: r });
+  const [, b] = clients;
+  assert.ok(b.chan.lossy, 'петля с потерями — транспорт с потерями');
+  const x0 = match.heroPos(1)!.x;
+  b.move = [1, 0];
+  run(40);
+  assert.ok(match.heroPos(1)!.x - x0 > 3, `герой шёл несмотря на потери: ${match.heroPos(1)!.x - x0}`);
+  assert.ok(match.seats.get(1)!.lastSeq > 100, `команды дошли: ${match.seats.get(1)!.lastSeq}`);
 });
