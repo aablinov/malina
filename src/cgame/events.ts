@@ -2,8 +2,8 @@
  * Единая очередь системных событий — `Sys_QueEvent`/`Com_EventLoop` Quake 3 (wiki/arch-layers.md): обработчики DOM и
  * транспорт сети ничего не делают сами, только кладут событие с меткой времени в кольцо; цикл кадра разбирает очередь
  * перед тактами (`drain`) — порядок «ввод → сеть → такт → кадр» один и тот же, клавиша-тап короче такта не теряется,
- * геймплей не выполняется внутри `keydown`. В обработчиках остаётся лишь то, что нельзя отложить: `preventDefault`
- * и первый жест для звука
+ * геймплей не выполняется внутри `keydown`. В обработчиках остаётся лишь то, что нельзя отложить: `preventDefault`,
+ * первый жест для звука и клавиши интерфейса (меню, инвентарь, лавка, чат — `keyNow`): они не игра и отвечают сразу
  */
 export type SysInput =
   | { kind: 'key'; code: string; down: boolean; repeat: boolean; e: KeyboardEvent }
@@ -55,11 +55,13 @@ export interface DomBinding {
   prevent: (e: KeyboardEvent) => boolean;
   /** Первый жест пользователя — разрешить звук; зовётся в обработчике, не из очереди */
   gesture?: () => void;
+  /** Клавиша интерфейса (меню, панели): обработана сразу, в очередь не идёт. true — съедена */
+  keyNow?: (e: KeyboardEvent) => boolean;
 }
 
 /** Слушатели окна и холста, которые только кладут события в очередь; вернёт снятие */
 export function bindDom(q: EventQueue, canvas: HTMLElement, b: DomBinding, target: Window = window): () => void {
-  const onKeyDown = (e: KeyboardEvent): void => { if (b.prevent(e)) e.preventDefault(); b.gesture?.(); q.push({ kind: 'key', code: e.code, down: true, repeat: e.repeat, e }); };
+  const onKeyDown = (e: KeyboardEvent): void => { if (b.prevent(e)) e.preventDefault(); b.gesture?.(); if (b.keyNow?.(e)) return; q.push({ kind: 'key', code: e.code, down: true, repeat: e.repeat, e }); };
   const onKeyUp = (e: KeyboardEvent): void => { q.push({ kind: 'key', code: e.code, down: false, repeat: false, e }); };
   const onBlur = (): void => { q.push({ kind: 'blur' }); };
   const onMove = (e: MouseEvent): void => { q.push({ kind: 'mouse', x: e.clientX, y: e.clientY }); };
