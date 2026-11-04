@@ -1,104 +1,155 @@
-# Малина
+# Malina
 
-Мистическая кооперативная зачистка подземелий в духе Minecraft Dungeons: изометрическая камера, мечи, топоры и магия, добрый детский воксельный стиль (`wiki/adr-004-mystic-coop-melee.md`, `wiki/style-guide.md`).
-Написана на TypeScript (строгий режим) и three.js, собирается Vite.
+**English** · [Русский](#малина)
 
-Сейчас в игре одна сцена — **плейграунд**: на нём отлаживаются герой, меч и блочные уровни. Врагов пока нет — новые появятся под ближний бой.
+A cosy co-op action game in the spirit of **Minecraft Dungeons** crossed with **tower defence**, playable **over the network** with friends and family. Isometric camera, swords, axes, bows and magic, a kind blocky voxel look — and a raspberry bush in the middle of the map that the whole party has to keep alive.
 
-## Плейграунд
-Арена 48 × 48 м из блоков (карта `assets/maps/playground.json`): трава с дорогами 3 м через 10 м (край рваный, как в Minecraft Dungeons), каменные стены с факелами, укрытия, колонна, диагональ, угол, коридор 3 м с проёмом 1 м, **пруд** с живой водой (вброд — по колено), **площадка 2 м** с подъёмом по ступеням (прыжка нет, как в Minecraft Dungeons), травяной **холм** в три яруса (трава свисает с краёв уступов, сверху — пучки пятнами, как в Minecraft Dungeons), соломенные **чучела** (кучка из четырёх, одиночное и подвижное на рельсе), склад. За южной стеной — **витрина блоков**, за восточной — зона **«мир»** по скриншотам Minecraft Dungeons: двор со складом, река с водопадом и мостом, скалы по краю, холмы со свечами, портал в холме (`src/level/world-zone.ts`, сборки `src/level/kit.ts`, `wiki/style-world.md`).
+*Malina* (малина) is Russian for *raspberry*: raspberries are the in-game currency, and the bush you defend is the heart of the game.
 
-Открыть: `dist/index.html` (или `http://localhost:5173/`) — **главное меню** в духе Minecraft Dungeons (`src/menu/`, `wiki/design-main-menu.md`): «Одиночная игра», «Сетевая игра» (через сервер, см. ниже), «Настройки»; в лагере герой надевает собранное и выбирает карту обороны куста (`td`, `td2`, `td3`), Esc в бою — пауза и выход в лагерь. Плейграунд — `?dev=playground`. **F10** — редактор уровней; `?map=editor` — играть на карте из редактора, `?map=rooms/elite` — любая встроенная карта. Большая карта (> 400 чанков) стримится регионами 32 × 32 м вокруг героя, любая — с `&stream=1` (`src/world/`, `wiki/dev-performance.md`); `?map=world&seed=42` — процедурный мир для отладки стриминга.
+## Why this game exists
 
-- Управление мышью, как в Minecraft Dungeons: **ЛКМ по земле** — идти в обход стен (поиск пути по блокам: ступени, вброд через воду, на площадки; держи — идёт за курсором), **ЛКМ по цели** — подойти на длину меча и ударить (держи — комбо из трёх: слева, справа, сверху с ударной волной; за клинком светящийся след), **Shift + ЛКМ** — бить на месте в сторону курсора
-- **WASD** — ходьба клавишами (отменяет приказ мыши), **Space** — перекат (неуязвимость в начале, перезарядка 0,9 с), **ПКМ** — стрелять из лука (держи — очередь), **Q** — спец-удар оружия (шкала копится попаданиями, у каждого из 14 видов оружия свой), **1 / 2 / 3** — артефакты с перезарядкой, **E** — зелье здоровья, **F** — использовать и торговать, **I** — инвентарь, **M** — полная карта, **Tab** — карта поверх игры (как в Diablo II), **L** — день / ночь, **F9** — звук (и фоновая музыка: тихая в покое, ещё тише в бою, тревожная с сердцебиением при здоровье ниже 30 %, `src/music.ts`)
-- **HUD и инвентарь как в Minecraft Dungeons** (`src/hud/`, `wiki/design-inventory.md`): снизу панель — очки зачарования, инвентарь, три артефакта с полосой душ, сердце здоровья с жизнями, зелье, карта, перекат, стрелы, малина, полоса опыта; слева сверху — эффекты, справа — задание. Инвентарь: герой в 3D с надетым (ближнее, броня, дальнее, 3 артефакта, уровень, сила), вкладки, сетка 3 в ряд, карточка предмета; клик — выбрать, двойной клик / ПКМ / Enter — надеть, перетащить на гнездо, **X** — разобрать за малину, гнёзда зачарований — прокачка за очки (1 очко за уровень). Предметы и прокачка — `src/items.ts`, в бою — `src/gear.ts`; профиль хранится в localStorage
-- **F1** — панель параметров героя и меча (ползунки, «Скопировать JSON», «Сбросить»), **F2** — коллайдеры и путь героя, **F3** — дуга удара, **F4** — телеметрия, **F6** — бессмертие, **F7** — время 1 / 0,5 / 0,25 / 0,1, **P** — пауза, **.** — кадр вперёд, **F8** — FPS, **B** — постобработка, **U** — свет как в Unreal (AO, цветокоррекция, дымка; `src/lighting.ts`) или простой, **N** — сброс чучел и склада
-- **Склад** (левее нулевой точки): красные **бочки** — от ударов загораются и взрываются, поджигая соседние; волшебные **сундуки** — F: сундук трясётся, крышка распахивается со вспышкой, столбом света и конфетти, малина, лечение, связка стрел и предмет снаряжения (столб света цвета редкости) вылетают фонтаном (`wiki/design-inventory.md`, раздел 12); **источник здоровья** — F лечит, пока стоишь рядом; **деревянные ящики** разбиваются мечом (иногда в них малина)
+Malina was made for fun — to play with kids, nephews and nieces on a couple of laptops in the same room, or over the internet. It is not a product. It is a toy that keeps growing, and you are welcome to make it yours:
 
-Все настраиваемые числа — в `src/tuning.ts` (`HERO`, `SWORD`).
+- **Change anything.** Towers, enemies, maps, balance, the hero, the look — everything is TypeScript and JSON, and all the tuning numbers are in one place (`src/tuning.ts`, `src/td/`).
+- **It ships with its own wiki.** The `wiki/` folder is a living design document in the "LLM wiki" style: decisions (ADRs), design pages for every system, visual style guides, performance notes and a journal of every change. Start at [wiki/index.md](wiki/index.md).
+- **It is ready for AI agents.** `AGENTS.md` / `CLAUDE.md` tell a coding agent how to run, test and extend the project, and the wiki gives it the context. Open the repo in Claude Code, Cursor or any agent you like, describe the enemy, tower or map you want — and play it ten minutes later.
 
-Тесты (Playwright, нужен собранный `dist`) — на установленном Google Chrome, node через mise (подробно — `wiki/dev-testing.md`):
+## What you get
+
+- **Dungeon crawling the Minecraft Dungeons way** — click to walk around walls, click an enemy to close in and strike (three-hit combo with a shockwave), dodge roll, bow, 14 weapon kinds with their own weapon arts, enchantments, artifacts, spells and auras, potions, chests, barrels and loot fountains.
+- **Bush Defence** — the tower defence mode. Enemy waves march along roads from their lairs towards the raspberry bush; you build towers on pads (archer tower, frost spire, catapult, fire brazier, arcane obelisk, wall ballista, tar cauldron, stargazer, storm spire, heart of winter), upgrade and sell them, repair what the gnawer beavers chew up, and fight in between with your own sword. Three maps: a **lava map**, the **Crystal Glade** and a **castle siege** with walls and gates that break and get repaired. Mini-bosses every third wave, a sutler who sells gear for the battle, hints designed for kids (raspberry magnet, next-wave card, "tower in trouble" alarm).
+- **Network play** — a small Node server with a server-authoritative battle modelled on Quake 3: the server runs the simulation, clients predict their own hero; rooms with a code, readiness, chat, friends, late joiners, battle history with rewards. Waves scale with the number of players.
+- **A big hand-made island** (256 × 256 m, seven biomes, a fort, a temple with a golem arena, a village with a blacksmith and a merchant), procedural dungeon floors from room templates, and a **level editor** in the spirit of Unreal Engine with a preset library of 179 ready-made pieces of world.
+- **Everything is code.** Textures are drawn by code, sounds and music are synthesised with Web Audio, block and decor shapes are generated into OBJ. No asset pipeline, no engine — TypeScript, three.js and Vite.
+
+## Quick start
+
+Requirements: Node (the version is pinned in `mise.toml`; the project uses [mise](https://mise.jdx.dev/) to run it) and a modern browser (Chrome, Safari, Firefox).
+
+```bash
+npm install
+make play        # builds the game and starts one server that also serves it
 ```
+
+Open http://localhost:8787 — the main menu lets you play solo or create a network room. For development, `make dev` runs the game server (port 8787) and the Vite dev client (port 5173) together.
+
+Playing over the network: run the server somewhere reachable (`PORT`, `HOST`, `DB_PATH`, `STATIC=dist` to serve the game too), open the game with `?server=http://your-host:8787`, create a room and share the code. The server keeps profiles, rooms and battle history in SQLite.
+
+More scripts (`npm run …`): `typecheck`, `build`, `test:net` (server, network and simulation tests without a browser), `map:td` / `map:td2` / `map:td3` / `map:island` / `map:playground` / `map:rooms` (regenerate maps from their generators), `prefabs`, `blocks`, `decor`. `make check` runs types and the fast tests.
+
+## How to play
+
+- **LMB on the ground** — walk there (pathfinding around walls, up stairs, through shallow water); **LMB on an enemy** — close in and strike, hold for the three-hit combo; **Shift + LMB** — strike in place.
+- **WASD** — walk by keys, **Space** — dodge roll, **RMB** — bow, **Q** — weapon art, **1 / 2 / 3** — artifacts, **E** — potion, **F** — use / talk / build / repair, **I** — inventory, **M** / **Tab** — map, **G** — call the next wave early (bonus), **Esc** — pause.
+- Bush Defence: walk up to a pad and press **F** (or click it) to open the tower menu; number keys pick a tower, the same menu upgrades to level III or sells for 70 %. Keep the bush alive through all waves.
+
+Developer keys (**F1**–**F10**: tuning panel, colliders, telemetry, god mode, slow motion, FPS, editor and more) and the full editor manual are in the wiki: [design-editor.md](wiki/design-editor.md), [design-inventory.md](wiki/design-inventory.md), [design-tower-defence.md](wiki/design-tower-defence.md).
+
+Useful URLs: `?map=td` / `td2` / `td3` (defence maps), `?map=island`, `?map=prefabs` (preset showcase), `?map=dungeon&seed=42&floor=2`, `?dev=playground` (test arena), `?dev=editor` (level editor).
+
+## Where things are
+
+| Folder | What is inside |
+|---|---|
+| `src/sim/`, `src/game/` | Deterministic battle simulation and match logic — no DOM, runs in the browser and in Node |
+| `src/cgame/` | Client side of the battle: event queue, input, prediction, views from snapshots, defence menu and HUD |
+| `src/net/`, `server/` | Protocol, transports, delta-snapshot codec; the Node server (rooms, profiles, matches, SQLite) |
+| `src/td/` | Bush Defence: towers, waves, walls and gates, lairs, scaling |
+| `src/mobs/`, `src/bosses/` | Enemies of the Order, critters, mini-bosses and bosses |
+| `src/level/`, `src/world/` | Voxel levels: blocks, palette, mesher, collisions, pathfinding, map generators, preset library, streaming |
+| `src/knight.ts`, `src/gear.ts`, `src/items.ts`, `src/weapons.ts`, `src/magic/` | Hero, gear, items and enchantments, weapons, spells |
+| `src/menu/`, `src/hud/` | Main menu, camp lobby, HUD, inventory, shop, automap |
+| `src/dev/` | Playground and the level editor |
+| `assets/` | Maps (JSON), block and decor shapes (OBJ), presets |
+| `tests/`, `server/test/` | Playwright end-to-end tests and fast Node tests |
+| `wiki/` | The design wiki — start at [wiki/index.md](wiki/index.md) |
+
+Architecture overview: [wiki/arch-layers.md](wiki/arch-layers.md). Project brief and current state: [wiki/project-brief.md](wiki/project-brief.md).
+
+## Tests
+
+```bash
 mise exec -- npm run build
 PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise exec -- npx playwright test
 ```
 
-## Уровни и редактор
-Мир собирается из блоков: **карта** — `assets/maps/*.json`, **формы блоков** — `assets/blocks/*.obj`, **палитра** (из какой формы и каких текстур состоит блок, как сталкивается) — `src/level/palette.ts`.
+End-to-end tests run on an installed Google Chrome (no `playwright install`, see [wiki/dev-testing.md](wiki/dev-testing.md)); `npm run test:net` runs the server and simulation tests in seconds.
 
-- Блок 1 × 1 × 1 м, формы на сетке 1/16 (полублок, ступени, стенка, забор, крест для травы и огня), поэтому всё стыкуется друг с другом.
-- Клетка `(x, y, z)` стоит в мире центром на целых `x`, `z` и занимает высоту от `y` до `y + 1`. Пол арены — верх клеток `y = −1`.
-- Боец упирается в блоки, поднимается на полублоки и ступени (шаг 0,5 м; у ступеней низкая половина 0,5, высокая 1), падает с обрывов. Заборы и стенки — 1,5 м, через них не перешагнуть. Враги и пули работают с плоскими препятствиями, собранными из блоков (`obstaclesOf`), навигация врагов — по той же сетке.
-- Рендер: на чанк 16³ — по одной сетке на слой (непрозрачные, вырезные, вода, огонь), грани между соседями не рисуются, углы затенены. Факелы и костры светят: 8 ближайших к камере — настоящие источники света.
-- Плейграунд — тоже карта: `npm run map:playground` пересобирает `assets/maps/playground.json` из генератора `src/level/playground-map.ts` (подписи витрины лежат в `meta.labels`).
-- **Декор** — свободные предметы поверх блоков (колонны, щебень, цепи, корни, паутина, знамёна, факелы, фонари, грибы): поле `decor` в карте, реестр `src/level/decor.ts`, формы `assets/decor/*.obj` (`npm run decor`). Стоят с шагом 1/16 под любым углом, но пиксели те же 16 на метр (`wiki/design-level-decor.md`).
-- Формы: `npm run blocks` пишет `assets/blocks/*.obj` из `scripts/gen-blocks.mjs`; их же можно рисовать руками в Blockbench или Blender (нужны `v / vt / vn / usemtl / f`, `usemtl` — слот текстуры).
+---
 
-**Библиотека пресетов** (`wiki/design-prefab-library.md`) — готовые куски мира для сборки уровней: блоки + декор + свет относительно опорной клетки, запекаются кодом из строителей `src/level/prefab-lib/builders.ts` (`npm run prefabs` → `assets/prefabs/*.json` и витрина `assets/maps/prefabs.json`, открыть — `?map=prefabs`). В редакторе — вкладка **Библиотека**: клик — выбрать, **R** — повернуть на 90°, ЛКМ — поставить; свой префаб из выделения → ПКМ → «Сохранить в библиотеку (JSON)». Каталог по референсам Elden Ring и Minecraft Dungeons собран: 179 пресетов (с вариантами) по 89 строителям — дороги и природа, руины, поселение и композиции (деревня, хутор, лагерь, руины у кладбища, обрыв со статуей), крупные вложены из средних; биом «снег» — снежная земля (в ландшафте земля на выбор: трава, снег или джунгли), лёд, сугробы и снежные варианты построек через пост-проход `snowCap`; биом «джунгли с кристаллами» — влажная земля с мхом, светящиеся кристаллы (слой `glow`, запечённый бирюзовый свет), храм из резного камня с пирамидой и воротами, деревья с контрфорсами, лианы и идол.
+# Малина
 
-**Карта 1 «Остров»** (`wiki/design-map-island.md`) — 256 × 256 м по нарисованному плану (`wiki/sources/map-01/plan.png`): генератор `src/level/island-map.ts` собирает её из пресетов библиотеки в пикселях картинки (`npm run map:island` → `assets/maps/island.json`), играть — `?map=island`. Семь биомов, остров и четыре малых за мостами, форт, храм с ареной Друзового голема, мирная деревня с кузнецом и торговцем; 28 групп врагов с засадами и патрулями, сундуки, ящики и бочки — всё в `meta` и сущностях карты, плейграунд читает их на любой карте.
+[English](#malina) · **Русский**
 
-**Оборона куста** (`wiki/design-tower-defence.md`) — режим tower defence на карте с `meta.td`: `?map=td` (`npm run map:td` ← `src/level/td-map.ts`). Лавовая карта 96 × 96 м: куст малины в центре, три дороги врагов от логов-пещер по мостам через разломы с лавой (светит, дымится, жжёт), вулканы с кратерами, заборчики и жаровни. Площадки под башни: подойти и **F** или кликнуть — меню с пятью башнями (**1–5**: стрелковая вышка, морозный шпиль, катапульта, огненная жаровня, волшебный обелиск), улучшение до III и продажа за 70 %; валюта — малина. Десять волн по дорогам (**G** — раньше срока с бонусом; враги крепчают с волнами, с числом игроков их больше и они крепче), новые враги — гонец, таран, мотылёк; враги идут к кусту и бьют его, куст засох — поражение, **N** — заново. Вторая карта — **Кристальная поляна** `?map=td2` (`npm run map:td2` ← `src/level/td-glade-map.ts`): ночь, рвы со стенками, синие порталы-логова, грибы-светильники и светлячки, двенадцать волн со стаей с уровня 7 и три новых врага — кристальный панцирник (панцирь гасит шесть ударов), споровик (лечит соседей, лопается облаком спор), радужный скакун (прыгает по дороге). Третья — **осада замка** `?map=td3` (`npm run map:td3` ← `src/level/td-castle-map.ts`): игроки внутри замка на лугу, куст во дворе, враги с четырёх сторон; **стены и ворота** ломают (подрывники взрывают стены, лозовые баллисты и арбалетчики расстреливают ворота) и чинят (**F** у стены за малину), пролом открывает врагам дорогу внутрь; площадки на бастионах и во дворе, по стенам ходят по лестницам, через калитку в воротах герой выходит на перехват; новые башни — стенная баллиста (болт насквозь, пробивает броню) и котёл со смолой (лужа: вязнут и горят). Плейтест-правки: у башен есть прочность — **бобры-грызуны** ломают их в руины (F — починить с прежним уровнем), **ледяные колдунчики** замораживают (два удара разбивают лёд); каждую третью волну — **мини-босс** (великан, королева слизней, снежный шаман); в бой герой идёт как новый (меч стража, куртка, лук, три стартовых заклинания), у точки появления — **маркитант**: оружие, броня, все заклинания и ауры за малину боя, только на этот бой; магнит малины, карточка следующей волны и сигнал «башня в беде»; три дорогие башни по площади на всех картах — **звездочёт** (метеорит в самую толпу), **грозовой шпиль** (молния цепью), **сердце зимы** (вьюга вокруг и ледяная волна); клавиши меню — по месту в списке. Код режима — `src/td/`, враги — `src/mobs/td-foes.ts`, мини-боссы — `src/mobs/td-chiefs.ts`.
+Уютная кооперативная игра в духе **Minecraft Dungeons**, скрещённая с **tower defence**, в которую можно играть **по сети** с друзьями и семьёй. Изометрическая камера, мечи, топоры, луки и магия, добрый блочный воксельный стиль — и куст малины посреди карты, который всей компанией надо уберечь.
 
-**Комнаты подземелья** — заготовки в ASCII (`src/level/rooms.ts`: `#` стена, `.` пол, `o` колонна, `=` низкое укрытие, `~` кислота, `n` нора, `c` сундук, `D` дверь, `T` факел, `S` спавн, `M` торговец, `A` алтарь, `B` босс), `npm run map:rooms` превращает их в `assets/maps/rooms/*.json`, дальше их можно править в редакторе. Генератор этажа `src/level/dungeon.ts` раскладывает комнаты на сетке 5 × 5 с шагом 32 м (главный путь 5–6 комнат до босса, 1–2 ответвления: элитная, торговец или кладовая, алтарь), закладывает лишние двери и прокладывает коридоры 3 клетки шириной. Посмотреть: кнопка **Этаж…** в редакторе или `dist/index.html?map=dungeon&seed=42&floor=2`. Любую встроенную карту можно открыть как `?map=rooms/elite`.
+Малина — валюта игры, а куст малины — её сердце.
 
-**Редактор** — в духе Unreal Engine (`wiki/design-editor.md`): `dist/index.html?dev=editor` (или **F10** в плейграунде). Сверху меню и панель инструментов, слева **Префабы** (блоки, декор, сборки, свет, точка появления, библиотека пресетов, свои префабы — категории, поиск, превью; клик — выбрать, тянуть — поставить), в центре вьюпорты (**один, два или четыре вида**: перспектива, сверху, спереди, сбоку; режимы «с освещением / без / каркас»), справа **Аутлайнер** (дерево карты) и **Детали / Настройки мира**, вкладка **Оружие** — превью, характеристики и баланс. Камера: колесо — зум, СКМ или Alt+ЛКМ — вращать, ПКМ — двигать, ПКМ + WASD / QE — лететь, F — к выделенному, Home — вся карта, Alt+X — развернуть вид. **Tab** — режимы по кругу: выделение → блоки → декор → ландшафт (Shift+1…5 — сразу нужный, пятый — «Поставить»).
-- **Выделение:** ЛКМ — выбрать блок, предмет, свет или точку появления, Shift — добавить, тянуть по пустому — рамка, ПКМ — меню; гизмо **W / E / R** — перенос, поворот по осям, размер (**Q** — без гизмо), привязка к сетке и углу на панели; **Del** — убрать, **Ctrl+D** — копия, стрелки — сдвиг. Блоки поворачиваются четвертями, декор — свободно по трём осям.
-- **Настройки мира** (в карте, `meta.world`): солнце, небо и глобальный свет, дымка, погода (дождь, гроза, снег, листопад, искры), постобработка; наборы — «Окружение» на панели. Поставленный свет (точечный, прожектор) и точка появления со взглядом тоже уходят в карту и работают в игре.
-- **Блоки** (кисть): ЛКМ — поставить, Shift+ЛКМ — убрать, Ctrl+ЛКМ дважды — залить параллелепипед (с Shift — вырезать), **Q** — взять блок под курсором, **R** — повернуть, **[ ]** и **1–9** — палитра, **P** — точка появления.
-- **Декор:** ЛКМ — поставить предмет на пол, стену или потолок (по его опоре), ЛКМ по предмету — выбрать и тащить, Shift+ЛКМ / Del — убрать, **R / T / Y** — поворот, наклон, крен на 15°, **Z** — случайный поворот, **Q** — взять, **Ctrl+D** — копия.
-- **Ландшафт:** ползунки — размер по X и Z, слои по 0,5 м, крупность плит, доля камня; ЛКМ по земле — поставить кусок (проходим отовсюду), ЛКМ по куску — выбрать, Shift+ЛКМ — новый поверх; ползунки и «Случайно» перестраивают выбранный, **стрелки** — сдвиг (Shift — на 4), **Del** — убрать, **Esc** — снять выбор; куски хранятся в карте (`meta.lands`).
-- Везде: **PgUp / PgDn** — срез по высоте, **G** — сетка, **Ctrl+Z / Ctrl+Y** — отмена и повтор (и свойств, света, мира), **Ctrl+S** — скачать JSON, **Ctrl+O** — открыть, **F5** — играть, **F1** — горячие клавиши. Карта автоматически сохраняется в localStorage; **Играть** открывает плейграунд с ней (`?map=editor`), «Файл → Этаж подземелья…» собирает этаж из комнат-заготовок. Скачанный JSON кладётся в `assets/maps/` и попадает в сборку.
+## Зачем эта игра
 
-## Запуск
-Без установки: открыть `dist/index.html` в браузере.
+Малина сделана для развлечения — чтобы играть с детьми и племянниками на паре ноутбуков в одной комнате или через интернет. Это не продукт, а игрушка, которая всё время растёт, и вы можете менять её по своему усмотрению:
 
-Одной командой (node через mise): `make dev` — сервер сетевой игры на 8787 и клиент Vite на 5173 вместе (Ctrl+C гасит оба); `make play` — собрать и поднять один сервер, который отдаёт и игру, http://localhost:8787; `make check` — типы и быстрые тесты; `make e2e` — Playwright.
+- **Меняйте что угодно.** Башни, враги, карты, баланс, герой, внешний вид — всё это TypeScript и JSON, а настраиваемые числа собраны в одном месте (`src/tuning.ts`, `src/td/`).
+- **Игра распространяется вместе с вики.** Папка `wiki/` — живой дизайн-документ по схеме «LLM-вики»: решения (ADR), страницы по каждой системе, гайды по стилю, заметки о производительности и журнал всех изменений. Начинать с [wiki/index.md](wiki/index.md).
+- **Готова для ИИ.** `AGENTS.md` / `CLAUDE.md` объясняют агенту, как запускать, тестировать и расширять проект, а вики даёт ему контекст. Откройте репозиторий в Claude Code, Cursor или любом другом агенте, опишите врага, башню или карту, которых вам не хватает, — и играйте через десять минут.
 
-Для разработки:
-```
+## Что внутри
+
+- **Зачистка подземелий как в Minecraft Dungeons** — клик по земле ведёт в обход стен, клик по врагу — подойти и ударить (комбо из трёх ударов с ударной волной), перекат, лук, 14 видов оружия со своими спец-ударами, зачарования, артефакты, заклинания и ауры, зелья, сундуки, бочки и фонтаны добычи.
+- **Оборона куста** — режим tower defence. Волны врагов идут по дорогам от своих логов к кусту малины; вы строите башни на площадках (стрелковая вышка, морозный шпиль, катапульта, огненная жаровня, волшебный обелиск, стенная баллиста, котёл со смолой, звездочёт, грозовой шпиль, сердце зимы), улучшаете и продаёте их, чините то, что сгрызли бобры, и сами дерётесь мечом между волнами. Три карты: **лавовая**, **Кристальная поляна** и **осада замка** со стенами и воротами, которые ломают и чинят. Мини-боссы каждую третью волну, маркитант с лавкой на бой, подсказки для детей (магнит малины, карточка следующей волны, сигнал «башня в беде»).
+- **Сетевая игра** — небольшой сервер на Node с серверно-авторитарным боем по образцу Quake 3: сервер считает симуляцию, клиенты предсказывают своего героя; комнаты с кодом, готовность, чат, друзья, опоздавшие, история боёв с наградами. Волны масштабируются по числу игроков.
+- **Большой рукотворный остров** (256 × 256 м, семь биомов, форт, храм с ареной голема, деревня с кузнецом и торговцем), процедурные этажи подземелья из комнат-заготовок и **редактор уровней** в духе Unreal Engine с библиотекой из 179 готовых кусков мира.
+- **Всё — код.** Текстуры рисуются кодом, звуки и музыка синтезируются через Web Audio, формы блоков и декора генерируются в OBJ. Ни пайплайна ассетов, ни движка — TypeScript, three.js и Vite.
+
+## Быстрый старт
+
+Нужны Node (версия закреплена в `mise.toml`; проект запускает его через [mise](https://mise.jdx.dev/)) и современный браузер (Chrome, Safari, Firefox).
+
+```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run typecheck  # проверка типов
-npm run build    # проверка типов + сборка dist/index.html одним файлом
-npm run blocks   # формы блоков → assets/blocks/*.obj
-npm run decor    # формы декора → assets/decor/*.obj
-npm run map:playground  # плейграунд → assets/maps/playground.json (нужен Node ≥ 22.18)
-npm run map:rooms   # комнаты подземелья → assets/maps/rooms/*.json
-npm run map:island  # карта 1 «Остров» из пресетов → assets/maps/island.json
-npm run map:td      # карта «Оборона куста» → assets/maps/td.json (map:td2 — поляна, map:td3 — замок)
-npm run prefabs     # библиотека пресетов → assets/prefabs/*.json и витрина assets/maps/prefabs.json
-npm run server      # сервер сетевой игры: http://localhost:8787, база ./data/malina.db
-npm run test:net    # тесты сервера, сети и симуляции без браузера (node:test), секунды
+make play        # собирает игру и поднимает один сервер, который её же и отдаёт
 ```
 
-## Сервер сетевой игры
-`server/` — TypeScript без сборки (Node выполняет `.ts` сам) и SQLite (`node:sqlite`), WebSocket — `ws` (`wiki/design-multiplayer.md`, `wiki/adr-005-server-authoritative-battle.md`). Модель серверно-авторитарная, как в Quake 3: сервер считает бой без рендера (`src/game/`, `src/sim/`, `src/headless.ts`) и шлёт дельты снимков по `/game`, клиент предсказывает своего героя (`src/cgame/net-battle.ts`); на `/ws` — вход по имени и токену, профили героев, комнаты лагеря (код, места, готовность, хост), чат, итог и история боёв с наградами от сервера. Переменные: `PORT`, `HOST`, `DB_PATH`, `STATIC=dist` (отдавать и игру), `MAPS`. Игра ищет сервер по `?server=http://…`, на своём адресе или на `localhost:8787`. Общий протокол — `src/net/protocol.ts` и `src/net/game-protocol.ts`, клиент лобби — `src/net/client.ts`. Быстрые тесты сети и симуляции без браузера — `npm run test:net`.
+Откройте http://localhost:8787 — в главном меню можно играть одному или создать сетевую комнату. Для разработки `make dev` поднимает вместе игровой сервер (порт 8787) и клиент Vite (порт 5173).
 
-## Устройство кода
-- `src/level/` — уровни: `island-map.ts` генератор карты 1 «Остров», `level.ts` воксельная сетка и JSON, `palette.ts` палитра блоков, `obj.ts` и `shapes.ts` формы из OBJ, `atlas.ts` атлас текстур, `mesher.ts` рендер чанков и шейдер живой воды, `collide.ts` столкновения с высотой, `pathfind.ts` поиск пути героя по клику (A* по сетке 0,5 м с высотой), `playground-map.ts` генератор арены и витрины, `rooms.ts` комнаты-заготовки, `dungeon.ts` генератор этажа, `maps.ts` встроенные карты, `prefab-lib/` библиотека пресетов (типы, строители, запекание, постановка с поворотом), `prefabs-map.ts` витрина пресетов
-- `src/td/` — оборона куста (tower defence): `td.ts` режим, площадки, меню, волны, `tower.ts` башня, `towers.ts` виды, `bush.ts` куст, `lair.ts` логово, `wall.ts` стены и ворота замка (пролом, починка), `waves.ts` / `waves-glade.ts` / `waves-castle.ts` волны трёх карт, `scaling.ts` масштаб по волнам и игрокам, `hpbar.ts` полоска прочности башни и здоровья мини-босса, `lava-fx.ts` дымка и искры лавы, `mist-fx.ts` туман над лагерями врагов, `types.ts` формат `meta.td`
-- `src/dev/editor.ts` — редактор уровней (`?dev=editor`), `src/dev/editor/` — его части: `viewports.ts` вьюпорты, `outliner.ts` дерево карты, `prefabs.ts` префабы и превью, `ui.ts` меню и панель деталей, `weapons-panel.ts` оружие
-- `src/world.ts` — настройки мира карты (солнце, небо, дымка, погода, постобработка), поставленный свет; `src/weather.ts` — погода частицами
-- `src/weapons.ts` — оружие: модели, характеристики, баланс, активное оружие
-- `src/temper.ts`, `src/weapon-arts.ts`, `src/weapon-synergies.ts` — закалка оружия зачарованиями (цвет клинка, шлейф, искры, эффект попадания), 28 синергий пар на добивающем, спец-удары Q (`wiki/design-weapon-arts.md`)
-- `src/items.ts` — предметы и прокачка как в Minecraft Dungeons: каталог (ближнее, дальнее, броня, артефакты), сила, редкость, зачарования, профиль героя (уровень, опыт, очки, малина, души, стрелы), разбор
-- `src/gear.ts` — снаряжение в бою: урон от силы и зачарований, стрелы, артефакты, зелье, души, опыт, жизни
-- `src/merchants.ts` — лавки кузнеца и торговца: навес, прилавок, житель, имя над лавкой
-- `src/net/` — сетевая игра: `protocol.ts` общий протокол клиента и сервера, `client.ts` клиент сервера; `server/` — сам сервер
-- `src/menu/` — главное меню: `menu.ts` стартовый экран, `lobby.ts` лагерь (снаряжение, выбор карты, панель сетевой игры), `scene.ts` фон у костра, `campaign.ts` карты обороны, `session.ts` партия и адреса боя, `settings.ts` / `settings-panel.ts` настройки, `pause.ts` пауза и итог боя
-- `src/hud/` — HUD (`hud.ts`), инвентарь (`inventory.ts`), торговля (`shop.ts`), карта с туманом войны (`automap.ts`); `src/icons.ts` — пиксельные иконки предметов кодом
-- `src/main.ts` — точка входа: плейграунд или редактор
-- `src/tuning.ts` — настраиваемые числа героя и меча
-- `src/knight.ts` — герой: блочная модель с крупной головой и плащом, ходьба, перекат, падение с обрывов, меч с комбо; ввод — `KnightInput` (под сеть)
-- `src/lighting.ts` — свет и постобработка «как в Unreal»: солнце, небо, AO, bloom, цветокоррекция, дымка (`wiki/style-lighting.md`)
-- `src/trail.ts` — светящийся след клинка
-- `src/target.ts` — цель для ударов и взрывов
-- `src/collision.ts` — плоские препятствия и скольжение вдоль стен
-- `src/props.ts` — склад: бочки, сундуки, источник здоровья, ящики, лут; `src/loot-look.ts` — свечение, лучи и столбы света сокровищ
-- `src/nav.ts`, `src/ik.ts` — навигационная сетка и двухзвенная IK (для будущих врагов)
-- `src/fx.ts` — частицы, вспышки, взрывы, ударные волны, цифры урона
-- `src/dev/` — плейграунд: сцена, управление мышью (клик — идти / бить), слоты заклинаний, чучела, панель, оверлеи
-- `src/textures.ts` — пиксельные текстуры рисуются кодом
-- `src/audio.ts` — звуки синтезируются через Web Audio
+Игра по сети: запустите сервер там, куда дотянутся друзья (`PORT`, `HOST`, `DB_PATH`, `STATIC=dist`, чтобы он отдавал и игру), откройте игру с `?server=http://ваш-хост:8787`, создайте комнату и поделитесь кодом. Профили, комнаты и историю боёв сервер хранит в SQLite.
+
+Прочие скрипты (`npm run …`): `typecheck`, `build`, `test:net` (тесты сервера, сети и симуляции без браузера), `map:td` / `map:td2` / `map:td3` / `map:island` / `map:playground` / `map:rooms` (пересобрать карты из генераторов), `prefabs`, `blocks`, `decor`. `make check` — типы и быстрые тесты.
+
+## Как играть
+
+- **ЛКМ по земле** — идти туда (путь в обход стен, по ступеням, вброд через воду); **ЛКМ по врагу** — подойти и ударить, держать — комбо из трёх; **Shift + ЛКМ** — бить на месте.
+- **WASD** — ходьба клавишами, **Space** — перекат, **ПКМ** — лук, **Q** — спец-удар оружия, **1 / 2 / 3** — артефакты, **E** — зелье, **F** — использовать / говорить / строить / чинить, **I** — инвентарь, **M** / **Tab** — карта, **G** — позвать следующую волну раньше срока (бонус), **Esc** — пауза.
+- Оборона куста: подойдите к площадке и нажмите **F** (или кликните по ней) — откроется меню башен; цифры выбирают башню, то же меню улучшает до III уровня или продаёт за 70 %. Уберегите куст до конца всех волн.
+
+Клавиши разработчика (**F1**–**F10**: панель параметров, коллайдеры, телеметрия, бессмертие, замедление, FPS, редактор и прочее) и полное руководство по редактору — в вики: [design-editor.md](wiki/design-editor.md), [design-inventory.md](wiki/design-inventory.md), [design-tower-defence.md](wiki/design-tower-defence.md).
+
+Полезные адреса: `?map=td` / `td2` / `td3` (карты обороны), `?map=island`, `?map=prefabs` (витрина пресетов), `?map=dungeon&seed=42&floor=2`, `?dev=playground` (тестовая арена), `?dev=editor` (редактор уровней).
+
+## Где что лежит
+
+| Папка | Что внутри |
+|---|---|
+| `src/sim/`, `src/game/` | Детерминированная симуляция боя и логика матча — без DOM, работает в браузере и в Node |
+| `src/cgame/` | Клиентская часть боя: очередь событий, ввод, предсказание, виды по снимкам, меню обороны и HUD |
+| `src/net/`, `server/` | Протокол, транспорты, кодек дельта-снимков; сервер на Node (комнаты, профили, матчи, SQLite) |
+| `src/td/` | Оборона куста: башни, волны, стены и ворота, логова, масштаб |
+| `src/mobs/`, `src/bosses/` | Враги Ордена, зверьё, мини-боссы и боссы |
+| `src/level/`, `src/world/` | Воксельные уровни: блоки, палитра, мешер, столкновения, поиск пути, генераторы карт, библиотека пресетов, стриминг |
+| `src/knight.ts`, `src/gear.ts`, `src/items.ts`, `src/weapons.ts`, `src/magic/` | Герой, снаряжение, предметы и зачарования, оружие, заклинания |
+| `src/menu/`, `src/hud/` | Главное меню, лагерь, HUD, инвентарь, лавка, карта |
+| `src/dev/` | Плейграунд и редактор уровней |
+| `assets/` | Карты (JSON), формы блоков и декора (OBJ), пресеты |
+| `tests/`, `server/test/` | Сквозные тесты Playwright и быстрые тесты Node |
+| `wiki/` | Дизайн-вики — начинать с [wiki/index.md](wiki/index.md) |
+
+Обзор архитектуры: [wiki/arch-layers.md](wiki/arch-layers.md). Бриф проекта и текущее состояние: [wiki/project-brief.md](wiki/project-brief.md).
+
+## Тесты
+
+```bash
+mise exec -- npm run build
+PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise exec -- npx playwright test
+```
+
+Сквозные тесты идут на установленном Google Chrome (без `playwright install`, см. [wiki/dev-testing.md](wiki/dev-testing.md)); `npm run test:net` прогоняет тесты сервера и симуляции за секунды.

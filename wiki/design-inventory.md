@@ -1,131 +1,131 @@
-# HUD, инвентарь и прокачка снаряжения в духе Minecraft Dungeons
+# HUD, inventory and gear progression in the spirit of Minecraft Dungeons
 
-Версия 1.4 от 25.10.2026: ~~у торговца вкладка «Ауры»~~ — убрана в тот же день, ауры падают с боссов этажа (раздел 9). Версия 1.3 от 25.10.2026: торговцы — сетка всех товаров с ценой по характеристикам, всё оружие в инвентаре (раздел 9). Версия 1.2 от 24.10.2026: волшебные сундуки, яркие трофеи и малина со спецэффектами и звуком (раздел 12). Версия 1.1: броня и лук на герое, кузнец и торговец, карта в стиле Diablo, чёрные квадраты у заклинаний. Дополняет [design-dungeon.md](design-dungeon.md) (оружие, усиления) и [design-editor.md](design-editor.md) (вкладка «Оружие» — модели и удары ближнего боя). Как проверять — [dev-testing.md](dev-testing.md).
+Version 1.4 of 2026-10-25: ~~the merchant has an "Auras" tab~~ — removed the same day, auras drop from the floor's bosses (section 9). Version 1.3 of 2026-10-25: merchants — a grid of all goods with prices by stats, all weapons in the inventory (section 9). Version 1.2 of 2026-10-24: magic chests, bright loot and raspberries with special effects and sound (section 12). Version 1.1: armour and bow on the hero, blacksmith and merchant, a Diablo-style map, black squares around spells. Complements [design-dungeon.md](design-dungeon.md) (weapons, buffs) and [design-editor.md](design-editor.md) (the "Weapons" tab — melee models and strikes). How to test — [dev-testing.md](dev-testing.md).
 
-Цель — максимально близко к Minecraft Dungeons по виду и правилам, но под ПК в браузере: всё управляется мышью и клавиатурой, геймпадные подсказки (LB/RB, A/B/X/Y) заменены клавишами.
+The goal is to be as close as possible to Minecraft Dungeons in look and rules, but for a PC in a browser: everything is controlled with mouse and keyboard, gamepad hints (LB/RB, A/B/X/Y) are replaced with keys.
 
-Код: данные и правила — `src/items.ts`, бой — `src/gear.ts`, HUD — `src/hud/hud.ts`, инвентарь — `src/hud/inventory.ts`, карта — `src/hud/automap.ts`, торговцы — `src/merchants.ts` и `src/hud/shop.ts`, иконки — `src/icons.ts`.
+Code: data and rules — `src/items.ts`, combat — `src/gear.ts`, HUD — `src/hud/hud.ts`, inventory — `src/hud/inventory.ts`, map — `src/hud/automap.ts`, merchants — `src/merchants.ts` and `src/hud/shop.ts`, icons — `src/icons.ts`.
 
 ## 1. HUD
 
-Снизу по центру — тёмная панель со скошенными краями, как в MCD (по скриншотам 5 и 6 из запроса):
+Bottom centre — a dark panel with bevelled edges, as in MCD (from screenshots 5 and 6 of the request):
 
-| Слева направо | Клавиша | Что |
+| Left to right | Key | What |
 |---|---|---|
-| Спираль и число | — | Свободные очки зачарования |
-| Сундук (фиолетовая рамка) | I | Открыть инвентарь (клик тоже) |
-| Три гнезда артефактов | 1, 2, 3 | Иконка, тёмная заливка перезарядки сверху и секунды; пустое — «+»; действующий (тотем, сапоги) светится золотом; не хватает душ — иконка серая |
-| Полоса под артефактами | — | Души (голубая), до 100 |
-| Сердце в щите | — | Здоровье: красное убывает сверху; ниже — жизни «3 ♥»; при F4 — числа |
-| Зелье | E | Перезарядка 20 с |
-| Карта | M | Полная карта (раздел 7) |
-| Двойной шеврон | Space | Перекат, серый на перезарядке |
-| Шестиугольник со стрелами | ПКМ | Число стрел сверху; кончились — красное |
-| Малина | — | Валюта (в MCD — изумруды) |
-| Полоса под правой половиной | — | Опыт до следующего уровня, «LV n» |
+| Spiral and number | — | Free enchantment points |
+| Chest (violet frame) | I | Open the inventory (click works too) |
+| Three artifact slots | 1, 2, 3 | Icon, dark cooldown fill from the top and seconds; empty — "+"; active (totem, boots) glows gold; not enough souls — the icon is grey |
+| Bar under the artifacts | — | Souls (blue), up to 100 |
+| Heart in a shield | — | Health: the red drains from the top; below — lives "3 ♥"; with F4 — numbers |
+| Potion | E | Cooldown 20 s |
+| Map | M | Full map (section 7) |
+| Double chevron | Space | Dodge roll, grey on cooldown |
+| Hexagon with arrows | RMB | Arrow count on top; run out — red |
+| Raspberry | — | Currency (emeralds in MCD) |
+| Bar under the right half | — | Experience to the next level, "LV n" |
 
-Справа сверху под заданием — мини-карта (раздел 7). Слева сверху — действующие эффекты ромбами (скорость, исцеление, «×35 Мультивыстрел», «Бесконечность», бессмертие), справа сверху — задание пиксельным шрифтом и подзаголовок жёлтым. По центру сверху — баннер («Уровень 2», найденный предмет).
+Top right under the quest — the mini-map (section 7). Top left — active effects as diamonds (speed, healing, "×35 Multishot", "Infinity", immortality), top right — the quest in a pixel font and a subtitle in yellow. Top centre — a banner ("Level 2", a found item).
 
-Размеры — в `em` от шрифта корня `clamp(10px, min(0.84vw, 1.5vh), 22px)`: при 1920 × 1080 слот ≈ 62 px, как в MCD. Цифры и заголовки — Press Start 2P (с кириллицей), текст — Rubik.
+Sizes — in `em` from the root font `clamp(10px, min(0.84vw, 1.5vh), 22px)`: at 1920 × 1080 a slot ≈ 62 px, as in MCD. Digits and headings — Press Start 2P (with Cyrillic), text — Rubik.
 
-## 2. Инвентарь
+## 2. Inventory
 
-`I` или `Tab` — открыть; игра на паузе, как в одиночной MCD. Фон — бордово-фиолетовый градиент с крупными «пикселями».
+`I` or `Tab` — open; the game is paused, as in single-player MCD. Background — a maroon-violet gradient with large "pixels".
 
-- **Слева — герой.** 3D-модель того же `Knight` с надетым оружием (свой рендер на холсте, медленно вращается, тянуть мышью — крутить). Вокруг — гнёзда: ближнее оружие, броня, дальнее; снизу три артефакта; слева шестиугольник уровня с кольцом опыта, справа — сила.
-- **В центре — вкладки и сетка.** Все, ближний бой, дальний бой, броня, артефакты, зачарованные; `Q` / `E` — листать. Сетка 3 в ряд с прокруткой, пустые клетки с крестом добивают до полного ряда.
-- **Плитка предмета:** рамка и клетчатый уголок цвета редкости (обычное — серое, редкое — зелёное, уникальное — оранжевое), иконка, сила со значком вида внизу справа, вложенные очки со спиралью сверху слева, зачарованные — фиолетовое сияние с бегущим бликом, зелёная ▲ / красная ▼ — сильнее или слабее надетого, жёлтый уголок — новый (пропадает при выборе).
-- **Справа — карточка:** сила, плашка редкости, «Надето», название пиксельным шрифтом, крупная иконка, свойства ромбами, описание; у ближнего оружия — полосы «Сила / Скорость / Площадь» (красная риска — надетое); снизу три ромба гнёзд зачарований. У ближнего оружия ещё строки закалки: спец-удар Q, облик клинка и синергии пар ([design-weapon-arts.md](design-weapon-arts.md)).
-- **Мышь:** клик — выбрать, двойной клик или ПКМ — надеть, перетащить на гнездо героя — надеть туда (артефакт — в нужное гнездо). **Клавиши:** стрелки — по сетке, Enter — надеть, X — разобрать, Esc / I — назад и закрыть.
-- **Разбор:** панель «Выручка за разбор» — малина и потраченные очки; надетое не разбирается.
+- **Left — the hero.** A 3D model of the same `Knight` with the equipped weapon (its own render on a canvas, slowly rotates, drag with the mouse — to turn). Around it — slots: melee weapon, armour, ranged; below three artifacts; on the left a level hexagon with an experience ring, on the right — power.
+- **Centre — tabs and grid.** All, melee, ranged, armour, artifacts, enchanted; `Q` / `E` — flip through. A grid of 3 per row with scrolling, empty cells with a cross fill out the last row.
+- **Item tile:** a frame and a chequered corner in the rarity colour (common — grey, rare — green, unique — orange), an icon, power with the kind glyph bottom right, invested points with a spiral top left, enchanted — a violet glow with a running highlight, a green ▲ / red ▼ — stronger or weaker than the equipped one, a yellow corner — new (disappears on selection).
+- **Right — the card:** power, rarity badge, "Equipped", the name in a pixel font, a large icon, properties as diamonds, description; for melee weapons — "Power / Speed / Area" bars (red tick — the equipped one); below three enchantment-slot diamonds. Melee weapons also have temper lines: weapon art Q, blade look and pair synergies ([design-weapon-arts.md](design-weapon-arts.md)).
+- **Mouse:** click — select, double click or RMB — equip, drag onto a hero slot — equip there (an artifact — into the chosen slot). **Keys:** arrows — across the grid, Enter — equip, X — salvage, Esc / I — back and close.
+- **Salvage:** the "Salvage proceeds" panel — raspberries and the points spent; the equipped item cannot be salvaged.
 
-## 3. Предметы
+## 3. Items
 
-`ItemDef` — запись каталога `ITEMS`: вид (`melee`, `ranged`, `armor`, `artifact`), редкость, иконка, описание и числа вида. `Item` — экземпляр в профиле: `uid`, `def`, сила `power`, гнёзда зачарований, флаг «новый».
+`ItemDef` — a record of the catalogue `ITEMS`: kind (`melee`, `ranged`, `armor`, `artifact`), rarity, icon, description and the kind's numbers. `Item` — an instance in the profile: `uid`, `def`, power `power`, enchantment slots, the "new" flag.
 
-- **Ближнее оружие** ссылается на `weapons.ts` (`weapon: 'claymore'`) — модель и три удара берутся оттуда; надел — `applyWeapon` и `Knight.setWeapon`. `?weapon=<id>` в адресе — поверх надетого, для отладки.
-- **Дальнее:** урон, пауза между выстрелами, скорость и дальность стрелы, стрел за выстрел (веер «Звёздного лука»), отбрасывание.
-- **Броня:** здоровье (прибавка к 100) и свойства: души, урон артефактов и ближнего боя, перезарядки артефактов и переката, лечение зельем, стрел в связке.
-- **Артефакты:** огненная стрела (ракета к курсору, взрыв), тотем исцеления, сапоги скорости, рог ветра (отбрасывание вокруг), молниевый куб (три ближайшие цели), жнец душ (тратит 40 душ, взрыв вокруг). Взрывы поджигают бочки склада. В те же гнёзда надеваются **заклинания** — стартовые искра, огненный шар, ледяной дождь и лечение; держи клавишу — заряд ([design-spells.md](design-spells.md)). Четвёртое гнездо — **аура** (R): шкала от урона и вспышка ×3.
-- **Сила** растит числа: ×(1 + 0,06 · (сила − 1)). Сила героя — среднее ближнего, брони, дальнего и среднего артефактов.
+- **Melee weapons** reference `weapons.ts` (`weapon: 'claymore'`) — the model and three strikes are taken from there; equipped — `applyWeapon` and `Knight.setWeapon`. `?weapon=<id>` in the address — on top of the equipped one, for debugging.
+- **Ranged:** damage, pause between shots, arrow speed and range, arrows per shot (the "Star Bow" fan), knockback.
+- **Armour:** health (added to 100) and properties: souls, artifact and melee damage, artifact and dodge-roll cooldowns, potion healing, arrows per bundle.
+- **Artifacts:** fire arrow (a rocket to the cursor, explosion), healing totem, boots of speed, horn of wind (knockback around), lightning cube (the three nearest targets), soul reaper (spends 40 souls, an explosion around). Explosions ignite the storage-yard barrels. **Spells** are equipped into the same slots — the starters spark, fireball, ice rain and heal; hold the key — charge ([design-spells.md](design-spells.md)). The fourth slot — **aura** (R): a meter from damage and a ×3 flare.
+- **Power** grows the numbers: ×(1 + 0.06 · (power − 1)). The hero's power — the average of melee, armour, ranged and the average of the artifacts.
 
-## 4. Прокачка — зачарования
+## 4. Progression — enchantments
 
-Как в MCD: у предмета (кроме артефактов) 1, 2 или 3 гнезда — по редкости. В гнезде три варианта (`rollEnchantSlots`, детерминированно от `uid`); на уникальном один из вариантов первого гнезда — мощный (фиолетовое свечение). Выбрал вариант — остальные в гнезде закрыты; ступени I → II → III стоят 1, 2, 3 очка (мощное — на 1 дороже). Очко зачарования — за каждый новый уровень героя; разбор возвращает все вложенные очки.
+As in MCD: an item (except artifacts) has 1, 2 or 3 slots — by rarity. A slot has three options (`rollEnchantSlots`, deterministic from `uid`); on a unique item one of the first slot's options is powerful (a violet glow). Choose an option — the rest in the slot are closed; levels I → II → III cost 1, 2, 3 points (a powerful one — 1 more). An enchantment point — for every new hero level; salvage returns all invested points.
 
-| Вид | Зачарования |
+| Kind | Enchantments |
 |---|---|
-| Ближний бой | Острота, Критический удар (×3), Вампиризм, Отбрасывание, Вихрь (шире волна добивающего), Огненный аспект, Вытягивание душ, **Сокрушение** (волна от любого удара) |
-| Дальний бой | Сила, Мультивыстрел (+2 стрелы), Бесконечность, Ускорение, Отдача, **Пронзание** |
-| Броня | Крепость (+здоровье), Перезарядка артефактов, Сборщик душ, Лекарь (зелье), Акробат (перекат), **Восстановление** (здоровье в секунду) |
+| Melee | Sharpness, Critical Hit (×3), Vampirism, Knockback, Whirlwind (a wider finisher wave), Fire Aspect, Soul Siphon, **Smiting** (a wave from any strike) |
+| Ranged | Power, Multishot (+2 arrows), Infinity, Haste, Recoil, **Piercing** |
+| Armour | Fortitude (+health), Artifact Cooldown, Soul Gatherer, Healer (potion), Acrobat (dodge roll), **Regeneration** (health per second) |
 
-`Profile.stats()` сводит надетое в `GearStats` — множители, которые читают `gear.ts` и сцена.
+`Profile.stats()` folds the equipped items into `GearStats` — the multipliers read by `gear.ts` and the scene.
 
-## 5. Бой, опыт, души, жизни
+## 5. Combat, experience, souls, lives
 
-- Удар меча: урон × `meleeMult`, крит, огонь, отбрасывание × `knockMult`, волна × `waveMult` (`playground.ts → strike`).
-- Каждое попадание (меч, стрела, артефакт) даёт душу (больше со свойствами и зачарованиями) и опыт ≈ четверть урона. Уровень: 40 + 20 · (n − 1) опыта; новый уровень — баннер и +1 очко.
-- Стрелы летят по прямой, упираются в стены (`terrain.wallHit`), пробивают цели с «Пронзанием». Связка стрел (12 + свойства брони) — в каждом сундуке, там же случайный предмет около силы героя (обычные 68 %, редкие 26 %, уникальные 6 %) со столбом света цвета редкости (раздел 12).
-- Жизни: три; герой упал — минус жизнь, все потеряны — на плейграунде восстанавливаются.
+- A sword strike: damage × `meleeMult`, crit, fire, knockback × `knockMult`, wave × `waveMult` (`playground.ts → strike`).
+- Every hit (sword, arrow, artifact) gives a soul (more with properties and enchantments) and experience ≈ a quarter of the damage. Level: 40 + 20 · (n − 1) experience; a new level — a banner and +1 point.
+- Arrows fly straight, stop at walls (`terrain.wallHit`), pierce targets with "Piercing". A bundle of arrows (12 + armour properties) — in every chest, along with a random item around the hero's power (common 68 %, rare 26 %, unique 6 %) with a pillar of light in the rarity colour (section 12).
+- Lives: three; the hero falls — minus a life, all lost — on the playground they are restored.
 
-## 6. Хранение
+## 6. Storage
 
-Профиль (`ProfileData`) — `localStorage['malina.profile']`: уровень, опыт, очки, малина, души, стрелы, предметы, надетое. Первый запуск — стартовый набор: надеты меч стража, куртка странника, лук, огненная стрела и тотем; в сундуке ещё 19 предметов всех видов и редкостей и 3 очка зачарования, чтобы сразу примерить и прокачать. Сбросить — `__malina.profile.reset()`.
+The profile (`ProfileData`) — `localStorage['malina.profile']`: level, experience, points, raspberries, souls, arrows, items, equipped. First launch — the starter set: equipped are the Warden's Sword, the Wanderer's Jacket, the bow, the fire arrow and the totem; in the chest 19 more items of all kinds and rarities and 3 enchantment points, to try on and level right away. Reset — `__malina.profile.reset()`.
 
-## 7. Карта в стиле Diablo
+## 7. Diablo-style map
 
-`AutoMap` строится из блоков уровня: колонна — «пол» (верх выше соседей меньше чем на 1,5 м), «вода» или «стена». Туман войны: открываются клетки в радиусе 13 вокруг героя, разведанное рисуется на холсте 6 px на клетку — тёмно-синяя заливка, белый пиксельный контур у стен и пустоты, редкие белые ромбики, как на карте MCD (скриншоты 11, 12).
+`AutoMap` is built from the level's blocks: a column is "floor" (the top is higher than the neighbours by less than 1.5 m), "water" or "wall". Fog of war: cells within a radius of 13 around the hero are revealed, the explored part is drawn on a canvas at 6 px per cell — a dark blue fill, a white pixel outline at walls and voids, sparse white diamonds, as on the MCD map (screenshots 11, 12).
 
-Рисуется в изометрии камеры: поворот на 45° и сжатие по вертикали 0,7, так что верх карты совпадает с верхом экрана, как автокарта Diablo II.
+Drawn in the camera's isometry: a 45° rotation and a vertical squash of 0.7, so the top of the map matches the top of the screen, like the Diablo II automap.
 
-- **Мини-карта** справа сверху: вокруг героя, края растворяются; белая стрелка — герой и куда смотрит; значки сундуков (открытые серые), источника здоровья, кузнеца и торговца. Клик — полная карта.
-- **Tab — карта поверх игры** (Diablo II): только контур и едва заметная заливка во весь экран, игра идёт.
-- **M — полная карта** (MCD): тёмный экран с рамкой, название уровня жёлтым пиксельным шрифтом, разведанное вписано в окно, внизу «Сундуков открыто a / b» и «Исследовано n %».
+- **Mini-map** top right: around the hero, edges dissolve; a white arrow — the hero and where he looks; icons of chests (opened ones grey), the health fountain, the blacksmith and the merchant. Click — the full map.
+- **Tab — map over the game** (Diablo II): only the outline and a barely visible fill across the whole screen, the game keeps running.
+- **M — full map** (MCD): a dark screen with a frame, the level name in a yellow pixel font, the explored part fitted into the window, at the bottom "Chests opened a / b" and "Explored n %".
 
-## 8. Броня и лук на герое
+## 8. Armour and bow on the hero
 
-`ArmorLook` у брони в каталоге: цвета нагрудника и канта, наплечники, головной убор (капюшон, шлем с гребнем, шапка, волчья голова с ушами), подол, цвет плаща, светящийся камень. `Knight.setArmor` собирает детали поверх тела (они вспыхивают при уроне вместе с телом), в инвентаре 3D-герой одет так же.
+`ArmorLook` on armour in the catalogue: colours of the breastplate and trim, pauldrons, headwear (hood, crested helmet, cap, wolf head with ears), a skirt, cloak colour, a glowing gem. `Knight.setArmor` assembles the parts over the body (they flash on damage together with the body), the 3D hero in the inventory is dressed the same.
 
-`BowLook` у дальнего оружия: лук (дуга из коробок, тетива, у «Звёздного» — светящиеся концы) или арбалет. Лук в левой руке виден только при выстреле: `Knight.shootPose` поворачивает героя к цели, левая рука с луком вперёд, правая натягивает тетиву; меч остаётся в правой, как в MCD.
+`BowLook` on ranged weapons: a bow (an arc of boxes, a string, the "Star" bow has glowing tips) or a crossbow. The bow in the left hand is visible only on a shot: `Knight.shootPose` turns the hero to the target, the left hand with the bow forward, the right draws the string; the sword stays in the right, as in MCD.
 
-## 9. Торговцы
+## 9. Merchants
 
-В северо-западном углу плейграунда — лавки как в лагере MCD (скриншоты 7–10): **кузнец** — каменная стена с горном (мерцающий свет) и наковальня, навес в жёлто-бирюзовую полоску, у жителя светятся фиолетовые глаза; **торговец** — ящики, бочка и малина на прилавке, навес в красно-оранжевую. Над лавками — имена пиксельным шрифтом, житель поворачивает голову к герою; лавка — препятствие для героя и пути. F у прилавка — окно торговли, игра на паузе.
+In the north-west corner of the playground — shops as in the MCD camp (screenshots 7–10): the **blacksmith** — a stone wall with a forge (flickering light) and an anvil, a yellow-and-turquoise striped awning, the villager has glowing violet eyes; the **merchant** — crates, a barrel and raspberries on the counter, a red-and-orange awning. Above the shops — names in a pixel font, the villager turns his head toward the hero; a shop is an obstacle for the hero and for pathing. F at the counter — the trade window, the game is paused.
 
-**Ничего наугад** (с 25.10.2026, ~~случайный товар «?», особый товар, 1/2/3 — купить~~): окно — сетка всех товаров вкладками (Q / E), под каждым — цена, у купленного раньше — «есть», ▲ / ▼ — сильнее или слабее надетого. Справа карточка выбранного: сила, редкость, урон за три удара, урон в секунду, дальность и крит, спец-удар Q (у оружия), свойства, описание, цена и «Купить». Сила товара — сила героя. Код — `src/hud/shop.ts`.
+**Nothing at random** (since 2026-10-25, ~~a random "?" item, a special item, 1/2/3 — buy~~): the window — a grid of all goods in tabs (Q / E), under each — the price, one bought earlier — "owned", ▲ / ▼ — stronger or weaker than the equipped one. On the right the card of the selected one: power, rarity, damage over three strikes, damage per second, range and crit, weapon art Q (for weapons), properties, description, price and "Buy". The goods' power — the hero's power. Code — `src/hud/shop.ts`.
 
-| Кто | Вкладки |
+| Who | Tabs |
 |---|---|
-| Кузнец | ближний бой (все 16 оружий), дальний бой, броня; справа — перековка надетого: +1 к силе за 30 + 15 · сила предмета |
-| Торговец | ближний бой, дальний бой (и связка стрел × 24 за 20), броня, артефакты, обычные заклинания ([design-spells.md](design-spells.md), 110 + 12 · сила) |
+| Blacksmith | melee (all 16 weapons), ranged, armour; on the right — reforging the equipped item: +1 power for 30 + 15 · item power |
+| Merchant | melee, ranged (and a bundle of arrows × 24 for 20), armour, artifacts, common spells ([design-spells.md](design-spells.md), 110 + 12 · power) |
 
-**Цена — по характеристикам** (`src/prices.ts`): стоимость × редкость (обычное 1, редкое 1,45, уникальное 2,1) × (1 + 0,15 · (сила − 1)), с округлением до 5. Стоимость: ближнее оружие — оценка баланса `weaponMetrics().score` (меч стража = 100: урон в секунду, площадь, дальность, скорость); дальнее — 3,6 · урон в секунду + 2 · дальность + 10 · отбрасывание; броня — 20 + 1,4 · здоровье + 0,45 · сумма свойств; артефакт — от силы, радиуса, длительности и перезарядки. При силе 1: кастеты 85, меч 100, катана 170, клинки понтифика 215, нагакиба 275, убийца драконов 290; лук 95, лук-близнец 365; куртка 60, доспех чемпиона 275.
+**Price — by stats** (`src/prices.ts`): value × rarity (common 1, rare 1.45, unique 2.1) × (1 + 0.15 · (power − 1)), rounded to 5. Value: melee weapons — the balance estimate `weaponMetrics().score` (Warden's Sword = 100: damage per second, area, range, speed); ranged — 3.6 · damage per second + 2 · range + 10 · knockback; armour — 20 + 1.4 · health + 0.45 · the sum of properties; artifact — from power, radius, duration and cooldown. At power 1: knuckles 85, sword 100, katana 170, pontiff's blades 215, nagakiba 275, dragonslayer 290; bow 95, twin bow 365; jacket 60, champion's armour 275.
 
-Купленное показывается справа — «Надеть» (Enter) или «В инвентарь». Клавиши: стрелки — выбор, Enter или двойной клик — купить, Esc или F — закрыть. Новый профиль начинает с 250 малины. Ауры не продаются: они падают с боссов этажа ([design-bosses.md](design-bosses.md), раздел 4), на плейграунде лежат в инвентаре.
+The purchase is shown on the right — "Equip" (Enter) or "To inventory". Keys: arrows — select, Enter or double click — buy, Esc or F — close. A new profile starts with 250 raspberries. Auras are not sold: they drop from the floor's bosses ([design-bosses.md](design-bosses.md), section 4), on the playground they lie in the inventory.
 
-**Всё оружие в инвентаре:** на плейграунде все 16 оружий ближнего боя лежат в инвентаре с начала (стартовый набор), в старые сохранения недостающее докладывается при загрузке.
+**All weapons in the inventory:** on the playground all 16 melee weapons lie in the inventory from the start (the starter set), old saves get the missing ones added on load.
 
-## 10. Чёрные квадраты у заклинаний (исправлено)
+## 10. Black squares around spells (fixed)
 
-Вспышки заклинаний и взрывов — спрайты (`fx.flash`). Проход затенения GTAO прятал прозрачные сетки, но не спрайты, и те попадали в буфер нормалей непрозрачными квадратами — AO рисовал вокруг них тёмные прямоугольники. Теперь `SolidAOPass` прячет и спрайты, и точки (`src/lighting.ts`). Ещё взрывы артефактов (огненная стрела, жнец душ) — без тёмного дыма `fx.explosion`, а перезарядка на слоте — светлая тень и серая иконка вместо почти чёрной заливки.
+Spell and explosion flashes are sprites (`fx.flash`). The GTAO pass hid transparent meshes but not sprites, and those got into the normal buffer as opaque squares — AO drew dark rectangles around them. Now `SolidAOPass` hides sprites and points too (`src/lighting.ts`). Also artifact explosions (fire arrow, soul reaper) — without the dark smoke of `fx.explosion`, and the cooldown on a slot — a light shade and a grey icon instead of an almost black fill.
 
-## 11. Клавиши (изменения)
+## 11. Keys (changes)
 
-E — теперь зелье (как в MCD), использовать и торговать — **F**; M — полная карта, Tab — карта поверх игры, звук — **F9**; 1/2/3 — артефакты вместо пустых слотов заклинаний; ПКМ — лук; I — инвентарь; H — подсказка по управлению (сама прячется через 15 с).
+E — now the potion (as in MCD), use and trade — **F**; M — full map, Tab — map over the game, sound — **F9**; 1/2/3 — artifacts instead of empty spell slots; RMB — bow; I — inventory; H — controls hint (hides itself after 15 s).
 
-## 12. Сундуки, трофеи и малина — чтобы хотелось открыть
+## 12. Chests, loot and raspberries — so you want to open them
 
-Цель — детский восторг от каждой находки. Один тип сундука на всю игру. Код: сундук и лут — `src/props.ts`, трофей на полу — `itemLootMesh` в `src/gear.ts`, общие текстуры свечения — `src/loot-look.ts`, звуки — `src/audio.ts` (раздел «сокровища»).
+The goal is a child's delight at every find. One chest type for the whole game. Code: chest and loot — `src/props.ts`, the loot on the floor — `itemLootMesh` in `src/gear.ts`, shared glow textures — `src/loot-look.ts`, sounds — `src/audio.ts` (the "treasures" section).
 
-- **Сундук** — тёмно-синий с золотой оковкой (как «обсидиановый» и золотой сундуки MCD), по углам и на крышке камни, переливающиеся радугой, из щели под крышкой сочится свет, под сундуком — цветной ореол, вокруг поднимаются искры. Подошёл — тихий перезвон.
-- **Открытие (F):** 0,6 с сундук трясётся, приседает, крышка подскакивает, искры втягиваются в щель, звук — гул вверх и ускоряющийся стук. Затем крышка распахивается на пружине, бьёт столб света, звезда из лучей, три цветных кольца, радужное конфетти, тряска камеры, звук — удар и фанфара с колокольчиками. Лут вылетает фонтаном по одному (каждые 0,08 с, каждый «бульк» на ноту выше), за ним светящийся хвост. Открытый сундук ещё пару секунд искрится изнутри, камни гаснут.
-- **Трофей на полу:** крупная иконка над крутящейся звездой лучей, столб света цвета редкости с белой сердцевиной (у уникальных выше, плюс золотой), ореол, кольца-«сонар» по земле, искры. Приземлился — кольцо, вспышка и долгий звон (чем реже, тем выше). Подобрал — взрыв искр цвета редкости и фанфара. Трофей можно подобрать через 1,8 с после вылета — чтобы успеть увидеть столб.
-- **Малина** — крупная ягода из косточек-кубиков с зелёной чашечкой, розовый ореол, блик-звёздочка, пятно света на земле; притягивается к герою издалека (2,4 м). Подобрал — розовая вспышка, кольцо, брызги сока, «чпок» с колокольчиком; серия подряд (меньше 0,9 с между ягодами) поднимается по пентатонике. Счётчик малины в HUD подпрыгивает, надпись «+N малины» крупная и светится.
-- Лут не лежит на сундуках и бочках — соскальзывает в сторону. Деревянный ящик ломается с треском досок.
+- **The chest** — dark blue with gold fittings (like the "obsidian" and gold chests of MCD), gems on the corners and the lid shimmering with a rainbow, light seeps from the gap under the lid, under the chest — a coloured halo, sparks rise around. Walk up — a quiet chime.
+- **Opening (F):** for 0.6 s the chest shakes, squats, the lid hops, sparks are sucked into the gap, the sound — a rising hum and an accelerating knock. Then the lid springs open, a pillar of light bursts out, a star of rays, three coloured rings, rainbow confetti, camera shake, the sound — a thump and a fanfare with bells. The loot flies out as a fountain one by one (every 0.08 s, each "plop" a note higher), with a glowing tail behind. The opened chest keeps sparkling inside for a couple more seconds, the gems fade.
+- **Loot on the floor:** a large icon above a spinning star of rays, a pillar of light in the rarity colour with a white core (taller for uniques, plus gold), a halo, "sonar" rings along the ground, sparks. Landed — a ring, a flash and a long chime (the rarer, the higher). Picked up — a burst of sparks in the rarity colour and a fanfare. Loot can be picked up 1.8 s after flying out — so that you have time to see the pillar.
+- **Raspberry** — a large berry made of drupelet cubes with a green calyx, a pink halo, a star highlight, a spot of light on the ground; drawn to the hero from afar (2.4 m). Picked up — a pink flash, a ring, a splash of juice, a "pop" with a bell; a streak (less than 0.9 s between berries) rises up the pentatonic. The raspberry counter in the HUD bounces, the "+N raspberries" caption is large and glows.
+- Loot does not lie on chests and barrels — it slides off to the side. A wooden crate breaks with the crack of boards.
 
-## 13. Дальше
+## 13. Next
 
-- «Позолоченные» предметы, подарки, таинственный торговец.
-- Своя анимация натяжения тетивы и стрелы на луке.
-- Души от врагов, когда появятся враги; артефакты, которые тратят души, станут важнее.
-- Сеть: профиль у каждого игрока свой, лут — на всех.
+- "Gilded" items, gifts, a mysterious merchant.
+- Own animation of drawing the string and the arrow on the bow.
+- Souls from enemies, when enemies appear; artifacts that spend souls will matter more.
+- Network: every player has their own profile, loot — for everyone.

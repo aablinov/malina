@@ -1,42 +1,42 @@
-# Источник: мир Minecraft Dungeons — двор, река, скалы, холмы, портал (9 скриншотов)
+# Source: the world of Minecraft Dungeons — yard, river, cliffs, hills, portal (9 screenshots)
 
-Добавлено 24.10.2026. Скриншоты миссии «W mroczną otchłań» (Unreal Engine 4), камера сверху под углом, день. Файлы — `mcd-world/`. Источник не правим; выводы — в [../style-world.md](../style-world.md) (наборы блоков и сборок), дороги — в [../style-terrain.md](../style-terrain.md).
+Added 2026-10-24. Screenshots of the mission "W mroczną otchłań" (Unreal Engine 4), camera from above at an angle, day. Files — `mcd-world/`. The source is not edited; conclusions — in [../style-world.md](../style-world.md) (block and kit sets), roads — in [../style-terrain.md](../style-terrain.md).
 
 | | |
 |---|---|
-| ![Дороги](mcd-world/mcd-09-roads.webp) | ![Двор со складом](mcd-world/mcd-10-yard.webp) |
-| **9. Дорога у деревни** — рваный край, следы. | **10. Двор со складом.** |
-| ![Водопад и мост](mcd-world/mcd-11-waterfall.webp) | ![Скалы](mcd-world/mcd-12-cliffs.webp) |
-| **11. Водопад, река, мост.** | **12. Скалы по краю уровня.** |
-| ![Холмы и свечи](mcd-world/mcd-13-hills-candles.webp) | ![Портал](mcd-world/mcd-14-portal.webp) |
-| **13. Холмы террасами, деревья, свечи на стене.** | **14. Портал в холме.** |
-| ![Разные холмы](mcd-world/mcd-15-hills.webp) | ![Плиты](mcd-world/mcd-16-plateaus.webp) |
-| **15. Разнообразие холмов.** | **16. Холмы-плиты.** |
-| ![Плиты и скала](mcd-world/mcd-17-plateaus-cliff.webp) | |
-| **17. Плато с обрывом из скалы.** | |
+| ![Roads](mcd-world/mcd-09-roads.webp) | ![Yard with a storage yard](mcd-world/mcd-10-yard.webp) |
+| **9. Road by the village** — a ragged edge, footprints. | **10. Yard with a storage yard.** |
+| ![Waterfall and bridge](mcd-world/mcd-11-waterfall.webp) | ![Cliffs](mcd-world/mcd-12-cliffs.webp) |
+| **11. Waterfall, river, bridge.** | **12. Cliffs along the level edge.** |
+| ![Hills and candles](mcd-world/mcd-13-hills-candles.webp) | ![Portal](mcd-world/mcd-14-portal.webp) |
+| **13. Terraced hills, trees, candles on a wall.** | **14. Portal in a hill.** |
+| ![Various hills](mcd-world/mcd-15-hills.webp) | ![Plateaus](mcd-world/mcd-16-plateaus.webp) |
+| **15. Variety of hills.** | **16. Slab hills.** |
+| ![Plateaus and a cliff](mcd-world/mcd-17-plateaus-cliff.webp) | |
+| **17. Plateau with a cliff drop.** | |
 
-## Что видно
+## What is visible
 
-**10. Двор.** Пол — утоптанная земля `#c59b5c` с тёмными штрихами «ёлочкой» `#ae855e`, с уступами в полблока. Ограды — светлый голубовато-серый камень `#78787a`–`#83868e` со ступенчатым верхом (высота гуляет блоками). Стог из тюков сена `#d0af54` с оранжево-красными обвязками `#ba541c`. Ящики — тёмное дерево `#9f6e5a`, железные полосы, пятна жёлтой краски `#e4ad33`; сундуки, ящички, телега на двух колёсах `#9e6647`, скамья, фонари на изогнутых столбах `#a9844f`.
+**10. Yard.** The floor — trampled earth `#c59b5c` with dark "herringbone" strokes `#ae855e`, with ledges of half a block. Fences — light bluish-grey stone `#78787a`–`#83868e` with a stepped top (the height wanders by blocks). A stack of hay bales `#d0af54` with orange-red bindings `#ba541c`. Crates — dark wood `#9f6e5a`, iron bands, spots of yellow paint `#e4ad33`; chests, small boxes, a two-wheeled cart `#9e6647`, a bench, lanterns on curved posts `#a9844f`.
 
-**11. Водопад и река.** Скала светло-серая, ровная, с вертикальными пластами; водопад — бирюзовые струи `#0f7592`, у подножия белые клубы брызг `#b2b3b0`–`#dbd5d0`. Река в русле на полтора блока ниже травы, тёмная бирюза `#44687a`, светлые полосы вдоль течения, белая кромка у берегов. Мост — толстый настил из светлых досок `#b68c58`–`#cea86c`, по углам квадратные столбы `#846438`. Справа — травяные столбы скал ступенями к воде.
+**11. Waterfall and river.** The cliff is light grey, flat, with vertical strata; the waterfall — turquoise streams `#0f7592`, white clouds of spray at the foot `#b2b3b0`–`#dbd5d0`. The river in a channel a block and a half below the grass, dark turquoise `#44687a`, light bands along the current, a white rim at the shores. The bridge — a thick deck of light boards `#b68c58`–`#cea86c`, square posts at the corners `#846438`. On the right — grassy cliff columns stepping down to the water.
 
-**12. Края уровня.** Высокие скалы 5–8 блоков, свет `#70767a`, в тени синие `#425966`; трава сверху свисает бахромой; каменные ступени.
+**12. Level edges.** Tall cliffs of 5–8 blocks, lit `#70767a`, in shadow blue `#425966`; grass hangs down from the top as a fringe; stone steps.
 
-**13. Холмы и свечи.** Холм — террасы по 1 блоку с бахромой травы; деревья — кубы листвы `#598230` с пышными краями, блик `#99b956`. На крепостной стене стоят свечи — вокруг тёплое пятно, без видимого источника света (запечено).
+**13. Hills and candles.** A hill — terraces of 1 block with a grass fringe; trees — foliage cubes `#598230` with fluffy edges, highlight `#99b956`. Candles stand on the fortress wall — a warm spot around them, without a visible light source (baked).
 
-**14. Портал.** Проём в холме, рама из тёмного камня, внутри золотое сияние `#e6b144` с ярким ядром `#fee99a`, стены проёма окрашены золотом; перед ним светлые плиты `#af9f8e`, на них заходит трава.
+**14. Portal.** An opening in a hill, a frame of dark stone, inside a golden glow `#e6b144` with a bright core `#fee99a`, the walls of the opening are tinted gold; in front of it light slabs `#af9f8e`, grass encroaches onto them.
 
-**16, 17. Холмы-плиты** (добавлены 24.10.2026). Холмы пологие и плоские: широкие плиты одна над другой с перепадом в 1 блок, края — длинные прямые и ступенчатые диагонали под 45°; на высоких перепадах под травой — голубоватая скала; на площадках стоят мобы, между уровнями — проходы.
+**16, 17. Slab hills** (added 2026-10-24). The hills are gentle and flat: wide slabs one above another with a 1-block step, the edges — long straight lines and stepped diagonals at 45°; on tall steps there is bluish cliff under the grass; mobs stand on the plateaus, between the levels — passages.
 
-**15. Холмы.** Уступы травы, ступени из земли тропинки, скальные стороны под травой, пятна сухой жёлто-зелёной травы `#b9b957`, белые ромашки.
+**15. Hills.** Grass ledges, earthen path stairs, cliff sides under the grass, patches of dry yellow-green grass `#b9b957`, white daisies.
 
-## Что берём
+## What we take
 
-| Приём | Куда | Статус |
+| Technique | Where | Status |
 |---|---|---|
-| Пол двора, ступенчатые ограды, сено, ящики, сундук, телеги, скамья, 3 вида фонарей | палитра «двор», декор «склад», «фонари», сборки `steppedWall`, `hayStack` | сделано 24.10.2026 |
-| Скалы (светлая, тёмная, с травой, ступени), водопад с бегущими струями, река с течением, мост, брызги и пена | палитра «скалы и вода», слои `falls` и `river`, декор «вода», сборки `cliffMass`, `cliffSteps`, `riverBed`, `waterfall`, `bridgeX`, `stairway` | сделано |
-| Холмы террасами, полублок травы, пышная листва, свечи с запечённым светом | палитра «холмы», декор «свечи», атрибут `bake`, сборки `hill`, `tree`, `rampart` | сделано |
-| Портал: сияние с анимацией, рама, перемычка, пол, золотой запечённый свет | палитра «портал», слой `portal`, сборка `portal` | сделано |
-| Сухая трава, ромашки, ступени тропинки, холм с обрывом | палитра «холмы», опции `hill` | сделано |
+| Yard floor, stepped fences, hay, crates, chest, carts, bench, 3 kinds of lanterns | palette "yard", decor "storage", "lanterns", kits `steppedWall`, `hayStack` | done 2026-10-24 |
+| Cliffs (light, dark, with grass, stairs), a waterfall with running streams, a river with a current, a bridge, splashes and foam | palette "cliffs and water", layers `falls` and `river`, decor "water", kits `cliffMass`, `cliffSteps`, `riverBed`, `waterfall`, `bridgeX`, `stairway` | done |
+| Terraced hills, grass half-block, fluffy foliage, candles with baked light | palette "hills", decor "candles", attribute `bake`, kits `hill`, `tree`, `rampart` | done |
+| Portal: animated glow, frame, lintel, floor, golden baked light | palette "portal", layer `portal`, kit `portal` | done |
+| Dry grass, daisies, path stairs, a hill with a drop | palette "hills", `hill` options | done |

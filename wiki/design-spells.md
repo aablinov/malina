@@ -1,157 +1,157 @@
-# Заклинания и ауры
+# Spells and auras
 
-Версия 1.7 от 29.10.2026: один реестр всех заклинаний `SPELLS` — стартовые переехали из `Spells` в `src/magic/starters.ts`, у `Spell` появились хуки заряда; `gear.ts` применяет артефакт в одном месте (раздел 6). Версия 1.6 от 25.10.2026: десять базовых заклинаний у торговца — огонь, призыв, малиновая кровь, свет (раздел 3.1); призванные — приманки для мобов. Версия 1.5 от 25.10.2026: семь наступательных аур — жгут, морозят, бьют молнией и лучом, слабят, толкают землёй, режут клинками. Версия 1.4 от 24.10.2026: обычные заклинания продаёт торговец за малину и с боссов не падают. Версия 1.3: 20 заклинаний с боссов сделаны — реестр `src/magic/`, четыре новые школы (свет, тьма, земля, аркана) с кругами и звуком, пафос по редкости (замедление, затемнение мира, отъезд камеры, крупное название). Версия 1.2: ауры сделаны — четвёртое гнездо (R), пять аур, шкала и вспышка ×3. Версия 1.1: круги каста из слоёв по школам, звук заклинаний — пентатоника, низ через насыщение, реверберация, заряд ступенями. Версия 1.0: каркас магии, 4 стартовых заклинания и 5 аур (сделаны), 20 заклинаний с боссов (пока дизайн), анатомия каста. Микс Elden Ring (заряд, «тяжёлые» касты), Minecraft Dungeons (слоты, души, добрый воксельный вид) и Warcraft 3 (ауры на союзников, связки). Слоты и души — [design-inventory.md](design-inventory.md), враги и боссы — [design-dungeon.md](design-dungeon.md).
+Version 1.7 of 2026-10-29: one registry of all spells `SPELLS` — the starters moved from `Spells` into `src/magic/starters.ts`, `Spell` gained charge hooks; `gear.ts` applies an artifact in one place (section 6). Version 1.6 of 2026-10-25: ten base spells at the merchant — fire, summoning, raspberry blood, light (section 3.1); summoned creatures are decoys for mobs. Version 1.5 of 2026-10-25: seven offensive auras — they burn, freeze, strike with lightning and beams, weaken, shove with earth, cut with blades. Version 1.4 of 2026-10-24: common spells are sold by the merchant for raspberries and do not drop from bosses. Version 1.3: 20 boss spells done — registry `src/magic/`, four new schools (light, dark, earth, arcane) with sigils and sound, pomp by rarity (slow motion, world darkening, camera pull-back, big title). Version 1.2: auras done — fourth slot (R), five auras, meter and ×3 flare. Version 1.1: cast sigils built from layers per school, spell sound — pentatonic, bass through saturation, reverb, charge in steps. Version 1.0: magic framework, 4 starter spells and 5 auras (done), 20 boss spells (design only so far), anatomy of a cast. A mix of Elden Ring (charging, "heavy" casts), Minecraft Dungeons (slots, souls, friendly voxel look) and Warcraft 3 (auras on allies, combos). Slots and souls — [design-inventory.md](design-inventory.md), enemies and bosses — [design-dungeon.md](design-dungeon.md).
 
-## 1. Каркас
+## 1. Framework
 
-- **Слоты.** Заклинание — предмет-артефакт (`slot: 'artifact'`) с полем `spell`; надевается в те же гнёзда 1 / 2 / 3. Аура — отдельное четвёртое гнездо (клавиша R), действует на всех союзников в радиусе 8 м, как в WC3 (союзников пока нет — только герой).
-- **Откуда берутся.** Стартовые 4 — у каждого героя с начала. **Обычные** (пепельная корона, морозный гребень, грозовая туча, коса-череп, малиновый куст — `spell: 'shop'`) продаёт **торговец** за малину: четвёртый товар на прилавке, видно заранее, сначала то, которого у героя нет, после покупки меняется; цена 110 + 12 · сила. С боссов обычные не падают. Редкие выпадают из мини-боссов, легендарные — из боссов, мифические — из финального босса этажа (`spell: 'boss'`). Сундуки, случайный товар и обычные враги заклинаний не дают (`rollLoot` пропускает предметы с `spell`).
-- **Выпадение — событие.** Над боссом падает гримуар: столб света, замедление ×0,3 на полсекунды, хор, книга парит и листает страницы.
-- **Заряд, как в Elden Ring.** Тап — быстрый каст. Держать клавишу — под ногами раскрывается круг каста (раздел 5.1), частицы стягиваются к руке, звук растёт ступенями (раздел 5.2); отпустить — круг вспыхивает и расходится, каст сильнее (×1 → ×2,5). Пока заряжаешь — идёшь вдвое медленнее и смотришь на курсор.
-- **Цена.** Перезарядка; часть заклинаний с боссов ещё тратит души.
-- **Пафос растёт с редкостью** (раздел 5).
+- **Slots.** A spell is an artifact item (`slot: 'artifact'`) with a `spell` field; it is equipped into the same slots 1 / 2 / 3. An aura is a separate fourth slot (key R), affects all allies within 8 m, as in WC3 (there are no allies yet — only the hero).
+- **Where they come from.** The 4 starters — every hero has them from the start. **Common** ones (ash crown, frost ridge, storm cloud, skull scythe, raspberry bush — `spell: 'shop'`) are sold by the **merchant** for raspberries: the fourth item on the counter, visible in advance, first the one the hero does not have, changes after purchase; price 110 + 12 · power. Common ones do not drop from bosses. Rare ones drop from mini-bosses, legendary — from bosses, mythic — from the floor's final boss (`spell: 'boss'`). Chests, random merchandise and ordinary enemies do not give spells (`rollLoot` skips items with `spell`).
+- **The drop is an event.** A grimoire falls over the boss: a pillar of light, slow motion ×0.3 for half a second, a choir, the book hovers and flips its pages.
+- **Charging, as in Elden Ring.** Tap — quick cast. Hold the key — a cast sigil unfolds underfoot (section 5.1), particles are drawn to the hand, the sound rises in steps (section 5.2); release — the sigil flashes and spreads, the cast is stronger (×1 → ×2.5). While charging you walk at half speed and face the cursor.
+- **Cost.** Cooldown; some boss spells also spend souls.
+- **Pomp grows with rarity** (section 5).
 
-## 2. Стартовые заклинания (сделаны)
+## 2. Starter spells (done)
 
-| | Что делает | Заряд | Перезарядка |
+| | What it does | Charge | Cooldown |
 |---|---|---|---|
-| **Искра** (молния) | Молния с неба в цель у курсора, перескакивает ещё на 2 | Перескоков 2 → 5, урон ×2,5 | 4 с |
-| **Огненный шар** | Шар летит к курсору, взрывается при касании цели или в конце пути | Шар растёт в руке от мяча до бочки, радиус взрыва 2,2 → 4 м | 6 с |
-| **Ледяной дождь** | Зона у курсора: 2 с падают сосульки, урон волнами | Радиус 3 → 5 м, сосулек 14 → 34 | 10 с |
-| **Слабое лечение** | Лечит героя (позже — и союзников рядом) | Лечение ×2,5 | 12 с |
+| **Spark** (lightning) | Lightning from the sky at the target under the cursor, jumps to 2 more | Jumps 2 → 5, damage ×2.5 | 4 s |
+| **Fireball** | The ball flies to the cursor, explodes on touching a target or at the end of its path | The ball grows in the hand from a ball to a barrel, blast radius 2.2 → 4 m | 6 s |
+| **Ice Rain** | A zone at the cursor: icicles fall for 2 s, damage in waves | Radius 3 → 5 m, icicles 14 → 34 | 10 s |
+| **Minor Heal** | Heals the hero (later — allies nearby too) | Healing ×2.5 | 12 s |
 
-Стартовый набор: 1 — огненный шар, 2 — искра, 3 — лечение; ледяной дождь лежит в инвентаре. Старым сохранениям четыре заклинания добавляются в инвентарь, свободные гнёзда занимаются ими.
+Starter set: 1 — fireball, 2 — spark, 3 — heal; ice rain lies in the inventory. Old saves get the four spells added to the inventory, free slots are filled with them.
 
-## 3. Заклинания с боссов (сделаны)
+## 3. Boss spells (done)
 
-Мини-боссы есть — восемь стражей роняют редкие ([design-bosses.md](design-bosses.md)); 15 заклинаний с боссов лежат в инвентаре с начала (старым сохранениям добавляются, как ауры) — надеть в гнездо 1/2/3 и пробовать; пять обычных покупаются у торговца. Школа задаёт цвета, узор круга каста и аккорд заряда: огонь, лёд, молния (как у стартовых), **свет** (золото и белый: лучи, пентаграмма), **тьма** (фиолетовый и бирюза: спираль, око), **земля** (янтарь и зелень: трещины, камни, листья), **аркана** (пурпур и розовый: венец мечей, пентаграмма).
+Mini-bosses exist — eight wardens drop rares ([design-bosses.md](design-bosses.md)); 15 boss spells lie in the inventory from the start (old saves get them added, like auras) — equip into slot 1/2/3 and try; five common ones are bought from the merchant. The school sets the colours, the pattern of the cast sigil and the charge chord: fire, ice, lightning (as for the starters), **light** (gold and white: rays, pentagram), **dark** (violet and turquoise: spiral, eye), **earth** (amber and green: cracks, stones, leaves), **arcane** (purple and pink: crown of swords, pentagram).
 
-**Огонь**
-1. **Небесный молот** (редкое) — метеор в точку: 1 с растёт красная тень и вой падения, удар — кратер, оглушение, камни, горящий пол.
-2. **Пламенный змей** (легендарное) — огненный змей ползёт по земле, петляет между врагами, оставляет горящую колею; на поворотах хлещет хвостом.
-3. **Пепельная корона** (обычное, у торговца) — кольцо огня волной расходится от героя и отбрасывает.
+**Fire**
+1. **Heavenly Hammer** (rare) — a meteor at a point: for 1 s a red shadow grows and the howl of the fall rises, impact — crater, stun, stones, burning floor.
+2. **Flame Serpent** (legendary) — a fiery serpent crawls along the ground, weaves between enemies, leaves a burning track; lashes its tail on turns.
+3. **Ash Crown** (common, at the merchant) — a ring of fire spreads from the hero as a wave and knocks back.
 
-**Лёд**
-4. **Ледяная гробница** (редкое) — замораживает элиту в кристалл; через 2 с кристалл взрывается веером осколков.
-5. **Морозный гребень** (обычное, у торговца) — веер ледяных шипов вырастает из земли и подбрасывает врагов.
-6. **Абсолютный ноль** (мифическое) — купол 8 м, внутри время почти стоит, враги замирают на 4 с; мир теряет цвет, звук глохнет, слышно сердцебиение.
+**Ice**
+4. **Ice Tomb** (rare) — freezes an elite into a crystal; after 2 s the crystal bursts into a fan of shards.
+5. **Frost Ridge** (common, at the merchant) — a fan of ice spikes grows out of the ground and tosses enemies up.
+6. **Absolute Zero** (mythic) — a dome of 8 m, inside it time almost stands still, enemies freeze for 4 s; the world loses colour, sound goes muffled, a heartbeat is heard.
 
-**Молния**
-7. **Копьё громовержца** (редкое) — заряд растит копьё молнии в руке, бросок пронзает линию, на выходе — гром.
-8. **Громовой прыжок** (легендарное) — герой взлетает и бьёт в землю, цепные молнии во все стороны.
-9. **Грозовая туча** (обычное, у торговца) — над героем 8 с висит туча и сама бьёт ближайших.
+**Lightning**
+7. **Thunderer's Spear** (rare) — charging grows a spear of lightning in the hand, the throw pierces a line, thunder at the exit.
+8. **Thunder Leap** (legendary) — the hero leaps up and strikes the ground, chain lightning in all directions.
+9. **Storm Cloud** (common, at the merchant) — a cloud hangs over the hero for 8 s and strikes the nearest on its own.
 
-**Свет и звёзды**
-10. **Звездопад** (легендарное, держать) — 5 с звёзды падают по всей зоне, герой парит в столбе света.
-11. **Луч павшей звезды** (мифическое) — огромный луч из рук, герой медленно ведёт им; камера отъезжает, на полу выжженная полоса.
-12. **Небесный суд** (легендарное) — столп света бьёт врагов, лечит союзников и **поднимает павшего союзника**.
+**Light and stars**
+10. **Starfall** (legendary, hold) — for 5 s stars fall over the whole zone, the hero hovers in a pillar of light.
+11. **Fallen Star Beam** (mythic) — a huge beam from the hands, the hero slowly sweeps it; the camera pulls back, a scorched strip on the floor.
+12. **Heavenly Judgement** (legendary) — a pillar of light strikes enemies, heals allies and **raises a fallen ally**.
 
-**Тьма и души**
-13. **Хор мёртвых** (редкое) — призрачные руки из земли держат врагов и утаскивают вниз, шёпот.
-14. **Гравитационный колодец** (легендарное) — чёрная сфера 2 с стягивает врагов и предметы, потом схлопывается и выбрасывает их; свет вокруг гнётся.
-15. **Коса-череп** (обычное, у торговца) — летящий череп: врагу урон, союзнику лечение.
-16. **Павшие стражи** (редкое, 50 душ) — три призрачных рыцаря на 15 с из синих порталов.
+**Dark and souls**
+13. **Choir of the Dead** (rare) — ghostly hands from the ground hold enemies and drag them down, whispering.
+14. **Gravity Well** (legendary) — a black sphere pulls in enemies and items for 2 s, then collapses and throws them out; the light around it bends.
+15. **Skull Scythe** (common, at the merchant) — a flying skull: damage to an enemy, healing to an ally.
+16. **Fallen Wardens** (rare, 50 souls) — three ghostly knights for 15 s out of blue portals.
 
-**Земля и природа**
-17. **Разлом** (редкое) — трещина бежит вперёд, из неё каменные шипы подбрасывают врагов.
-18. **Малиновый куст** (обычное, фирменное, у торговца) — колючий куст держит врагов, через 4 с лопается ягодами, ягоды лечат союзников.
-19. **Облик титана** (мифическое) — на 10 с герой — огромный каменный великан, удары трясут землю.
+**Earth and nature**
+17. **Rift** (rare) — a crack runs forward, stone spikes out of it toss enemies up.
+18. **Raspberry Bush** (common, signature, at the merchant) — a thorny bush holds enemies, after 4 s bursts with berries, the berries heal allies.
+19. **Titan Form** (mythic) — for 10 s the hero is a huge stone giant, blows shake the ground.
 
-**Аркана**
-20. **Фаланга клинков** (редкое) — над головой веер из 7 призрачных мечей, летят по очереди; каждый звенит своей нотой, вместе — аккорд.
+**Arcane**
+20. **Phalanx of Blades** (rare) — a fan of 7 ghostly swords over the head, they fly one by one; each rings its own note, together — a chord.
 
-Запас: **Разрыв** — рывок-телепорт со взрывом в точке исчезновения и появления.
+Reserve: **Rupture** — a dash-teleport with an explosion at the point of vanishing and the point of appearing.
 
-**Связки стихий** (кооп): молния по замороженному — ×3 и стеклянный звон; огонь по скованному корнями — поджигает куст; колодец, а следом метеор — «сборка». У связки своя вспышка и надпись над врагами.
+**Elemental combos** (co-op): lightning on a frozen target — ×3 and a glassy chime; fire on one bound by roots — sets the bush alight; a well followed by a meteor — "the build". A combo has its own flash and a caption above the enemies.
 
-## 3.1. Базовые заклинания (у торговца)
+## 3.1. Base spells (at the merchant)
 
-Не слишком сильные, обычной редкости (`spell: 'shop'`): продаёт торговец (вкладка «Заклинания»), а в плейграунде все десять лежат у героя с начала (старым сохранениям добавляются). Числа — тап, полный заряд ×2,5.
+Not too strong, common rarity (`spell: 'shop'`): sold by the merchant ("Spells" tab), and in the playground all ten lie with the hero from the start (old saves get them added). Numbers — tap, full charge ×2.5.
 
-| Заклинание | Школа | Что делает | Цифры |
+| Spell | School | What it does | Numbers |
 |---|---|---|---|
-| **Огненная стена** | огонь | Стена огня поперёк пути к курсору, жжёт всех в ней и идущих сквозь; заряд — длиннее | 5 м, 8 урона каждые 0,5 с, 4 с, перезарядка 10 с |
-| **Огненный ураган** | огонь | Смерч медленно катится к курсору, затягивает и замедляет | 6 урона каждые 0,3 с, −30 % скорости, 4 с, 12 с |
-| **Малый армагеддон** | огонь | Дождь огненных шаров вокруг героя, каждый третий — в ближайшего врага | 8–14 шаров по 14, круг 5 м, 3 с, 16 с |
-| **Стая волков** | призыв | Волки из порталов гонят ближайших, укус замедляет | 2 (с зарядом 3), 8 урона, 12 с, 20 с |
-| **Малый элементаль** | призыв | Парит и стреляет огоньками; стихия по очереди: огонь, лёд (замедляет), молния (оглушает на миг) | 10 урона раз в 1,2 с, 15 с, 22 с |
-| **Каменный голем** | призыв | Медленный, бьёт кулаком в землю, держит мобов на себе | 18 по кругу 2 м, оглушение 0,5 с, 18 с, 28 с |
-| **Малиновые когти** | кровь | Три когтя малинового пламени перед героем | 22 урона + кровотечение 50, 6 % здоровья, 5 с |
-| **Рой малинок** | кровь | Поток малиновых мушек конусом | 4 урона за тик + кровотечение 15, 1,5 с, 8 % здоровья, 6 с |
-| **Малиновый клинок** | кровь | Оружие в малиновом соке: удары мечом сильнее и копят кровотечение | +10 % урона мечом, кровотечение 25 за удар, 15 с, 10 % здоровья, 25 с |
-| **Ослепляющая вспышка** | свет | Вспышка вокруг героя: урон, отброс, оглушение рядовых (боссов — нет) | 12 урона, 4 м, оглушение 1,5 с, 14 с |
+| **Fire Wall** | fire | A wall of fire across the path to the cursor, burns everyone in it and passing through; charge — longer | 5 m, 8 damage every 0.5 s, 4 s, cooldown 10 s |
+| **Fire Hurricane** | fire | A twister slowly rolls toward the cursor, sucks in and slows | 6 damage every 0.3 s, −30 % speed, 4 s, 12 s |
+| **Minor Armageddon** | fire | A rain of fireballs around the hero, every third — at the nearest enemy | 8–14 balls of 14 each, circle 5 m, 3 s, 16 s |
+| **Wolf Pack** | summoning | Wolves out of portals chase the nearest, the bite slows | 2 (3 with charge), 8 damage, 12 s, 20 s |
+| **Minor Elemental** | summoning | Hovers and shoots sparks; element in turn: fire, ice (slows), lightning (stuns for an instant) | 10 damage once per 1.2 s, 15 s, 22 s |
+| **Stone Golem** | summoning | Slow, punches the ground, keeps mobs on itself | 18 in a 2 m circle, stun 0.5 s, 18 s, 28 s |
+| **Raspberry Claws** | blood | Three claws of raspberry flame in front of the hero | 22 damage + bleed 50, 6 % health, 5 s |
+| **Raspberry Swarm** | blood | A stream of raspberry midges in a cone | 4 damage per tick + bleed 15, 1.5 s, 8 % health, 6 s |
+| **Raspberry Blade** | blood | The weapon in raspberry juice: sword blows are stronger and build up bleed | +10 % sword damage, bleed 25 per hit, 15 s, 10 % health, 25 s |
+| **Blinding Flash** | light | A flash around the hero: damage, knockback, stun of regular mobs (not bosses) | 12 damage, 4 m, stun 1.5 s, 14 s |
 
-- **Малиновая кровь** (как магия крови Elden Ring, `src/magic/blood-core.ts`): каст стоит доли здоровья, но не ниже 1 — убить себя нельзя; зато перезарядка короткая. Удары копят на цели шкалу кровотечения (100, тает после секунды без ударов); полная лопается всплеском — 20 урона, фонтан малинового сока, +5 здоровья герою.
-- **Призыв** (`src/magic/minions.ts`): портал, фигура поднимается из земли, сама идёт к ближайшему врагу (не к бочкам), без врагов держится у героя, в конце растворяется. Пока жив — **приманка** (`src/decoys.ts`): моб выбирает ближайшую цель из героя и призванных и бьёт её; голем с `taunt` перетягивает всех мобов в 8 м, даже если герой ближе. Здоровье призванного кончилось — исчезает раньше срока.
+- **Raspberry blood** (like Elden Ring blood magic, `src/magic/blood-core.ts`): a cast costs a fraction of health, but not below 1 — you cannot kill yourself; in return the cooldown is short. Hits build up a bleed meter on the target (100, decays after a second without hits); a full meter bursts in a splash — 20 damage, a fountain of raspberry juice, +5 health to the hero.
+- **Summoning** (`src/magic/minions.ts`): a portal, a figure rises from the ground, walks on its own to the nearest enemy (not to barrels), without enemies stays near the hero, dissolves at the end. While alive — a **decoy** (`src/decoys.ts`): a mob picks the nearest target among the hero and the summoned and attacks it; a golem with `taunt` pulls all mobs within 8 m, even if the hero is closer. The summoned creature's health runs out — it vanishes early.
 
-## 4. Ауры (сделаны)
+## 4. Auras (done)
 
-Аура всегда видна вокруг героя: тусклый круг своей школы под ногами (слои ступеней 0–1) и свой знак. Нанесённый урон копит шкалу (250); полная — гнездо в HUD светится и звенит, **R** — аура **вспыхивает**: 5 с эффект ×3, большой круг радиусом 4 м раскрывается весь (символы, стена лучей), кольца, засветка, свет, стоп-кадр, аккорд стихии и баннер; в конце круг расходится, аккорд вниз. Пока боссов нет, все двенадцать аур лежат в инвентаре (старым сохранениям добавляются); у торговца не продаются — падают с боссов этажа по шансам ([design-bosses.md](design-bosses.md), раздел 4).
+An aura is always visible around the hero: a dim sigil of its school underfoot (layers of steps 0–1) and its own sign. Damage dealt builds a meter (250); when full — the HUD slot glows and chimes, **R** — the aura **flares**: 5 s of ×3 effect, a big sigil of radius 4 m unfolds completely (symbols, a wall of rays), rings, screen flash, light, hitstop, the element's chord and a banner; at the end the sigil spreads out, the chord goes down. While there are no bosses, all twelve auras lie in the inventory (old saves get them added); they are not sold by the merchant — they drop from the floor's bosses by chance ([design-bosses.md](design-bosses.md), section 4).
 
-| Аура | Эффект | Вид |
+| Aura | Effect | Look |
 |---|---|---|
-| **Кровавый пакт** | 8 % любого урона — в здоровье | Красные капли дугой летят от раны к герою, «глоток» |
-| **Бастион** | −20 % получаемого урона | Три щита-руны кружат вокруг; удар — щиты вспыхивают, кольцо, звон щита |
-| **Ярость** | +15 % урона (меч, стрелы, заклинания), +10 % шанс крита | От руки с оружием поднимаются угли |
-| **Ясность** | −25 % перезарядки заклинаний и артефактов, +50 % душ | Три голубых огонька кружат над головой |
-| **Терновый венец** | 30 % урона — обратно ближайшему врагу в 3 м | Кольцо колючих лоз; удар — шипы летят в обидчика |
+| **Blood Pact** | 8 % of any damage — into health | Red drops fly in an arc from the wound to the hero, a "gulp" |
+| **Bastion** | −20 % damage taken | Three shield runes circle around; a hit — the shields flash, a ring, shield clang |
+| **Rage** | +15 % damage (sword, arrows, spells), +10 % crit chance | Embers rise from the weapon hand |
+| **Clarity** | −25 % spell and artifact cooldowns, +50 % souls | Three blue lights circle over the head |
+| **Crown of Thorns** | 30 % of damage — back to the nearest enemy within 3 m | A ring of thorny vines; a hit — thorns fly at the attacker |
 
-**Наступательные ауры** (по школам) сами бьют врагов вокруг героя — бочки и ящики не трогают. У зонных под ногами светится кольцо по краю зоны и вспыхивает на каждом пульсе. Урон самой ауры копит шкалу вполовину, иначе вспышка заряжалась бы от стояния в толпе. Вспышка — ×3: где урон за раз, там урон ×3; где ритм — там чаще. Числа черновые, ещё не проверены в игре: урон за раз — сила предмета, ритм и радиусы — `OFF` в `src/aura-offense.ts`.
+**Offensive auras** (by school) strike enemies around the hero on their own — barrels and crates are left alone. Zone auras have a ring glowing underfoot along the zone's edge that flashes on every pulse. The aura's own damage builds the meter at half rate, otherwise the flare would charge from standing in a crowd. Flare — ×3: where there is damage per hit, damage ×3; where there is a rhythm — more often. Numbers are drafts, not yet checked in the game: damage per hit — the item's power, rhythm and radii — `OFF` in `src/aura-offense.ts`.
 
-| Аура | Школа | Постоянно | Вспышка (R) | Вид |
+| Aura | School | Constant | Flare (R) | Look |
 |---|---|---|---|---|
-| **Горнило** | огонь | 3 урона каждые 0,5 с всем в 2,5 м | Радиус 4 м, урон ×3, огненные кубы | Кольцо углей, языки пламени по краю |
-| **Стужа** | лёд | 2 урона каждые 0,5 с и −30 % скорости на 1 с в 3 м | Заморозка (оглушение 1,2 с) всех в 4 м, −60 % скорости, урон ×3 | Снежинки кружат и падают, иней на замедленных |
-| **Грозовой венец** | молния | Раз в 1,2 с молния с плеча в случайного врага в 5 м: 8 урона и 2 перескока по 60 % | Молния каждые 0,4 с | Искры бегут по доспеху |
-| **Карающий ореол** | свет | Каждый 4-й удар героя — луч с неба в цель: 12 урона ей и соседям в 0,9 м | Луч на каждый удар | Золотой нимб над головой |
-| **Голодная тень** | тьма | Враги в 3 м получают +15 % урона | Ослабление ×3 в 4 м, тень пьёт 4 урона каждые 0,5 с, половину — герою | Фиолетовая дымка у ног, око |
-| **Каменная поступь** | земля | Раз в 3 с толчок: 10 урона и отброс в 2,2 м | Толчок каждую секунду в 3,5 м, кольцо каменных шипов | Камешки подпрыгивают у ног, чаще перед толчком |
-| **Вихрь клинков** | аркана | 3 призрачных меча на 1,3 м режут задетых: 4 урона, одну цель — не чаще раза в 0,4 с | 6 мечей на 1,8 м, крутятся быстрее | Плоские розовые клинки с золотой гардой |
+| **Crucible** | fire | 3 damage every 0.5 s to everyone within 2.5 m | Radius 4 m, damage ×3, fire cubes | A ring of embers, tongues of flame along the edge |
+| **Chill** | ice | 2 damage every 0.5 s and −30 % speed for 1 s within 3 m | Freeze (stun 1.2 s) of everyone within 4 m, −60 % speed, damage ×3 | Snowflakes swirl and fall, frost on the slowed |
+| **Storm Crown** | lightning | Once per 1.2 s lightning from the shoulder at a random enemy within 5 m: 8 damage and 2 jumps at 60 % | Lightning every 0.4 s | Sparks run over the armour |
+| **Punishing Halo** | light | Every 4th hero hit — a beam from the sky at the target: 12 damage to it and to neighbours within 0.9 m | A beam on every hit | A golden halo over the head |
+| **Hungry Shade** | dark | Enemies within 3 m take +15 % damage | Weakening ×3 within 4 m, the shade drinks 4 damage every 0.5 s, half of it — to the hero | Violet haze at the feet, an eye |
+| **Stone Tread** | earth | Once per 3 s a shove: 10 damage and knockback within 2.2 m | A shove every second within 3.5 m, a ring of stone spikes | Pebbles bounce at the feet, more often before a shove |
+| **Whirl of Blades** | arcane | 3 ghostly swords at 1.3 m cut whoever they touch: 4 damage, one target — no more than once per 0.4 s | 6 swords at 1.8 m, spin faster | Flat pink blades with a golden guard |
 
-Замедление и оглушение действуют только на рядовых мобов (`Target.chill`, `Target.stun`); у боссов свои оглушения, их аура не трогает. Ослабление (`Target.expose`) действует и на боссов.
+Slowing and stunning work only on regular mobs (`Target.chill`, `Target.stun`); bosses have their own stuns, the aura does not touch them. Weakening (`Target.expose`) works on bosses too.
 
-## 5. Анатомия каста — чтобы чувствовалась сила
+## 5. Anatomy of a cast — so that the power is felt
 
-Каждый каст — три фазы, все обязательны.
+Every cast is three phases, all mandatory.
 
-1. **Замах** (0,15–1,2 с). Круг рун под ногами, частицы стягиваются к руке, герой разворачивается к цели и вытягивает руку; гул, высота растёт с зарядом. На цели заранее «тень»: падающие искры, морозный круг. В конце замаха остальные звуки приглушаются — «тишина перед ударом».
-2. **Удар.** Засветка экрана цветом стихии на 1–2 кадра, настоящий точечный свет освещает сцену, кольцо по земле, разлёт частиц, тряска. Звук в три слоя: низ (удар 40–60 Гц) + треск/щелчок + тело стихии. Полный заряд добавляет стоп-кадр 50–90 мс.
-3. **Послевкусие** (1,5–3 с). След на полу (выжженное пятно, иней, светлый круг), тлеющие угли или ползущие искры, медленно гаснущий свет, затихающий хвост звука (раскат грома, треск углей, звон).
+1. **Wind-up** (0.15–1.2 s). A rune sigil underfoot, particles are drawn to the hand, the hero turns to the target and stretches out the arm; a hum, pitch rising with the charge. A "shadow" on the target in advance: falling sparks, a frost circle. At the end of the wind-up the other sounds are ducked — "silence before the blow".
+2. **Impact.** A screen flash in the element's colour for 1–2 frames, a real point light lights the scene, a ring along the ground, a scatter of particles, shake. Sound in three layers: bass (a thump at 40–60 Hz) + crackle/click + the body of the element. Full charge adds a hitstop of 50–90 ms.
+3. **Aftertaste** (1.5–3 s). A mark on the floor (scorched spot, frost, a bright circle), smouldering embers or crawling sparks, a slowly fading light, a dying tail of sound (a rumble of thunder, the crackle of embers, a chime).
 
-### 5.1. Круг каста — событие на карте
+### 5.1. The cast sigil — an event on the map
 
-Круг под героем (и на месте удара у ледяного дождя) собран из 5–7 слоёв, у каждой школы свой узор. Слои вращаются в разные стороны с разной скоростью и раскрываются **ступенями по заряду** — 0, ¼, ½, ¾: новый слой «щёлкает» (выскакивает крупнее и ярче, садится на место), по земле бежит кольцо, с края круга взлетают искры, камера чуть вздрагивает, звучит нота. С третьей ступени вокруг героя кружат восемь светящихся символов и с края поднимаются огоньки, с четвёртой встаёт стена вертикальных лучей. На полном заряде круг «дышит». Каст — круг вспыхивает, расходится и тает; отмена — просто гаснет.
+The sigil under the hero (and at the impact point for ice rain) is built from 5–7 layers, each school with its own pattern. Layers rotate in different directions at different speeds and unfold **in steps by charge** — 0, ¼, ½, ¾: a new layer "clicks" (pops out larger and brighter, settles into place), a ring runs along the ground, sparks fly up from the sigil's edge, the camera twitches slightly, a note sounds. From the third step eight glowing symbols circle around the hero and small lights rise from the edge, from the fourth a wall of vertical rays stands up. At full charge the sigil "breathes". Cast — the sigil flashes, spreads and melts away; cancel — it just fades.
 
-| Школа | Слои (от ступени 0 к 3) |
+| School | Layers (from step 0 to 3) |
 |---|---|
-| Искра | Кольцо с засечками, зигзаг-молния → квадрат и ромб навстречу друг другу (звезда) → кольцо символов → бусины по внешнему краю, треугольник в центре |
-| Огонь | Кольцо с засечками → гексаграмма → кольцо символов, венец языков пламени → треугольник и ромб в центре |
-| Лёд | Кольцо с засечками → шестиугольник, снежинка → кольцо ромбиков → кольцо символов |
-| Лечение | Кольцо с засечками → «цветок жизни», квадрат → ромб, венок листьев → кольцо символов |
+| Spark | A notched ring, a zigzag lightning → a square and a rhombus toward each other (a star) → a ring of symbols → beads along the outer edge, a triangle in the centre |
+| Fire | A notched ring → a hexagram → a ring of symbols, a crown of flame tongues → a triangle and a rhombus in the centre |
+| Ice | A notched ring → a hexagon, a snowflake → a ring of small rhombi → a ring of symbols |
+| Heal | A notched ring → a "flower of life", a square → a rhombus, a wreath of leaves → a ring of symbols |
 
-### 5.2. Звук — сила и «детскость»
+### 5.2. Sound — power and "childlikeness"
 
-- **Ноты, а не писк.** Всё строится из мажорной пентатоники: что ни сыграй подряд, звучит радостно, как в MCD. Голоса — пары слегка расстроенных осцилляторов через фильтр с огибающей (тёплые, не «пищалки»); пила — только для огня и только сквозь низкий фильтр.
-- **Сила — из низа.** Удары — синус с падением высоты через мягкое насыщение (tanh): гармоники делают низ слышным даже в динамиках ноутбука. Общий выход идёт через компрессор (громко, без хрипа) и реверберацию — заклинания звучат «в зале».
-- **Заряд ступенями.** Аккорд-подложка стихии: на каждой ступени вступает ещё одна нота аккорда и звенит колокольчик выше предыдущего, «вумп» в низ. Низ и ветер магии растут с зарядом, пульс-«сердце» учащается с 0,44 до 0,12 с. Полный заряд — фанфара колокольчиков и мерцание сверху, пока не отпустишь.
-- **Удары:** искра — щелчок, разряд, яркий мажорный аккорд, долгий раскат; огонь — тяжёлый удар, рёв пламени, медный аккорд, треск углей; лёд — стеклянный звон осколков и аккорд колоколов, каждая сосулька — нота пентатоники (дождь складывается в мелодию); лечение — арфа через две октавы и тёплый аккорд.
+- **Notes, not squeaks.** Everything is built from the major pentatonic: whatever you play in a row sounds joyful, as in MCD. Voices — pairs of slightly detuned oscillators through a filter with an envelope (warm, not "beepers"); the sawtooth — only for fire and only through a low filter.
+- **Power comes from the bass.** Impacts — a sine with a falling pitch through soft saturation (tanh): harmonics make the bass audible even in laptop speakers. The master output goes through a compressor (loud, without rasp) and reverb — spells sound "in a hall".
+- **Charge in steps.** The element's chord bed: on each step one more note of the chord enters and a bell rings higher than the previous one, a "whump" in the bass. The bass and the wind of magic grow with the charge, the "heart" pulse quickens from 0.44 to 0.12 s. Full charge — a fanfare of bells and a shimmer on top until you release.
+- **Impacts:** spark — a click, a discharge, a bright major chord, a long rumble; fire — a heavy thump, the roar of flame, a brassy chord, the crackle of embers; ice — the glassy chime of shards and a chord of bells, each icicle — a note of the pentatonic (the rain adds up into a melody); heal — a harp over two octaves and a warm chord.
 
-**Пафос по редкости** (`Spells.pomp`): обычное — фазы 1–3; редкое — плюс стоп-кадр и тряска всегда; легендарное — плюс замедление ×⅓ на 0,35 с и широкие ударные волны; мифическое — плюс мир темнеет и выцветает (`fx.darken`), камера подаётся назад (`fx.zoom`), крупное название по центру (`fx.title`), хор.
+**Pomp by rarity** (`Spells.pomp`): common — phases 1–3; rare — plus hitstop and shake always; legendary — plus slow motion ×⅓ for 0.35 s and wide shock waves; mythic — plus the world darkens and desaturates (`fx.darken`), the camera pulls back (`fx.zoom`), a big title in the centre (`fx.title`), a choir.
 
-## 6. Как сделано
+## 6. How it is built
 
-- **`src/spells.ts`** — класс `Spells`: заряд (`start` / `release`, визуал заряда — круг под ногами, сгусток в руке, ступени), `cast` (домножает заряд и зовёт `Spell.cast`) и набор инструментов каста — `later`, `proc`, `impact`, `windup`, `pomp`, `groundSigil`, `bolt`, `nearest`, `within`, `ground`, `face`, `hand`, `color`, `buff` (усиления героя — их домножает `gear.ts`), `aim`, `tex`; школы `School` и их цвета. ~~Стартовые заклинания внутри класса~~ — переехали в `src/magic/starters.ts`.
-- **`src/magic/registry.ts`** — один реестр всех заклинаний `SPELLS: Record<SpellKind, Spell>` (стартовые, базовые, с боссов; типы проверяют, что ни одно не забыто) и `spellOf(kind)` — заклинание по виду артефакта или `null` для обычного (огненная стрела, тотем…).
-- **`src/magic/kit.ts`** — тип `Spell`: школа, ступень пафоса, `cast` и необязательные хуки заряда — `self` (целится в себя: герой смотрит вперёд, а не на курсор), `orb(k)` (размер сгустка в руке), `charging(kit, hand, k)` (своя картинка каждый кадр заряда: искры в ладони у искры, угли у огненного шара).
-- **`src/magic/starters.ts`** — четыре стартовых: искра, огненный шар, ледяной дождь, лечение (`STARTERS`).
-- **`src/magic/base-*.ts`** — базовые заклинания (огонь, призыв, кровь, свет) и их иконки; `minions.ts` — общий ход призванных, `blood-core.ts` — плата здоровьем и кровотечение; `src/decoys.ts` — приманки, `src/mobs/mob.ts` целится в ближайшую из героя и приманок.
-- **`src/magic/`** — заклинания с боссов: группы `fire-ice.ts`, `storm-light.ts`, `dark-arcane.ts`, `earth.ts` и их иконки `*-icons.ts` (~~`BossSpell`, `BOSS_SPELLS`~~ — теперь `Spell` и общий `SPELLS`).
-- **`src/sigils.ts`** — класс `Sigil`: слои круга по школам (`STYLE`), узоры рисуются кодом (`DRAW`), раскрытие ступенями, символы, стена света, `burst` при касте.
-- **`src/spell-audio.ts`** — голоса (`voice`, `hiss`, `boom` с насыщением, `bell`, `pluck`), `ChargeSound` (подложка, низ, ветер, пульс, ступени, полный заряд) и `spellSfx` — звуки кастов и ударов.
-- **`src/fx.ts`** — общие детали каста: `screenFlash` (засветка), `light` (пул из трёх `PointLight`, всегда в сцене, чтобы не пересобирать шейдеры), `decal` (след на полу), `hitstop` (стоп-кадр: цикл плейграунда почти останавливает время, пока он не истечёт).
-- **`src/fx.ts`** — ещё `slowmo`, `darken`, `zoom`, `title` для пафоса мифических.
-- **`src/audio.ts`** — компрессор и реверберация на выходе, шина `bus` для обычных звуков и `duck` (приглушить её перед ударом; заклинания звучат мимо шины), `audioCore()` — узлы для звука заклинаний.
-- **`src/gear.ts`** — `pressArtifact` / `releaseArtifact`: заклинание с зарядом начинает заряжаться, остальное срабатывает сразу; клик по слоту HUD и `__malina.artifact(i, x, z, charge)` — каст без удержания. `useArtifact` — одно место применения: общие проверки (гнездо, перезарядка, герой на ногах, души), потом `spellOf(kind)` — заклинание творит `Spells.cast`, иначе обычный артефакт — `plain` (огненная стрела, тотем, сапоги, рог, молниевый куб, жнец душ).
-- **`src/items.ts`** — предметы `spark`, `fireball`, `icerain`, `heal` с полем `spell` (`'starter'`), `charge` — время полного заряда; ауры `pact`, `bastion`, `rage`, `clarity`, `thorns` и наступательные `inferno`, `frost`, `storm`, `halo`, `shade`, `quake`, `blades` — гнездо `aura`, поле `aura` (вид, сила %, у наступательных — урон за раз, радиус), `spell: 'boss'`.
-- **`src/auras.ts`** — класс `Auras`: эффекты (`leech`, `damageTaken`, `dmgMult`, `cdMult`, `soulsMult`, `thorns`), шкала и `flare`, вид. Снаряжение (`gear.ts`) домножает статы и ставит герою `dmgTakenMul`; удар по герою замечает по падению здоровья. HUD — гнездо со шкалой цветом ауры, инвентарь — гнездо справа от героя и вкладка «Ауры».
-- **`src/aura-offense.ts`** — класс `AuraOffense` (поле `Auras.offense`): пульс по таймеру, поиск врагов в радиусе (без `prop`), урон через хук `damage`, флаг `own` (шкала вполовину), числа `OFF`. `Target` получил необязательные `prop`, `chill`, `expose`, `stun`: у `Mob` — замедление (`slowMul` в `pace` и `dash`) и оглушение, у `Boss` — ослабление. Иконки — `src/aura-icons.ts`, круги — `STYLE` в `src/sigils.ts`, звуки — `auraBurn`, `auraChill`, `auraZap`, `auraBeam`, `auraDrain`, `auraStomp`, `bladeCut`.
+- **`src/spells.ts`** — class `Spells`: charge (`start` / `release`, charge visuals — the sigil underfoot, the orb in the hand, steps), `cast` (multiplies by charge and calls `Spell.cast`) and a set of casting tools — `later`, `proc`, `impact`, `windup`, `pomp`, `groundSigil`, `bolt`, `nearest`, `within`, `ground`, `face`, `hand`, `color`, `buff` (hero buffs — multiplied by `gear.ts`), `aim`, `tex`; schools `School` and their colours. ~~Starter spells inside the class~~ — moved to `src/magic/starters.ts`.
+- **`src/magic/registry.ts`** — one registry of all spells `SPELLS: Record<SpellKind, Spell>` (starters, base, boss; the types check that none is forgotten) and `spellOf(kind)` — the spell by artifact kind or `null` for a plain one (fire arrow, totem…).
+- **`src/magic/kit.ts`** — type `Spell`: school, pomp tier, `cast` and optional charge hooks — `self` (targets itself: the hero looks forward, not at the cursor), `orb(k)` (size of the orb in the hand), `charging(kit, hand, k)` (its own picture every frame of charging: sparks in the palm for spark, embers for fireball).
+- **`src/magic/starters.ts`** — the four starters: spark, fireball, ice rain, heal (`STARTERS`).
+- **`src/magic/base-*.ts`** — base spells (fire, summoning, blood, light) and their icons; `minions.ts` — the common behaviour of the summoned, `blood-core.ts` — payment in health and bleed; `src/decoys.ts` — decoys, `src/mobs/mob.ts` targets the nearest among the hero and decoys.
+- **`src/magic/`** — boss spells: groups `fire-ice.ts`, `storm-light.ts`, `dark-arcane.ts`, `earth.ts` and their icons `*-icons.ts` (~~`BossSpell`, `BOSS_SPELLS`~~ — now `Spell` and the common `SPELLS`).
+- **`src/sigils.ts`** — class `Sigil`: sigil layers by school (`STYLE`), patterns drawn in code (`DRAW`), unfolding in steps, symbols, the wall of light, `burst` on cast.
+- **`src/spell-audio.ts`** — voices (`voice`, `hiss`, `boom` with saturation, `bell`, `pluck`), `ChargeSound` (bed, bass, wind, pulse, steps, full charge) and `spellSfx` — the sounds of casts and impacts.
+- **`src/fx.ts`** — shared cast details: `screenFlash` (screen flash), `light` (a pool of three `PointLight`s, always in the scene so as not to rebuild shaders), `decal` (a mark on the floor), `hitstop` (hitstop: the playground loop almost stops time until it expires).
+- **`src/fx.ts`** — also `slowmo`, `darken`, `zoom`, `title` for mythic pomp.
+- **`src/audio.ts`** — compressor and reverb on the output, the `bus` for ordinary sounds and `duck` (duck it before an impact; spells sound past the bus), `audioCore()` — the nodes for spell sound.
+- **`src/gear.ts`** — `pressArtifact` / `releaseArtifact`: a spell with charge starts charging, everything else fires immediately; a click on a HUD slot and `__malina.artifact(i, x, z, charge)` — a cast without holding. `useArtifact` — the one place of application: common checks (slot, cooldown, hero on his feet, souls), then `spellOf(kind)` — a spell is cast by `Spells.cast`, otherwise a plain artifact — `plain` (fire arrow, totem, boots, horn, lightning cube, soul reaper).
+- **`src/items.ts`** — items `spark`, `fireball`, `icerain`, `heal` with the field `spell` (`'starter'`), `charge` — time to full charge; auras `pact`, `bastion`, `rage`, `clarity`, `thorns` and the offensive `inferno`, `frost`, `storm`, `halo`, `shade`, `quake`, `blades` — slot `aura`, field `aura` (kind, power %, for offensive ones — damage per hit, radius), `spell: 'boss'`.
+- **`src/auras.ts`** — class `Auras`: effects (`leech`, `damageTaken`, `dmgMult`, `cdMult`, `soulsMult`, `thorns`), the meter and `flare`, the look. Gear (`gear.ts`) multiplies the stats and sets `dmgTakenMul` on the hero; a hit on the hero is noticed by the drop in health. HUD — a slot with a meter in the aura's colour, inventory — a slot to the right of the hero and an "Auras" tab.
+- **`src/aura-offense.ts`** — class `AuraOffense` (field `Auras.offense`): a pulse on a timer, search for enemies within the radius (without `prop`), damage through the `damage` hook, flag `own` (meter at half rate), numbers `OFF`. `Target` gained optional `prop`, `chill`, `expose`, `stun`: for `Mob` — slowing (`slowMul` in `pace` and `dash`) and stun, for `Boss` — weakening. Icons — `src/aura-icons.ts`, sigils — `STYLE` in `src/sigils.ts`, sounds — `auraBurn`, `auraChill`, `auraZap`, `auraBeam`, `auraDrain`, `auraStomp`, `bladeCut`.

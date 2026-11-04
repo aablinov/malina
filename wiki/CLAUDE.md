@@ -1,15 +1,15 @@
-# Как вести вики
+# How to maintain the wiki
 
-Схема «LLM-вики» (Андрей Карпатый): знания накапливаются в связанных markdown-страницах, а не пересобираются из источников каждый раз.
+Andrej Karpathy's "LLM wiki" scheme: knowledge accumulates in linked markdown pages instead of being rebuilt from sources every time.
 
-**Три слоя:**
-1. **Источники** — `sources/`: скриншоты, выписки, заметки по чужим играм. Не правим, только добавляем. У каждого источника — страница-конспект рядом (`sources/<тема>.md`): что видно и что из этого берём.
-2. **Страницы** — `*.md` в корне `wiki/`: решения (`adr-*`), дизайн (`design-*`), стиль (`style-*`), бриф. Пишутся по-русски, ссылаются друг на друга относительными ссылками.
-3. **Служебные** — [index.md](index.md) (оглавление: каждая страница — одна строка в своём разделе) и [log.md](log.md) (журнал, только дописывается).
+**Three layers:**
+1. **Sources** — `sources/`: screenshots, excerpts, notes on other games. Never edited, only added to. Each source has a summary page next to it (`sources/<topic>.md`): what is visible and what we take from it.
+2. **Pages** — `*.md` in the root of `wiki/`: decisions (`adr-*`), design (`design-*`), style (`style-*`), the brief. Written in English, linked to each other with relative links.
+3. **Service files** — [index.md](index.md) (table of contents: every page is one row in its section) and [log.md](log.md) (the journal, append-only).
 
-**Операции:**
-- **Новый источник:** положить в `sources/`, написать конспект, обновить затронутые страницы, строка в `index.md`, запись в `log.md` с типом `источник`.
-- **Изменение кода, которое меняет описанное:** поправить страницу (раздел, версию и дату в шапке), запись в `log.md` с типом `код` и ссылками на страницы. Одна запись — один коммит.
-- **Проверка (lint):** нет страниц без строки в `index.md`, нет ссылок в никуда, устаревшее помечено зачёркиванием или «заменено …», а не удалено молча.
+**Operations:**
+- **New source:** put it in `sources/`, write a summary, update the affected pages, add a row to `index.md`, add an entry to `log.md` with type `source`.
+- **Code change that alters what is described:** fix the page (section, version and date in the header), add an entry to `log.md` with type `code` and links to the pages. One entry — one commit.
+- **Check (lint):** no pages without a row in `index.md`, no links to nowhere, outdated material marked with strikethrough or "replaced by …", not silently deleted.
 
-Формат записи журнала: `## [ГГГГ-ММ-ДД] тип | коротко`, затем 1–3 строки и «Страницы: …».
+Journal entry format: `## [YYYY-MM-DD] type | short title`, then 1–3 lines and "Pages: …".

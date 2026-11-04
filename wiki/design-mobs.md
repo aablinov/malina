@@ -1,173 +1,173 @@
-# Рядовые мобы — воинство Ордена Малины
+# Regular mobs — the host of the Order of the Raspberry
 
-Версия 2.1 от 31.10.2026: №38–39 — враги осады замка (пнёвый подрывник с бронёй и порохом, лозовая баллиста) в `src/mobs/td-foes.ts`; удар с нулевым направлением — пробивающий, мимо щитов и брони (`Mob.hit`); `Mob.extendMarch` — дорога продолжается после пролома — [design-tower-defence.md](design-tower-defence.md), раздел 9. Версия 2.0 от 31.10.2026: №35–37 — враги кристальной поляны (панцирник, споровик, скакун) в `src/mobs/td-foes.ts` — [design-tower-defence.md](design-tower-defence.md), раздел 8. Версия 1.9 от 30.10.2026: №32–34 — враги обороны куста (гонец, таран, мотылёк) в `src/mobs/td-foes.ts`, в кнопках витрины их нет — [design-tower-defence.md](design-tower-defence.md). Версия 1.8 от 30.10.2026: марш по дороге для обороны куста — `march`, `progress`, поводок, тревога от удара только при герое рядом — [design-tower-defence.md](design-tower-defence.md). Версия 1.7 от 30.10.2026: посты с `aggro` (засада) и `route` (патруль по точкам, пока не заметил героя), группы на карте из `meta.mobRooms` без возврата павших — [design-map-island.md](design-map-island.md). Версия 1.6 от 25.10.2026: Соллер, Рыцарь Солнца — редкий сильный одиночка, №31 (раздел 2G; как сделано — раздел 5). Версия 1.5 от 25.10.2026: четвёртая партия — конструкты (26–30), комната «Мастерская Ордена»; все 30 сделаны (раздел 5). Версия 1.4: третья партия — семьи D и E (17–20, 22–25), комнаты «Старый погост» и «Звериное логово», замедление героя от зон мобов (раздел 5). Версия 1.3: вторая партия — семьи B и C целиком (6–9, 11–15), гвардия со знаменем в казарме, новая комната «Терновый сад» (раздел 5). Версия 1.2: казарма Ордена за западной стеной плейграунда — гарнизон из первой партии на постах (раздел 5). Версия 1.1: сделана первая партия — 8 мобов (1, 2, 3, 4, 5, 10, 16, 21), класс `Mob`, стая, витрина в F1 (раздел 5). Версия 1.0: план — 30 рядовых мобов в шести семьях. Стиль и предание — как у стражей, [design-bosses.md](design-bosses.md); орды и бюджет комнаты — [design-dungeon.md](design-dungeon.md), раздел 5.
+Version 2.1 of 2026-10-31: #38–39 — castle siege enemies (stump sapper with armour and gunpowder, vine ballista) in `src/mobs/td-foes.ts`; a hit with zero direction is piercing, past shields and armour (`Mob.hit`); `Mob.extendMarch` — the road continues after a breach — [design-tower-defence.md](design-tower-defence.md), section 9. Version 2.0 of 2026-10-31: #35–37 — Crystal Glade enemies (shellback, sporeling, hopper) in `src/mobs/td-foes.ts` — [design-tower-defence.md](design-tower-defence.md), section 8. Version 1.9 of 2026-10-30: #32–34 — Bush Defence enemies (courier, battering ram, moth) in `src/mobs/td-foes.ts`, not in the showcase buttons — [design-tower-defence.md](design-tower-defence.md). Version 1.8 of 2026-10-30: march along the road for Bush Defence — `march`, `progress`, leash, alarm from a hit only when the hero is nearby — [design-tower-defence.md](design-tower-defence.md). Version 1.7 of 2026-10-30: posts with `aggro` (ambush) and `route` (patrol along points until the hero is spotted), groups on the map from `meta.mobRooms` without the fallen returning — [design-map-island.md](design-map-island.md). Version 1.6 of 2026-10-25: Soller, Knight of the Sun — a rare strong loner, #31 (section 2G; how it is built — section 5). Version 1.5 of 2026-10-25: fourth batch — constructs (26–30), the "Order Workshop" room; all 30 done (section 5). Version 1.4: third batch — families D and E (17–20, 22–25), the "Old Graveyard" and "Beast Lair" rooms, hero slowdown from mob zones (section 5). Version 1.3: second batch — families B and C in full (6–9, 11–15), the guard with a banner in the barracks, the new "Bramble Garden" room (section 5). Version 1.2: the Order Barracks behind the playground's west wall — a garrison from the first batch on posts (section 5). Version 1.1: first batch done — 8 mobs (1, 2, 3, 4, 5, 10, 16, 21), the `Mob` class, the pack, the showcase in F1 (section 5). Version 1.0: plan — 30 regular mobs in six families. Style and lore as for the wardens, [design-bosses.md](design-bosses.md); hordes and room budget — [design-dungeon.md](design-dungeon.md), section 5.
 
-## 1. Общие правила
+## 1. General rules
 
-- **Проще стражей.** 1–6 подвижных частей (у стражей до 8), силуэт читается в толпе с 20 м. Скелеты те же: голем, маг, зверь, реликвия, плюс «малыш» из 1–2 кубов.
-- **Знак Ордена у всех:** герб-ягода, корона из костянок или малиновая лоза. **Сердце-ягода — только у элитных:** любой моб бывает элитным — здоровье ×3, размер ×1,3, аура, одно свойство (ускоряет соседей, взрывается при смерти, призывает мелких, регенерирует).
-- **Одна атака и один трюк.** Перед каждой атакой — метка на полу (круг или полоса) не меньше 0,5 с. У каждого — понятный способ победить (колонка «Как победить»).
-- **Свет показывает роль:** белый — рыцари, зелёный — лекари, малиновый — атакующие, фиолетовый — призыватели.
-- **Очки** — стоимость в бюджете орды; **малина** — 1–5 ягод с моба.
-- **Тон** — доброе приключение в духе Minecraft Dungeons, не Dark Souls.
+- **Simpler than wardens.** 1–6 moving parts (wardens have up to 8), the silhouette reads in a crowd from 20 m. The same skeletons: golem, mage, beast, relic, plus a "little one" of 1–2 cubes.
+- **Everyone bears the mark of the Order:** a berry crest, a crown of drupelets or a raspberry vine. **The berry heart is only for elites:** any mob can be elite — health ×3, size ×1.3, an aura, one property (speeds up neighbours, explodes on death, summons little ones, regenerates).
+- **One attack and one trick.** Before every attack a mark on the floor (a circle or a strip) for at least 0.5 s. Each has a clear way to beat it (the "How to beat" column).
+- **Light shows the role:** white — knights, green — healers, raspberry — attackers, purple — summoners.
+- **Points** — the cost in the horde budget; **raspberries** — 1–5 berries per mob.
+- **Tone** — a kind adventure in the spirit of Minecraft Dungeons, not Dark Souls.
 
-## 2. Список
+## 2. The list
 
-### A. Маги Ордена — скелет «маг», как иллагер-заклинатель
+### A. Mages of the Order — "mage" skeleton, like an illager evoker
 
-| # | Моб | Роль | Как бьёт | Как победить | Очки |
+| # | Mob | Role | How it attacks | How to beat | Points |
 |---|---|---|---|---|---|
-| 1 | **Ягодная целительница** | лечит | зелёный луч лечит раненого союзника; раз в 8 с кольцо лечения | луч видно — бей её первой; удар прерывает каст | 6 |
-| 2 | **Жгучий маг** | атакует | огненные ягоды дугой на метки; вплотную — отпрыгивает телепортом | загнать в угол, бить во время каста | 6 |
-| 3 | **Лозовый призыватель** | призывает | круг на полу → 3 малинёныша или лоза-хлыст; не больше 6 призванных | пока колдует, стоит на месте | 7 |
+| 1 | **Berry Healer** | heals | a green beam heals a wounded ally; a healing ring every 8 s | the beam is visible — hit her first; a hit interrupts the cast | 6 |
+| 2 | **Ember Mage** | attacks | fire berries in an arc onto marks; up close — teleports away | corner it, hit it during the cast | 6 |
+| 3 | **Vine Summoner** | summons | a circle on the floor → 3 berrylings or a whip vine; no more than 6 summoned | stands still while casting | 7 |
 
-### B. Рыцари Малины — скелет «голем»
+### B. Knights of the Raspberry — "golem" skeleton
 
-Белые доспехи с малиновой каймой, на щите малина, красный плащ с белой ягодой (одна пластина), щель шлема светится.
+White armour with raspberry trim, a raspberry on the shield, a red cloak with a white berry (one plate), the helmet slit glows.
 
-| # | Моб | Роль | Как бьёт | Как победить | Очки |
+| # | Mob | Role | How it attacks | How to beat | Points |
 |---|---|---|---|---|---|
-| 4 | **Оруженосец** | толпа | короткий меч, два взмаха | слабая броня | 3 |
-| 5 | **Щитоносец** | стена | башенный щит держит удары спереди (×0,2), удар щитом отбрасывает | обойти и бить в спину, магия по меткам | 6 |
-| 6 | **Копейщик** | дистанция | выпад копьём на 4 м по полосе | шаг вбок, после выпада открыт | 4 |
-| 7 | **Арбалетчик** | стрелок | болт по линии-метке | перезарядка 2 с — беззащитен | 4 |
-| 8 | **Знаменосец** | поддержка | втыкает знамя: рыцари рядом +25 % урона и скорости | сломать знамя (3 удара) | 7 |
-| 9 | **Молотобоец** | танк | двуручный молот по кругу-метке | медленный, после удара оглушён | 9 |
+| 4 | **Squire** | crowd | short sword, two swings | weak armour | 3 |
+| 5 | **Shieldbearer** | wall | a tower shield holds hits from the front (×0.2), a shield bash knocks back | go around and hit the back, magic on marks | 6 |
+| 6 | **Spearman** | reach | a spear thrust at 4 m along a strip | sidestep, open after the thrust | 4 |
+| 7 | **Crossbowman** | shooter | a bolt along a line mark | 2 s reload — defenceless | 4 |
+| 8 | **Bannerman** | support | plants a banner: knights nearby +25% damage and speed | break the banner (3 hits) | 7 |
+| 9 | **Hammerer** | tank | a two-handed hammer on a circle mark | slow, stunned after the strike | 9 |
 
-### C. Порождения куста — живая малина
+### C. Spawn of the bush — living raspberries
 
-| # | Моб | Роль | Как бьёт | Как победить | Очки |
+| # | Mob | Role | How it attacks | How to beat | Points |
 |---|---|---|---|---|---|
-| 10 | **Малинёныш** | рой | ягодка на ножках, кусает | падает с одного удара, бить по кругу | 1 |
-| 11 | **Ягодный слизень** | толпа | прыгает, липнет | при смерти делится на 2, потом ещё раз | 3 |
-| 12 | **Колючий клубок** | натиск | сворачивается ёжиком и катится по полосе | врезался в стену — оглушён | 3 |
-| 13 | **Лоза-хлыст** | ловушка | растёт из земли, не ходит, хлещет по кругу 3 м | бить издали или магией | 3 |
-| 14 | **Бутон-плевун** | турель | плюётся косточками дугой на метки | закрывается, пока плюёт, — бей в паузу | 4 |
-| 15 | **Терновое чудище** | танк | высокое, сплетено из лоз; притягивает героя лозой | после рывка подставляет спину | 8 |
+| 10 | **Berryling** | swarm | a berry on legs, bites | drops in one hit, hit in a circle | 1 |
+| 11 | **Berry Slime** | crowd | hops, sticks | on death splits in 2, then once more | 3 |
+| 12 | **Prickle Ball** | rush | curls up like a hedgehog and rolls along a strip | ran into a wall — stunned | 3 |
+| 13 | **Whip Vine** | trap | grows out of the ground, does not walk, lashes in a 3 m circle | hit from afar or with magic | 3 |
+| 14 | **Spitting Bud** | turret | spits seeds in an arc onto marks | closes while spitting — hit in the pause | 4 |
+| 15 | **Bramble Horror** | tank | tall, woven of vines; pulls the hero in with a vine | exposes its back after the lunge | 8 |
 
-### D. Павшие садовники — нежить Ордена
+### D. Fallen gardeners — the undead of the Order
 
-| # | Моб | Роль | Как бьёт | Как победить | Очки |
+| # | Mob | Role | How it attacks | How to beat | Points |
 |---|---|---|---|---|---|
-| 16 | **Увядший садовник** | толпа | зомби с мотыгой | медленный | 2 |
-| 17 | **Сборщик с серпом** | натиск | быстрый скелет, двойной взмах | хрупкий | 3 |
-| 18 | **Костяной лучник** | стрелок | колючие стрелы, держит дистанцию | подойти вплотную | 3 |
-| 19 | **Огонёк-плакальщик** | охотник | летает сквозь стены, лопается рядом и замедляет | сбить на подлёте | 2 |
-| 20 | **Пугало** | призыв | из шляпы каждые 6 с — 3 вороны; вплотную бьёт по кругу | бить между стаями | 5 |
+| 16 | **Withered Gardener** | crowd | a zombie with a hoe | slow | 2 |
+| 17 | **Sickle Reaper** | rush | a fast skeleton, double swing | fragile | 3 |
+| 18 | **Bone Archer** | shooter | thorn arrows, keeps its distance | get up close | 3 |
+| 19 | **Mourning Wisp** | hunter | flies through walls, bursts nearby and slows | knock it down on approach | 2 |
+| 20 | **Scarecrow** | summon | 3 crows out of the hat every 6 s; up close hits in a circle | hit between flocks | 5 |
 
-### E. Звери Ордена
+### E. Beasts of the Order
 
-| # | Моб | Роль | Как бьёт | Как победить | Очки |
+| # | Mob | Role | How it attacks | How to beat | Points |
 |---|---|---|---|---|---|
-| 21 | **Малиновый волк** | стая по 3 | окружают, прыжок по метке | промахнулся — открыт | 3 |
-| 22 | **Ягодный кабанчик** | таран | разгон по полосе (младший брат Морозного кабана) | врезался в стену — оглушён | 4 |
-| 23 | **Жук-ягодник** | засада | зарывается, бугор ползёт к герою, выныривает | вынырнул — открыт | 4 |
-| 24 | **Лозоплёт** | контроль | паук плетёт на полу сеть из лоз, она замедляет | сеть сгорает от огня | 4 |
-| 25 | **Улей Ордена** | спавнер | выпускает рой шмелей, пока цел | ломать сам улей | 5 |
+| 21 | **Raspberry Wolf** | pack of 3 | surround, a leap on a mark | missed — open | 3 |
+| 22 | **Berry Boarlet** | ram | a charge along a strip (little brother of the Frost Boar) | ran into a wall — stunned | 4 |
+| 23 | **Berry Beetle** | ambush | burrows, a mound creeps towards the hero, surfaces | surfaced — open | 4 |
+| 24 | **Vine Weaver** | control | a spider weaves a web of vines on the floor, it slows | the web burns from fire | 4 |
+| 25 | **Order Hive** | spawner | releases a swarm of bumblebees while intact | break the hive itself | 5 |
 
-### F. Конструкты и реликвии
+### F. Constructs and relics
 
-| # | Моб | Роль | Как бьёт | Как победить | Очки |
+| # | Mob | Role | How it attacks | How to beat | Points |
 |---|---|---|---|---|---|
-| 26 | **Друзовый големчик** | тяжёлый | удар о землю — волна шипов по полосе | руки застревают в земле | 8 |
-| 27 | **Котелок-прыгун** | зона | прыжок на героя, брызги при приземлении, вплотную выкипает | после прыжка открыт | 5 |
-| 28 | **Обелиск-хранитель** | поддержка | купол на союзников в 6 м: им половина урона | сначала сломать обелиск | 6 |
-| 29 | **Корзина-мимик** | сюрприз | притворяется наградой и кусается | с неё много малины | 5 |
-| 30 | **Бочонок варенья** | подрывник | катится к герою, метка-круг 1,5 с, взрыв липким вареньем | отбежать или подорвать среди врагов | 3 |
+| 26 | **Druse Golemling** | heavy | a ground slam — a wave of spikes along a strip | its arms get stuck in the ground | 8 |
+| 27 | **Hopping Pot** | zone | a leap onto the hero, splashes on landing, boils over up close | open after the leap | 5 |
+| 28 | **Guardian Obelisk** | support | a dome over allies within 6 m: they take half damage | break the obelisk first | 6 |
+| 29 | **Basket Mimic** | surprise | pretends to be a reward and bites | drops lots of raspberries | 5 |
+| 30 | **Jam Keg** | sapper | rolls towards the hero, a 1.5 s circle mark, explodes with sticky jam | run away or detonate it among enemies | 3 |
 
-### G. Одиночки — редкие сильные воины, не из Ордена
+### G. Loners — rare strong warriors, not of the Order
 
-| # | Моб | Роль | Как бьёт | Как победить | Очки |
+| # | Mob | Role | How it attacks | How to beat | Points |
 |---|---|---|---|---|---|
-| 31 | **Соллер, Рыцарь Солнца** | одиночка | серия из трёх ударов прямым мечом; издали — солнечное копьё по полосе-метке; ниже половины здоровья один раз молится солнцу и лечится | уходить вбок от копья, бить после серии, сорвать молитву ударом | 14 |
+| 31 | **Soller, Knight of the Sun** | loner | a series of three strikes with a straight sword; from afar — a sun spear along a strip mark; below half health prays to the sun once and heals | step aside from the spear, hit after the series, interrupt the prayer with a hit | 14 |
 
-**Кто он.** Странствующий воин, славящий солнце — то, что растит малину. Не из Ордена: ягоды-герба нет, на тунике — солнце. Встречается редко и всегда один; не мини-босс (нет арены, сердца, гримуара), но сильнейший из рядовых.
+**Who he is.** A wandering warrior who praises the sun — the thing that grows raspberries. Not of the Order: no berry crest, a sun on his tunic. Met rarely and always alone; not a mini-boss (no arena, no heart, no grimoire), but the strongest of the regulars.
 
-**Доспех — точная калька по рефам (Солер из Асторы, Dark Souls):** высокий шлем-ведро из потёртой стали с плоским верхом; Т-образное забрало — щель для глаз во всю ширину и вертикальная планка с пятью заклёпками; рифлёный стальной горжет; длинное красное перо сзади слева, отклонено назад; оливково-серый капюшон складками вокруг шеи; бледно-зелёные лохматые наплечники с рваным краем; грязно-белая туника с красным солнцем — 9 волнистых лучей, жёлтый диск с лицом и красными крапинками; бахромчатый подол до середины бедра; широкий коричневый ремень с ромбовидными бляхами и второй ремень наискось; кольчужные рукава, кожаные наручи, стальные манжеты; кольчужные штаны, стальные поножи до колена, кольчужные сапоги; прямой меч в ножнах у левого бедра.
+**Armour — an exact copy of the references (Solaire of Astora, Dark Souls):** a tall bucket helmet of worn steel with a flat top; a T-shaped visor — a full-width eye slit and a vertical bar with five rivets; a fluted steel gorget; a long red plume at the back left, swept backwards; an olive-grey hood in folds around the neck; pale green shaggy pauldrons with a ragged edge; a dirty-white tunic with a red sun — 9 wavy rays, a yellow disc with a face and red speckles; a fringed hem to mid-thigh; a wide brown belt with diamond-shaped studs and a second belt diagonally; chainmail sleeves, leather bracers, steel cuffs; chainmail leggings, steel greaves to the knee, chainmail boots; a straight sword in a scabbard at the left hip.
 
-**Покой — «Восславь солнце»:** руки вверх буквой V, ладони раскрыты, голова запрокинута; сверху падает тёплый столб света, на полу золотое пятно, в луче кружат пылинки. Видит героя в 6 м (или когда ударили): опускает руки, достаёт меч, луч гаснет. Герой ушёл далеко — Соллер возвращается на место со всем здоровьем, руки снова вверх, луч вернулся.
+**Idle — "Praise the sun":** arms raised in a V, palms open, head thrown back; a warm pillar of light falls from above, a golden spot on the floor, dust motes swirl in the beam. Sees the hero at 6 m (or when hit): lowers his arms, draws the sword, the beam goes out. The hero went far away — Soller returns to his spot with full health, arms up again, the beam is back.
 
-## 3. Как складываются комнаты
+## 3. How rooms are assembled
 
-- **Роли:** толпа (4, 10, 11, 16), натиск (12, 17, 22), стрелки (7, 14, 18), танки (5, 9, 15, 26), поддержка (1, 8, 28), призыв (3, 20, 25), контроль и зоны (13, 24, 27, 30). Из любых 3–4 семей собирается интересная комната.
-- **Связки «кого бить первым»:** знаменосец со щитоносцами, целительница за рыцарями, обелиск с магами.
-- **Семьи по этажам (набросок):** сад — куст и звери, крипта — садовники, цитадель — рыцари и маги, конструкты — везде.
+- **Roles:** crowd (4, 10, 11, 16), rush (12, 17, 22), shooters (7, 14, 18), tanks (5, 9, 15, 26), support (1, 8, 28), summon (3, 20, 25), control and zones (13, 24, 27, 30). Any 3–4 families make an interesting room.
+- **"Who to hit first" combos:** the bannerman with shieldbearers, the healer behind knights, the obelisk with mages.
+- **Families by floor (a sketch):** garden — the bush and the beasts, crypt — the gardeners, citadel — knights and mages, constructs — everywhere.
 
-## 4. Порядок работы
+## 4. Order of work
 
-1. ~~Общий класс `Mob` — облегчённый мозг `MiniBoss` без арены и ярости~~ — сделано.
-2. ~~Первая партия, 8 мобов: 1, 2, 3, 4, 5, 10, 16, 21~~ — сделано.
-3. ~~Вторая партия: рыцари (6–9) и порождения куста (11–15)~~ — сделано.
-4. ~~Третья партия: павшие садовники (17–20) и звери (22–25)~~ — сделано.
-5. ~~Четвёртая партия: конструкты (26–30)~~ — сделано. Все 30 есть; дальше — проверить игрой и вывести мобов в орды подземелья.
-6. ~~Соллер, Рыцарь Солнца (31): модель по рефам, молитва под лучом, бой, Солнечная поляна на плейграунде~~ — сделано. В подземелье — один, с шансом ~15 % на этаж, вне бюджета орды (когда орды подземелья возьмут мобов).
+1. ~~A shared `Mob` class — a lightweight `MiniBoss` brain without an arena or rage~~ — done.
+2. ~~First batch, 8 mobs: 1, 2, 3, 4, 5, 10, 16, 21~~ — done.
+3. ~~Second batch: knights (6–9) and spawn of the bush (11–15)~~ — done.
+4. ~~Third batch: fallen gardeners (17–20) and beasts (22–25)~~ — done.
+5. ~~Fourth batch: constructs (26–30)~~ — done. All 30 exist; next — verify by play and bring the mobs into the dungeon hordes.
+6. ~~Soller, Knight of the Sun (31): model from the references, prayer under the beam, combat, the Sun Glade in the playground~~ — done. In the dungeon — one, with a ~15% chance per floor, outside the horde budget (once dungeon hordes take mobs).
 
-## 5. Как сделано
+## 5. How it is built
 
-- **`src/bosses/field.ts`** — `Field`: метки (круг, полоса), снаряды по дуге, опасные зоны. Вынесено из `MiniBoss` — у стража и у каждого моба своё поле.
-- **`src/mobs/mob.ts`** — `Mob` (наследник `Boss`: здоровье и урон масштабируются как у стражей, вспышка, перелив). Мозг: вылезает из земли → стоит, пока не увидит героя в 14 м или его не ударят (соседи в 8 м замечают тоже) → погоня с дистанцией `keep` → атака → `daze` → смерть (валится, рассыпается, малина). Без сердца и ярости. `guard(dir)` — доля урона (щит), `heal(n)` — лечение с зелёной цифрой, отброс от удара делится на `mass`.
-- **`src/mobs/pack.ts`** — `Pack`: стая — спавн из реестра, отряд кольцом `squad`, толкотня (лёгкий уступает тяжёлому), масштаб, малина с павших (призванные — без малины). Мобы не налезают на героя — уступают ему.
-- **`src/mobs/roster.ts`** — `MOBS` (id → имя и класс) и `SQUADS` (отряды витрины).
-- **Мобы:** `mages.ts` — целительница (`healer`), жгучий маг (`pyro`), призыватель (`summoner`); `knights.ts` — оруженосец (`squire`), щитоносец (`shield`), копейщик (`spear`), арбалетчик (`crossbow`), знаменосец (`banner`), молотобоец (`hammer`); `critters.ts` — малинёныш (`berryling`), увядший садовник (`gardener`), малиновый волк (`wolf`); `bush.ts` — слизень (`slime`, осколки `slime_mid`, `slime_small`), колючий клубок (`hedgehog`), лоза-хлыст (`vine`), бутон-плевун (`bud`), терновое чудище (`horror`); `fallen.ts` — сборщик с серпом (`reaper`), костяной лучник (`archer`), огонёк-плакальщик (`wisp`), пугало (`scarecrow`) и его вороны (`crow`); `beasts.ts` — ягодный кабанчик (`boarlet`), жук-ягодник (`beetle`), лозоплёт (`spider`), улей (`hive`) и шмели (`bee`); `constructs.ts` — друзовый големчик (`druseling`), котелок-прыгун (`pot`), обелиск-хранитель (`obelisk`), корзина-мимик (`mimic`), бочонок варенья (`keg`).
-- **Купол обелиска:** мобам в 6 м ставит `ward` — урон по ним ×0,5 (над головой фиолетовые искры, цифра «купол»); граница купола — кольцо на полу, видно, пока обелиск в бою.
-- **Общее в `Mob`:** `dash(dir, speed, dt)` — рывок, true — упёрся в стену (клубок, кабанчик); `ghost` — летает сквозь стены (огонёк); `vanish()` — пасть без удара (пал хозяин — вороны и шмели падают, огонёк лопнул сам); `heroSlow` — замедление от зон моба. **`Field.shot`** — прямой выстрел (болт, стрела), только вид: урон считает стрелок по метке-полосе.
-- **Замедление героя:** у героя поле `slow` (0..1, `src/knight.ts`), плейграунд каждый тик ставит его по зонам мобов (не больше 0,8): паутина лозоплёта — 0,45, холодная лужица огонька — 0,35. Зоны стражей со `slow` (лёд и прочее) по-прежнему не замедляют — не подключены.
-- **Знамя:** у рыцарей флаг `knight`; знамя знаменосца ставит рыцарям в 6 м `rally` — урон (`dmgMult`) и скорость (`pace`) +25 %, над головой малиновые искры. Воткнутое знамя — отдельная цель (`Mob.extras()`, стая отдаёт её в `targets()`), падает с трёх любых ударов; через 6 с знаменосец ставит новое. Пал знаменосец — знамя падает.
-- **Числа (уровень 1, соло):**
+- **`src/bosses/field.ts`** — `Field`: marks (circle, strip), projectiles in an arc, hazard zones. Extracted from `MiniBoss` — a warden and every mob have their own field.
+- **`src/mobs/mob.ts`** — `Mob` (a subclass of `Boss`: health and damage scale as for wardens, flash, shimmer). Brain: climbs out of the ground → stands until it sees the hero at 14 m or is hit (neighbours within 8 m notice too) → chase with `keep` distance → attack → `daze` → death (topples, crumbles, raspberries). No heart and no rage. `guard(dir)` — damage fraction (shield), `heal(n)` — healing with a green number, knockback from a hit is divided by `mass`.
+- **`src/mobs/pack.ts`** — `Pack`: the pack — spawn from the roster, a squad in a ring `squad`, jostling (the light one yields to the heavy one), scale, raspberries from the fallen (summoned ones drop none). Mobs do not crowd onto the hero — they yield to him.
+- **`src/mobs/roster.ts`** — `MOBS` (id → name and class) and `SQUADS` (showcase squads).
+- **Mobs:** `mages.ts` — healer (`healer`), ember mage (`pyro`), summoner (`summoner`); `knights.ts` — squire (`squire`), shieldbearer (`shield`), spearman (`spear`), crossbowman (`crossbow`), bannerman (`banner`), hammerer (`hammer`); `critters.ts` — berryling (`berryling`), withered gardener (`gardener`), raspberry wolf (`wolf`); `bush.ts` — slime (`slime`, fragments `slime_mid`, `slime_small`), prickle ball (`hedgehog`), whip vine (`vine`), spitting bud (`bud`), bramble horror (`horror`); `fallen.ts` — sickle reaper (`reaper`), bone archer (`archer`), mourning wisp (`wisp`), scarecrow (`scarecrow`) and its crows (`crow`); `beasts.ts` — berry boarlet (`boarlet`), berry beetle (`beetle`), vine weaver (`spider`), hive (`hive`) and bumblebees (`bee`); `constructs.ts` — druse golemling (`druseling`), hopping pot (`pot`), guardian obelisk (`obelisk`), basket mimic (`mimic`), jam keg (`keg`).
+- **The obelisk's dome:** gives mobs within 6 m `ward` — damage to them ×0.5 (purple sparks overhead, the caption "dome"); the dome's border is a ring on the floor, visible while the obelisk is in combat.
+- **Shared in `Mob`:** `dash(dir, speed, dt)` — a dash, true means it hit a wall (prickle ball, boarlet); `ghost` — flies through walls (wisp); `vanish()` — fall without a hit (the master fell — crows and bumblebees drop, the wisp burst on its own); `heroSlow` — slowdown from the mob's zones. **`Field.shot`** — a straight shot (bolt, arrow), visual only: the shooter computes damage by the strip mark.
+- **Hero slowdown:** the hero has a `slow` field (0..1, `src/knight.ts`); the playground sets it every tick from mob zones (no more than 0.8): the vine weaver's web — 0.45, the wisp's cold puddle — 0.35. Warden zones with `slow` (ice and the like) still do not slow — not wired up.
+- **The banner:** knights have the `knight` flag; the bannerman's banner gives knights within 6 m `rally` — damage (`dmgMult`) and speed (`pace`) +25%, raspberry sparks overhead. The planted banner is a separate target (`Mob.extras()`, the pack hands it over in `targets()`), it falls after any three hits; after 6 s the bannerman plants a new one. The bannerman fell — the banner falls.
+- **Numbers (level 1, solo):**
 
-| Моб | Здоровье | Удар | Окно |
+| Mob | Health | Strike | Window |
 |---|---|---|---|
-| Целительница | 45 | толчок посохом 4; луч лечит 9/с до 2,4 с; кольцо +30 % в 5 м раз в 8 с | удар во время луча — «сорвано!», оглушена 1,2 с |
-| Жгучий маг | 40 | 3 ягоды по меткам 1,3 м, по 9 + горящий пол 4/с на 2 с | телепорт раз в 6 с; залп 1,5 с стоя |
-| Призыватель | 50 | толчок 5; 3 малинёныша раз в 7 с, своих не больше 6 | призыв 1,7 с стоя |
-| Оруженосец | 45 | два взмаха по полосе 2,3 м, по 6 | — |
-| Щитоносец | 80 | удар щитом по полосе 3 м — 10, отброс 8 | щит спереди ×0,2; после удара 1,1 с опущен |
-| Малинёныш | 12 | укус 4 по кругу 0,7 м | — |
-| Садовник | 40 | мотыга по полосе 2,6 м — 11 | мотыга в земле 0,6 с |
-| Волк | 30 | прыжок по полосе до 6 м — 9 | промахнулся — оглушён 1,1 с |
-| Копейщик | 50 | выпад по полосе 4,2 м — 8 | 0,8 с вытаскивает копьё |
-| Арбалетчик | 40 | болт по полосе 15 м — 8 | перезарядка 2 с |
-| Знаменосец | 55 | толчок древком 5; знамя: рыцари +25 % | знамя падает с 3 ударов |
-| Молотобоец | 120 | молот по кругу 2,2 м — 16, отброс 9 | увяз — оглушён 1,4 с |
-| Слизень | 36 / 16 / 8 | прыжок на метку — 6 / 4 / 3, липкая лужица | делится 1 → 2 → 4, осколки без малины |
-| Клубок | 30 | катится по полосе 9 м — 9 | в стену — оглушён 1,5 с |
-| Лоза-хлыст | 35 | хлёст по кругу 3 м — 7; не ходит, не отбрасывается | — |
-| Бутон-плевун | 30 | 3 косточки по меткам — 6; не ходит | в плевке сомкнут: ×0,25 |
-| Терновое чудище | 140 | аркан 7 м — 6 и тянет к себе, потом удар 12; топот 2,6 м — 10 | аркан мимо — оглушено 1,4 с |
-| Сборщик с серпом | 28 | два взмаха по кругу 1,3 м — по 5 | хрупкий |
-| Костяной лучник | 30 | две стрелы по полосе 12 м — по 6 | вплотную не стреляет |
-| Огонёк-плакальщик | 10 | летит сквозь стены; лопается рядом — 6 и холодная лужица (замедляет 0,35) | сбить на подлёте; лопнул сам — без малины |
-| Пугало | 60 | 3 вороны раз в 6 с (не больше 6); вплотную — круг 2,3 м — 8 | пало — вороны падают |
-| Ягодный кабанчик | 45 | роет 0,8 с, таран 10 м — 10, отброс 8, бежит дальше | в стену — оглушён 1,8 с |
-| Жук-ягодник | 40 | под землёй бугор ползёт к герою до 2 с, выныривает — 9 | под землёй неуязвим; вынырнул — оглушён 1,2 с |
-| Лозоплёт | 35 | сеть на полу 2,4 м на 5 с — замедляет 0,45; укус 6 | — |
-| Улей Ордена | 60 | по 2 шмеля раз в 3,5 с, не больше 5; шмель жалит на 2 | пал — шмели падают |
-| Друзовый големчик | 90 | удар о землю — шипы по полосе 6,5 м — 12 | кулаки в земле — оглушён 1,2 с |
-| Котелок-прыгун | 50 | прыжок до 5 м на метку — 8, горящий пол 4/с; вплотную выкипает — круг 2,2 м — 7 | после прыжка крышка набок 0,8 с |
-| Обелиск-хранитель | 70 | купол 6 м: союзникам ×0,5 урона; вплотную толчок 4, отброс 8; не ходит | сломать первым |
-| Корзина-мимик | 55 | спит корзиной малины, оживает в 2,5 м — «сюрприз!»; укус 9 | малина ×8 |
-| Бочонок варенья | 20 | катится к герою, метка 2,4 м на 1,5 с — взрыв 12, отброс 7; липкая лужа (0,4) | разбить заранее: взрыв бьёт мобов рядом на 30 и подрывает соседние бочонки |
-| Соллер, Рыцарь Солнца | 300 | серия мечом: 3 удара по полосе 2,6 м, по 10; копьё по полосе 14 м (метка 0,7 с) — 18, отброс 6, раз в 5 с; ниже половины здоровья раз за бой — молитва: +25 % за 2 с | после серии 0,9 с открыт, после копья — 1 с; удар срывает молитву — оглушён 1,5 с; малина ×6 |
+| Healer | 45 | staff shove 4; the beam heals 9/s for up to 2.4 s; ring +30% within 5 m every 8 s | a hit during the beam — "interrupted!", stunned 1.2 s |
+| Ember Mage | 40 | 3 berries on 1.3 m marks, 9 each + burning floor 4/s for 2 s | teleport every 6 s; a 1.5 s volley standing still |
+| Summoner | 50 | shove 5; 3 berrylings every 7 s, no more than 6 of its own | a 1.7 s summon standing still |
+| Squire | 45 | two swings along a 2.3 m strip, 6 each | — |
+| Shieldbearer | 80 | shield bash along a 3 m strip — 10, knockback 8 | shield in front ×0.2; lowered for 1.1 s after the bash |
+| Berryling | 12 | bite 4 in a 0.7 m circle | — |
+| Gardener | 40 | hoe along a 2.6 m strip — 11 | hoe in the ground for 0.6 s |
+| Wolf | 30 | a leap along a strip up to 6 m — 9 | missed — stunned 1.1 s |
+| Spearman | 50 | thrust along a 4.2 m strip — 8 | pulls the spear out for 0.8 s |
+| Crossbowman | 40 | a bolt along a 15 m strip — 8 | 2 s reload |
+| Bannerman | 55 | shove with the pole 5; banner: knights +25% | the banner falls after 3 hits |
+| Hammerer | 120 | hammer in a 2.2 m circle — 16, knockback 9 | bogged down — stunned 1.4 s |
+| Slime | 36 / 16 / 8 | a leap onto a mark — 6 / 4 / 3, a sticky puddle | splits 1 → 2 → 4, fragments drop no raspberries |
+| Prickle Ball | 30 | rolls along a 9 m strip — 9 | into a wall — stunned 1.5 s |
+| Whip Vine | 35 | a lash in a 3 m circle — 7; does not walk, no knockback | — |
+| Spitting Bud | 30 | 3 seeds on marks — 6; does not walk | closed while spitting: ×0.25 |
+| Bramble Horror | 140 | a 7 m lasso — 6 and pulls in, then a strike 12; a 2.6 m stomp — 10 | lasso missed — stunned 1.4 s |
+| Sickle Reaper | 28 | two swings in a 1.3 m circle — 5 each | fragile |
+| Bone Archer | 30 | two arrows along a 12 m strip — 6 each | does not shoot up close |
+| Mourning Wisp | 10 | flies through walls; bursts nearby — 6 and a cold puddle (slows 0.35) | knock it down on approach; burst on its own — no raspberries |
+| Scarecrow | 60 | 3 crows every 6 s (no more than 6); up close — a 2.3 m circle — 8 | fell — the crows drop |
+| Berry Boarlet | 45 | digs for 0.8 s, a 10 m ram — 10, knockback 8, keeps running | into a wall — stunned 1.8 s |
+| Berry Beetle | 40 | underground, the mound creeps towards the hero for up to 2 s, surfaces — 9 | invulnerable underground; surfaced — stunned 1.2 s |
+| Vine Weaver | 35 | a 2.4 m web on the floor for 5 s — slows 0.45; bite 6 | — |
+| Order Hive | 60 | 2 bumblebees every 3.5 s, no more than 5; a bumblebee stings for 2 | fell — the bumblebees drop |
+| Druse Golemling | 90 | ground slam — spikes along a 6.5 m strip — 12 | fists in the ground — stunned 1.2 s |
+| Hopping Pot | 50 | a leap of up to 5 m onto a mark — 8, burning floor 4/s; boils over up close — a 2.2 m circle — 7 | lid askew for 0.8 s after the leap |
+| Guardian Obelisk | 70 | a 6 m dome: allies take ×0.5 damage; up close a shove 4, knockback 8; does not walk | break it first |
+| Basket Mimic | 55 | sleeps as a basket of raspberries, wakes at 2.5 m — "surprise!"; bite 9 | raspberries ×8 |
+| Jam Keg | 20 | rolls towards the hero, a 2.4 m mark for 1.5 s — explosion 12, knockback 7; a sticky puddle (0.4) | break it early: the explosion hits mobs nearby for 30 and sets off neighbouring kegs |
+| Soller, Knight of the Sun | 300 | sword series: 3 strikes along a 2.6 m strip, 10 each; a spear along a 14 m strip (0.7 s mark) — 18, knockback 6, every 5 s; below half health once per fight — prayer: +25% over 2 s | open for 0.9 s after the series, 1 s after the spear; a hit interrupts the prayer — stunned 1.5 s; raspberries ×6 |
 
-- **Витрина:** F1 → «Мобы: первая / вторая / третья / четвёртая партия», «Моб: …» (копейщики и сборщики по 2, лозы, огоньки и бочонки по 3) (волки по 3, малинёныши по 4, садовники по 3), «Убрать мобов»; отряд встаёт в 9 м перед героем. Уровень и число игроков — те же, что у стражей. Хук: `__malina.pack`, `__malina.spawnMob(id, x, z)`. Малина с моба — кучкой (`Props.berries`).
-- **Комнаты мобов** — `MOB_ROOMS` в `src/level/playground-map.ts`: у каждой прямоугольник, посты гарнизона и вход; у каждой своя стая. Комната думает, только пока герой ближе 30 м от неё или гарнизон в бою; весь гарнизон пал, а герой вышел из комнаты — гарнизон снова на постах. F1 → кнопки с именами комнат (встать у входа), хук `__malina.mobRooms`, `fillRoom(room)`.
-- **Казарма Ордена** (версия 1.3 — расширена до 33 × 21 м) — комната за западной стеной плейграунда, проход в стене на z −1…1 (`BARRACKS`, `buildBarracks` в `src/level/playground-map.ts`). Гарнизон из 16 мобов на постах (`BARRACKS_POSTS`): у входа малинёныши и садовники, дальше волки (за ними жгучий маг и призыватель) и рыцари (за ними целительница). На постах мобы смотрят на вход и замечают героя в 5 м; группы стоят дальше 8 м друг от друга, поэтому просыпаются по одной. В глубине — гвардия: молотобоец впереди, копейщики, знаменосец, арбалетчики у западной стены. N (сброс) тоже возвращает гарнизон.
-- **Старый погост** — 24 × 24 м к северу от казармы (x −50…−27, z −36…−13), проход — в западной стене плейграунда на z −17…−15. Плиты, земля и трава, надгробия со свечами и цветами. Посты: у входа три сборщика, посреди три огонька, в глубине пугало, у дальней стены два лучника.
-- **Звериное логово** — 24 × 24 м за погостом (z −62…−39), проход — из северной стены погоста (x −36…−34). Земля и трава, кости, корни. Посты: у входа справа два кабанчика, слева два лозоплёта, в глубине два жука и улей.
-- **Мастерская Ордена** — 24 × 24 м за Терновым садом (z 38…61), проход — из южной стены сада (x −36…−34). Плиты и булыжник, ящики, тележка, сундук, свечи. Посты: у входа справа три бочонка, посреди два котелка, в глубине обелиск с двумя големчиками, по углам две корзины-мимика.
-- **Терновый сад** — 24 × 24 м южнее казармы, вход — проход в её южной стене (x −36…−34). Трава и земля, кусты малины по краю, корни на западной скале. Посты: у входа три лозы-хлыста, справа слизни, слева клубки, в глубине чудище и два бутона.
-- **Соллер** — `src/mobs/soller.ts`, `SunKnight` (`soller`). Доспех собран из кубиков, солнце на тунике (спереди и сзади) и кольчуга — свои пиксельные текстуры на холсте: 9 волнистых лучей, диск с лицом и крапинками. Меч в правой руке (−X), ножны у левого бедра (+X), в бою ножны пусты. Луч — `lightBeam` и `groundGlow` из `src/loot-look.ts`, приглушённый (`BEAM`), чтобы рыцарь в нём читался; пылинки в луче. `praising` — славит солнце (на посту не встревожен или молится в бою), по нему руки вверх буквой V, голова запрокинута, луч наливается за ~0,7 с и гаснет за ~0,4 с. Видит героя в 6 м (поляна этого не урезает: `fillRoom` ставит гарнизону `min(aggro, 5)`). Герой дальше 18 м или пал — `homing`: идёт на пост, там здоровье полное, молитва снова доступна, смотрит, как стоял. Смерть — вспышка луча и «Восславь солнце!».
-- **Солнечная поляна** — `glade` в `MOB_ROOMS`: не комната, а угол арены плейграунда (x 14…23, z 12…23) без стен; пост Соллера (18,5; 18,5), вокруг кольцо жёлтых и белых цветов, надпись на полу. Кнопка в F1 — «Солнечная поляна», «Моб: Соллер, Рыцарь Солнца» — вызвать перед героем.
-- **Тесты:** «мобы первой партии» — каждый задевает героя, падает, роняет малину и исчезает; «мобы: щит…» — щит ×0,2 спереди и полный урон в спину, лечение и срыв, призыв без малины, волк оглушён после промаха, масштаб; «комнаты мобов» — 22 + 10 + 9 + 7 + 10 мобов всех тридцати видов, у входа в казарму никто не просыпается, группы просыпаются по одной (и в саду), пал весь гарнизон — после выхода казарма снова полна; «мобы второй партии» — знамя (+25 % урона, падает с трёх ударов), слизень делится 1 → 2 → 4, бутон в плевке ×0,25, клубок о стену оглушён, молотобоец увязает. «Мобы: каждый…» проверяет все 30 и Соллера; «мобы четвёртой партии» — купол ×0,5 и спадает с обелиском, взрыв бочонка бьёт соседа и подрывает второй бочонок, мимик спит корзиной до 2,5 м, големчик увязает, котелок прыгает; «мобы третьей партии» — огонёк сквозь стену, вороны пугала и шмели улья (без малины, падают с хозяином), жук под землёй неуязвим и оглушён, вынырнув, паутина замедляет героя на 0,45 и отпускает, кабанчик о стену оглушён; «Соллер» — на поляне один Соллер, на посту славит под лучом, в 7 м не видит, в 5,5 м просыпается и луч гаснет, серия мечом и копьё задевают героя, молитва ниже половины лечит, удар её срывает (оглушён), второй молитвы нет, герой ушёл — Соллер на посту с полным здоровьем и снова славит.
+- **Showcase:** F1 → "Mobs: first / second / third / fourth batch", "Mob: …" (spearmen and reapers in 2s, vines, wisps and kegs in 3s) (wolves in 3s, berrylings in 4s, gardeners in 3s), "Remove mobs"; the squad stands 9 m in front of the hero. Level and player count are the same as for the wardens. Hook: `__malina.pack`, `__malina.spawnMob(id, x, z)`. Raspberries from a mob come as a pile (`Props.berries`).
+- **Mob rooms** — `MOB_ROOMS` in `src/level/playground-map.ts`: each has a rectangle, garrison posts and an entrance; each has its own pack. A room thinks only while the hero is within 30 m of it or the garrison is in combat; the whole garrison fell and the hero left the room — the garrison is back on its posts. F1 → buttons with room names (stand at the entrance), hook `__malina.mobRooms`, `fillRoom(room)`.
+- **Order Barracks** (version 1.3 — extended to 33 × 21 m) — a room behind the playground's west wall, a passage in the wall at z −1…1 (`BARRACKS`, `buildBarracks` in `src/level/playground-map.ts`). A garrison of 16 mobs on posts (`BARRACKS_POSTS`): at the entrance berrylings and gardeners, further in wolves (behind them the ember mage and the summoner) and knights (behind them the healer). On posts the mobs face the entrance and notice the hero at 5 m; groups stand more than 8 m apart, so they wake one at a time. Deep inside — the guard: the hammerer in front, spearmen, the bannerman, crossbowmen at the west wall. N (reset) also returns the garrison.
+- **Old Graveyard** — 24 × 24 m north of the barracks (x −50…−27, z −36…−13), the passage is in the playground's west wall at z −17…−15. Slabs, earth and grass, gravestones with candles and flowers. Posts: three reapers at the entrance, three wisps in the middle, a scarecrow deep inside, two archers at the far wall.
+- **Beast Lair** — 24 × 24 m beyond the graveyard (z −62…−39), the passage is from the graveyard's north wall (x −36…−34). Earth and grass, bones, roots. Posts: two boarlets at the entrance on the right, two vine weavers on the left, two beetles and a hive deep inside.
+- **Order Workshop** — 24 × 24 m beyond the Bramble Garden (z 38…61), the passage is from the garden's south wall (x −36…−34). Slabs and cobblestone, crates, a cart, a chest, candles. Posts: three kegs at the entrance on the right, two pots in the middle, an obelisk with two golemlings deep inside, two basket mimics in the corners.
+- **Bramble Garden** — 24 × 24 m south of the barracks, the entrance is a passage in its south wall (x −36…−34). Grass and earth, raspberry bushes along the edge, roots on the west cliff. Posts: three whip vines at the entrance, slimes on the right, prickle balls on the left, the horror and two buds deep inside.
+- **Soller** — `src/mobs/soller.ts`, `SunKnight` (`soller`). The armour is assembled from cubes; the sun on the tunic (front and back) and the chainmail are their own pixel textures on a canvas: 9 wavy rays, a disc with a face and speckles. The sword in the right hand (−X), the scabbard at the left hip (+X), empty in combat. The beam is `lightBeam` and `groundGlow` from `src/loot-look.ts`, dimmed (`BEAM`) so the knight reads inside it; dust motes in the beam. `praising` — praising the sun (on post and not alarmed, or praying in combat); when set, arms up in a V, head thrown back, the beam fills in over ~0.7 s and fades over ~0.4 s. Sees the hero at 6 m (the glade does not trim this: `fillRoom` gives the garrison `min(aggro, 5)`). The hero is further than 18 m or fell — `homing`: walks to his post, there health is full, the prayer is available again, faces the way he stood. Death — a flash of the beam and "Praise the sun!".
+- **Sun Glade** — `glade` in `MOB_ROOMS`: not a room but a corner of the playground arena (x 14…23, z 12…23) without walls; Soller's post at (18.5; 18.5), around it a ring of yellow and white flowers, an inscription on the floor. The button in F1 — "Sun Glade", "Mob: Soller, Knight of the Sun" — summon in front of the hero.
+- **Tests:** "first batch mobs" — each hits the hero, falls, drops raspberries and disappears; "mobs: shield…" — shield ×0.2 from the front and full damage to the back, healing and interruption, a summon without raspberries, the wolf stunned after a miss, scale; "mob rooms" — 22 + 10 + 9 + 7 + 10 mobs of all thirty kinds, nobody wakes at the barracks entrance, groups wake one at a time (also in the garden), the whole garrison fell — after leaving the barracks are full again; "second batch mobs" — the banner (+25% damage, falls after three hits), the slime splits 1 → 2 → 4, the bud while spitting ×0.25, the prickle ball stunned against a wall, the hammerer bogs down. "Mobs: each…" checks all 30 and Soller; "fourth batch mobs" — the dome ×0.5 and it drops with the obelisk, a keg's explosion hits a neighbour and sets off the second keg, the mimic sleeps as a basket until 2.5 m, the golemling bogs down, the pot hops; "third batch mobs" — the wisp through a wall, the scarecrow's crows and the hive's bumblebees (no raspberries, drop with their master), the beetle is invulnerable underground and stunned once surfaced, the web slows the hero by 0.45 and lets go, the boarlet stunned against a wall; "Soller" — one Soller in the glade, praises under the beam on his post, does not see at 7 m, wakes at 5.5 m and the beam goes out, the sword series and the spear hit the hero, the prayer below half heals, a hit interrupts it (stunned), there is no second prayer, the hero left — Soller is on his post with full health and praises again.
 
 
-## 6. Мозг и движитель (по образцу botlib Quake 3)
+## 6. Brain and mover (modelled on Quake 3 botlib)
 
-Версия от 04.11.2026 ([arch-layers.md](arch-layers.md)). `Mob.update` (`src/mobs/mob.ts`) разделён:
+Version of 2026-11-04 ([arch-layers.md](arch-layers.md)). `Mob.update` (`src/mobs/mob.ts`) is split:
 
-- **Мозг** `think()` — раз в `THINK_S` = 0,1 с (как `bot_thinktime`), фаза у каждого своя: выбирает цель (ближайший герой отряда или приманка — куст, стена, башня, призванный), замечает героя по `aggro` и отпускает по `leash`, ставит режим движения `intent.mode` (`march` по дороге, `patrol` по маршруту, `chase` — погоня с удержанием дистанции, `path` — в обход, `hold`), выбирает атаку (`choose`) по перезарядке. Удар по мобу и пролом стены будят мысль сразу.
-- **Движитель** `mover()` — каждый такт: шаг по режиму (`marching`/`patrol`/`steer`, подклассы переопределяют `steer`: стрелки держат дистанцию, неподвижные только поворачиваются), стены (`resolveCircle`, призраки сквозь), не налезать на героя; записывает `intent.move` — куда шагнул, с долей скорости.
-- **Навигация**: погоня, которая полсекунды не продвигается к цели, просит путь у крючка `MobHooks.route` (`Pathfinder` уровня, `src/level/pathfind.ts`); бюджет — `ROUTE_BUDGET` = 4 пути за такт мира на всех (как лимит маршрутизации botlib), остальным — в следующий такт; один путь раскрывает не больше `ROUTE_EXPAND` = 2500 клеток (у героя — 30 000), не нашёлся — следующая просьба через 1,5 с. Путь идёт по точкам режимом `path`, цель ушла дальше 1,5 м — снова погоня. Дороги обороны — по-прежнему полилинии `TdLane`.
-- **Куклы** в сетевом бою (`Mob.puppetStep`) шагают по намерению сервера из снимка (`mx`, `mz` в `MobEnt`) тем же ходом и подтягиваются к месту из буфера снимков — походка и повороты как у живого.
-- **Детерминизм**: стражи (`src/bosses/`) тоже на `rnd()`, часы — только время боя; страж `sim-boundary.test.ts` запрещает `Math.random` и `performance.now` во всём геймплее сервера. `src/nav.ts` (`NavGrid`) удалён, `distToObstacle` — в `src/collision.ts`.
-- Тесты: `server/test/mob-brain.test.ts` (стена без пути и с путём, мысль реже такта), детерминизм хэшей в `headless.test.ts`.
+- **Brain** `think()` — once per `THINK_S` = 0.1 s (like `bot_thinktime`), each with its own phase: picks a target (the nearest hero of the squad or a lure — bush, wall, tower, summoned), notices the hero by `aggro` and lets go by `leash`, sets the movement mode `intent.mode` (`march` along the road, `patrol` along the route, `chase` — pursuit keeping distance, `path` — a detour, `hold`), chooses an attack (`choose`) by cooldown. A hit on the mob and a wall breach wake the thought immediately.
+- **Mover** `mover()` — every tick: a step by mode (`marching`/`patrol`/`steer`, subclasses override `steer`: shooters keep distance, stationary ones only turn), walls (`resolveCircle`, ghosts pass through), does not crowd onto the hero; records `intent.move` — where it stepped, with a speed fraction.
+- **Navigation**: a chase that makes no progress towards the target for half a second asks the `MobHooks.route` hook for a path (the level's `Pathfinder`, `src/level/pathfind.ts`); the budget is `ROUTE_BUDGET` = 4 paths per world tick for everyone (like botlib's routing limit), the rest wait for the next tick; one path expands no more than `ROUTE_EXPAND` = 2500 cells (the hero's — 30,000); not found — the next request after 1.5 s. The path is followed by points in `path` mode; the target moved more than 1.5 m away — chase again. Defence roads are still `TdLane` polylines.
+- **Puppets** in a networked fight (`Mob.puppetStep`) step by the server's intent from the snapshot (`mx`, `mz` in `MobEnt`) with the same gait and pull towards the position from the snapshot buffer — walking and turning look like a live one.
+- **Determinism**: wardens (`src/bosses/`) are also on `rnd()`, the clock is only fight time; the `sim-boundary.test.ts` guard forbids `Math.random` and `performance.now` in all server gameplay. `src/nav.ts` (`NavGrid`) removed, `distToObstacle` is in `src/collision.ts`.
+- Tests: `server/test/mob-brain.test.ts` (a wall without a path and with one, thought rarer than a tick), hash determinism in `headless.test.ts`.

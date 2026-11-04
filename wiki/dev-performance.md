@@ -1,100 +1,100 @@
-# Производительность: замеры, бюджеты, правила
+# Performance: measurements, budgets, rules
 
-> Версия 4 · 04.11.2026
+> Version 4 · 2026-11-04
 
-Откуда взялось: подлагивания при шквале магии и при смерти стража. Разбор показал, что дело не в размере сцены (плейграунд — 206 чанков, ничего в уровне не меняется), а в том, что эффекты рождались «на лету»: новые материалы и геометрии на каждый сегмент молнии, тысяча ягод за один кадр, первый каст каждой школы компилировал шейдеры прямо в кадре удара. Поэтому сначала замеры и пулы, стриминг регионов — отдельный этап (см. «Дорожная карта» внизу).
+Where it came from: stutters during a spell barrage and on a warden's death. Analysis showed the cause was not the scene size (the playground — 206 chunks, nothing in the level changes) but effects being born "on the fly": new materials and geometries for every lightning segment, a thousand berries in one frame, the first cast of each school compiling shaders right in the frame of the hit. Hence measurements and pools first; region streaming is a separate stage (see "Roadmap" below).
 
-## Как мерить
+## How to measure
 
-- **F8** в плейграунде — оверлей `src/dev/perf.ts`: FPS, кадр (среднее, p95, максимум за 2 с), CPU симуляции и рендера, GPU (если браузер даёт `EXT_disjoint_timer_query_webgl2`, иначе «н/д»), вызовов отрисовки, треугольников, шейдерных программ, геометрий, текстур, число длинных кадров (> 25 мс) и причина последнего. Причины ставит код: `perf.mark('…')`.
-- Хук `window.__malina.perf` — `snapshot()`, `reset()`; `__malina.renderer.info` — счётчики three; `__malina.ready` — промис прогрева (число программ).
-- **Перф-тест** `tests/perf.spec.ts`: смерть финального стража на 30 уровне с 4 игроками (фонтан, гримуары, подбор ягод) и шквал всех 24 заклинаний. Проверяет: число программ после прогрева не растёт; второй круг заклинаний не добавляет геометрий (утечки); на настоящем GPU — нет кадров дольше `PERF_MAX_MS` (40) и втрое дольше медианы.
+- **F8** in the playground — the `src/dev/perf.ts` overlay: FPS, frame (average, p95, max over 2 s), simulation and render CPU, GPU (if the browser provides `EXT_disjoint_timer_query_webgl2`, otherwise "n/a"), draw calls, triangles, shader programs, geometries, textures, number of long frames (> 25 ms) and the cause of the last one. Causes are set by code: `perf.mark('…')`.
+- Hook `window.__malina.perf` — `snapshot()`, `reset()`; `__malina.renderer.info` — three's counters; `__malina.ready` — the warm-up promise (program count).
+- **Perf test** `tests/perf.spec.ts`: death of the final warden on level 30 with 4 players (fountain, grimoires, berry pickup) and a barrage of all 24 spells. Checks: the program count does not grow after warm-up; the second round of spells adds no geometries (leaks); on a real GPU — no frames longer than `PERF_MAX_MS` (40) or three times the median.
 
 ```bash
 mise exec -- npm run build
 PERF_GPU=1 PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise exec -- npx playwright test tests/perf.spec.ts
 ```
 
-`PERF_GPU=1` открывает Chrome в окне с Metal — только так время рендера что-то значит. Без него тест идёт в SwiftShader (программная растеризация, полупрозрачные эффекты рисуются секундами) и проверяет только утечки и программы.
+`PERF_GPU=1` opens Chrome in a window with Metal — only then does render time mean anything. Without it the test runs in SwiftShader (software rasterisation, translucent effects take seconds to draw) and checks only leaks and programs.
 
-## Замеры
+## Measurements
 
-| Сценарий | До (25.10.2026) | После |
+| Scenario | Before (2026-10-25) | After |
 |---|---|---|
-| Смерть стража, худший кадр (GPU) | 52 мс, на полу 1066 кучек, программ +4 | 12,7 мс, на полу 26 кучек, программ +0 |
-| Смерть стража, SwiftShader | 18,9 с (компиляция шейдеров + 4 вызова на ягоду) | — |
-| Шквал заклинаний, худший кадр (GPU) | 30,7 мс, программ +5, геометрий +143 | 9,5 мс, программ +0, геометрий +2 за круг |
-| Шквал, SwiftShader | 19,3 с | — |
-| Программ после прогрева | 41 (остальные компилировались в бою) | 127 (всё при загрузке, ≈ 1 с) |
+| Warden death, worst frame (GPU) | 52 ms, 1066 piles on the floor, programs +4 | 12.7 ms, 26 piles on the floor, programs +0 |
+| Warden death, SwiftShader | 18.9 s (shader compilation + 4 calls per berry) | — |
+| Spell barrage, worst frame (GPU) | 30.7 ms, programs +5, geometries +143 | 9.5 ms, programs +0, geometries +2 per round |
+| Barrage, SwiftShader | 19.3 s | — |
+| Programs after warm-up | 41 (the rest compiled in battle) | 127 (all at load, ≈ 1 s) |
 
-## Что сделано
+## What was done
 
-1. **Прогрев** (`src/fx-zoo.ts`): при загрузке в сцену ставится «зоопарк» — по одному телу каждого варианта материала, который рождается в бою (Lambert обычный/прозрачный/двусторонний/с цветами вершин, Basic с картой и без, аддитивные, спрайты, точки, линии, экземпляры с цветом, переплёт и обложки гримуаров). Один `renderer.compileAsync` — под канвас (sRGB) и под буфер композера (линейное пространство: это разные программы). Материалы зоопарка живут весь сеанс, иначе three выбросит программы из кэша. Там же заранее рисуются и загружаются текстуры сигилов, свечения, следов и всех текстур, что уже стоят в мире (спящие стражи, лавки — они всплывали при первом попадании в кадр).
-2. **Пулы** (`src/pool.ts`, `src/fx.ts`): частицы на типизированных массивах (структура массивов, без объектов на спавн); кольца, вспышки, дуги, черты и декали — слоты с общей геометрией (кольца квантуются по толщине с шагом 0,05) и материалом на слот; цифры урона — переиспользуемые div-ы, не больше 48.
-3. **Экземпляры** (`src/fx-bolts.ts`): молнии и огненные кубы — по одному `InstancedMesh` на слой с цветом и прозрачностью в атрибутах (`aAlpha` через `onBeforeCompile`). Раньше небесная молния — 60 мешей и 2 материала.
-4. **Фонтан малины** (`src/props.ts`): ягоды вылетают волнами по 8 за тик, кучек не больше 60 (у сильного стража кучки крупнее, малины столько же); подобранное освобождается (`disposeOwned`); вспышка и кольцо подбора — не чаще раза в 0,1 с; лежачая ягода не проверяет препятствия каждый тик.
-5. **Гримуар** (`src/bosses/grimoire.ts`): переплёт — общие материалы, обложка — одна текстура на иконку.
-6. **Кадр** (`src/lighting.ts`): карта теней рисуется один раз за кадр (`shadowMap.autoUpdate = false`, `needsUpdate` перед композером — GTAO делает второй проход по сцене, и тени стоили вдвое); AO — `AO_QUALITY` (половина разрешения, 6 сэмплов, 8 на шумоподавление; было 10 и 12); один обход сцены для скрытия прозрачного вместо двух. Канвас без MSAA и с плотностью ≤ 1,5: кадр собирает композер в своих буферах.
-7. **DOM**: `.fx-flash` без `mix-blend-mode`, `.fx-dark` без `backdrop-filter` (полноэкранные режимы наложения заставляли композитор пересобирать кадр), обводка цифр одним слоем.
-8. **Звук** (`src/audio.ts`): бюджет 32 одновременных голосов; при заполнении первыми уходят детюн-дубли и искорки короче 0,1 с.
+1. **Warm-up** (`src/fx-zoo.ts`): at load a "zoo" is placed in the scene — one body of every material variant that is born in battle (Lambert plain/transparent/double-sided/with vertex colours, Basic with and without a map, additive, sprites, points, lines, instances with colour, grimoire binding and covers). One `renderer.compileAsync` — for the canvas (sRGB) and for the composer buffer (linear space: these are different programs). The zoo materials live for the whole session, otherwise three evicts the programs from the cache. There, too, the sigil, glow and trail textures are pre-drawn and uploaded, as are all textures already standing in the world (sleeping wardens, shops — they popped in when first entering the frame).
+2. **Pools** (`src/pool.ts`, `src/fx.ts`): particles on typed arrays (structure of arrays, no objects per spawn); rings, flashes, arcs, slashes and decals — slots with shared geometry (rings are quantised by thickness in steps of 0.05) and a material per slot; damage numbers — reusable divs, at most 48.
+3. **Instances** (`src/fx-bolts.ts`): lightning and fire cubes — one `InstancedMesh` per layer with colour and opacity in attributes (`aAlpha` via `onBeforeCompile`). Previously a sky lightning bolt was 60 meshes and 2 materials.
+4. **Raspberry fountain** (`src/props.ts`): berries fly out in waves of 8 per tick, at most 60 piles (a strong warden's piles are larger, the raspberry total is the same); what is picked up is freed (`disposeOwned`); the pickup flash and ring — no more than once per 0.1 s; a lying berry does not check obstacles every tick.
+5. **Grimoire** (`src/bosses/grimoire.ts`): binding — shared materials, cover — one texture per icon.
+6. **Frame** (`src/lighting.ts`): the shadow map is drawn once per frame (`shadowMap.autoUpdate = false`, `needsUpdate` before the composer — GTAO makes a second pass over the scene, and shadows cost double); AO — `AO_QUALITY` (half resolution, 6 samples, 8 for denoising; was 10 and 12); one scene traversal to hide transparents instead of two. Canvas without MSAA and with density ≤ 1.5: the composer assembles the frame in its own buffers.
+7. **DOM**: `.fx-flash` without `mix-blend-mode`, `.fx-dark` without `backdrop-filter` (full-screen blend modes forced the compositor to rebuild the frame), number outlines in a single layer.
+8. **Sound** (`src/audio.ts`): a budget of 32 simultaneous voices; when full, detune duplicates and sparkles shorter than 0.1 s go first.
 
-## Этап 2: стоимость кадра (25.10.2026)
+## Stage 2: frame cost (2026-10-25)
 
-| Что | Было | Стало |
+| What | Was | Now |
 |---|---|---|
-| Уровень: `view.sync/update`, рентген, срез | в каждом тике симуляции (до 6 раз за кадр при догоне) | раз в кадр в `render()`; хук `step()` синхронизирует сам |
-| Погода (`src/weather.ts`) | CPU считал 2 600–5 200 частиц и перезаливал буфер каждый кадр | положение считает вершинный шейдер по сиду и времени; за кадр меняются три uniform-а, симуляция в грозу — 0,04 мс |
-| Светлячки | 70 матриц в кадр на CPU | вершинный шейдер по сиду (`seed` на экземпляр), два uniform-а |
-| Геометрия чанков (`src/level/mesher.ts`) | 17 чисел на вершину у всех слоёв, без индексов | индексы: квад — 4 вершины, формы блоков делят вершины рёбер (−33 % вершин); `shore`/`flow` только у жидкостей, `bake` только при запечённом свете рядом. Плейграунд: 45,9 → 21,6 МБ |
-| Путь героя (F2, `src/dev/overlay.ts`) | новая геометрия каждый кадр, даже без пути | один буфер, `drawRange` |
-| Миникарта | 2D-канвас перерисовывался каждый кадр | 10 раз в секунду (полная карта — каждый кадр, пока открыта) |
+| Level: `view.sync/update`, x-ray, slice | every simulation tick (up to 6 times per frame when catching up) | once per frame in `render()`; the `step()` hook syncs by itself |
+| Weather (`src/weather.ts`) | CPU computed 2,600–5,200 particles and re-uploaded the buffer every frame | position is computed by the vertex shader from seed and time; three uniforms change per frame, simulation in a thunderstorm — 0.04 ms |
+| Fireflies | 70 matrices per frame on the CPU | vertex shader by seed (`seed` per instance), two uniforms |
+| Chunk geometry (`src/level/mesher.ts`) | 17 numbers per vertex in all layers, no indices | indices: a quad — 4 vertices, block shapes share edge vertices (−33 % vertices); `shore`/`flow` only for liquids, `bake` only with baked light nearby. Playground: 45.9 → 21.6 MB |
+| Hero path (F2, `src/dev/overlay.ts`) | a new geometry every frame, even without a path | one buffer, `drawRange` |
+| Minimap | the 2D canvas was redrawn every frame | 10 times a second (the full map — every frame while open) |
 
-Вершинный шейдер читает отсутствующий атрибут как ноль (`bake` у неосвещённых чанков, как у декора) — отдельные варианты материала не нужны. В GLSL слово `half` зарезервировано.
+The vertex shader reads a missing attribute as zero (`bake` on unlit chunks, as on decor) — separate material variants are not needed. In GLSL the word `half` is reserved.
 
-## Этап 3: регионы и стриминг (25.10.2026)
+## Stage 3: regions and streaming (2026-10-25)
 
-Решение 25.10.2026: мир — **фиксированная карта** (сгенерированная заранее или нарисованная), бесконечного мира не будет. Регионы нужны не чтобы генерировать на лету, а чтобы в сцене были только окрестности игроков: карта 512 × 512 м и больше целиком в сцене не живёт. Дерева нет и не нужно: мир — сетка колонок **32 × 32 м** (2 × 2 чанка по X и Z, все по Y) с ключом `rx,rz`, регион точки — `floor(x / 32)`.
+Decision of 2026-10-25: the world is a **fixed map** (pre-generated or hand-drawn); there will be no infinite world. Regions are needed not to generate on the fly but so that only the players' surroundings are in the scene: a map of 512 × 512 m and larger does not live in the scene whole. There is no tree and none is needed: the world is a grid of **32 × 32 m** columns (2 × 2 chunks in X and Z, all in Y) keyed by `rx,rz`; the region of a point is `floor(x / 32)`.
 
-- **Источник — карта** `src/world/map-source.ts`: карта целиком лежит в памяти (`Level`), живой уровень получает её палитру, и при загрузке региона чанки копируются как есть (`Level.putChunk`, без перекодирования), декор региона добавляется и убирается вместе с ним, сущности карты `chest`, `barrel`, `crate` становятся предметами региона с id `rx,rz:n` (сундук комнаты-заготовки заменяет блок-ящик под собой). Большая карта (> 400 чанков) стримится сама, любая — с `?stream=1`; маленькая живёт в сцене целиком, как раньше. Пример: `?map=dungeon&seed=42&floor=2&stream=1`.
-- **Генератор** `src/world/gen.ts` — отладочный источник (`?map=world&seed=N`), чтобы гонять стриминг без большой карты: регион детерминирован от (seed, rx, rz). Рельеф — `landscape` из `src/level/kit.ts` на окне с запасом 12 клеток (сглаживание и проходимость считаются по соседям, иначе на стыках были бы швы), в мир копируется только своя колонка. Дороги каждые 64 м по сетке, озёра по шуму 48 м с песчаным берегом, скала в каждом четвёртом регионе, деревья и цветы по хэшу клетки (деревья не ближе 3 м к краю). Сущности — ящики, бочки, сундуки на ровной траве со стабильными id `rx,rz:n`.
-- **Менеджер** `src/world/regions.ts`: якоря — позиции героев (для кооператива объединение), квадрат радиуса 2 региона вокруг каждого; дальше радиуса 3 регион выгружается через 5 с (гистерезис). Загрузка — не больше одного региона за кадр, ближайший первым. Выгрузка — `Level.removeChunk` по ключам региона и `Props.removeGroup`.
-- **Мешер с бюджетом**: `LevelRenderer.sync(budgetMs, focus)` перестраивает грязные чанки ближние первыми, пока не выйдет 4 мс; остальные — в следующих кадрах (`view.pending`). Запечённый свет блоков считается по чанкам, а не обходом всего уровня. `Level.getBounds()` растёт на месте при `set`, без обхода (после стирания остаётся надмножеством — это только диапазон поиска).
-- **Состояние**: `Props` зовёт `hooks.changed(id)`, когда бочка взорвалась, ящик разбит или сундук открыт; менеджер пишет id в дельту региона и сохраняет `malina.world.<seed>` в localStorage (`{version, regions: {key: {dead: [...], seen: base64}}}`); при загрузке региона «мёртвые» не ставятся. Тот же формат подойдёт серверу.
-- **Карта** `src/hud/automap.ts` — тайлами 32 × 32 клетки: тайл создаётся при загрузке региона (колонны читаются из уровня, соседние тайлы перерисовывают контуры), разведка упаковывается в base64 при выгрузке и восстанавливается при возвращении и после перезагрузки.
-- **Тест** `tests/world.spec.ts`: на процедурном источнике — 25 регионов на старте, переход на 160 м грузит и выгружает регионы, те же id предметов при возвращении, разбитый ящик и открытый сундук не возвращаются после выгрузки и перезагрузки, карта помнит разведку; на этаже подземелья как карте — сундуки из сущностей, открытый не возвращается после выгрузки и перезагрузки.
+- **Source — a map** `src/world/map-source.ts`: the whole map lies in memory (`Level`), the live level gets its palette, and on region load the chunks are copied as is (`Level.putChunk`, no re-encoding), the region's decor is added and removed with it, the map entities `chest`, `barrel`, `crate` become region items with id `rx,rz:n` (a room template's chest replaces the crate block under it). A large map (> 400 chunks) streams by itself, any map — with `?stream=1`; a small one lives in the scene whole, as before. Example: `?map=dungeon&seed=42&floor=2&stream=1`.
+- **Generator** `src/world/gen.ts` — a debug source (`?map=world&seed=N`) to exercise streaming without a large map: a region is deterministic from (seed, rx, rz). Relief — `landscape` from `src/level/kit.ts` on a window with a 12-cell margin (smoothing and walkability are computed from neighbours, otherwise there would be seams at the joints), only its own column is copied into the world. Roads every 64 m on the grid, lakes by 48 m noise with a sandy shore, a cliff in every fourth region, trees and flowers by cell hash (trees no closer than 3 m to the edge). Entities — crates, barrels, chests on flat grass with stable ids `rx,rz:n`.
+- **Manager** `src/world/regions.ts`: anchors — hero positions (the union for co-op), a square of radius 2 regions around each; beyond radius 3 a region is unloaded after 5 s (hysteresis). Loading — no more than one region per frame, nearest first. Unloading — `Level.removeChunk` by the region's keys and `Props.removeGroup`.
+- **Mesher with a budget**: `LevelRenderer.sync(budgetMs, focus)` rebuilds dirty chunks nearest first until 4 ms run out; the rest — in following frames (`view.pending`). Baked block light is computed per chunk, not by traversing the whole level. `Level.getBounds()` grows in place on `set`, without traversal (after erasing it remains a superset — it is only a search range).
+- **State**: `Props` calls `hooks.changed(id)` when a barrel exploded, a crate broke or a chest was opened; the manager writes the id into the region delta and saves `malina.world.<seed>` in localStorage (`{version, regions: {key: {dead: [...], seen: base64}}}`); on region load the "dead" are not placed. The same format will suit the server.
+- **Map** `src/hud/automap.ts` — tiles of 32 × 32 cells: a tile is created on region load (columns are read from the level, neighbouring tiles redraw their outlines), exploration is packed into base64 on unload and restored on return and after a reload.
+- **Test** `tests/world.spec.ts`: on the procedural source — 25 regions at start, a 160 m trip loads and unloads regions, the same item ids on return, a broken crate and an opened chest do not come back after unload and reload, the map remembers exploration; on a dungeon floor as a map — chests from entities, an opened one does not come back after unload and reload.
 
-Замер в превью (GPU): переход на 160 м шагами по 2 м — генерация и мешинг регионов укладываются в 6–7 мс на шаг; в мире 25 регионов ≈ 180 чанков, 370 вызовов отрисовки.
+Measurement in the preview (GPU): a 160 m trip in 2 m steps — region generation and meshing fit in 6–7 ms per step; in the world 25 regions ≈ 180 chunks, 370 draw calls.
 
-Не сделано и пойдёт дальше: стражи и арены как сущности карты по регионам (сейчас только плейграунд), препятствия для врагов по регионам, лут с пола в состояние региона, декор экземплярами по регионам (сейчас `DecorRenderer` пересобирает все экземпляры при каждой загрузке региона), мешер в воркере — если бюджета не хватит.
+Not done and coming later: wardens and arenas as map entities per region (currently only the playground), enemy obstacles per region, floor loot into the region state, decor as instances per region (currently `DecorRenderer` rebuilds all instances on every region load), the mesher in a worker — if the budget is not enough.
 
-## Правила для нового кода
+## Rules for new code
 
-- Ничего не создавать в бою: `new THREE.*Material`, `new *Geometry`, `new CanvasTexture` — только при загрузке или в кэш на уровне модуля. Нужен новый вариант материала — добавить его в зоопарк `src/fx-zoo.ts`, иначе первый каст скомпилирует шейдер в кадре.
-- Общие ресурсы помечать `markShared()` — дефолтный `dispose` в `fx.custom` их не трогает; явные `geometry.dispose()` на общих геометриях не писать.
-- Временные тела — через `fx.shock/flash/arc/line/decal/bolt/fireCubes/particle`; `fx.custom` — только для особого, с минимумом тел.
-- Много одинаковых тел (ягоды, осколки, руки) — экземпляры или пул с капом; эффекты на подбор/попадание — с троттлингом.
-- Звуки пакетами — через `voice/hiss/boom`: они сами соблюдают бюджет.
-- Перед коммитом тяжёлого эффекта — `PERF_GPU=1` прогон `tests/perf.spec.ts` и взгляд на F8.
+- Create nothing in battle: `new THREE.*Material`, `new *Geometry`, `new CanvasTexture` — only at load or into a module-level cache. Need a new material variant — add it to the zoo `src/fx-zoo.ts`, otherwise the first cast will compile the shader in the frame.
+- Mark shared resources with `markShared()` — the default `dispose` in `fx.custom` leaves them alone; do not write explicit `geometry.dispose()` on shared geometries.
+- Temporary bodies — via `fx.shock/flash/arc/line/decal/bolt/fireCubes/particle`; `fx.custom` — only for special cases, with a minimum of bodies.
+- Many identical bodies (berries, shards, hands) — instances or a capped pool; pickup/hit effects — with throttling.
+- Sounds in batches — via `voice/hiss/boom`: they respect the budget themselves.
+- Before committing a heavy effect — a `PERF_GPU=1` run of `tests/perf.spec.ts` and a look at F8.
 
-## Дорожная карта
+## Roadmap
 
-- **Стоимость кадра, остаток:** факелы — пересчёт ближайших раз в N кадров; мешер — жадное слияние граней; герой — слить боксы по частям; клонирования `Vector3` в тике героя.
-- **Регионы, остаток:** стражи и враги как сущности регионов с записями без three, препятствия врагов по регионам, лут с пола в состояние региона, мешер в воркере при нехватке бюджета.
-- **Сеть:** сидированный ГСЧ вместо `Math.random` в геймплее (ИИ стражей, криты, лут), убрать `performance.now()` из симуляции, список героев вместо одного.
+- **Frame cost, remainder:** torches — recompute the nearest ones every N frames; mesher — greedy face merging; hero — merge boxes by part; `Vector3` clones in the hero tick.
+- **Regions, remainder:** wardens and enemies as region entities with three-free records, enemy obstacles per region, floor loot into the region state, the mesher in a worker when the budget runs short.
+- **Network:** a seeded RNG instead of `Math.random` in gameplay (warden AI, crits, loot), remove `performance.now()` from the simulation, a list of heroes instead of one.
 
-## Этап 4: серверный бой (04.11.2026)
+## Stage 4: server battle (2026-11-04)
 
-Матч без рендера (`src/game/match.ts`) на четырёх героев, башни на всех площадках, волны одна за другой, Node 26 на M-серии: карта `td` — 0,7 мс на кадр 50 мс при 38 мобах, `td3` — 1,1 мс при 47 мобах; полный снимок ≈ 12–14 КБ JSON (дельты в разы меньше). Около 2 % ядра на матч — ни «думать реже», ни бинарный кодек пока не нужны. Скрипт замера — по образцу `server/test/match.test.ts` (матч + `frame(0.05)` в цикле).
+A match without rendering (`src/game/match.ts`) with four heroes, towers on all pads, waves one after another, Node 26 on M-series: map `td` — 0.7 ms per 50 ms frame with 38 mobs, `td3` — 1.1 ms with 47 mobs; a full snapshot ≈ 12–14 KB JSON (deltas several times smaller). About 2 % of a core per match — neither "think less often" nor a binary codec is needed yet. Measurement script — modelled on `server/test/match.test.ts` (a match + `frame(0.05)` in a loop).
 
-## Сеть: трафик боя
+## Network: battle traffic
 
-Замер 04.11.2026 (`PROTOCOL = 2`, JSON, два игрока, карта `td`): скрипты над `Match` по петле и над настоящим сервером с `ws`-клиентами, байты на TCP-сокете.
+Measurement of 2026-11-04 (`PROTOCOL = 2`, JSON, two players, map `td`): scripts over `Match` via the loopback and over a real server with `ws` clients, bytes on the TCP socket.
 
-| | Данных | На проводе без сжатия | На проводе с permessage-deflate |
+| | Data | On the wire uncompressed | On the wire with permessage-deflate |
 |---|---|---|---|
-| Сервер → игрок, волна без башен, до 20 мобов | 16,5 КБ/с | 16,5 КБ/с | **1,3 КБ/с** |
-| Игрок → сервер, команда каждый такт (60 Гц, ~180 Б) | 10,2 КБ/с | 10,7 КБ/с | **2,7 КБ/с** |
+| Server → player, a wave without towers, up to 20 mobs | 16.5 KB/s | 16.5 KB/s | **1.3 KB/s** |
+| Player → server, a command every tick (60 Hz, ~180 B) | 10.2 KB/s | 10.7 KB/s | **2.7 KB/s** |
 
-- Пачка из трёх команд в кадре (`CMD_DUP`) по WebSocket утраивала исходящий поток до 27 КБ/с на игрока без пользы (TCP не теряет) — теперь дубли только по транспорту с потерями.
-- Полный снимок — до 4,3 КБ, средняя дельта — 0,6 КБ, с 20 мобами — 0,9 КБ.
-- Вывод: бинарный кодек и Хаффман (как в Quake 3) не нужны при ≤ 4 игроках; сжатие с общим контекстом даёт больше, чем компактный кодек без него. Полоса — не ограничение этой игры, ограничение — задержка (RTT/2 на удар); транспорт без TCP (WebTransport, WebRTC DataChannel) имеет смысл только против head-of-line blocking при потерях на Wi-Fi, архитектура (seq/ack, кольцо снимков, `CMD_DUP`) к нему готова.
+- A batch of three commands per frame (`CMD_DUP`) over WebSocket tripled the outgoing stream to 27 KB/s per player to no benefit (TCP does not lose) — now duplicates only over a lossy transport.
+- A full snapshot — up to 4.3 KB, an average delta — 0.6 KB, with 20 mobs — 0.9 KB.
+- Conclusion: a binary codec and Huffman (as in Quake 3) are not needed with ≤ 4 players; compression with a shared context gives more than a compact codec without one. Bandwidth is not this game's limit; the limit is latency (RTT/2 per strike); a non-TCP transport (WebTransport, WebRTC DataChannel) makes sense only against head-of-line blocking under loss on Wi-Fi, and the architecture (seq/ack, snapshot ring, `CMD_DUP`) is ready for it.

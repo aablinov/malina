@@ -1,36 +1,36 @@
-# ADR-004. Назад к мистической кооп-зачистке: мечи, топоры, магия и добрый детский стиль
+# ADR-004. Back to mystic co-op clearing: swords, axes, magic and a kind, kid-friendly style
 
-- **Статус:** принято
-- **Дата:** 22.10.2026
-- **Заменяет:** `claude/adr-002-realistic-weapons-tactical-movement.md` (реальные стволы, тактика, броня)
-- **Уточняет:** `claude/adr-003-visual-style.md` (стиль Minecraft Dungeons) — референсы и правила теперь в `style-guide.md`
-- **Сохраняет:** `claude/adr-001-dungeon-roguelite.md` — кооперативная зачистка подземелий остаётся основным режимом
+- **Status:** accepted
+- **Date:** 2026-10-22
+- **Supersedes:** `claude/adr-002-realistic-weapons-tactical-movement.md` (real firearms, tactics, armour)
+- **Refines:** `claude/adr-003-visual-style.md` (Minecraft Dungeons style) — references and rules now live in `style-guide.md`
+- **Keeps:** `claude/adr-001-dungeon-roguelite.md` — co-op dungeon clearing remains the core mode
 
-## Контекст
+## Context
 
-После ADR-002 игра ушла в тактический шутер: АК-74, AR-15, двустволка, рикошеты, гранаты РГД-5, тюремщики ЧВК, арахниды «Звёздного десанта». Это слишком далеко от изначального концепта — мистического кооператива в духе Minecraft Dungeons. Пользователь просит вернуться назад.
+After ADR-002 the game drifted into a tactical shooter: AK-74, AR-15, double-barrel shotgun, ricochets, RGD-5 grenades, PMC jailers, "Starship Troopers" arachnids. That is too far from the original concept — a mystic co-op game in the spirit of Minecraft Dungeons. The user asks to go back.
 
-## Решение
+## Decision
 
-1. **Жанр** — мистическая кооперативная зачистка подземелий (до 4 игроков), как в ADR-001: этажи из комнат, орды, боссы, малина.
-2. **Бой — ближний и магия.** Классы оружия: меч, топор, большой (двуручный) меч, позже — посохи и заклинания. Огнестрела нет: ни стволов, ни магазинов, ни рикошетов, ни гранат.
-3. **Сейчас конкретного оружия нет** — есть один **стандартный меч**:
-   - ЛКМ — удар, удержание или повторные нажатия — **комбо из трёх ударов**: слева направо, справа налево, сверху вниз (добивающий — дальше, сильнее, с ударной волной);
-   - за клинком тянется **светящийся след** (light trail), у добивающего он ярче и шире;
-   - во время удара герой поворачивается к курсору и делает короткий выпад.
-4. **Управление — как в Minecraft Dungeons (уточнено 22.10.2026):**
-   - **ЛКМ по земле** — идти туда, удержание — идти за курсором; **ЛКМ по цели** — подойти на длину оружия и ударить, удержание — комбо;
-   - **Shift + ЛКМ** — бить на месте в сторону курсора; **WASD** — альтернатива мыши, отменяет приказ;
-   - **Space** — перекат-уклонение с перезарядкой; **1 / 2 / 3** — слоты заклинаний (артефактов) с перезарядкой, без маны;
-   - **прыжка нет**, как в оригинале: перепады высоты — ступени и полублоки. Бег, присед, прицел и выносливость убраны.
-5. **Врагов в плейграунде нет** — жуки, арахниды и тюремщики удалены вместе с кодом. Новые враги появятся под ближний бой.
-6. **Стиль** — добрый, детский, как на референсах Minecraft и Minecraft Dungeons (`style-guide.md`): насыщенные цвета, мягкий свет, светящиеся акценты, светлячки, живая вода. Без крови и «взрослого» реализма.
+1. **Genre** — mystic co-op dungeon clearing (up to 4 players), as in ADR-001: floors of rooms, hordes, bosses, raspberries.
+2. **Combat is melee and magic.** Weapon classes: sword, axe, great (two-handed) sword, later staves and spells. No firearms: no guns, no magazines, no ricochets, no grenades.
+3. **No specific weapons for now** — there is one **standard sword**:
+   - LMB — strike; holding or repeated presses — a **three-hit combo**: left to right, right to left, top to bottom (the finisher reaches further, hits harder, with a shockwave);
+   - a **glowing light trail** follows the blade; the finisher's trail is brighter and wider;
+   - during a strike the hero turns to the cursor and makes a short lunge.
+4. **Controls — as in Minecraft Dungeons (refined 2026-10-22):**
+   - **LMB on the ground** — walk there, holding — follow the cursor; **LMB on a target** — approach to weapon reach and strike, holding — combo;
+   - **Shift + LMB** — strike in place towards the cursor; **WASD** — an alternative to the mouse, cancels the order;
+   - **Space** — dodge roll with a cooldown; **1 / 2 / 3** — spell (artifact) slots with cooldowns, no mana;
+   - **no jump**, as in the original: height differences are stairs and half-blocks. Sprint, crouch, aim and stamina are removed.
+5. **No enemies in the playground** — beetles, arachnids and jailers are deleted together with their code. New enemies will come for melee combat.
+6. **Style** — kind, kid-friendly, as in the Minecraft and Minecraft Dungeons references (`style-guide.md`): saturated colours, soft light, glowing accents, fireflies, living water. No blood and no "adult" realism.
 
-## Последствия
+## Consequences
 
-- Удалены модули стрельбы и врагов: `firearms.ts`, `gunplay.ts`, `grenade.ts`, `hero.ts` (тактический боец), `jailer.ts`, `cover.ts`, `arachnid.ts`, `beetle.ts`, `bush.ts`, `config.ts`. Они остаются в истории git.
-- Новый герой — `src/knight.ts`: блочный персонаж с крупной головой, меч с комбо и перекат; след клинка — `src/trail.ts`. Мышиные приказы (идти, подойти и бить, бить на месте) и слоты заклинаний — в `src/dev/playground.ts`, путь в обход стен ищет `src/level/pathfind.ts` — A* по точкам сетки 0,5 м на высоте пола: вверх — шаг до 0,5 м (ступени, полублоки), вниз — спрыгнуть до 3 м, над полом свободно на рост героя, у стен дороже; готовый путь спрямляется. Вода и кислота — вброд: пол в них на полблока ниже берега.
-- Числа героя и меча — в `src/tuning.ts` (`HERO`, `SWORD`), правятся в F1.
-- Плейграунд остаётся основной сценой разработки: соломенные чучела вместо мишеней стрельбища, склад и витрина блоков на месте.
-- Вода анимирована шейдером: волны по поверхности, блики и пена у берегов.
-- `design-dungeon.md` в разделах про оружие, броню и тактическую стойку устарел — переписывается под ближний бой и магию.
+- Shooting and enemy modules removed: `firearms.ts`, `gunplay.ts`, `grenade.ts`, `hero.ts` (tactical fighter), `jailer.ts`, `cover.ts`, `arachnid.ts`, `beetle.ts`, `bush.ts`, `config.ts`. They stay in git history.
+- New hero — `src/knight.ts`: a blocky character with a large head, a sword with a combo and a dodge roll; the blade trail is `src/trail.ts`. Mouse orders (walk, approach and strike, strike in place) and spell slots are in `src/dev/playground.ts`; the path around walls is found by `src/level/pathfind.ts` — A* over grid points 0.5 m apart at floor height: upward a step of up to 0.5 m (stairs, half-blocks), downward a drop of up to 3 m, free space above the floor for the hero's height, more expensive near walls; the finished path is straightened. Water and acid are waded: the floor in them is half a block below the bank.
+- Hero and sword numbers are in `src/tuning.ts` (`HERO`, `SWORD`), tuned in F1.
+- The playground remains the main development scene: straw training dummies instead of shooting-range targets, the storage yard and block showcase stay in place.
+- Water is animated by a shader: waves on the surface, highlights and foam at the banks.
+- `design-dungeon.md` is outdated in the sections on weapons, armour and tactical stance — it is being rewritten for melee and magic.

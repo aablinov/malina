@@ -1,7 +1,7 @@
-# Карта 1: нарисованный план острова
+# Map 1: the drawn plan of the island
 
-Файлы: `map-01/map.webp` — рисунок карты (остров с горами, храмом-пирамидой, фортом, деревней хижин, рекой с водопадами, кораблями), `map-01/plan.png` — та же картинка с разметкой, `map-01/plan.html` — исходник разметки (SVG поверх картинки, рендер Chrome).
+Files: `map-01/map.webp` — the map drawing (an island with mountains, a pyramid temple, a fort, a village of huts, a river with waterfalls, ships), `map-01/plan.png` — the same picture with markup, `map-01/plan.html` — the markup source (SVG over the picture, rendered in Chrome).
 
-**Что на разметке:** 7 биомов (снег — Седые горы, джунгли с кристаллами — храм, пальмовые рощи, скалы и руины Западного холма, луг с золотой рощей, горячие ключи, форт и деревня), дороги, 14 групп врагов по порядку пути, 7 засад, 5 патрулей, босс на пирамиде, Соллер у статуи, 4 моста между островами (Б1–Б4), 4 переправы через реки (М1–М4), 13 сундуков и россыпь ящиков. Масштаб: вся картинка — 256 × 256 м, 1 м ≈ 7,5 px.
+**What is on the markup:** 7 biomes (snow — the Grey Mountains, jungle with crystals — the temple, palm groves, the cliffs and ruins of the West Hill, a meadow with a golden grove, hot springs, the fort and the village), roads, 14 enemy groups in path order, 7 ambushes, 5 patrols, the boss on the pyramid, Soller by the statue, 4 bridges between the islands (B1–B4), 4 river crossings (M1–M4), 13 chests and a scattering of crates. Scale: the whole picture is 256 × 256 m, 1 m ≈ 7.5 px.
 
-**Что взято:** всё — генератор карты `src/level/island-map.ts` написан в пикселях этой картинки ([design-map-island.md](../design-map-island.md)). Не сделано: корабли (нет пресета), водопады в море, крокодил и звери-статисты.
+**What was taken:** everything — the map generator `src/level/island-map.ts` is written in the pixels of this picture ([design-map-island.md](../design-map-island.md)). Not done: ships (no preset), waterfalls into the sea, the crocodile and background animals.

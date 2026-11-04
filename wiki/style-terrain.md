@@ -1,52 +1,52 @@
-# Земля, камень и листва: пастельная гамма Minecraft Dungeons
+# Ground, stone and foliage: the pastel palette of Minecraft Dungeons
 
-Версия 1.2 от 23.10.2026. Источник — те же 4 скриншота: [sources/mcd-lighting.md](sources/mcd-lighting.md). Свет — [style-lighting.md](style-lighting.md). Код — `src/textures.ts` (`softFill`, `GRASS_*`, `DIRT_*`), `src/level/mesher.ts` (`macroTint`), `src/level/palette.ts` (`natural`).
+Version 1.2 of 2026-10-23. Source — the same 4 screenshots: [sources/mcd-lighting.md](sources/mcd-lighting.md). Light — [style-lighting.md](style-lighting.md). Code — `src/textures.ts` (`softFill`, `GRASS_*`, `DIRT_*`), `src/level/mesher.ts` (`macroTint`), `src/level/palette.ts` (`natural`).
 
-## Что видно на скриншотах
+## What the screenshots show
 
-- **Трава — почти ровная заливка.** Внутри одной поверхности яркость гуляет на ±5–8 из 255, пиксельного шума нет. Разнообразие — крупными мягкими пятнами в несколько метров (светлее и желтее / темнее), поэтому вдали не видно повтора тайла — трава будто «смазана».
-- **Дорожка** — тёплый оранжевый беж, мягкие светлые «следы» ≈ 0,3 м довольно густо. **Край не по линейке:** граница с травой рваная, ступеньками в 1–2 пикселя с лёгким размытием, гуляет заливами и мысами на метр-два, на дороге — островки травы, трава местами вытоптана (скриншот `mcd-01-village`).
-- **Бок земли** — ровная коричневая полоса, сверху свисает трава.
-- **Тени светлые:** бок уступа в тени — всё ещё тёплый коричневый, а не чёрный.
-- **Цвет пастельный:** насыщенность умеренная, без «кислотной» зелени.
-- **Камень ограды** — ровный светлый голубовато-серый, швов почти не видно; **руины** — сланцевые сине-бирюзовые с мхом; **плиты пола** — серые, шов светлый.
-- **Листва** — крупные «листочки» в 2–3 пикселя, оливково-зелёная, сверху светлее.
+- **Grass is an almost flat fill.** Within one surface the brightness wanders by ±5–8 out of 255, there is no pixel noise. Variety comes in large soft blotches several metres across (lighter and yellower / darker), so no tile repetition is visible from afar — the grass looks "smeared".
+- **The path** — a warm orange beige, soft light "footprints" ≈ 0.3 m fairly dense. **The edge is not ruler-straight:** the border with the grass is ragged, in steps of 1–2 pixels with a slight blur, wanders in bays and headlands a metre or two across, on the road — islands of grass, the grass is trampled in places (screenshot `mcd-01-village`).
+- **The side of the earth** — a flat brown strip, grass hangs down from above.
+- **Shadows are light:** the side of a ledge in shadow is still a warm brown, not black.
+- **The colour is pastel:** moderate saturation, no "acid" green.
+- **Fence stone** — a flat light bluish grey, the joints are barely visible; **ruins** — slaty blue-turquoise with moss; **floor slabs** — grey, the joint is light.
+- **Foliage** — large "leaflets" of 2–3 pixels, olive green, lighter on top.
 
-## Как сделано
+## How it is done
 
-| Что | Как |
+| What | How |
 |---|---|
-| Текстуры земли | `softFill`: ровный цвет, зерно ±2–3, 3–5 крупных пятен (круги, к краю сходят на нет, с переносом через край тайла) — вместо пиксельного шума. Трава, бок травы, земля, дорожка, песок, гравий, камень, бахрома, пучки, высокая трава, папоротник |
-| Пятна по миру | `macroTint` в мешере: два слоя плавного шума (9 м и 3 м), светлые пятна теплее и желтее, тёмные холоднее, ±6 %. Через цвет вершин — в шейдере бесплатно. Блоки с `natural: true` (трава, земля, дорожка, песок, гравий), а также бахрома и пучки — того же оттенка, что земля под ними |
-| Рваный край дорог | Мешер: у травы и дорожки в палитре `bleed` — 4 маски; верх блока «заходит» на верх соседней природной земли другого вида на 0–8 px (полметра), глубина плавно гуляет ступеньками по 2 px, к концам тайла сходится — соседние тайлы стыкуются; крайний пиксель — полутон двух материалов, плюс островки. Маска выбирается по хэшу и зеркалится. Слой `detail` с `polygonOffset` — не мерцает. Крупно край ломает генератор карты: клетки у края по плавному шуму (3 м) зарастают травой или вытаптываются в дорогу |
-| Кладка | `softBricks`: у каждого кирпича свой тон ±8 %, верхний ряд чуть светлее, шов того же цвета, темнее на 12 % (у руин 14 %). `softCobble`: скруглённые камни, сверху-слева светлее. Плиты — 4 крупные плиты на тайл, шов сверху-слева светлый. Мох — `overlayBlobs`, мягкие пятна, гуще сверху. У «руинного» кирпича все варианты в сланцевой гамме (свой мшистый) — без пестроты |
-| Листва | `softLeaves`: «листочки» 2 × 2 из четырёх тонов, сверху светлее; у вырезной — дырки по краю. Разброс яркости между блоками кроны 0,12 (было 0,2) |
-| Без «шахматки» | Разброс яркости от блока к блоку у природной земли снижен с 0,08–0,14 до 0,02–0,03, у камня — до 0,03 |
-| Свет | Неба больше, солнца меньше (2,0 / 2,2), отражённый свет снизу тёплый `#d8c49a`, экспозиция 1,02, насыщенность в цветокоррекции ×1,0 |
+| Ground textures | `softFill`: a flat colour, grain ±2–3, 3–5 large blotches (circles fading out toward the edge, wrapping across the tile edge) — instead of pixel noise. Grass, grass side, earth, path, sand, gravel, stone, fringe, tufts, tall grass, fern |
+| Blotches across the world | `macroTint` in the mesher: two layers of smooth noise (9 m and 3 m), light blotches warmer and yellower, dark ones cooler, ±6 %. Through vertex colour — free in the shader. Blocks with `natural: true` (grass, earth, path, sand, gravel), as well as fringe and tufts — the same tint as the ground under them |
+| Ragged road edge | Mesher: grass and path have `bleed` in the palette — 4 masks; the block's top "encroaches" onto the top of a neighbouring natural ground of another kind by 0–8 px (half a metre), the depth wanders smoothly in steps of 2 px, converging toward the tile ends — neighbouring tiles join up; the outermost pixel — a halftone of the two materials, plus islands. The mask is chosen by hash and mirrored. The `detail` layer with `polygonOffset` — no flicker. At the large scale the edge is broken by the map generator: cells at the edge grow over with grass or are trampled into road by smooth noise (3 m) |
+| Masonry | `softBricks`: every brick has its own tone ±8 %, the top row slightly lighter, the joint the same colour, darker by 12 % (for ruins 14 %). `softCobble`: rounded stones, lighter top-left. Slabs — 4 large slabs per tile, the joint is light top-left. Moss — `overlayBlobs`, soft blotches, denser on top. All variants of the "ruin" brick are in the slaty palette (with their own mossy one) — no motley |
+| Foliage | `softLeaves`: "leaflets" of 2 × 2 from four tones, lighter on top; the cut-out one has holes along the edge. Brightness spread between crown blocks 0.12 (was 0.2) |
+| No "checkerboard" | The block-to-block brightness spread of natural ground lowered from 0.08–0.14 to 0.02–0.03, of stone — to 0.03 |
+| Light | More sky, less sun (2.0 / 2.2), the bounced light from below is warm `#d8c49a`, exposure 1.02, saturation in colour grading ×1.0 |
 
-## Калибровка по пикселям
+## Calibration by pixels
 
-Цвета не на глаз: с референса снята медиана освещённых участков, у нас — медиана пикселей кадра (`gl.readPixels` 9 × 9 в точке мира), текстура подгонялась отношением «цель / замер» по каналам.
+Colours are not by eye: the median of lit areas was taken from the reference, ours — the median of frame pixels (`gl.readPixels` 9 × 9 at a world point), the texture was tuned by the "target / measurement" ratio per channel.
 
-| Поверхность | Референс | Было | Стало |
+| Surface | Reference | Was | Became |
 |---|---|---|---|
-| Трава сверху, на солнце | `#84aa58` (≈ 117–135) | `#64a229`, разброс 81–124 | `#81ae51`, разброс ±8 |
-| Дорожка | `#cba060` | `#826546` | `#cfaa61` |
-| Бок уступа в тени | тёплый коричневый ≈ `#9b6d36` | `#352b1e` | коричневый, не чёрный |
-| Дорожка (медиана / светлые следы) | `#c89c5d` / `#d3a96a` | `#cfaa61`, круглые точки | `#cc9f5b`…`#cea15e` / `#d2ac6d` |
-| Булыжник сверху | `#a3a8ad` | серый `#8d8d8d` с шумом | `#aeacad` |
-| Плиты | `#a6a6a6` | бежево-серые с тёмными швами | `#a1a3a2`…`#acaeac` |
-| Сланец руин | `#587578` (в тени) | лиловый `#8b7f93` | `#6b7e82` (на солнце) |
-| Листва на солнце / в тени | `#789a45` / `#4d7c2f` | тёмная `#3f7d2c` с чёрными точками | `#7a9948` / `#4c6e2e` |
+| Grass top, in the sun | `#84aa58` (≈ 117–135) | `#64a229`, spread 81–124 | `#81ae51`, spread ±8 |
+| Path | `#cba060` | `#826546` | `#cfaa61` |
+| Side of a ledge in shadow | warm brown ≈ `#9b6d36` | `#352b1e` | brown, not black |
+| Path (median / light footprints) | `#c89c5d` / `#d3a96a` | `#cfaa61`, round dots | `#cc9f5b`…`#cea15e` / `#d2ac6d` |
+| Cobblestone top | `#a3a8ad` | grey `#8d8d8d` with noise | `#aeacad` |
+| Slabs | `#a6a6a6` | beige-grey with dark joints | `#a1a3a2`…`#acaeac` |
+| Ruin slate | `#587578` (in shadow) | lilac `#8b7f93` | `#6b7e82` (in the sun) |
+| Foliage in the sun / in shadow | `#789a45` / `#4d7c2f` | dark `#3f7d2c` with black dots | `#7a9948` / `#4c6e2e` |
 
-Базовые цвета текстур (до света): трава `#6d994e` / светлая `#7ba558` / тёмная `#608b46`, земля `#9a6942` / `#8a5c39`, дорожка `#c99153` со следами `#d6a466`, песок `#e4d19b`, камень `#a4abb4`; кладка: булыжник `#88929d`, кирпич `#86919c`, сланец `#6a8592`, плиты `#a0a2a2`, мох `#6f9a4c`; листва `#486e37` / `#6b8a42` / `#839f52` / `#9cb063`, кусты на тон темнее.
+Base texture colours (before light): grass `#6d994e` / light `#7ba558` / dark `#608b46`, earth `#9a6942` / `#8a5c39`, path `#c99153` with footprints `#d6a466`, sand `#e4d19b`, stone `#a4abb4`; masonry: cobblestone `#88929d`, brick `#86919c`, slate `#6a8592`, slabs `#a0a2a2`, moss `#6f9a4c`; foliage `#486e37` / `#6b8a42` / `#839f52` / `#9cb063`, bushes a tone darker.
 
-## Правила
+## Rules
 
-- Новая природная поверхность — через `softFill`, без `noiseFill` с большим разбросом.
-- Деталь — крупными пятнами и формой (бахрома, пучки, декор), а не пиксельной рябью.
-- Не поднимать насыщенность цветокоррекцией — пастель держится на текстурах и мягком свете.
+- A new natural surface — through `softFill`, without `noiseFill` with a large spread.
+- Detail — in large blotches and in shape (fringe, tufts, decor), not in pixel ripple.
+- Do not raise saturation in colour grading — the pastel holds on the textures and the soft light.
 
-## Дальше
+## Next
 
-- Дерево (доски, брёвна, ящики) и дом (штукатурка, бурый кирпич) пока в старой гамме.
+- Wood (boards, logs, crates) and the house (plaster, brown brick) are still in the old palette.
