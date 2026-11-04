@@ -19,6 +19,7 @@ export interface LoopbackOpts {
 interface Pending { at: number; frame: string; to: LoopbackEnd }
 
 export class LoopbackEnd implements Transport {
+  readonly lossy: boolean;
   onMessage: ((frame: string) => void) | null = null;
   onClose: ((code: number) => void) | null = null;
   peer!: LoopbackEnd;
@@ -28,7 +29,7 @@ export class LoopbackEnd implements Transport {
   delivered = 0;
   private readonly link: Link;
 
-  constructor(link: Link) { this.link = link; }
+  constructor(link: Link, lossy: boolean) { this.link = link; this.lossy = lossy; }
 
   send(frame: string): void {
     if (this.closed || this.peer.closed) return;
@@ -86,7 +87,8 @@ export interface LoopbackPair { a: LoopbackEnd; b: LoopbackEnd; pump: (now: numb
 
 export function loopbackPair(o: LoopbackOpts = {}): LoopbackPair {
   const link = new Link(o);
-  const a = new LoopbackEnd(link), b = new LoopbackEnd(link);
+  const lossy = (o.loss ?? 0) > 0 || (o.reorder ?? 0) > 0;
+  const a = new LoopbackEnd(link, lossy), b = new LoopbackEnd(link, lossy);
   a.peer = b; b.peer = a;
   return { a, b, pump: (now) => link.pump(now) };
 }

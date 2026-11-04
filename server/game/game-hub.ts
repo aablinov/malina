@@ -14,6 +14,7 @@ import type { MatchRunner } from './runner.ts';
  * Лобби, чат и профили живут на `/ws` (server/hub.ts)
  */
 const HELLO_MS = 15_000;
+export const DEFLATE = { threshold: 64, serverNoContextTakeover: false, clientNoContextTakeover: false, serverMaxWindowBits: 15, clientMaxWindowBits: 15, zlibDeflateOptions: { level: 6, memLevel: 8 }, concurrencyLimit: 4 };
 
 export interface GameHubDeps {
   auth: Auth;
@@ -30,7 +31,8 @@ export class GameHub {
 
   constructor(deps: GameHubDeps) {
     this.d = deps;
-    this.wss = new WebSocketServer({ noServer: true, maxPayload: NET_LIMITS.maxMessage });
+    // permessage-deflate с общим контекстом: снимки похожи от кадра к кадру, сжимаются в разы; порог низкий — кадры мелкие
+    this.wss = new WebSocketServer({ noServer: true, maxPayload: NET_LIMITS.maxMessage, perMessageDeflate: DEFLATE });
     this.wss.on('connection', (ws: WebSocket) => this.greet(ws));
   }
 

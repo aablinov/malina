@@ -441,7 +441,8 @@ export class NetBattleClient {
     const i = h.input, seq = ++this.seq;
     const c: Cmd = { seq, snap: this.view.n, move: [r2(i.move.x), r2(i.move.y)], aim: [r2(i.aim.x), r2(i.aim.y), r2(i.aim.z)], attack: i.attack, roll: this.rolled, bow: h.bow(), ping: h.net.rtt };
     this.recent.push(c);
-    if (this.recent.length > CMD_DUP) this.recent.shift();
+    const dup = this.chan.lossy ? CMD_DUP : 1;
+    while (this.recent.length > dup) this.recent.shift();
     this.chan.sendUnreliable(this.recent.slice());
     this.chan.flush();
     this.rolled = false;

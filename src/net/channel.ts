@@ -60,6 +60,8 @@ export class Channel<R = unknown, U = unknown> {
 
   /** В пути надёжных сообщений */
   get pending(): number { return this.out.length; }
+  /** Транспорт теряет кадры — ненадёжное стоит дублировать (по TCP дубли только тратят полосу) */
+  get lossy(): boolean { return this.t.lossy ?? false; }
 
   /** Надёжно: уйдёт сейчас и будет повторяться до подтверждения; false — окно полно */
   sendReliable(m: R): boolean {
