@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -175,7 +176,7 @@ export class GeneralRdyan extends MiniBoss {
 
   protected choose(dist: number): string | null {
     if (this.enraged && this.meteorCd <= 0) return this.pick('meteor');
-    const r = Math.random();
+    const r = rnd();
     if (dist < 5) return this.pick(r < 0.5 ? 'swords' : r < 0.8 ? 'pull' : 'arrows');
     if (dist > 8) return this.pick(r < 0.5 ? 'leap' : r < 0.8 ? 'arrows' : 'pull');
     return this.pick(r < 0.35 ? 'pull' : r < 0.7 ? 'arrows' : 'leap');
@@ -197,7 +198,7 @@ export class GeneralRdyan extends MiniBoss {
         if (t < PULL_T) {
           const hero = this.h.hero.pos, dx = this.pos.x - hero.x, dz = this.pos.z - hero.z, d = Math.hypot(dx, dz);
           if (d < PULL_R && d > this.radius + 1) { hero.x += (dx / d) * PULL_SPEED * dt; hero.z += (dz / d) * PULL_SPEED * dt; }
-          if (Math.random() < 0.6) fx.particle({ pos: hero.clone().setY(rand(0.3, 1.5)), vel: new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(3), life: 0.4, size: 0.1, color: GRAV, gravity: 0 });
+          if (rnd() < 0.6) fx.particle({ pos: hero.clone().setY(rand(0.3, 1.5)), vel: new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(3), life: 0.4, size: 0.1, color: GRAV, gravity: 0 });
         }
         if (at(PULL_T)) this.markCircle(this.pos, SLAM_R, SLAM_AIM, () => undefined);
         if (at(PULL_T + SLAM_AIM)) {
@@ -298,7 +299,7 @@ export class GeneralRdyan extends MiniBoss {
         if (t < f0) return false;
         const k = Math.min(1, (t - f0) / MET_FALL);
         this.flyY = MET_H * (1 - k);
-        if (Math.random() < 0.9) fx.particle({ pos: this.pos.clone().setY(this.flyY + 2), vel: new THREE.Vector3(rand(-1, 1), 3, rand(-1, 1)), life: 0.5, size: 0.2, color: Math.random() < 0.5 ? METEOR : EMBER, gravity: -2 });
+        if (rnd() < 0.9) fx.particle({ pos: this.pos.clone().setY(this.flyY + 2), vel: new THREE.Vector3(rand(-1, 1), 3, rand(-1, 1)), life: 0.5, size: 0.2, color: rnd() < 0.5 ? METEOR : EMBER, gravity: -2 });
         if (k < 1) return false;
         this.flyY = 0;
         this.shadow.visible = false;
@@ -344,7 +345,7 @@ export class GeneralRdyan extends MiniBoss {
         for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + t; this.hazard(this.pos.clone().add(new THREE.Vector3(Math.cos(a) * (this.radius + 1.3), 0, Math.sin(a) * (this.radius + 1.3))), 0.9, 4, 8, THORN); }
         this.h.fx.burst(this.pos.clone().setY(0.5), [THORN, RASP, '#3f6a2a'], 16, { speed: 4, up: 3, size: 0.12, life: 0.6, gravity: 8 });
       }
-      if (Math.random() < 0.4) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(0.5, 4.5), rand(-1.5, 1.5))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.6, size: 0.1, color: GRAV, gravity: 0 });
+      if (rnd() < 0.4) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(0.5, 4.5), rand(-1.5, 1.5))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.6, size: 0.1, color: GRAV, gravity: 0 });
     }
     // бег: ножки лошадки мелькают, рыцарь подскакивает в седле
     if (walk) {

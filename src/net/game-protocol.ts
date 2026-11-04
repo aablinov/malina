@@ -39,7 +39,7 @@ export type GameServerMsg =
 /** Герой в снимке: `h<место>` */
 export type HeroEnt = EntityState & { seat: number; x: number; y: number; z: number; yaw: number; hp: number; maxHp: number; down: 0 | 1; mx: number; mz: number; ax: number; az: number; attack: 0 | 1; roll: 0 | 1; bow: 0 | 1; ack: number; ping: number };
 /** Враг в снимке: `m<сетевой id>` */
-export type MobEnt = EntityState & { kind: string; x: number; y: number; z: number; yaw: number; hp: number; maxHp: number; flags: number; attack: string; seq: number; ax: number; az: number; lane: string; marchI: number };
+export type MobEnt = EntityState & { kind: string; x: number; y: number; z: number; yaw: number; hp: number; maxHp: number; flags: number; attack: string; seq: number; ax: number; az: number; lane: string; marchI: number; mx: number; mz: number };
 /** Флаги врага в снимке: призван (без малины), оглушён, замедлен холодом, воодушевлён знаменем, заметил героя */
 export const MOB_FLAG = { summoned: 1, daze: 2, chill: 4, rally: 8, alerted: 16 } as const;
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -183,7 +184,7 @@ export class WinterMistress extends MiniBoss {
     if (this.enraged && this.zeroCd <= 0) return 'zero';
     if (this.guardsCd <= 0 && this.minions.length === 0) return 'guards';
     if (this.wallCd <= 0) return 'wall';
-    return Math.random() < 0.5 ? 'icicles' : 'shards';
+    return rnd() < 0.5 ? 'icicles' : 'shards';
   }
 
   protected act(name: string, t: number, dt: number): boolean {
@@ -250,7 +251,7 @@ export class WinterMistress extends MiniBoss {
           if (!this.quiet) sfx.winter();
         }
         this.ringK = Math.min(1.8, this.ringK + dt * 0.6);
-        if (Math.random() < 0.8) fx.burst(this.pos.clone().setY(this.body.position.y + 2.5), [FROST, ICE, RASP], 3, { speed: 4, up: 2, size: 0.1, life: 0.8, glow: true, gravity: 0 });
+        if (rnd() < 0.8) fx.burst(this.pos.clone().setY(this.body.position.y + 2.5), [FROST, ICE, RASP], 3, { speed: 4, up: 2, size: 0.1, life: 0.8, glow: true, gravity: 0 });
         return t > 2;
       }
       case 'zero': {
@@ -309,7 +310,7 @@ export class WinterMistress extends MiniBoss {
         grp.rotation.y = Math.atan2(dir.x, dir.z);
         fx.custom(grp, 0.35, (k) => {
           grp.position.copy(ground).addScaledVector(dir, 10 * k).setY(1);
-          if (Math.random() < 0.6) fx.particle({ pos: grp.position.clone(), vel: new THREE.Vector3(0, rand(0, 0.5), 0), life: 0.3, size: 0.08, color: ICE, gravity: 0 });
+          if (rnd() < 0.6) fx.particle({ pos: grp.position.clone(), vel: new THREE.Vector3(0, rand(0, 0.5), 0), life: 0.3, size: 0.08, color: ICE, gravity: 0 });
         }, () => mat.dispose());
         if (this.inLine(ground, dir, 10, 1)) this.hurt(12, ground, 3);
       }, ICE);
@@ -334,7 +335,7 @@ export class WinterMistress extends MiniBoss {
       p.addScaledVector(v, dt);
       grp.position.copy(p);
       grp.lookAt(p.clone().add(v));
-      if (Math.random() < 0.6) fx.particle({ pos: p.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.3, size: 0.09, color: Math.random() < 0.7 ? ICE : RASP, gravity: 0 });
+      if (rnd() < 0.6) fx.particle({ pos: p.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.3, size: 0.09, color: rnd() < 0.7 ? ICE : RASP, gravity: 0 });
     }, () => mat.dispose());
   }
 
@@ -348,7 +349,7 @@ export class WinterMistress extends MiniBoss {
     g.rotation.y = Math.atan2(dir.x, dir.z);
     fx.custom(g, 0.8, (k) => {
       g.position.copy(from).addScaledVector(dir, 30 * k);
-      for (let j = 0; j < 3; j++) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(0.2, 2.6), rand(-1.5, 1.5))), vel: dir.clone().multiplyScalar(rand(4, 8)).setY(rand(-0.5, 0.5)), life: 0.5, size: rand(0.06, 0.14), color: Math.random() < 0.8 ? FROST : ICE, gravity: 0 });
+      for (let j = 0; j < 3; j++) fx.particle({ pos: g.position.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(0.2, 2.6), rand(-1.5, 1.5))), vel: dir.clone().multiplyScalar(rand(4, 8)).setY(rand(-0.5, 0.5)), life: 0.5, size: rand(0.06, 0.14), color: rnd() < 0.8 ? FROST : ICE, gravity: 0 });
     }, () => { mat.dispose(); core.dispose(); });
     fx.shake = Math.max(fx.shake, 0.4);
     if (this.inLine(from, dir, 30, 3)) this.hurt(18, from, 8);
@@ -404,7 +405,7 @@ export class WinterMistress extends MiniBoss {
     // метель второй фазы: снег по всей арене
     if (this.enraged && this.awake && !this.dead) {
       const a = this.arena;
-      for (let j = 0; j < 3; j++) this.h.fx.particle({ pos: new THREE.Vector3(rand(a.x0, a.x1), rand(3, 7), rand(a.z0, a.z1)), vel: new THREE.Vector3(rand(1.5, 3), rand(-2.5, -1.2), rand(-0.6, 0.6)), life: rand(1.5, 2.5), size: rand(0.05, 0.1), color: Math.random() < 0.85 ? FROST : ICE, gravity: 0 });
+      for (let j = 0; j < 3; j++) this.h.fx.particle({ pos: new THREE.Vector3(rand(a.x0, a.x1), rand(3, 7), rand(a.z0, a.z1)), vel: new THREE.Vector3(rand(1.5, 3), rand(-2.5, -1.2), rand(-0.6, 0.6)), life: rand(1.5, 2.5), size: rand(0.05, 0.1), color: rnd() < 0.85 ? FROST : ICE, gravity: 0 });
     }
     if (this.freezeT <= 0) return;
     // вмёрзший герой стоит, где застал ноль
@@ -455,9 +456,9 @@ export class WinterMistress extends MiniBoss {
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 4)) * 0.1;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.9 : 1));
     // снежинки вокруг
-    if (!dead && this.state !== 'sleep' && Math.random() < 0.45) {
+    if (!dead && this.state !== 'sleep' && rnd() < 0.45) {
       const a = rand(0, Math.PI * 2), r = rand(0.8, 2.2);
-      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(0.8, 4) + this.body.position.y, Math.sin(a) * r)), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(-0.4, -0.1), rand(-0.2, 0.2)), life: rand(0.6, 1.2), size: rand(0.05, 0.1), color: Math.random() < 0.7 ? FROST : Math.random() < 0.6 ? ICE : RASP, gravity: 0 });
+      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(0.8, 4) + this.body.position.y, Math.sin(a) * r)), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(-0.4, -0.1), rand(-0.2, 0.2)), life: rand(0.6, 1.2), size: rand(0.05, 0.1), color: rnd() < 0.7 ? FROST : rnd() < 0.6 ? ICE : RASP, gravity: 0 });
     }
   }
 }

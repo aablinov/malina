@@ -365,6 +365,7 @@ export class NetBattleClient {
     m.pupAttack = e.attack;
     m.pupSeq = e.seq;
     m.pupAim.set(e.ax, 0, e.az);
+    m.pupMove.set(e.mx ?? 0, e.mz ?? 0);
     m.laneId = e.lane || null;
     m.marchI = e.marchI;
     m.maxHp = e.maxHp;

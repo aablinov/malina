@@ -16,12 +16,24 @@ import type { Knight } from '../knight.ts';
  */
 
 export type MobState = 'spawn' | 'idle' | 'walk' | 'attack' | 'daze' | 'dead';
+/** Режим движения, который выбрал мозг: стоять, марш по дороге, патруль, погоня с удержанием дистанции, по пути в обход */
+export type MobMode = 'hold' | 'march' | 'patrol' | 'chase' | 'path';
+/** Мозг думает столько секунд спустя (bot_thinktime Quake 3); движитель и атаки идут каждый такт */
+export const THINK_S = 0.1;
+/** Путей в обход за такт мира — на всех мобов */
+export const ROUTE_BUDGET = 4;
+/** Потолок раскрытых клеток одного пути моба (у героя — 30000): дальше цели он всё равно не держит */
+export const ROUTE_EXPAND = 2500;
+/** Путь не нашёлся или бюджет вышел — следующая просьба не раньше, чем через столько секунд */
+const ROUTE_RETRY_S = 1.5;
 
 export interface MobHooks extends BossHooks {
   /** Живые мобы стаи (союзники: лекарь лечит, призыватель считает своих) */
   allies(): readonly Mob[];
   /** Призвать моба в стаю */
   spawn(kind: string, at: THREE.Vector3): Mob | null;
+  /** Путь в обход стен (бюджет на такт мира): точки; null — нет навигации или бюджет вышел */
+  route?(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] | null;
   /** Отряд (общий бой): герои других игроков — моб гонится за ближайшим на ногах; пусто — только свой герой */
   heroes?(): readonly Knight[];
   /** Ударить героя отряда (не своего): урон уже с масштабом моба */
@@ -119,6 +131,17 @@ export abstract class Mob extends Boss {
   readonly pupAim = new THREE.Vector3();
   pupAttack = '';
   pupSeq = 0;
+  /** Кукла: направление шага со снимка (намерение сервера) — походка и поворот как у живого */
+  readonly pupMove = new THREE.Vector2();
+  /** Намерение мозга (думает раз в THINK_S): режим движения; move — куда шагнул движитель в этом такте (в снимок, для походки) */
+  readonly intent = { mode: 'hold' as MobMode, move: new THREE.Vector2() };
+  private thinkT = 0;
+  /** Путь в обход (режим path): точки и куда он проложен */
+  private path: THREE.Vector3[] = [];
+  private readonly pathTo = new THREE.Vector3();
+  /** Погоня упёрлась: сколько секунд не продвигается к цели */
+  private stuckT = 0;
+  private stuckFrom = new THREE.Vector3();
   /** Кукла: оглушена, замедлена, воодушевлена, заметила героя — со снимка (искры и лёд — те же, что у живого) */
   pupDaze = false;
   pupAlerted = false;
@@ -165,6 +188,8 @@ export abstract class Mob extends Boss {
     this.yaw = yaw;
     this.setPlayers(1);
     this.group.add(this.body);
+    // фаза мысли — своя, чтобы стая не думала вся в один такт
+    this.thinkT = rnd() * THINK_S;
   }
 
   /** Выбор атаки, когда перезарядка вышла (null — идти дальше) */
@@ -208,6 +233,7 @@ export abstract class Mob extends Boss {
     if (this.alerted || this.dead) return;
     if (this.march && byHit) { const hp = this.mh.hero.pos; if (Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z) > this.aggro + 2) return; }
     this.alerted = true;
+    this.thinkT = 0;
     for (const m of this.mh.allies()) if (m !== this && Math.hypot(m.pos.x - this.pos.x, m.pos.z - this.pos.z) < 8) m.notice();
   }
 
@@ -220,6 +246,7 @@ export abstract class Mob extends Boss {
     this.marchDone = false;
     this.alerted = false;
     this.focus = null;
+    this.thinkT = 0;
     if (this.state === 'attack') { this.field.clear(); this.go('idle'); }
   }
   /** Встать на дорогу того же марша, что у `from` (порождённые в пути: половинки слизня, подручные) */
@@ -296,20 +323,16 @@ export abstract class Mob extends Boss {
     for (const s of this.shimmers) s.mat.dispose();
   }
 
-  // ---------- мозг ----------
+  // ---------- мозг и движитель ----------
+  /**
+   * Такт: мозг (раз в THINK_S — цель, тревога, режим движения, выбор атаки), потом движитель (каждый такт — шаг по режиму,
+   * стены, не налезать на героя), атаки и оглушение — по своим таймерам каждый такт. Как бот Quake 3: думает реже, чем движется
+   */
   update(dt: number): void {
     this.st += dt;
     this.ward -= dt;
     this.auraFx(dt);
-    // цель: ближайшая из героя и приманок; меняем только вне атаки, чтобы удар не перескочил на полпути
-    if (this.state !== 'attack') {
-      const others = this.mh.heroes?.() ?? [];
-      if (others.length) { const n = nearestHero(this.pos, this.mh.hero, others); this.prey = n === this.mh.hero ? null : n; } else this.prey = null;
-      this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro, this.hunter, this.reachY);
-    }
     const hero = this.h.hero.pos;
-    const dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, dist = Math.hypot(dx, dz);
-    const rel = wrap(Math.atan2(dx, dz) - this.yaw);
     let walk = false;
     switch (this.state) {
       case 'spawn':
@@ -319,24 +342,19 @@ export abstract class Mob extends Boss {
         break;
       case 'idle':
       case 'walk': {
-        if (!this.alerted && dist < this.aggro && Math.abs(hero.y - this.pos.y) < 2) this.notice();
-        // охотник увидел башню — сворачивает к ней с дороги (соседей не тревожит); башня пала — фокус пуст, снова марш
-        if (!this.alerted && this.focus?.siege && dist < (this.focus.taunt ?? 0)) this.alerted = true;
-        // на марше: герой убежал дальше поводка, приманки нет — тревога снята, снова на дорогу
-        if (this.march && this.alerted && !this.focus && dist > this.leash) this.alerted = false;
-        if (!this.alerted || this.h.hero.down) { walk = this.march ? this.marching(dt) : !this.alerted && this.patrol(dt); this.state = walk ? 'walk' : 'idle'; break; }
-        this.cd -= dt;
-        if (this.cd <= 0) {
-          const a = this.choose(dist, rel);
-          if (a) { this.go('attack', a); break; }
-        }
-        walk = this.steer(dt, dist, dx, dz, rel);
-        this.state = walk ? 'walk' : 'idle';
+        // перезарядка идёт только в погоне (как и раньше): на марше первый удар у куста не мгновенный
+        if (this.alerted && !this.h.hero.down) this.cd -= dt;
+        this.thinkT -= dt;
+        if (this.thinkT <= 0) { this.thinkT += THINK_S; this.think(); }
+        // мысль могла начать атаку — тогда движитель в этом такте не идёт
+        if ((this.state as MobState) !== 'attack') { walk = this.mover(dt); this.state = walk ? 'walk' : 'idle'; }
         break;
       }
-      case 'attack':
-        if (this.act(this.attack, this.st, dt, dist) && this.state === 'attack') { this.cd = this.rest(); this.go('idle'); }
+      case 'attack': {
+        const dx = hero.x - this.pos.x, dz = hero.z - this.pos.z;
+        if (this.act(this.attack, this.st, dt, Math.hypot(dx, dz)) && this.state === 'attack') { this.cd = this.rest(); this.go('idle'); }
         break;
+      }
       case 'daze':
         this.dazeFx();
         if (this.st > this.dazeFor) { this.cd = 0.4; this.go('idle'); }
@@ -344,19 +362,94 @@ export abstract class Mob extends Boss {
       case 'dead': this.dying(dt); break;
     }
     this.field.update(dt);
-    if (this.state !== 'dead') {
-      // не сквозь стены (кроме призраков); на героя не налезает — уступает ему
-      const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
-      if (!this.ghost) resolveCircle(p, this.radius, this.h.obstacles());
-      const d = Math.hypot(hero.x - p.x, hero.z - p.z), R = this.radius + HERO.radius;
-      if (d < R && d > 1e-3) { const k = (R - d) / d; p.x -= (hero.x - p.x) * k; p.z -= (hero.z - p.z) * k; }
-      this.pos.x = p.x; this.pos.z = p.z;
-    }
+    if (this.state !== 'dead') this.collide(hero);
     this.healT -= dt;
     if (this.healed >= 1 && this.healT <= 0) { this.h.fx.text(this.pos.clone().setY(this.topY + 0.3), `+${Math.round(this.healed)}`, 'heal'); this.healed = 0; this.healT = 0.5; }
     this.tickLook(dt, this.state === 'dead' ? Math.max(0.1, 1 - this.st * 2) : 1);
     this.animate(dt, walk);
     this.place();
+  }
+
+  /** Мозг: цель (герой отряда или приманка), тревога и поводок, режим движения, выбор атаки, путь в обход, если упёрся */
+  protected think(): void {
+    const others = this.mh.heroes?.() ?? [];
+    if (others.length) { const n = nearestHero(this.pos, this.mh.hero, others); this.prey = n === this.mh.hero ? null : n; } else this.prey = null;
+    this.focus = pickDecoy(this.pos, this.h.hero.pos, this.aggro, this.hunter, this.reachY);
+    const hero = this.h.hero.pos;
+    const dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, dist = Math.hypot(dx, dz);
+    if (!this.alerted && dist < this.aggro && Math.abs(hero.y - this.pos.y) < 2) this.notice();
+    // охотник увидел башню — сворачивает к ней с дороги (соседей не тревожит); башня пала — фокус пуст, снова марш
+    if (!this.alerted && this.focus?.siege && dist < (this.focus.taunt ?? 0)) this.alerted = true;
+    // на марше: герой убежал дальше поводка, приманки нет — тревога снята, снова на дорогу
+    if (this.march && this.alerted && !this.focus && dist > this.leash) this.alerted = false;
+    if (!this.alerted || this.h.hero.down) { this.intent.mode = this.march ? 'march' : !this.alerted ? 'patrol' : 'hold'; this.path = []; return; }
+    if (this.cd <= 0) {
+      const rel = wrap(Math.atan2(dx, dz) - this.yaw);
+      const a = this.choose(dist, rel);
+      if (a) { this.go('attack', a); this.intent.mode = 'hold'; return; }
+    }
+    // погоня; упёрся в стену (полсекунды без продвижения к цели) — путь в обход, пока есть бюджет
+    if (this.intent.mode === 'path' && this.path.length && this.pathTo.distanceTo(hero) < 1.5) return;
+    this.intent.mode = 'chase';
+    if (this.stuckT >= 0.5 && this.mh.route) {
+      const p = this.mh.route(this.pos, hero);
+      if (p && p.length) { this.path = p; this.pathTo.copy(hero); this.intent.mode = 'path'; this.stuckT = 0; }
+      else this.stuckT = -ROUTE_RETRY_S;
+    }
+  }
+
+  /**
+   * Движитель (каждый такт): шаг по режиму мозга — марш и патруль по точкам, погоня с удержанием дистанции (`steer`,
+   * подклассы меняют), путь в обход. Записывает `intent.move` — куда шагнул (для походки и снимка). true — шёл
+   */
+  protected mover(dt: number): boolean {
+    const x0 = this.pos.x, z0 = this.pos.z;
+    let walk = false;
+    switch (this.intent.mode) {
+      case 'march': walk = this.marching(dt); break;
+      case 'patrol': walk = this.patrol(dt); break;
+      case 'chase': {
+        const hero = this.h.hero.pos, dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, dist = Math.hypot(dx, dz);
+        walk = this.steer(dt, dist, dx, dz, wrap(Math.atan2(dx, dz) - this.yaw));
+        // не продвигается к цели, хотя хочет идти, — копится «упёрся»
+        if (walk) {
+          if (this.stuckT <= 0 && this.stuckT > -dt) this.stuckFrom.copy(this.pos);
+          this.stuckT += dt;
+          const was = Math.hypot(hero.x - this.stuckFrom.x, hero.z - this.stuckFrom.z);
+          if (this.stuckT > 0 && was - dist > 0.3) this.stuckT = 0;
+        } else if (this.stuckT > 0) this.stuckT = 0;
+        break;
+      }
+      case 'path': walk = this.followPath(dt); break;
+      default: break;
+    }
+    const sx = this.pos.x - x0, sz = this.pos.z - z0, len = Math.hypot(sx, sz);
+    const full = this.pace * dt;
+    if (len > 1e-5 && full > 1e-6) this.intent.move.set(sx / len, sz / len).multiplyScalar(Math.min(1, len / full)); else this.intent.move.set(0, 0);
+    return walk;
+  }
+
+  /** По точкам пути в обход почти полным ходом; кончился — снова погоня */
+  private followPath(dt: number): boolean {
+    while (this.path.length > 1 && Math.hypot(this.path[0].x - this.pos.x, this.path[0].z - this.pos.z) < 0.5) this.path.shift();
+    const t = this.path[0];
+    if (!t) { this.intent.mode = 'chase'; return false; }
+    const dx = t.x - this.pos.x, dz = t.z - this.pos.z, d = Math.hypot(dx, dz);
+    if (this.path.length === 1 && d < 0.6) { this.path = []; this.intent.mode = 'chase'; return false; }
+    const want = wrap(Math.atan2(dx, dz) - this.yaw), m = this.turn * 1.5 * dt;
+    this.yaw += Math.max(-m, Math.min(m, want));
+    const sp = this.pace * dt * (Math.abs(want) > 1.2 ? 0.5 : 1);
+    this.pos.x += (dx / d) * Math.min(sp, d); this.pos.z += (dz / d) * Math.min(sp, d);
+    return true;
+  }
+
+  /** Не сквозь стены (кроме призраков); на героя не налезает — уступает ему */
+  private collide(hero: THREE.Vector3): void {
+    const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
+    if (!this.ghost) resolveCircle(p, this.radius, this.h.obstacles());
+    const d = Math.hypot(hero.x - p.x, hero.z - p.z), R = this.radius + HERO.radius;
+    if (d < R && d > 1e-3) { const k = (R - d) / d; p.x -= (hero.x - p.x) * k; p.z -= (hero.z - p.z) * k; }
+    this.pos.x = p.x; this.pos.z = p.z;
   }
 
   /** Кукла стала живым врагом (гость стал хостом): мозг включается с того, что было в снимке */
@@ -396,7 +489,10 @@ export abstract class Mob extends Boss {
     else {
       // атака со снимка: та же у куклы — замах, метки на полу, выпады; удары никого не ранят
       if (this.pupAttack && this.pupSeq !== this.seenSeq) { this.seenSeq = this.pupSeq; this.go('attack', this.pupAttack); }
-      const dx = this.pupTo.x - this.pos.x, dz = this.pupTo.z - this.pos.z, d = Math.hypot(dx, dz), k = d > 4 ? 1 : Math.min(1, dt * 10);
+      // шаг по намерению сервера тем же ходом, что у живого, потом подтяжка к месту из буфера снимков (как чужие герои)
+      const mv = this.pupMove, sp = this.pace * dt;
+      if (this.state !== 'attack') { this.pos.x += mv.x * sp; this.pos.z += mv.y * sp; }
+      const dx = this.pupTo.x - this.pos.x, dz = this.pupTo.z - this.pos.z, d = Math.hypot(dx, dz), k = d > 4 ? 1 : Math.min(1, dt * 12);
       this.pos.x += dx * k; this.pos.z += dz * k;
       this.flyY += (this.pupTo.y - this.flyY) * Math.min(1, dt * 10);
       this.yaw += wrap(this.pupYaw - this.yaw) * Math.min(1, dt * 10);
@@ -404,7 +500,7 @@ export abstract class Mob extends Boss {
         const dist = Math.hypot(this.pupAim.x - this.pos.x, this.pupAim.z - this.pos.z);
         if (this.act(this.attack, this.st, dt, dist) && this.state === 'attack') this.go('idle');
       } else {
-        walk = d > 0.03;
+        walk = mv.lengthSq() > 0.01 || d > 0.3;
         this.state = walk ? 'walk' : 'idle';
       }
     }

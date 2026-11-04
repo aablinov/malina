@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -176,8 +177,8 @@ export class GoldenRider extends MiniBoss {
 
   protected choose(dist: number): string | null {
     if (dist < 4) return 'sweep';
-    if (dist > 6 && Math.random() < 0.55) return 'lance';
-    return Math.random() < 0.5 ? 'blades' : 'lance';
+    if (dist > 6 && rnd() < 0.55) return 'lance';
+    return rnd() < 0.5 ? 'blades' : 'lance';
   }
 
   protected act(name: string, t: number, dt: number): boolean {
@@ -207,7 +208,7 @@ export class GoldenRider extends MiniBoss {
           this.hurt(20, this.pos, 10);
           fx.hitstop = Math.max(fx.hitstop, 0.05);
         }
-        if (Math.random() < 0.6) fx.burst(this.pos.clone().setY(0.15), DUST, 2, { speed: 1.5, up: 1, size: 0.12, life: 0.5, gravity: 5 });
+        if (rnd() < 0.6) fx.burst(this.pos.clone().setY(0.15), DUST, 2, { speed: 1.5, up: 1, size: 0.12, life: 0.5, gravity: 5 });
         if (wall && this.lanceRun < LANCE_LEN - 0.5) {
           if (!this.quiet) sfx.crash();
           fx.shake = Math.max(fx.shake, 0.9);
@@ -275,7 +276,7 @@ export class GoldenRider extends MiniBoss {
       const d = b.to.clone().setY(0.2).sub(b.from).normalize();
       b.g.position.lerpVectors(b.from, b.to.clone().setY(0.2), k);
       b.g.quaternion.setFromUnitVectors(up, d.negate());
-      if (Math.random() < 0.8) this.h.fx.particle({ pos: b.g.position.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.3, size: 0.08, color: i % 2 ? GOLD : RASP, gravity: 0 });
+      if (rnd() < 0.8) this.h.fx.particle({ pos: b.g.position.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.3, size: 0.08, color: i % 2 ? GOLD : RASP, gravity: 0 });
       if (k >= 1) {
         b.phase = 'off'; b.g.visible = false;
         if (!this.quiet) sfx.stab();

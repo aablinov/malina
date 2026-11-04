@@ -257,7 +257,7 @@ export class Match {
       const aim = m.aimPos;
       const flags = (m.summoned ? MOB_FLAG.summoned : 0) | (m.state === 'daze' ? MOB_FLAG.daze : 0) | (m.chillT > 0 ? MOB_FLAG.chill : 0) | (m.rally > 0 ? MOB_FLAG.rally : 0) | (m.alerted ? MOB_FLAG.alerted : 0);
       out.push({ id: `m${m.net}`, kind: m.kind, x: r2(m.pos.x), y: r2(m.pos.y), z: r2(m.pos.z), yaw: r2(m.yaw), hp: Math.round(m.hp), maxHp: m.maxHp, flags,
-        attack: m.state === 'attack' ? m.attack : '', seq: m.attackSeq, ax: r2(aim.x), az: r2(aim.z), lane: m.laneId ?? '', marchI: m.marchI });
+        attack: m.state === 'attack' ? m.attack : '', seq: m.attackSeq, ax: r2(aim.x), az: r2(aim.z), lane: m.laneId ?? '', marchI: m.marchI, mx: r2(m.intent.move.x), mz: r2(m.intent.move.y) });
     }
     out.push(...this.battle.world.entities());
     return out;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -98,7 +99,7 @@ export class Cauldron extends MiniBoss {
   protected choose(dist: number): string | null {
     if (dist < 3.4) return 'boil';
     if (this.summonCd <= 0 && this.minions.length < 3) return 'summon';
-    if (dist > 4 && Math.random() < 0.38) return 'slam';
+    if (dist > 4 && rnd() < 0.38) return 'slam';
     return 'lob';
   }
 
@@ -114,7 +115,7 @@ export class Cauldron extends MiniBoss {
             const side = i % 2 ? 1 : -1;
             const to = this.clampIn(this.heroAt().add(new THREE.Vector3(rand(-2, 2), 0, rand(-2, 2)).multiplyScalar(i === 0 ? 0.2 : 1)));
             const from = this.pos.clone().add(new THREE.Vector3(0, 2.4, 0)).addScaledVector(new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)), side * 1.4);
-            const mesh = new THREE.Mesh(UNIT, glowMat(Math.random() < 0.5 ? FIRE : RASP));
+            const mesh = new THREE.Mesh(UNIT, glowMat(rnd() < 0.5 ? FIRE : RASP));
             mesh.scale.setScalar(0.45);
             const dur = 0.95;
             this.markCircle(to, 1.6, dur, () => undefined);
@@ -160,7 +161,7 @@ export class Cauldron extends MiniBoss {
       case 'boil': {
         // выкипает: бурлит, крышка пляшет — и кольцо пламени вокруг
         if (!this.hitDone) { this.hitDone = true; this.markCircle(this.pos, 3.6, 0.75, () => undefined); }
-        if (t < 0.75) { if (Math.random() < 0.3 && !this.quiet) sfx.bubble(); return false; }
+        if (t < 0.75) { if (rnd() < 0.3 && !this.quiet) sfx.bubble(); return false; }
         if (this.hitDone && t - dt < 0.75) {
           if (!this.quiet) { sfx.splat(); boom(90, 40, 0.6, 0.5); }
           fx.shock(this.pos.clone().setY(0.1), 3.8, RASP, 0.4, 0.3);
@@ -212,7 +213,7 @@ export class Cauldron extends MiniBoss {
     // варево: бурлит, на ярости выше; пузыри и искры
     const boilK = this.state === 'sleep' ? 0.3 : this.state === 'attack' ? 1.4 : 1;
     this.brew.position.y = 1.86 + Math.sin(t * 7) * 0.03 * boilK;
-    if (this.state !== 'dead' && Math.random() < 0.25 * boilK) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.8, 0.8), this.flyY + this.body.position.y + 2, rand(-0.8, 0.8))), vel: new THREE.Vector3(0, rand(1, 2), 0), life: rand(0.3, 0.6), size: rand(0.08, 0.16), color: Math.random() < 0.5 ? FIRE : RASP, gravity: -1 });
+    if (this.state !== 'dead' && rnd() < 0.25 * boilK) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.8, 0.8), this.flyY + this.body.position.y + 2, rand(-0.8, 0.8))), vel: new THREE.Vector3(0, rand(1, 2), 0), life: rand(0.3, 0.6), size: rand(0.08, 0.16), color: rnd() < 0.5 ? FIRE : RASP, gravity: -1 });
     // крышка: во сне лежит, в бою пляшет, при призыве слетает вверх
     const lidUp = this.state === 'attack' && this.attack === 'summon' ? Math.sin(Math.min(1, S / 0.3) * Math.PI) * 1.4 : this.state === 'sleep' ? 0 : Math.max(0, Math.sin(t * 9)) * 0.08 * boilK;
     // крышка приоткрыта набок — видно, как светится варево

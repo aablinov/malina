@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import type { FX } from '../fx.ts';
 import { iconCanvas } from '../icons.ts';
 import { itemDef, RARITY } from '../items.ts';
@@ -139,7 +140,7 @@ export class Grimoire {
     this.floor.material.opacity = 0.6 + Math.sin(t * 3) * 0.2;
     // страницы: раз в 0,7 с одна переворачивается слева направо
     this.pageT -= dt;
-    if (this.pageT <= 0 && up >= 1) { this.pageT = 0.7; const p = this.pages.find((x) => !x.visible); if (p) { p.visible = true; p.userData.t = 0; if (!this.quiet() && Math.random() < 0.5) bossSfx.page(); } }
+    if (this.pageT <= 0 && up >= 1) { this.pageT = 0.7; const p = this.pages.find((x) => !x.visible); if (p) { p.visible = true; p.userData.t = 0; if (!this.quiet() && rnd() < 0.5) bossSfx.page(); } }
     for (const p of this.pages) if (p.visible) {
       p.userData.t += dt;
       const k = Math.min(1, p.userData.t / 0.6);
@@ -147,7 +148,7 @@ export class Grimoire {
       p.position.y = 0.08 + Math.sin(k * Math.PI) * 0.12;
       if (k >= 1) p.visible = false;
     }
-    if (Math.random() < 0.3) this.fx.particle({ pos: this.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.2, this.book.position.y + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 1.2)), vel: new THREE.Vector3(0, 0.8, 0), life: 0.9, size: 0.06, color: RASP, gravity: -0.5 });
+    if (rnd() < 0.3) this.fx.particle({ pos: this.group.position.clone().add(new THREE.Vector3((rnd() - 0.5) * 1.2, this.book.position.y + (rnd() - 0.5) * 0.6, (rnd() - 0.5) * 1.2)), vel: new THREE.Vector3(0, 0.8, 0), life: 0.9, size: 0.06, color: RASP, gravity: -0.5 });
     if (up >= 1 && Math.hypot(hero.x - this.pos.x, hero.z - this.pos.z) < 1.3) { this.take(); return true; }
     return false;
   }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -137,8 +138,8 @@ export class GraveCat extends MiniBoss {
   }
 
   protected choose(dist: number, rel: number): string | null {
-    if (dist < 3 && Math.abs(rel) < 1) return Math.random() < 0.75 ? 'swipe' : 'blink';
-    if (dist > 4 && Math.random() < 0.45) return 'pounce';
+    if (dist < 3 && Math.abs(rel) < 1) return rnd() < 0.75 ? 'swipe' : 'blink';
+    if (dist > 4 && rnd() < 0.45) return 'pounce';
     if (dist > 3) return 'blink';
     return null;
   }
@@ -282,9 +283,9 @@ export class GraveCat extends MiniBoss {
     this.tail2.rotation.set(-0.5 + Math.sin(t * 2.2 + 1) * 0.2, Math.sin(t * 1.7 + 1) * 0.3, 0);
     // огонь душ на факеле: бирюзовые языки и искры
     this.torch.scale.set(0.22, 0.3 + Math.sin(t * 17) * 0.06, 0.22);
-    if (this.state !== 'dead' && !this.gone && Math.random() < (this.state === 'sleep' ? 0.25 : 0.6)) {
+    if (this.state !== 'dead' && !this.gone && rnd() < (this.state === 'sleep' ? 0.25 : 0.6)) {
       const p = this.torch.getWorldPosition(new THREE.Vector3());
-      this.h.fx.particle({ pos: p.add(new THREE.Vector3(rand(-0.08, 0.08), 0.1, rand(-0.08, 0.08))), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(0.8, 1.6), rand(-0.2, 0.2)), life: rand(0.3, 0.55), size: rand(0.06, 0.13), color: Math.random() < 0.8 ? TURQ : RASP, gravity: -1 });
+      this.h.fx.particle({ pos: p.add(new THREE.Vector3(rand(-0.08, 0.08), 0.1, rand(-0.08, 0.08))), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(0.8, 1.6), rand(-0.2, 0.2)), life: rand(0.3, 0.55), size: rand(0.06, 0.13), color: rnd() < 0.8 ? TURQ : RASP, gravity: -1 });
     }
     // сердце-ягода: тихо бьётся, открыто — крупно
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;

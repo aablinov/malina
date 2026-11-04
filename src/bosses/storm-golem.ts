@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -108,15 +109,15 @@ export class StormGolem extends MiniBoss {
   }
 
   protected choose(dist: number): string | null {
-    if (dist < 4) return Math.random() < 0.8 ? 'slam' : 'spear';
-    if (dist > 5 && Math.random() < 0.38) return 'rods';
+    if (dist < 4) return rnd() < 0.8 ? 'slam' : 'spear';
+    if (dist > 5 && rnd() < 0.38) return 'rods';
     return 'spear';
   }
 
   /** Ломаная молния из a в b: тонкие светящиеся бруски с ореолом, гаснут за dur */
   private bolt(a: THREE.Vector3, b: THREE.Vector3, segs: number, jag: number, w: number, dur = 0.28): void {
     const g = new THREE.Group();
-    const core = glowMat(WHITE, 1, true), halo = glowMat(SPARK.clone().lerp(RASP, Math.random() * 0.4), 0.4, true);
+    const core = glowMat(WHITE, 1, true), halo = glowMat(SPARK.clone().lerp(RASP, rnd() * 0.4), 0.4, true);
     let prev = a.clone();
     for (let i = 1; i <= segs; i++) {
       const p = i === segs ? b.clone() : a.clone().lerp(b, i / segs).add(new THREE.Vector3(rand(-jag, jag), rand(-jag, jag) * 0.5, rand(-jag, jag)));
@@ -130,7 +131,7 @@ export class StormGolem extends MiniBoss {
       }
       prev = p;
     }
-    this.h.fx.custom(g, dur, (k) => { const f = (1 - k) * (0.6 + Math.random() * 0.4); core.opacity = f; halo.opacity = f * 0.4; }, () => { core.dispose(); halo.dispose(); });
+    this.h.fx.custom(g, dur, (k) => { const f = (1 - k) * (0.6 + rnd() * 0.4); core.opacity = f; halo.opacity = f * 0.4; }, () => { core.dispose(); halo.dispose(); });
   }
 
   /** Мировая позиция кончика громоотвода */
@@ -144,7 +145,7 @@ export class StormGolem extends MiniBoss {
     const p = this.tip(i);
     for (let j = 0; j < n; j++) {
       const o = new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(0.8);
-      this.h.fx.particle({ pos: p.clone().add(o), vel: o.multiplyScalar(-2.5), life: 0.3, size: rand(0.05, 0.1), color: Math.random() < 0.7 ? SPARK : RASP, gravity: 0 });
+      this.h.fx.particle({ pos: p.clone().add(o), vel: o.multiplyScalar(-2.5), life: 0.3, size: rand(0.05, 0.1), color: rnd() < 0.7 ? SPARK : RASP, gravity: 0 });
     }
   }
 
@@ -186,11 +187,11 @@ export class StormGolem extends MiniBoss {
           }, SPARK.clone().lerp(RASP, 0.3));
           if (!this.quiet) sfx.charge();
         }
-        if (t < FIRE) { this.sparkle(1, 2); if (Math.random() < 0.15 && !this.quiet) sfx.crackle(); return false; }
+        if (t < FIRE) { this.sparkle(1, 2); if (rnd() < 0.15 && !this.quiet) sfx.crackle(); return false; }
         if (t < FIRE + 0.5) return false;
         // перегрев: 30 % (в ярости 50 %), третье копьё подряд — наверняка
         this.heat++;
-        if (Math.random() < (this.enraged ? 0.5 : 0.3) || this.heat >= 3) {
+        if (rnd() < (this.enraged ? 0.5 : 0.3) || this.heat >= 3) {
           this.heat = 0;
           if (!this.quiet) sfx.overheat();
           fx.text(this.pos.clone().setY(this.topY + 0.8), 'перегрев!', 'crit');
@@ -235,8 +236,8 @@ export class StormGolem extends MiniBoss {
               planted.add(pole, cap);
               planted.position.copy(p).setY(0);
               fx.custom(planted, WAIT - FLY, (k) => {
-                gm.color.copy(SPARK).lerp(RASP, Math.random() * k).multiplyScalar(0.6 + Math.random() * k);
-                if (Math.random() < 0.3) fx.particle({ pos: p.clone().setY(1.3), vel: new THREE.Vector3(rand(-1, 1), rand(0, 1.5), rand(-1, 1)), life: 0.2, size: 0.06, color: SPARK, gravity: 0 });
+                gm.color.copy(SPARK).lerp(RASP, rnd() * k).multiplyScalar(0.6 + rnd() * k);
+                if (rnd() < 0.3) fx.particle({ pos: p.clone().setY(1.3), vel: new THREE.Vector3(rand(-1, 1), rand(0, 1.5), rand(-1, 1)), life: 0.2, size: 0.06, color: SPARK, gravity: 0 });
               }, () => { cm.dispose(); gm.dispose(); });
             });
           }
@@ -292,8 +293,8 @@ export class StormGolem extends MiniBoss {
     // голова: во сне опущена, в бою следит; в оглушении мотается
     this.head.rotation.set(st === 'sleep' ? 0.4 : 0, st === 'daze' ? Math.sin(t * 5) * 0.3 : 0, 0);
     // громоотводы потрескивают, перегрев — дым и искры из плеч
-    if (st !== 'sleep' && Math.random() < 0.06) this.sparkle(Math.random() < 0.5 ? 0 : 1);
-    if (st === 'daze' && Math.random() < 0.4) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), 3 + rand(0, 0.3), rand(-0.5, 0.5))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(1, 2), rand(-0.3, 0.3)), life: rand(0.6, 1.1), size: rand(0.15, 0.3), color: Math.random() < 0.8 ? '#7a7a80' : SPARK, gravity: -0.5 }, Math.random() < 0.2);
+    if (st !== 'sleep' && rnd() < 0.06) this.sparkle(rnd() < 0.5 ? 0 : 1);
+    if (st === 'daze' && rnd() < 0.4) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), 3 + rand(0, 0.3), rand(-0.5, 0.5))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(1, 2), rand(-0.3, 0.3)), life: rand(0.6, 1.1), size: rand(0.15, 0.3), color: rnd() < 0.8 ? '#7a7a80' : SPARK, gravity: -0.5 }, rnd() < 0.2);
     // сердце-ягода: в оглушении бьётся крупно
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.4 : 1));

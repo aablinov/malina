@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -133,7 +134,7 @@ export class Gatherer extends MiniBoss {
     if (dist < 3 && this.blinkCd <= 0) return 'blink';
     if (dist < 4.5 && this.wailCd <= 0) return 'wail';
     if (this.summonCd <= 0 && this.minions.length < 3) return 'summon';
-    return Math.random() < 0.55 ? 'hands' : 'wisps';
+    return rnd() < 0.55 ? 'hands' : 'wisps';
   }
 
   protected act(name: string, t: number, dt: number): boolean {
@@ -249,7 +250,7 @@ export class Gatherer extends MiniBoss {
       this.pinT -= dt;
       hero.pos.copy(this.pinAt);
       hero.vel.set(0, 0, 0);
-      if (Math.random() < 0.3) this.h.fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.2, 1.2), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, -1, 0), life: 0.4, size: 0.07, color: TURQ, gravity: 0 });
+      if (rnd() < 0.3) this.h.fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.2, 1.2), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, -1, 0), life: 0.4, size: 0.07, color: TURQ, gravity: 0 });
     }
     // огоньки: плывут и медленно доворачивают к герою
     const target = hero.pos.clone().setY(hero.pos.y + 1);
@@ -261,7 +262,7 @@ export class Gatherer extends MiniBoss {
       w.mesh.position.addScaledVector(w.vel, dt);
       w.mesh.rotation.set(w.t * 3, w.t * 4, 0);
       w.mesh.scale.setScalar(0.28 + Math.sin(w.t * 12) * 0.04);
-      if (Math.random() < 0.5) this.h.fx.particle({ pos: w.mesh.position.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.35, size: 0.08, color: TURQ, gravity: 0 });
+      if (rnd() < 0.5) this.h.fx.particle({ pos: w.mesh.position.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.35, size: 0.08, color: TURQ, gravity: 0 });
       const hit = w.mesh.position.distanceTo(target) < 0.7;
       if (hit || w.t > WISP_LIFE) {
         if (hit) this.hurt(8, w.mesh.position, 2);
@@ -303,9 +304,9 @@ export class Gatherer extends MiniBoss {
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 4)) * 0.1;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.8 : 1));
     // бирюзовые огоньки-души вокруг
-    if (!dead && this.state !== 'sleep' && Math.random() < 0.3 * op) {
+    if (!dead && this.state !== 'sleep' && rnd() < 0.3 * op) {
       const a = rand(0, Math.PI * 2);
-      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * 0.9, rand(0.4, 2.6), Math.sin(a) * 0.9)), vel: new THREE.Vector3(0, rand(0.2, 0.6), 0), life: rand(0.5, 0.9), size: rand(0.05, 0.1), color: Math.random() < 0.8 ? TURQ : RASP, gravity: 0 });
+      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * 0.9, rand(0.4, 2.6), Math.sin(a) * 0.9)), vel: new THREE.Vector3(0, rand(0.2, 0.6), 0), life: rand(0.5, 0.9), size: rand(0.05, 0.1), color: rnd() < 0.8 ? TURQ : RASP, gravity: 0 });
     }
   }
 }

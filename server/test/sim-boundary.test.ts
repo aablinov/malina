@@ -11,6 +11,8 @@ const ROOT = join(import.meta.dirname, '..', '..');
 /** Чистые каталоги: без вида, DOM и случайности; src/game — безголовый бой на тех же классах, что в браузере: только грузится в Node */
 const PURE = ['src/sim', 'src/net'];
 const DIRS = [...PURE, 'src/game'];
+/** Геймплей, который крутит сервер (герой, снаряжение, магия, мобы, стражи): сцена и звук можно, случайность и часы — нет */
+const GAMEPLAY = ['src/mobs', 'src/bosses', 'src/magic', 'src/knight.ts', 'src/gear.ts', 'src/spells.ts', 'src/weapon-arts.ts', 'src/aura-offense.ts', 'src/auras.ts', 'src/weapon-synergies.ts', 'src/decoys.ts', 'src/collision.ts', 'src/level/pathfind.ts'];
 /** Клиентские модули, которым место в src/net ради общего протокола, но в Node они не грузятся (WebSocket браузера, DOM) */
 const CLIENT_ONLY = new Set(['src/net/client.ts', 'src/net/battle-ui.ts']);
 const BANNED: [RegExp, string][] = [
@@ -23,6 +25,7 @@ const BANNED: [RegExp, string][] = [
 ];
 
 function walk(dir: string): string[] {
+  if (!statSync(dir).isDirectory()) return [dir];
   const out: string[] = [];
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
@@ -34,7 +37,8 @@ function walk(dir: string): string[] {
 
 const list = (dirs: string[]): string[] => dirs.flatMap((d) => { try { return walk(join(ROOT, d)); } catch { return []; } })
   .map((p) => relative(ROOT, p)).filter((p) => !CLIENT_ONLY.has(p));
-const pure = list(PURE), files = list(DIRS);
+const pure = list(PURE), files = list(DIRS), gameplay = list(GAMEPLAY);
+const DETERMINISM = BANNED.filter(([, why]) => why.startsWith('Math.random') || why.startsWith('часы'));
 
 test('модули симуляции и сети не трогают DOM, сцену и случайность', () => {
   const bad: string[] = [];
@@ -50,4 +54,16 @@ test('модули симуляции и сети не трогают DOM, сц�
 
 test('модули симуляции и сети грузятся в Node', async () => {
   for (const f of files) await import(join(ROOT, f));
+});
+
+test('геймплей сервера (герой, снаряжение, магия, мобы, стражи) не трогает Math.random и часы — только rnd() и время боя', () => {
+  const bad: string[] = [];
+  for (const f of gameplay) {
+    const src = readFileSync(join(ROOT, f), 'utf8');
+    for (const [re, why] of DETERMINISM) {
+      const m = re.exec(src);
+      if (m) bad.push(`${f}: ${why} (${m[0]})`);
+    }
+  }
+  assert.deepEqual(bad, []);
 });

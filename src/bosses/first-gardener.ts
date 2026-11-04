@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -188,7 +189,7 @@ export class FirstGardener extends MiniBoss {
   }
 
   protected choose(dist: number): string | null {
-    const r = Math.random(), few = this.minions.length < 2;
+    const r = rnd(), few = this.minions.length < 2;
     if (this.enraged) {
       if (dist < this.radius + 4.5) return this.pick(r < 0.4 ? 'harvest' : r < 0.75 ? 'quake' : 'boulder');
       return this.pick(r < 0.55 ? 'boulder' : r < 0.85 ? 'quake' : 'harvest');
@@ -257,7 +258,7 @@ export class FirstGardener extends MiniBoss {
       case 'gardeners': {
         if (at(0.5)) {
           if (!this.quiet) sfx.rustle();
-          const n = Math.random() < 0.5 ? 2 : 3;
+          const n = rnd() < 0.5 ? 2 : 3;
           for (let i = 0; i < n; i++) {
             const a = this.yaw + (i - (n - 1) / 2) * 0.9;
             this.summon(this.pos.clone().add(new THREE.Vector3(Math.sin(a) * 3, 0, Math.cos(a) * 3)), { body: MOSS, head: VINE, eye: RASP, hp: 40, dmg: 6, speed: 2.8 });
@@ -371,7 +372,7 @@ export class FirstGardener extends MiniBoss {
         this.hat.rotation.set(-hk * 4, hk * 2, 0);
         if (hk >= 1) { this.hat.visible = false; fx.burst(this.pos.clone().setY(this.topY + 1.5), [PLANK, '#a07a40'], 12, { speed: 3, up: 2, size: 0.12, life: 0.7, gravity: 10 }); }
       }
-      if (k < 1 && Math.random() < 0.5) fx.burst(this.pos.clone().add(new THREE.Vector3(rand(-1, 1), rand(1, this.topY), rand(-1, 1))), DUST, 1, { speed: 2, up: 1, size: 0.16, life: 0.8, gravity: 10 });
+      if (k < 1 && rnd() < 0.5) fx.burst(this.pos.clone().add(new THREE.Vector3(rand(-1, 1), rand(1, this.topY), rand(-1, 1))), DUST, 1, { speed: 2, up: 1, size: 0.16, life: 0.8, gravity: 10 });
     }
     // шаги: ноги ходят, торс качается; титан трясёт землю каждым шагом
     if (walk) {

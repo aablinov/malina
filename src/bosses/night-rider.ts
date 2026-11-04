@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, RASP, rand, type BossHooks } from './kit.ts';
@@ -139,9 +140,9 @@ export class NightRider extends MiniBoss {
   override reset(): void { this.fade = 1; this.twice = false; this.summonCd = 5; super.reset(); }
 
   protected choose(dist: number): string | null {
-    if (dist < 3.5) return Math.random() < 0.8 ? 'reap' : 'vanish';
+    if (dist < 3.5) return rnd() < 0.8 ? 'reap' : 'vanish';
     if (this.summonCd <= 0 && this.minions.length < 3) return 'summon';
-    if (dist > 5 && Math.random() < 0.45) return 'charge';
+    if (dist > 5 && rnd() < 0.45) return 'charge';
     return 'vanish';
   }
 
@@ -211,7 +212,7 @@ export class NightRider extends MiniBoss {
         this.lastP.copy(this.pos);
         this.move(this.dir, step); this.ran += step;
         this.wisp(2);
-        if (Math.random() < 0.3 && !this.quiet) sfx.hoof();
+        if (rnd() < 0.3 && !this.quiet) sfx.hoof();
         if (this.alive && !this.flyY && Math.hypot(this.h.hero.pos.x - this.pos.x, this.h.hero.pos.z - this.pos.z) < this.radius + 0.9 && !this.lanced) {
           this.lanced = true; this.hurt(18, this.pos, 9);
           fx.flash(this.h.hero.pos.clone().setY(1), TEAL, 1.6);
@@ -235,7 +236,7 @@ export class NightRider extends MiniBoss {
             }, DEEP);
           }
         }
-        if (Math.random() < 0.5) fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), rand(1.5, 3.5), rand(-1, 1))), vel: new THREE.Vector3(0, 1.2, 0), life: 0.6, size: 0.12, color: DEEP, gravity: 0 });
+        if (rnd() < 0.5) fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), rand(1.5, 3.5), rand(-1, 1))), vel: new THREE.Vector3(0, 1.2, 0), life: 0.6, size: 0.12, color: DEEP, gravity: 0 });
         return t > 1.1;
       }
       case 'reap': {
@@ -267,8 +268,8 @@ export class NightRider extends MiniBoss {
   /** Бирюзовые клочья тумана от коня */
   private wisp(n: number): void {
     for (let i = 0; i < n; i++) {
-      if (Math.random() > 0.5) continue;
-      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.7, 0.7), this.flyY + rand(0.3, 2.2), rand(-1.2, 1.2))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.4, 1.2), rand(-0.3, 0.3)), life: rand(0.4, 0.9), size: rand(0.08, 0.16), color: Math.random() < 0.8 ? TEAL : RASP, gravity: -0.5 });
+      if (rnd() > 0.5) continue;
+      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.7, 0.7), this.flyY + rand(0.3, 2.2), rand(-1.2, 1.2))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.4, 1.2), rand(-0.3, 0.3)), life: rand(0.4, 0.9), size: rand(0.08, 0.16), color: rnd() < 0.8 ? TEAL : RASP, gravity: -0.5 });
     }
   }
 

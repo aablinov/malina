@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -157,9 +158,9 @@ export class FallenStar extends MiniBoss {
   protected choose(dist: number): string | null {
     if (this.wakeUp) return 'awaken';
     if (this.enraged && this.novaCd <= 0) return 'nova';
-    if (dist < 5 && Math.random() < 0.45) return 'pulse';
-    if (this.beamCd <= 0 && Math.random() < 0.55) return 'beam';
-    return Math.random() < 0.5 ? 'meteors' : 'shards';
+    if (dist < 5 && rnd() < 0.45) return 'pulse';
+    if (this.beamCd <= 0 && rnd() < 0.55) return 'beam';
+    return rnd() < 0.5 ? 'meteors' : 'shards';
   }
 
   protected act(name: string, t: number, dt: number): boolean {
@@ -169,12 +170,12 @@ export class FallenStar extends MiniBoss {
         // заряд 1 с (кольца раскручиваются, свет стягивается) → полоса 0,8 с → луч ведёт ±35° (на ярости — 180°)
         if (!this.hitDone) { this.beamWide = this.enraged; }
         const sweep = this.beamWide ? 3 : 2, fire = 1.8;
-        if (!this.hitDone) { this.hitDone = true; this.beamCd = 9; this.beamSide = Math.random() < 0.5 ? -1 : 1; if (!this.quiet) sfx.charge(); }
+        if (!this.hitDone) { this.hitDone = true; this.beamCd = 9; this.beamSide = rnd() < 0.5 ? -1 : 1; if (!this.quiet) sfx.charge(); }
         if (t < 1) {
           this.face(dt, 2);
           this.spinK = 1 + t * 5;
           const c = this.core(), a = rand(0, Math.PI * 2), r = rand(1.5, 3);
-          fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(-1, 1), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * r * 2, 0, -Math.sin(a) * r * 2), life: 0.45, size: 0.1, color: Math.random() < 0.7 ? GOLD : RASP, gravity: 0 });
+          fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(-1, 1), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * r * 2, 0, -Math.sin(a) * r * 2), life: 0.45, size: 0.1, color: rnd() < 0.7 ? GOLD : RASP, gravity: 0 });
         }
         if (crossed(1)) {
           this.aim.copy(this.heroAt()).sub(this.pos).setY(0);
@@ -202,7 +203,7 @@ export class FallenStar extends MiniBoss {
           if (this.beamTick <= 0 && this.inLine(from, dir, BEAM_LEN, BEAM_W)) { this.beamTick = 0.2; this.hurt(BEAM_DMG, from, 3); }
           // по полу — искры вдоль луча
           const p = from.addScaledVector(dir, rand(2, BEAM_LEN * 0.6)).setY(0.2);
-          fx.particle({ pos: p, vel: new THREE.Vector3(rand(-1, 1), rand(1, 3), rand(-1, 1)), life: 0.4, size: 0.12, color: Math.random() < 0.6 ? GOLD : RASP, gravity: 6 });
+          fx.particle({ pos: p, vel: new THREE.Vector3(rand(-1, 1), rand(1, 3), rand(-1, 1)), life: 0.4, size: 0.12, color: rnd() < 0.6 ? GOLD : RASP, gravity: 6 });
         }
         if (t < fire + sweep) return false;
         // перегрев: грани раскрываются, сердце наружу
@@ -282,7 +283,7 @@ export class FallenStar extends MiniBoss {
           const hero = this.h.hero.pos, dx = this.pos.x - hero.x, dz = this.pos.z - hero.z, d = Math.hypot(dx, dz);
           if (d > 2) { hero.x += (dx / d) * 1.8 * dt; hero.z += (dz / d) * 1.8 * dt; }
           const c = this.core(), a = rand(0, Math.PI * 2), r = rand(3, 6);
-          fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(-1.5, 1.5), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * r * 1.5, 0, -Math.sin(a) * r * 1.5), life: 0.6, size: 0.12, color: Math.random() < 0.5 ? RASP : GOLD, gravity: 0 });
+          fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(-1.5, 1.5), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * r * 1.5, 0, -Math.sin(a) * r * 1.5), life: 0.6, size: 0.12, color: rnd() < 0.5 ? RASP : GOLD, gravity: 0 });
         }
         if (t < 3.3) return false;
         this.later.push({ t: 3.5, fn: () => this.lowerPillars() });
@@ -471,9 +472,9 @@ export class FallenStar extends MiniBoss {
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.9 : 1) * (1 + nova * 0.4));
     this.heart.rotation.y += dt * 0.8;
     // звёздная пыль
-    if (!dead && !sleep && Math.random() < 0.5) {
+    if (!dead && !sleep && rnd() < 0.5) {
       const a = rand(0, Math.PI * 2), r = rand(1, 2.4) * (1 + this.haloK * 0.6);
-      this.h.fx.particle({ pos: this.core().add(new THREE.Vector3(Math.cos(a) * r, rand(-1.4, 1.4), Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(-0.3, 0.2), 0), life: rand(0.6, 1.2), size: rand(0.05, 0.1), color: Math.random() < 0.55 ? STAR : Math.random() < 0.5 ? GOLD : RASP, gravity: 0 });
+      this.h.fx.particle({ pos: this.core().add(new THREE.Vector3(Math.cos(a) * r, rand(-1.4, 1.4), Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(-0.3, 0.2), 0), life: rand(0.6, 1.2), size: rand(0.05, 0.1), color: rnd() < 0.55 ? STAR : rnd() < 0.5 ? GOLD : RASP, gravity: 0 });
     }
   }
 }

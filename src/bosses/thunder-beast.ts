@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -169,15 +170,15 @@ export class ThunderBeast extends MiniBoss {
   }
 
   protected choose(dist: number): string | null {
-    if (dist < 3.5) return Math.random() < 0.75 ? 'claws' : 'leap';
-    if (dist > 6 && Math.random() < 0.35) return 'storm';
-    return Math.random() < 0.7 ? 'leap' : 'storm';
+    if (dist < 3.5) return rnd() < 0.75 ? 'claws' : 'leap';
+    if (dist > 6 && rnd() < 0.35) return 'storm';
+    return rnd() < 0.7 ? 'leap' : 'storm';
   }
 
   /** Ломаная молния из a в b: тонкие светящиеся бруски с ореолом, гаснут за dur */
   private bolt(a: THREE.Vector3, b: THREE.Vector3, segs: number, jag: number, w: number, dur = 0.28): void {
     const g = new THREE.Group();
-    const core = glowMat(WHITE, 1, true), halo = glowMat(SPARK.clone().lerp(RASP, Math.random() * 0.5), 0.4, true);
+    const core = glowMat(WHITE, 1, true), halo = glowMat(SPARK.clone().lerp(RASP, rnd() * 0.5), 0.4, true);
     let prev = a.clone();
     for (let i = 1; i <= segs; i++) {
       const p = i === segs ? b.clone() : a.clone().lerp(b, i / segs).add(new THREE.Vector3(rand(-jag, jag), rand(-jag, jag) * 0.4, rand(-jag, jag)));
@@ -193,7 +194,7 @@ export class ThunderBeast extends MiniBoss {
       prev = p;
     }
     // геометрия общая (UNIT) — освобождаем только материалы
-    this.h.fx.custom(g, dur, (k) => { const f = (1 - k) * (0.6 + Math.random() * 0.4); core.opacity = f; halo.opacity = f * 0.4; }, () => { core.dispose(); halo.dispose(); });
+    this.h.fx.custom(g, dur, (k) => { const f = (1 - k) * (0.6 + rnd() * 0.4); core.opacity = f; halo.opacity = f * 0.4; }, () => { core.dispose(); halo.dispose(); });
   }
 
   /** Молния с неба в метку */
@@ -266,7 +267,7 @@ export class ThunderBeast extends MiniBoss {
           this.pos.x = THREE.MathUtils.lerp(this.jumpFrom.x, this.jumpAt.x, k);
           this.pos.z = THREE.MathUtils.lerp(this.jumpFrom.z, this.jumpAt.z, k);
           this.flyY = Math.sin(Math.PI * k) * PEAK;
-          if (Math.random() < 0.6) fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.5, 0.5), this.flyY + 2.6, rand(-1, 1))), vel: new THREE.Vector3(0, rand(-0.5, 0.5), 0), life: 0.35, size: rand(0.06, 0.12), color: Math.random() < 0.7 ? SPARK : RASP, gravity: 0 });
+          if (rnd() < 0.6) fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.5, 0.5), this.flyY + 2.6, rand(-1, 1))), vel: new THREE.Vector3(0, rand(-0.5, 0.5), 0), life: 0.35, size: rand(0.06, 0.12), color: rnd() < 0.7 ? SPARK : RASP, gravity: 0 });
           if (k < 1) return false;
           this.flyY = 0;
           this.landing();
@@ -310,7 +311,7 @@ export class ThunderBeast extends MiniBoss {
             this.markCircle(p, 1.6, 0.9 + i * STEP, () => this.strike(p, 1.6), SPARK);
           }
         }
-        if (Math.random() < 0.5) this.bolt(this.pos.clone().setY(3.2), this.pos.clone().add(new THREE.Vector3(rand(-2, 2), 6, rand(-2, 2))), 4, 0.5, 0.05, 0.12);
+        if (rnd() < 0.5) this.bolt(this.pos.clone().setY(3.2), this.pos.clone().add(new THREE.Vector3(rand(-2, 2), 6, rand(-2, 2))), 4, 0.5, 0.05, 0.12);
         return t > 0.7 + 0.9 + n * STEP + 0.3;
       }
     }
@@ -329,7 +330,7 @@ export class ThunderBeast extends MiniBoss {
       const p = this.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
       this.hazard(p, 0.9, 1.4, 8, SPARK.clone().lerp(RASP, 0.3));
     }
-    if (Math.random() < 0.4) this.bolt(this.pos.clone().setY(2.2), this.pos.clone().add(new THREE.Vector3(rand(-2.5, 2.5), 0.1, rand(-2.5, 2.5))), 4, 0.4, 0.05, 0.15);
+    if (rnd() < 0.4) this.bolt(this.pos.clone().setY(2.2), this.pos.clone().add(new THREE.Vector3(rand(-2.5, 2.5), 0.1, rand(-2.5, 2.5))), 4, 0.4, 0.05, 0.15);
   }
 
   protected animate(dt: number, walk: boolean): void {
@@ -379,11 +380,11 @@ export class ThunderBeast extends MiniBoss {
     this.tail.rotation.x = Math.sin(t * 3.3) * 0.15 + (air ? 0.4 : 0);
     // постоянные искры с шерсти; в перегрузке — гуще, и свет в рёбрах дрожит
     const live = this.state !== 'dead' && this.state !== 'sleep';
-    if (live && Math.random() < (this.enraged ? 0.6 : 0.3)) {
-      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.5, 0.5), this.flyY + lift + rand(2.6, 3.4), rand(-1.2, 1.4))), vel: new THREE.Vector3(rand(-1, 1), rand(0.5, 1.5), rand(-1, 1)), life: rand(0.15, 0.35), size: rand(0.05, 0.1), color: Math.random() < 0.7 ? SPARK : RASP, gravity: 0 });
-      if (Math.random() < 0.06 && !this.quiet) sfx.crackle();
+    if (live && rnd() < (this.enraged ? 0.6 : 0.3)) {
+      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.5, 0.5), this.flyY + lift + rand(2.6, 3.4), rand(-1.2, 1.4))), vel: new THREE.Vector3(rand(-1, 1), rand(0.5, 1.5), rand(-1, 1)), life: rand(0.15, 0.35), size: rand(0.05, 0.1), color: rnd() < 0.7 ? SPARK : RASP, gravity: 0 });
+      if (rnd() < 0.06 && !this.quiet) sfx.crackle();
     }
-    this.coreMat.opacity = this.enraged ? 0.6 + Math.random() * 0.35 : 0.45 + Math.sin(t * 4) * 0.1;
+    this.coreMat.opacity = this.enraged ? 0.6 + rnd() * 0.35 : 0.45 + Math.sin(t * 4) * 0.1;
     this.core.scale.set(0.9, 0.8, 1.6).multiplyScalar(this.enraged ? 1.08 : 1);
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 6)) * 0.1;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.6 : 1));
