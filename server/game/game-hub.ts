@@ -14,7 +14,11 @@ import type { MatchRunner } from './runner.ts';
  * Лобби, чат и профили живут на `/ws` (server/hub.ts)
  */
 const HELLO_MS = 15_000;
-export const DEFLATE = { threshold: 64, serverNoContextTakeover: false, clientNoContextTakeover: false, serverMaxWindowBits: 15, clientMaxWindowBits: 15, zlibDeflateOptions: { level: 6, memLevel: 8 }, concurrencyLimit: 4 };
+/**
+ * Параметры клиента (client_max_window_bits, *_no_context_takeover) не навязываем: Safari предлагает голый
+ * `permessage-deflate`, и `ws` с жёстким clientMaxWindowBits отвергал все предложения — 400 и нет соединения
+ */
+export const DEFLATE = { threshold: 64, serverMaxWindowBits: 15, zlibDeflateOptions: { level: 6, memLevel: 8 }, concurrencyLimit: 4 };
 
 export interface GameHubDeps {
   auth: Auth;

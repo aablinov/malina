@@ -428,3 +428,7 @@ Lint: битых ссылок нет, все страницы и источни�
 ## [2026-11-04] код | Сеть: дубли команд только при потерях, permessage-deflate на /game, замеры трафика
 `Transport.lossy` — по WebSocket клиент шлёт одну команду в кадре (пачка из трёх утраивала исходящий поток до 27 КБ/с), дубли остаются для петли с потерями и будущего транспорта без TCP. `/game` сжат permessage-deflate с общим контекстом: на проводе вниз 16,5 → 1,3 КБ/с, вверх 10,7 → 2,7 КБ/с. Замеры и вывод про бинарный кодек — в [dev-performance.md](dev-performance.md). Тест: матч по петле с потерями 25 %.
 Страницы: [design-multiplayer.md](design-multiplayer.md), [dev-performance.md](dev-performance.md), [index.md](index.md).
+
+## [2026-11-04] код | Сеть: Safari не подключался к /game — сжатие без навязанных параметров клиента
+Safari предлагает голый `permessage-deflate`, а `ws` с жёстким `clientMaxWindowBits` отвергал все предложения и отвечал 400 — соединения боя не было. Параметры клиента больше не навязываются (`DEFLATE` в `game-hub.ts`), сжатие договаривается и с Chrome, и с Safari. Тест `game-hub.test.ts`: рукопожатие с тремя видами предложений.
+Страницы: [design-multiplayer.md](design-multiplayer.md).
