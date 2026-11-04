@@ -1,4 +1,5 @@
 import { duck } from '../audio.ts';
+import { rnd } from '../rng.ts';
 import { bell, boom, deg, hiss, semi, voice } from '../spell-audio.ts';
 import { rand } from './kit.ts';
 
@@ -49,7 +50,7 @@ export const bossSfx = {
     hiss({ dur, vol: 0.12, f: 3000, q: 0.8, attack: 0.1, verb: 0.3 });
     voice({ type: 'sawtooth', f: 73, f1: 65, dur, vol: 0.07, detune: 18, lp: 700, lp1: 400, attack: 0.08, verb: 0.5 });
     [0, 7, 12, 19].forEach((s, i) => voice({ type: 'sawtooth', f: semi(110, s), dur: 0.9, vol: 0.03, detune: 8, lp: 2400, lp1: 300, delay: i * 0.03, verb: 0.5 }));
-    for (let i = 0; i < 12; i++) hiss({ dur: 0.04, vol: 0.12, f: rand(1500, 4000), q: 2, delay: Math.random() * dur });
+    for (let i = 0; i < 12; i++) hiss({ dur: 0.04, vol: 0.12, f: rand(1500, 4000), q: 2, delay: rnd() * dur });
   },
   /** Взлёт: три мощных взмаха и рёв уходит вверх */
   takeoff() {
@@ -69,7 +70,7 @@ export const bossSfx = {
     hiss({ dur: 0.2, vol: 0.5, f: 1100, q: 0.5, verb: 0.3 });
     hiss({ dur: 1.8, vol: 0.32, f: 1400, f1: 110, q: 0.4, type: 'lowpass', verb: 0.5 });
     [0, 7, 12, 19].forEach((s, i) => voice({ type: 'sawtooth', f: semi(87.3, s), dur: 1.3, vol: 0.05, detune: 10, lp: 2600, lp1: 200, delay: i * 0.02, verb: 0.55 }));
-    for (let i = 0; i < 10; i++) voice({ type: 'triangle', f: rand(160, 380), dur: 0.08, vol: 0.05, delay: 0.25 + Math.random(), verb: 0.2 });
+    for (let i = 0; i < 10; i++) voice({ type: 'triangle', f: rand(160, 380), dur: 0.08, vol: 0.05, delay: 0.25 + rnd(), verb: 0.2 });
   },
   /** Малый метеор фазы 2 */
   pebble() { boom(120, 40, 0.5, 0.45, 0, 0.3); hiss({ dur: 0.4, vol: 0.18, f: 1200, f1: 200, q: 0.5, type: 'lowpass' }); },

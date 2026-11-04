@@ -329,8 +329,8 @@ function golem(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
       },
       onHurt(mn) {
         fx.burst(mn.pos.clone().setY(mn.pos.y + 1.3), ['#9a9284', '#6f695e', '#c8bba0'], 6, { speed: 2, up: 2, size: 0.08, life: 0.5, gravity: 10 });
-        const now = performance.now();
-        if (now - lastCrumb > 120) { lastCrumb = now; hiss({ dur: 0.06, vol: 0.12, f: 1400, q: 1.5, verb: 0.1 }); }
+        const now = kit.time;
+        if (now - lastCrumb > 0.12) { lastCrumb = now; hiss({ dur: 0.06, vol: 0.12, f: 1400, q: 1.5, verb: 0.1 }); }
       },
     });
     onEnd(kit, m, life, () => {

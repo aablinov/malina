@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -190,16 +191,16 @@ export class OrderJudge extends MiniBoss {
 
   protected choose(dist: number): string | null {
     const alive = this.squires.length;
-    if (this.graves.length > 0 && Math.random() < 0.6) { this.raiseHits = 0; return 'raise'; }
-    if (alive + this.graves.length === 0 && Math.random() < 0.25) return 'squires';
-    if (dist < 4.2) return Math.random() < 0.7 ? 'sweep' : 'verdict';
-    return Math.random() < 0.5 ? 'pillars' : 'verdict';
+    if (this.graves.length > 0 && rnd() < 0.6) { this.raiseHits = 0; return 'raise'; }
+    if (alive + this.graves.length === 0 && rnd() < 0.25) return 'squires';
+    if (dist < 4.2) return rnd() < 0.7 ? 'sweep' : 'verdict';
+    return rnd() < 0.5 ? 'pillars' : 'verdict';
   }
 
   /** Столп света в точке: высокий светящийся брусок с ореолом гаснет за полсекунды */
   private pillar(at: THREE.Vector3, r: number, dmg: number): void {
     const fx = this.h.fx, g = new THREE.Group();
-    const core = glowMat(WHITE, 1, true), halo = glowMat(HOLY.clone().lerp(RASP, Math.random() * 0.3), 0.45, true);
+    const core = glowMat(WHITE, 1, true), halo = glowMat(HOLY.clone().lerp(RASP, rnd() * 0.3), 0.45, true);
     const a = new THREE.Mesh(UNIT, core); a.scale.set(r * 0.9, 14, r * 0.9); a.position.y = 7;
     const b = new THREE.Mesh(UNIT, halo); b.scale.set(r * 1.6, 14, r * 1.6); b.position.y = 7;
     g.add(a, b);
@@ -221,7 +222,7 @@ export class OrderJudge extends MiniBoss {
     this.h.fx.custom(c, dur, (k) => {
       m.opacity = 0.15 + k * 0.5 + Math.sin(k * 40) * 0.05;
       c.scale.x = c.scale.z = 0.5 + k * 0.6;
-      if (Math.random() < 0.4) this.h.fx.particle({ pos: at.clone().add(new THREE.Vector3(rand(-0.4, 0.4), 0.1, rand(-0.4, 0.4))), vel: new THREE.Vector3(0, rand(2, 4), 0), life: 0.6, size: 0.08, color: HOLY, gravity: -1 });
+      if (rnd() < 0.4) this.h.fx.particle({ pos: at.clone().add(new THREE.Vector3(rand(-0.4, 0.4), 0.1, rand(-0.4, 0.4))), vel: new THREE.Vector3(0, rand(2, 4), 0), life: 0.6, size: 0.08, color: HOLY, gravity: -1 });
     }, () => m.dispose());
   }
 
@@ -277,7 +278,7 @@ export class OrderJudge extends MiniBoss {
         }
         if (t < FIRE + 0.6) return false;
         // меч увяз в камне: изредка шатается (основное окно — сорванный обряд)
-        if (Math.random() < 0.2) { fx.text(this.pos.clone().setY(this.topY + 0.8), 'меч увяз!', 'crit'); this.daze(1.5); }
+        if (rnd() < 0.2) { fx.text(this.pos.clone().setY(this.topY + 0.8), 'меч увяз!', 'crit'); this.daze(1.5); }
         return true;
       }
       case 'sweep': {
@@ -321,7 +322,7 @@ export class OrderJudge extends MiniBoss {
           fx.text(this.pos.clone().setY(this.topY + 0.8), 'воскрешение!', 'crit');
           for (const g of this.graves) this.column(g.pos, CH);
         }
-        if (Math.random() < 0.5) fx.particle({ pos: this.heart.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(rand(-1, 1), rand(-0.5, 1), rand(-1, 1))), vel: new THREE.Vector3(0, 1.5, 0), life: 0.5, size: 0.09, color: Math.random() < 0.6 ? HOLY : RASP, gravity: 0 });
+        if (rnd() < 0.5) fx.particle({ pos: this.heart.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(rand(-1, 1), rand(-0.5, 1), rand(-1, 1))), vel: new THREE.Vector3(0, 1.5, 0), life: 0.5, size: 0.09, color: rnd() < 0.6 ? HOLY : RASP, gravity: 0 });
         if (t < CH) return false;
         const room = Math.max(0, 5 - this.squires.length);
         for (const g of this.graves.slice(0, room)) {
@@ -386,7 +387,7 @@ export class OrderJudge extends MiniBoss {
     this.body.rotation.x += (lean - this.body.rotation.x) * Math.min(1, dt * 8);
     // голова: во сне опущена, в оглушении мотается
     this.head.rotation.set(st === 'sleep' ? 0.35 : 0, st === 'daze' ? Math.sin(t * 5) * 0.3 : 0, 0);
-    if (st !== 'sleep' && Math.random() < 0.05) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1.2, 1.2), rand(1, 4), rand(-0.8, 0.8))), vel: new THREE.Vector3(0, 0.6, 0), life: 0.8, size: 0.07, color: HOLY, gravity: 0 });
+    if (st !== 'sleep' && rnd() < 0.05) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1.2, 1.2), rand(1, 4), rand(-0.8, 0.8))), vel: new THREE.Vector3(0, 0.6, 0), life: 0.8, size: 0.07, color: HOLY, gravity: 0 });
     // сердце-ягода на чаше: в оглушении бьётся крупно
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.6 : 1));

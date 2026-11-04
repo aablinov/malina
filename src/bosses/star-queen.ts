@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -178,7 +179,7 @@ export class StarQueen extends MiniBoss {
   protected choose(): string | null {
     if (this.enraged && this.nightCd <= 0) return 'night';
     if (this.studentsCd <= 0 && !this.shield) return 'students';
-    return Math.random() < 0.5 ? 'starfall' : 'comet';
+    return rnd() < 0.5 ? 'starfall' : 'comet';
   }
 
   protected act(name: string, t: number, dt: number): boolean {
@@ -287,7 +288,7 @@ export class StarQueen extends MiniBoss {
     g.rotation.y = Math.atan2(dir.x, dir.z);
     fx.custom(g, 0.4, (k) => {
       g.position.copy(from).addScaledVector(dir, 18 * k).setY(1.1);
-      if (Math.random() < 0.8) fx.particle({ pos: g.position.clone(), vel: new THREE.Vector3(rand(-0.5, 0.5), rand(0, 1), rand(-0.5, 0.5)), life: 0.4, size: 0.12, color: Math.random() < 0.7 ? GOLD : RASP, gravity: 0 });
+      if (rnd() < 0.8) fx.particle({ pos: g.position.clone(), vel: new THREE.Vector3(rand(-0.5, 0.5), rand(0, 1), rand(-0.5, 0.5)), life: 0.4, size: 0.12, color: rnd() < 0.7 ? GOLD : RASP, gravity: 0 });
     }, () => { mat.dispose(); tail.dispose(); });
     fx.light(from.clone().setY(1.5), GOLD, 5, 10, 0.4);
     if (this.inLine(from, dir, 18, 1.6)) this.hurt(20, from, 6);
@@ -376,9 +377,9 @@ export class StarQueen extends MiniBoss {
       this.bubbleMat.opacity = 0.28 + Math.sin(t * 7) * 0.06;
     }
     // звёздные искры вокруг
-    if (!dead && this.state !== 'sleep' && Math.random() < 0.4) {
+    if (!dead && this.state !== 'sleep' && rnd() < 0.4) {
       const a = rand(0, Math.PI * 2), r = rand(0.8, 1.8) * this.moonK;
-      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(1, 4.2) + this.body.position.y * 0.5, Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(0.1, 0.4), 0), life: rand(0.5, 1), size: rand(0.05, 0.1), color: Math.random() < 0.6 ? STAR : Math.random() < 0.5 ? GOLD : RASP, gravity: 0 });
+      this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(1, 4.2) + this.body.position.y * 0.5, Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(0.1, 0.4), 0), life: rand(0.5, 1), size: rand(0.05, 0.1), color: rnd() < 0.6 ? STAR : rnd() < 0.5 ? GOLD : RASP, gravity: 0 });
     }
   }
 }

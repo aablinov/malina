@@ -1,10 +1,9 @@
 import * as THREE from 'three';
-import { obstacle, type Obstacle } from './collision.ts';
+import { distToObstacle, obstacle, type Obstacle } from './collision.ts';
 import type { FX } from './fx.ts';
 import { disposeOwned, markShared } from './fx.ts';
 import type { Target } from './target.ts';
 import type { Rand } from './textures.ts';
-import { distToObstacle } from './nav.ts';
 import { pixelTex } from './textures.ts';
 import { additive, additiveSprite, glowTex, groundGlow, lightBeam, rainbow, raysTex, starTex, type LootData } from './loot-look.ts';
 

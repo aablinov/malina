@@ -116,3 +116,12 @@ export function raycastCircle(ox: number, oz: number, dx: number, dz: number, cx
   if (t >= 0) return t;
   return c < 0 ? 0 : -1;
 }
+
+/** Расстояние от точки до края препятствия (0 — внутри) */
+export function distToObstacle(x: number, z: number, o: Obstacle): number {
+  const c = Math.cos(o.rot), s = Math.sin(o.rot);
+  const dx = x - o.x, dz = z - o.z;
+  const lx = dx * c - dz * s, lz = dx * s + dz * c;
+  const qx = Math.max(Math.abs(lx) - o.hx, 0), qz = Math.max(Math.abs(lz) - o.hz, 0);
+  return Math.hypot(qx, qz);
+}

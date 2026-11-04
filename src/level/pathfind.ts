@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { overlapsY, type Obstacle } from '../collision.ts';
-import { distToObstacle } from '../nav.ts';
+import { distToObstacle } from '../collision.ts';
 import { BODY_H, collideTop, STEP, type Terrain } from './collide.ts';
 import type { Level } from './level.ts';
 
@@ -22,6 +22,8 @@ export interface PathOptions {
   solids?: readonly Obstacle[];
   /** Насколько можно спрыгнуть вниз, м */
   dropMax?: number;
+  /** Потолок раскрытых клеток (цена поиска); по умолчанию MAX_EXPAND — для героя, мобам дешевле */
+  maxExpand?: number;
 }
 
 interface Node { i: number; j: number; y: number; g: number; f: number; parent: Node | null; closed: boolean; wall: boolean }
@@ -123,7 +125,8 @@ export class Pathfinder {
     let best = start, bestH = start.f;
     let goal: Node | null = null;
     let expanded = 0;
-    while (heap.length && expanded < MAX_EXPAND) {
+    const maxExpand = opts.maxExpand ?? MAX_EXPAND;
+    while (heap.length && expanded < maxExpand) {
       const n = pop();
       if (n.closed) continue;
       n.closed = true;

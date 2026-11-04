@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -114,8 +115,8 @@ export class DruseGolem extends MiniBoss {
   }
 
   protected choose(dist: number): string | null {
-    if (dist < 3.8 && (this.riftCd > 0 || Math.random() < 0.7)) return 'stomp';
-    if (this.riftCd <= 0 && Math.random() < 0.6) return 'rift';
+    if (dist < 3.8 && (this.riftCd > 0 || rnd() < 0.7)) return 'stomp';
+    if (this.riftCd <= 0 && rnd() < 0.6) return 'rift';
     return dist > 4.5 ? 'shard' : null;
   }
 
@@ -286,8 +287,8 @@ export class DruseGolem extends MiniBoss {
     }
     // друза: в ярости кристаллы дрожат и сыплют искры
     this.druse.position.x = this.enraged ? Math.sin(t * 40) * 0.015 : 0;
-    if (this.state !== 'dead' && this.state !== 'sleep' && Math.random() < (this.enraged ? 0.25 : 0.08)) {
-      fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), this.body.position.y + rand(2, 3.2), 0)).addScaledVector(this.fwd(), -0.9), vel: new THREE.Vector3(0, rand(0.4, 1), 0), life: 0.5, size: rand(0.05, 0.1), color: Math.random() < 0.5 ? PINK : PINK2, gravity: -0.5 });
+    if (this.state !== 'dead' && this.state !== 'sleep' && rnd() < (this.enraged ? 0.25 : 0.08)) {
+      fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), this.body.position.y + rand(2, 3.2), 0)).addScaledVector(this.fwd(), -0.9), vel: new THREE.Vector3(0, rand(0.4, 1), 0), life: 0.5, size: rand(0.05, 0.1), color: rnd() < 0.5 ? PINK : PINK2, gravity: -0.5 });
     }
     // сердце-ягода: в трещине ровно пульсирует, в оглушении — крупно бьётся
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;

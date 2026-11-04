@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import type { Target } from '../target.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
@@ -88,7 +89,7 @@ class Bush implements Target {
     this.leaf.emissive.setScalar(this.flashT > 0 ? 0.6 : 0);
     const s = this.alive ? 1 - this.hits * 0.15 : 0.25;
     this.group.scale.set(1, THREE.MathUtils.lerp(this.group.scale.y, s, 0.2), 1);
-    if (this.alive && Math.random() < 0.4) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.6, 0.6), rand(0.6, 1.6), rand(-0.6, 0.6))), vel: new THREE.Vector3(0, rand(0.8, 1.6), 0), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: Math.random() < 0.6 ? FIRE : RASP, gravity: -1 });
+    if (this.alive && rnd() < 0.4) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.6, 0.6), rand(0.6, 1.6), rand(-0.6, 0.6))), vel: new THREE.Vector3(0, rand(0.8, 1.6), 0), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: rnd() < 0.6 ? FIRE : RASP, gravity: -1 });
   }
 
   /** Вырос заново */
@@ -231,9 +232,9 @@ export class CrimsonSerpent extends MiniBoss {
 
   protected choose(dist: number): string | null {
     if (this.bush && this.drinkCd <= 0) return 'drink';
-    if (dist < 4.2) return Math.random() < 0.65 ? 'lunge' : 'burrow';
-    if (dist > 7 && Math.random() < 0.55) return 'burrow';
-    return Math.random() < 0.5 ? 'spit' : 'burrow';
+    if (dist < 4.2) return rnd() < 0.65 ? 'lunge' : 'burrow';
+    if (dist > 7 && rnd() < 0.55) return 'burrow';
+    return rnd() < 0.5 ? 'spit' : 'burrow';
   }
 
   protected act(name: string, t: number, dt: number): boolean {
@@ -255,14 +256,14 @@ export class CrimsonSerpent extends MiniBoss {
           const d = hero.clone().sub(this.mole), l = d.length(), sp = (this.enraged ? 9 : 7) * dt;
           if (l > 0.8) this.mole.addScaledVector(d, Math.min(sp, l - 0.8) / l);
           this.clampIn(this.mole, 2);
-          if (Math.random() < 0.6) fx.burst(this.mole.clone().setY(0.3), DIRT, 2, { speed: 2, up: 3, size: 0.12, life: 0.5, gravity: 10 });
+          if (rnd() < 0.6) fx.burst(this.mole.clone().setY(0.3), DIRT, 2, { speed: 2, up: 3, size: 0.12, life: 0.5, gravity: 10 });
           if (l < 1.2 || t > DIVE + RUN) {
             this.bur = 2;
             this.markAt.copy(this.clampIn(hero.clone(), 2));
             this.markCircle(this.markAt, 3, MARK, () => this.erupt(), FIRE);
           }
         } else if (this.bur === 2) this.mole.lerp(this.markAt, Math.min(1, dt * 6));
-        if (Math.random() < 0.5) fx.particle({ pos: this.mole.clone().add(new THREE.Vector3(rand(-0.8, 0.8), 0.4, rand(-0.8, 0.8))), vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.5, size: rand(0.08, 0.14), color: Math.random() < 0.7 ? FIRE : RASP, gravity: -1 });
+        if (rnd() < 0.5) fx.particle({ pos: this.mole.clone().add(new THREE.Vector3(rand(-0.8, 0.8), 0.4, rand(-0.8, 0.8))), vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.5, size: rand(0.08, 0.14), color: rnd() < 0.7 ? FIRE : RASP, gravity: -1 });
         if (t > 5) { this.under = false; this.straighten(); return true; } // подстраховка: метку смахнуло — вылез сам
         return false;
       }
@@ -287,7 +288,7 @@ export class CrimsonSerpent extends MiniBoss {
           if (t >= at && t - dt < at) {
             const to = this.clampIn(this.heroAt().add(new THREE.Vector3(rand(-2.5, 2.5), 0, rand(-2.5, 2.5)).multiplyScalar(i === 0 ? 0.15 : 1)));
             const from = this.pos.clone().addScaledVector(this.fwd(), 1.2).setY(2.2 - this.sink);
-            const mesh = new THREE.Mesh(UNIT, glowMat(Math.random() < 0.6 ? FIRE : RASP));
+            const mesh = new THREE.Mesh(UNIT, glowMat(rnd() < 0.6 ? FIRE : RASP));
             mesh.scale.setScalar(0.5);
             this.markCircle(to, 1.5, 0.9, () => undefined);
             this.lob(mesh, from, to, 0.9, 3.2, EMBER, (p) => {
@@ -324,11 +325,11 @@ export class CrimsonSerpent extends MiniBoss {
         this.pos.x = THREE.MathUtils.lerp(this.pos.x, nx, Math.min(1, dt * 5));
         this.pos.z = THREE.MathUtils.lerp(this.pos.z, nz, Math.min(1, dt * 5));
         this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.06 * dt);
-        if (Math.random() < 0.7) {
+        if (rnd() < 0.7) {
           const mouth = this.pos.clone().addScaledVector(this.fwd(), 1).setY(1.8);
-          fx.particle({ pos: b.pos.clone().setY(1).lerp(mouth, Math.random()), vel: mouth.sub(b.pos).setY(0.5).multiplyScalar(0.6), life: 0.4, size: rand(0.08, 0.15), color: Math.random() < 0.6 ? RASP : FIRE, gravity: 0 });
+          fx.particle({ pos: b.pos.clone().setY(1).lerp(mouth, rnd()), vel: mouth.sub(b.pos).setY(0.5).multiplyScalar(0.6), life: 0.4, size: rand(0.08, 0.15), color: rnd() < 0.6 ? RASP : FIRE, gravity: 0 });
         }
-        if (Math.random() < dt * 4 && !this.quiet) sfx.gulp();
+        if (rnd() < dt * 4 && !this.quiet) sfx.gulp();
         if (t < 3) return false;
         this.drinking = false; this.drinkCd = 10;
         return true;
@@ -431,11 +432,11 @@ export class CrimsonSerpent extends MiniBoss {
     this.head.rotation.x = THREE.MathUtils.lerp(this.head.rotation.x, hx, 0.2);
     this.jaw.rotation.x = THREE.MathUtils.lerp(this.jaw.rotation.x, jaw, 0.3);
     // угли с чешуи; застрял — земля сыплется
-    if (this.state !== 'dead' && !this.under && Math.random() < 0.35) {
-      const p = this.segAt[Math.floor(Math.random() * SEGS.length)];
-      fx.particle({ pos: p.clone().setY(rand(0.8, 1.6) - this.sink), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.6, 1.4), rand(-0.3, 0.3)), life: rand(0.4, 0.8), size: rand(0.06, 0.12), color: Math.random() < 0.7 ? FIRE : RASP, gravity: -0.5 });
+    if (this.state !== 'dead' && !this.under && rnd() < 0.35) {
+      const p = this.segAt[Math.floor(rnd() * SEGS.length)];
+      fx.particle({ pos: p.clone().setY(rand(0.8, 1.6) - this.sink), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.6, 1.4), rand(-0.3, 0.3)), life: rand(0.4, 0.8), size: rand(0.06, 0.12), color: rnd() < 0.7 ? FIRE : RASP, gravity: -0.5 });
     }
-    if (this.stuck && this.state === 'daze' && Math.random() < 0.3) fx.burst(this.pos.clone().setY(0.3), DIRT, 1, { speed: 2, up: 2, size: 0.1, life: 0.5, gravity: 10 });
+    if (this.stuck && this.state === 'daze' && rnd() < 0.3) fx.burst(this.pos.clone().setY(0.3), DIRT, 1, { speed: 2, up: 2, size: 0.1, life: 0.5, gravity: 10 });
     // сердце-ягода: оглушён — бьётся крупно
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.7 : 1));

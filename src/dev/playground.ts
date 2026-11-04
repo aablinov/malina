@@ -11,6 +11,7 @@ import { emptyInput, Knight, type Strike } from '../knight.ts';
 import { bindDom, EventQueue } from '../cgame/events.ts';
 import { GameInput, type Action } from '../cgame/input.ts';
 import { MouseOrders } from '../cgame/orders.ts';
+import { ROUTE_BUDGET, ROUTE_EXPAND } from '../mobs/mob.ts';
 import type { Target } from '../target.ts';
 import { makeTextures, rng } from '../textures.ts';
 import { Level, type LevelJSON } from '../level/level.ts';
@@ -390,11 +391,19 @@ export function runPlayground(): void {
     if (!foeObsKey || foeObsKey[0] !== base || foeObsKey[1] !== towers) { foeObsCache = base.concat(towers); foeObsKey = [base, towers]; }
     return foeObsCache;
   };
+  /** Путь в обход для мобов: не больше ROUTE_BUDGET за такт (src/mobs/mob.ts) */
+  let routeTick = -1, routeN = 0;
   const bossHooks = {
     scene, fx, hero, terrain,
     obstacles: () => foeObstacles(),
     hurtHero: (dmg: number, from: THREE.Vector3, knock: number) => hurtHero(dmg, from, knock),
     quiet: () => scripted,
+    route: (from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] | null => {
+      const t = world?.tick ?? Math.floor(simTime * 60);
+      if (t !== routeTick) { routeTick = t; routeN = 0; }
+      if (++routeN > ROUTE_BUDGET) return null;
+      return pathfinder.find(from, to, { solids: world?.foeSolids ?? solids(), maxExpand: ROUTE_EXPAND });
+    },
   };
   const bosses: MiniBoss[] = [];
   const arenas: Arena[] = [];

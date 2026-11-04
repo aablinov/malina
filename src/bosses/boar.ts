@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
@@ -144,7 +145,7 @@ export class FrostBoar extends MiniBoss {
 
   protected choose(dist: number): string | null {
     if (dist < 3.5) return 'gore';
-    return Math.random() < 0.55 ? 'charge' : 'frost';
+    return rnd() < 0.55 ? 'charge' : 'frost';
   }
 
   protected act(name: string, t: number, dt: number): boolean {
@@ -155,7 +156,7 @@ export class FrostBoar extends MiniBoss {
         this.phaseT += dt;
         if (this.phase === 'scrape') {
           // скребёт копытом: пыль и иней из-под ноги, полоса наливается
-          if (Math.random() < 0.4) fx.burst(this.pos.clone().add(this.dashDir.clone().multiplyScalar(1.2)).setY(0.1), ['#9fb4c4', '#e8f4ff'], 2, { speed: 1.5, up: 1.5, size: 0.08, life: 0.4, gravity: 6 });
+          if (rnd() < 0.4) fx.burst(this.pos.clone().add(this.dashDir.clone().multiplyScalar(1.2)).setY(0.1), ['#9fb4c4', '#e8f4ff'], 2, { speed: 1.5, up: 1.5, size: 0.08, life: 0.4, gravity: 6 });
           if (this.phaseT >= SCRAPE) {
             this.phase = 'dash'; this.phaseT = 0; this.dashLeft = DASH_LEN; this.rammed = false; this.hasWant = false;
             if (!this.quiet) sfx.roar();
@@ -176,7 +177,7 @@ export class FrostBoar extends MiniBoss {
             this.hurt(20, this.pos.clone(), 10);
             fx.hitstop = Math.max(fx.hitstop, 0.05);
           }
-          if (Math.random() < 0.8) fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), 0.2, rand(-1, 1))), vel: new THREE.Vector3(0, rand(0.5, 1.5), 0), life: 0.5, size: rand(0.08, 0.15), color: ICE, gravity: -0.5 });
+          if (rnd() < 0.8) fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), 0.2, rand(-1, 1))), vel: new THREE.Vector3(0, rand(0.5, 1.5), 0), life: 0.5, size: rand(0.08, 0.15), color: ICE, gravity: -0.5 });
           if (this.dashLeft <= 0) { this.phase = 'skid'; this.phaseT = 0; }
           return false;
         }
@@ -339,7 +340,7 @@ export class FrostBoar extends MiniBoss {
     this.head.rotation.y = headY;
     this.tail.rotation.y = Math.sin(t * (walk ? 14 : 6)) * 0.45;
     // иней с кристаллов
-    if (this.state !== 'dead' && this.state !== 'sleep' && Math.random() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.6, 0.6), 2.6 + bob, rand(-1, 1))), vel: new THREE.Vector3(0, rand(0.3, 0.8), 0), life: 0.6, size: rand(0.06, 0.12), color: Math.random() < 0.7 ? ICE : RASP, gravity: -0.3 });
+    if (this.state !== 'dead' && this.state !== 'sleep' && rnd() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.6, 0.6), 2.6 + bob, rand(-1, 1))), vel: new THREE.Vector3(0, rand(0.3, 0.8), 0), life: 0.6, size: rand(0.06, 0.12), color: rnd() < 0.7 ? ICE : RASP, gravity: -0.3 });
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.emblem.scale.setScalar(beat * (this.heartOpen ? 1.6 : 1));
   }

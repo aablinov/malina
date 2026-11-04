@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rnd } from '../rng.ts';
 import { resolveCircle } from '../collision.ts';
 import { HERO } from '../tuning.ts';
 import type { Target } from '../target.ts';
@@ -29,6 +30,8 @@ export class Minion implements Target {
   private cd = 1;
   private flashT = 0;
   private hop = 0;
+  /** Время жизни, с — покачивание на месте (не часы: детерминизм на сервере) */
+  private bob = 0;
   private readonly mats: THREE.MeshLambertMaterial[] = [];
   /** Тает (призрак): прозрачность 0..1 */
   ghost = false;
@@ -73,6 +76,7 @@ export class Minion implements Target {
   }
 
   update(dt: number): void {
+    this.bob += dt;
     if (this.dead) return;
     const hero = this.h.hero.pos, dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, d = Math.hypot(dx, dz);
     const sp = (this.look.speed ?? 2.6) * dt;
@@ -85,7 +89,7 @@ export class Minion implements Target {
     this.hop = Math.max(0, this.hop - dt);
     this.flashT = Math.max(0, this.flashT - dt);
     for (const m of this.mats) m.emissive.setScalar(this.flashT > 0 ? 0.6 : 0);
-    this.group.position.set(this.pos.x, Math.sin(this.hop * 12) * 0.15 + (d > 0.9 ? Math.abs(Math.sin(performance.now() * 0.012)) * 0.06 : 0), this.pos.z);
+    this.group.position.set(this.pos.x, Math.sin(this.hop * 12) * 0.15 + (d > 0.9 ? Math.abs(Math.sin(this.bob * 12)) * 0.06 : 0), this.pos.z);
     this.group.rotation.y = Math.atan2(dx, dz);
   }
 }
@@ -118,7 +122,7 @@ export abstract class MiniBoss extends Boss {
   get aura(): string | null {
     if (!this.auras.length) return null;
     if (!this.auraPick) {
-      let r = Math.random() * this.auras.reduce((a, [, w]) => a + w, 0);
+      let r = rnd() * this.auras.reduce((a, [, w]) => a + w, 0);
       this.auraPick = this.auras[this.auras.length - 1][0];
       for (const [id, w] of this.auras) if ((r -= w) < 0) { this.auraPick = id; break; }
     }
@@ -248,7 +252,7 @@ export abstract class MiniBoss extends Boss {
         break;
       case 'daze':
         this.heartOpen = this.st > 0.1;
-        if (Math.random() < 0.25) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(this.time * 6) * 0.8, this.topY + 0.4, Math.sin(this.time * 6) * 0.8)), vel: new THREE.Vector3(0, 0.3, 0), life: 0.4, size: 0.1, color: RASP, gravity: 0 });
+        if (rnd() < 0.25) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(this.time * 6) * 0.8, this.topY + 0.4, Math.sin(this.time * 6) * 0.8)), vel: new THREE.Vector3(0, 0.3, 0), life: 0.4, size: 0.1, color: RASP, gravity: 0 });
         if (this.st > this.dazeFor) { this.cd = 0.6; this.go('idle'); }
         break;
       case 'dead': this.dying(dt); break;

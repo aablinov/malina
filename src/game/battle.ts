@@ -5,6 +5,8 @@ import { nullFx } from '../headless.ts';
 import { Profile, xpToNext, type ProfileData } from '../items.ts';
 import { emptyInput, Knight, type KnightInput, type Strike } from '../knight.ts';
 import { obstaclesOf, terrainOf, type Terrain } from '../level/collide.ts';
+import { Pathfinder } from '../level/pathfind.ts';
+import { ROUTE_BUDGET, ROUTE_EXPAND } from '../mobs/mob.ts';
 import type { Level } from '../level/level.ts';
 import { Pack } from '../mobs/pack.ts';
 import { rnd } from '../rng.ts';
@@ -49,6 +51,7 @@ export class HeadlessBattle {
   readonly heroes = new Map<number, BattleHero>();
   readonly level: Level;
   readonly terrain: Terrain;
+  readonly pathfinder: Pathfinder;
   readonly scene = new THREE.Scene();
   readonly fx = nullFx();
   private readonly levelObstacles: Obstacle[];
@@ -60,6 +63,7 @@ export class HeadlessBattle {
     textures ??= makeTextures();
     this.level = map.level;
     this.terrain = terrainOf(map.level);
+    this.pathfinder = new Pathfinder(map.level, this.terrain);
     const b = map.level.getBounds() ?? { minX: -64, maxX: 64, minZ: -64, maxZ: 64, minY: -1, maxY: 0 };
     this.levelObstacles = obstaclesOf(map.level, 0, b.minX, b.minZ, b.maxX, b.maxZ);
     this.lava = map.level.palette.includes('lava');
@@ -73,6 +77,7 @@ export class HeadlessBattle {
       quiet: () => true,
       heroes: () => [...this.heroes.values()].map((h) => h.knight),
       hurtKnight: (k: Knight, dmg: number, from: THREE.Vector3, knock: number) => this.hurt(k, dmg, from, knock),
+      route: (from: THREE.Vector3, to: THREE.Vector3) => this.route(from, to),
     };
     this.pack = new Pack(bossHooks, (at, n) => { if (this.world.td) this.world.td.fallen++; this.world.piles.drop(at, n); });
     const hooks: SimHooks = {
@@ -84,6 +89,16 @@ export class HeadlessBattle {
       step: (dt) => this.stepActors(dt),
     };
     this.world = new SimWorld(hooks, { seed, level: map.level, td: map.td, players, personal });
+  }
+
+  /** Путей в обход за такт — не больше ROUTE_BUDGET (как лимит маршрутизации botlib): остальным мобам — в следующий такт */
+  private routeTick = -1;
+  private routeN = 0;
+  private route(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] | null {
+    const tick = this.world.tick;
+    if (tick !== this.routeTick) { this.routeTick = tick; this.routeN = 0; }
+    if (++this.routeN > ROUTE_BUDGET) return null;
+    return this.pathfinder.find(from, to, { solids: this.world.foeSolids, maxExpand: ROUTE_EXPAND });
   }
 
   private foeCache: Obstacle[] | null = null;
