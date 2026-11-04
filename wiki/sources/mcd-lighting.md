@@ -1,48 +1,48 @@
-# Источник: свет и декор Minecraft Dungeons (4 скриншота)
+# Source: light and decor of Minecraft Dungeons (4 screenshots)
 
-Добавлено 23.10.2026. Скриншоты игры на Unreal Engine 4 (польская локализация, миссия «W mroczną otchłań»), камера — изометрия сверху под углом, день. Файлы — `mcd-lighting/`. Источник не правим; выводы — в [../style-lighting.md](../style-lighting.md) и [../design-level-decor.md](../design-level-decor.md).
+Added 2026-10-23. Screenshots of the game on Unreal Engine 4 (Polish localisation, the mission "W mroczną otchłań"), camera — isometric from above at an angle, day. Files — `mcd-lighting/`. The source is not edited; conclusions — in [../style-lighting.md](../style-lighting.md) and [../design-level-decor.md](../design-level-decor.md).
 
 | | |
 |---|---|
-| ![Деревня у дороги](mcd-lighting/mcd-01-village.webp) | ![Травяные уступы](mcd-lighting/mcd-02-terraces.webp) |
-| **1. Деревня у дороги.** | **2. Травяные уступы.** |
-| ![Руины с ящиками](mcd-lighting/mcd-03-ruins.webp) | ![Река и причал](mcd-lighting/mcd-04-river.webp) |
-| **3. Руины с ящиками и факелом.** | **4. Река, дерево, причал.** |
+| ![Village by the road](mcd-lighting/mcd-01-village.webp) | ![Grass terraces](mcd-lighting/mcd-02-terraces.webp) |
+| **1. Village by the road.** | **2. Grass terraces.** |
+| ![Ruins with crates](mcd-lighting/mcd-03-ruins.webp) | ![River and pier](mcd-lighting/mcd-04-river.webp) |
+| **3. Ruins with crates and a torch.** | **4. River, tree, pier.** |
 
-## Что видно
+## What is visible
 
-**Свет**
-- Солнце тёплое, светит низко и сбоку (сверху слева): тени длинные, мягкие по краю, падают вправо-вниз (1, 3).
-- Тени не чёрные: в них голубовато-зелёный оттенок неба, детали в тени читаются (1, 2, 4).
-- Затенение в щелях и у подножий: где стена встречает землю, под ящиками, под кромкой уступов (1, 3) — похоже на SSAO.
-- Факел на тёмном камне даёт тёплое пятно и оранжевый отсвет на соседних блоках (3).
-- Светлое (белые цветы, вода, пух шерсти) мягко светится — bloom (1, 4).
+**Light**
+- The sun is warm, shines low and from the side (top left): the shadows are long, soft at the edge, fall to the right and down (1, 3).
+- Shadows are not black: they have the bluish-green tint of the sky, details in shadow read (1, 2, 4).
+- Shading in crevices and at bases: where a wall meets the ground, under crates, under the lip of ledges (1, 3) — looks like SSAO.
+- A torch on dark stone gives a warm spot and an orange glow on neighbouring blocks (3).
+- Light things (white flowers, water, the fluff of wool) glow softly — bloom (1, 4).
 
-**Камера и «плёнка»**
-- **Tilt-shift:** верх кадра и часто нижний край заметно размыты, резкая полоса — вокруг героя (1, 2, 4: свинья, поле, деревья вверху — в мыле). Это главный узнаваемый приём: мир похож на игрушечную диораму.
-- Дымка: дальнее (верх кадра) светлее и чуть голубее, контраст ниже (2, 4).
-- Цвет насыщенный, но мягкий: трава жёлто-зелёная, тени холоднее, освещённое теплее — раздельное тонирование. Чёрных и белых провалов нет (фильмический тонмаппинг).
+**Camera and "film"**
+- **Tilt-shift:** the top of the frame and often the bottom edge are noticeably blurred, the sharp band — around the hero (1, 2, 4: the pig, the field, the trees at the top — out of focus). This is the main recognisable technique: the world looks like a toy diorama.
+- Haze: the far part (the top of the frame) is lighter and slightly bluer, the contrast is lower (2, 4).
+- The colour is saturated but soft: the grass is yellow-green, shadows are cooler, lit parts warmer — split toning. No black or white pits (filmic tonemapping).
 
-**Земля и трава** (разобрано 23.10.2026, подробно — [../style-terrain.md](../style-terrain.md))
-- Трава — почти ровная пастельная заливка (разброс яркости ±5–8), крупные мягкие пятна, вдали повтора не видно.
-- Дорожка — тёплый беж со светлыми круглыми следами; бок земли — ровный коричневый; тени светлые.
+**Ground and grass** (analysed 2026-10-23, details — [../style-terrain.md](../style-terrain.md))
+- Grass — an almost flat pastel fill (brightness spread ±5–8), large soft blotches, no repetition visible from afar.
+- The path — a warm beige with light round footprints; the side of the earth — a flat brown; shadows are light.
 
-**Декор — не блоки**
-- Каменная ограда с рваным «лесенкой» верхом, деревянные пролёты забора между столбами, ящики с красными цветами, фонарь на изогнутом столбе (1, 4) — отдельные модели «из кубиков», стоят вне сетки.
-- Стопки ящиков и сундук стоят чуть криво (3); горшок-урна, ящик — не по сетке.
-- **Травяная бахрома:** по краю каждого уступа свисает зубчатая полоса травы (2, 3) — отдельная геометрия поверх блоков, ломает жёсткий край куба.
-- Пятна цветов, высокая трава и пучки — плотной россыпью, мелкие, не по одному на клетку (1, 2).
-- Голубой «мшистый» блок с лозами (2), причал из досок на столбах над водой (4), дерево с кроной из кубов листвы разного размера (4).
+**Decor — not blocks**
+- A stone fence with a ragged "staircase" top, wooden fence spans between posts, crates with red flowers, a lantern on a curved post (1, 4) — separate models "out of little cubes", standing off the grid.
+- Stacks of crates and a chest stand slightly askew (3); an urn pot, a crate — off the grid.
+- **Grass fringe:** along the edge of every ledge a jagged strip of grass hangs down (2, 3) — separate geometry over the blocks, it breaks the hard edge of the cube.
+- Patches of flowers, tall grass and tufts — in a dense scatter, small, not one per cell (1, 2).
+- A blue "mossy" block with vines (2), a pier of boards on posts over the water (4), a tree with a crown of foliage cubes of different sizes (4).
 
-## Что берём
+## What we take
 
-| Приём | Куда | Статус |
+| Technique | Where | Status |
 |---|---|---|
-| Тёплое низкое солнце, голубые тени, ACES | `src/lighting.ts` | сделано 23.10.2026 |
-| AO в щелях (GTAO без травы и листьев) | `src/lighting.ts` | сделано |
-| Tilt-shift: размытие верха и низа, резкая полоса у героя | `src/lighting.ts` | сделано, затем убрано 23.10.2026 — дорого по кадрам |
-| Дымка вдали, раздельное тонирование, +насыщенность | `src/lighting.ts` | сделано |
-| Свободный декор: колонны, ограды, фонари, ящики с цветами, кривые ящики | `src/level/decor.ts` | сделано (16 предметов) |
-| Травяная бахрома по краю уступов | мешер: `fringe` у травы, слой `detail` | сделано 23.10.2026 |
-| Плотная россыпь мелкой травы и цветов | мешер: `tufts` у травы, пятнами по шуму | сделано 23.10.2026 |
-| Пастельная земля без шума, пятна цвета по миру, светлые тени | `textures.ts`, `macroTint`, `lighting.ts` | сделано 23.10.2026 |
+| Warm low sun, blue shadows, ACES | `src/lighting.ts` | done 2026-10-23 |
+| AO in crevices (GTAO without grass and leaves) | `src/lighting.ts` | done |
+| Tilt-shift: blur of the top and bottom, a sharp band at the hero | `src/lighting.ts` | done, then removed 2026-10-23 — expensive in frames |
+| Haze in the distance, split toning, +saturation | `src/lighting.ts` | done |
+| Free-standing decor: columns, fences, lanterns, crates with flowers, askew crates | `src/level/decor.ts` | done (16 items) |
+| Grass fringe along ledge edges | mesher: `fringe` on grass, the `detail` layer | done 2026-10-23 |
+| A dense scatter of small grass and flowers | mesher: `tufts` on grass, in blotches by noise | done 2026-10-23 |
+| Pastel ground without noise, colour blotches across the world, light shadows | `textures.ts`, `macroTint`, `lighting.ts` | done 2026-10-23 |

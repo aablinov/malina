@@ -1,67 +1,67 @@
-# Редактор уровней в духе Unreal Engine
+# Unreal Engine-style level editor
 
-Версия 1.1 от 29.10.2026. Заменяет описание редактора в [design-level-blocks.md](design-level-blocks.md) (раздел 9) и дополняет [design-level-decor.md](design-level-decor.md) (раздел 6), [style-world.md](style-world.md) (ландшафт), [style-lighting.md](style-lighting.md) (настройки мира). Как проверять — [dev-testing.md](dev-testing.md).
+Version 1.1 of 2026-10-29. Replaces the editor description in [design-level-blocks.md](design-level-blocks.md) (section 9) and complements [design-level-decor.md](design-level-decor.md) (section 6), [style-world.md](style-world.md) (terrain), [style-lighting.md](style-lighting.md) (world settings). How to test — [dev-testing.md](dev-testing.md).
 
-Открыть: `?dev=editor` (или F10 в плейграунде). Код — `src/dev/editor.ts` и `src/dev/editor/`.
+Open: `?dev=editor` (or F10 in the playground). Code — `src/dev/editor.ts` and `src/dev/editor/`.
 
-## 1. Окно
+## 1. Window
 
-Раскладка как в Unreal Engine 5, панели тянутся разделителями:
+The layout is as in Unreal Engine 5; panels are resized with splitters:
 
-| Где | Что |
+| Where | What |
 |---|---|
-| Сверху | Строка меню (Файл, Правка, Вид, Окно, Справка), имя карты; панель инструментов — режим, гизмо (выделение / перенос / поворот / размер), привязка к сетке и углу, отмена, «Префаб», «Окружение» (наборы света и погода), «Оружие», «Играть» |
-| Слева | **Префабы** (`editor/prefabs.ts`) — вкладки «Все / Блоки / Декор / Сборки / Свет / Служебные / Мои префабы», поиск, 3D-превью (рисуются понемногу в отдельном рендере). Клик выбирает, перетаскивание ставит во вьюпорт. Над списком — инструменты текущего режима (у ландшафта — ползунки) |
-| В центре | Вкладки документов: уровень и **Оружие**. Уровень — вьюпорты (`editor/viewports.ts`) |
-| Справа | **Аутлайнер** (`editor/outliner.ts`) и **Детали / Настройки мира** (`editor/ui.ts`, `PropGrid`) |
-| Снизу | Строка состояния: префабы, журнал, клетка под курсором, FPS |
+| Top | Menu bar (File, Edit, View, Window, Help), map name; toolbar — mode, gizmo (select / move / rotate / scale), snapping to grid and angle, undo, "Prefab", "Environment" (lighting sets and weather), "Weapons", "Play" |
+| Left | **Prefabs** (`editor/prefabs.ts`) — tabs "All / Blocks / Decor / Kits / Light / Service / My prefabs", search, 3D previews (drawn gradually in a separate renderer). Click selects, drag places into the viewport. Above the list — the tools of the current mode (sliders for terrain) |
+| Centre | Document tabs: the level and **Weapons**. The level — viewports (`editor/viewports.ts`) |
+| Right | **Outliner** (`editor/outliner.ts`) and **Details / World settings** (`editor/ui.ts`, `PropGrid`) |
+| Bottom | Status bar: prefabs, log, cell under the cursor, FPS |
 
-## 2. Вьюпорты
+## 2. Viewports
 
-- Один, два или четыре вида: перспектива, сверху, спереди, справа (любой вид меняется в его меню; ещё снизу, сзади, слева). Один холст — каждый вид рисуется в свой прямоугольник (`setViewport` + `setScissor`). Alt+X — развернуть вид.
-- Режимы отрисовки: с освещением, без освещения, каркас, без постобработки. Постобработка (`Lighting.composer`) — только у первого вида, если он перспективный.
-- Камера: колесо — зум к курсору, СКМ или Alt+ЛКМ — вращать вокруг цели, ПКМ — двигать, ПКМ + WASD / QE — лететь; в режимах кисти WASD двигает и без ПКМ. Оси в углу кликабельны (вид вдоль оси), «Турель» медленно вращает сцену. F — к выделенному, Home — вся карта.
-- Меню «Показать»: сетка, иконки света и точки появления, декор, погода, дымка, статистика.
+- One, two or four views: perspective, top, front, right (any view can be changed in its menu; also bottom, back, left). A single canvas — each view is drawn into its own rectangle (`setViewport` + `setScissor`). Alt+X — maximise the view.
+- Draw modes: lit, unlit, wireframe, no post-processing. Post-processing (`Lighting.composer`) — only on the first view, if it is perspective.
+- Camera: wheel — zoom toward the cursor, MMB or Alt+LMB — orbit around the target, RMB — pan, RMB + WASD / QE — fly; in brush modes WASD moves even without RMB. The axes in the corner are clickable (view along an axis); "Turntable" slowly rotates the scene. F — to the selection, Home — the whole map.
+- "Show" menu: grid, light and spawn point icons, decor, weather, haze, statistics.
 
-## 3. Режимы
+## 3. Modes
 
-Tab — по кругу «Выделение → Блоки → Декор → Ландшафт», Shift+1…5 — сразу нужный (пятый — «Поставить»).
+Tab — cycles "Selection → Blocks → Decor → Terrain", Shift+1…5 — straight to the one needed (the fifth is "Place").
 
-- **Выделение.** ЛКМ выбирает блок, предмет декора, свет или точку появления (ближайшее под лучом: иконки → декор → воксели), Shift — добавить или убрать, тянуть по пустому — рамка (в перспективе берёт только верхние блоки колонн, в ортографических видах — всё). Двойной клик по ландшафту — весь кусок. ПКМ — меню: фокус, дублировать, удалить, повернуть на 90° вокруг X / Y / Z, выделить все такие блоки, взять в кисть, создать префаб, поставить точку появления или свет под курсором.
-- **Гизмо** (`TransformControls`, по одному на вид): W — перенос, E — поворот по осям, R — размер (ландшафт — размеры и слои, свет — дальность), Q — без гизмо, пробел — по кругу. Подсветка едет за гизмо, правка применяется, когда отпустили, — одной записью в отмене.
-  - Блоки: перенос — целыми клетками, поворот — четвертями вокруг центра клетки по любой оси. Формат клетки хранит только поворот вокруг вертикали (2 бита), поэтому при повороте вокруг X или Z блоки переставляются, а сама форма (ступени) не наклоняется. Прикреплённый декор едет вместе с блоками.
-  - Декор — свободно по всем осям (рыск, наклон, крен), шаг 1/16. Прожектор поворачивается конусом.
-  - Стрелки — сдвиг вдоль экрана активного вида по ближайшей оси мира (Shift — на 4), Shift+PgUp/PgDn — вверх и вниз.
-- **Блоки, Декор, Ландшафт** — прежние кисти без изменений (горячие клавиши — в README и разделе 6 [design-level-decor.md](design-level-decor.md)).
-- **Поставить** — выбранный префаб ставится кликом в клетку под курсором.
+- **Selection.** LMB selects a block, a decor item, a light or the spawn point (the nearest under the ray: icons → decor → voxels), Shift — add or remove, dragging over empty space — a marquee (in perspective it takes only the top blocks of columns, in orthographic views — everything). Double-click on terrain — the whole piece. RMB — menu: focus, duplicate, delete, rotate 90° around X / Y / Z, select all blocks of this kind, pick into the brush, create a prefab, put the spawn point or a light under the cursor.
+- **Gizmo** (`TransformControls`, one per view): W — move, E — rotate by axes, R — scale (terrain — sizes and layers, light — range), Q — no gizmo, space — cycle. The highlight follows the gizmo; the edit is applied on release — as a single undo record.
+  - Blocks: move — by whole cells, rotate — by quarters around the cell centre on any axis. The cell format stores only the rotation around the vertical (2 bits), so when rotating around X or Z the blocks are rearranged while the shape itself (stairs) does not tilt. Attached decor moves together with the blocks.
+  - Decor — free on all axes (yaw, pitch, roll), 1/16 step. A spotlight rotates by its cone.
+  - Arrows — nudge along the active view's screen by the nearest world axis (Shift — by 4), Shift+PgUp/PgDn — up and down.
+- **Blocks, Decor, Terrain** — the previous brushes, unchanged (hotkeys — in the README and section 6 of [design-level-decor.md](design-level-decor.md)).
+- **Place** — the selected prefab is placed by click into the cell under the cursor.
 
-## 4. Аутлайнер и детали
+## 4. Outliner and details
 
-Дерево: карта → Окружение (солнце, небо и глобальный свет, дымка, погода, постобработка) → точка появления → свет → ландшафт → декор по категориям → блоки по типам (с числом, до 400 клеток на тип). Ленивое и виртуальное — рисуются только видимые строки. Поиск по имени и типу, глаза — видимость иконок, декора, погоды и дымки. Выбор в вьюпорте раскрывает и прокручивает дерево.
+The tree: map → Environment (sun, sky and global light, haze, weather, post-processing) → spawn point → lights → terrain → decor by category → blocks by type (with a count, up to 400 cells per type). Lazy and virtual — only visible rows are drawn. Search by name and type; eyes — visibility of icons, decor, weather and haze. Selecting in the viewport expands and scrolls the tree.
 
-**Детали** — у каждого типа свои: блок (положение, поворот, тип, свойства палитры), декор (положение, поворот по трём осям, тип, опора, свет, столкновения), свет (тип, цвет, яркость, дальность, тени, у прожектора — конус, рыск, наклон), точка появления (клетка и взгляд), кусок ландшафта (центр и параметры). Числа тянутся мышью по полю, как в Unreal (Shift — ×10, Alt — ×0,1). Любая правка — с отменой; подряд идущие правки одного поля сливаются в одну запись.
+**Details** — each type has its own: block (position, rotation, type, palette properties), decor (position, rotation on three axes, type, anchor, light, collisions), light (type, colour, intensity, range, shadows; for a spotlight — cone, yaw, pitch), spawn point (cell and facing), terrain piece (centre and parameters). Numbers are dragged with the mouse over the field, as in Unreal (Shift — ×10, Alt — ×0.1). Every edit is undoable; consecutive edits of the same field merge into one record.
 
-## 5. Мир, свет, точка появления
+## 5. World, light, spawn point
 
-- **Настройки мира** (`src/world.ts`) лежат в карте в `meta.world` — только отличия от значений по умолчанию. Солнце (цвет, яркость, высота, азимут, тени), небо и глобальный свет (фон, свет неба сверху и отражённый от земли, сила, заполняющий), дымка (вкл., цвет, начало и конец для камеры игры — в редакторе масштабируется по дальности камеры), погода, постобработка (экспозиция, bloom, AO, насыщенность, контраст, виньетка, тонировка теней и светлого). Наборы: день, утро, закат, ночь, пасмурно, подземелье. Применяет `Lighting.applyWorld` — в редакторе и в игре; ночь по L остаётся своей.
-- **Погода** (`src/weather.ts`): дождь, гроза (вспышки молний подсвечивают небо), снег, листопад, искры и пепел; частицы в коробке вокруг камеры, сила и ветер.
-- **Поставленный свет** — сущности карты `entities` с `kind: 'light'` (`LightData`: точечный или прожектор, цвет, яркость, дальность, конус, наклон, тени). В редакторе — иконка и сфера дальности у выбранного; в игре — настоящие источники.
-- **Точка появления** — `spawn` и взгляд `meta.spawnYaw` (°, 0 — к +X, 90 — к +Z). Игра ставит туда героя, если карта открыта с `?map=…` (плейграунд по умолчанию — как раньше).
+- **World settings** (`src/world.ts`) live in the map in `meta.world` — only the differences from the defaults. Sun (colour, intensity, elevation, azimuth, shadows), sky and global light (background, sky light from above and reflected from the ground, strength, fill), haze (on, colour, start and end for the game camera — in the editor it scales with the camera distance), weather, post-processing (exposure, bloom, AO, saturation, contrast, vignette, shadow and highlight tint). Sets: day, morning, sunset, night, overcast, dungeon. Applied by `Lighting.applyWorld` — in the editor and in the game; the night on L stays its own thing.
+- **Weather** (`src/weather.ts`): rain, thunderstorm (lightning flashes light up the sky), snow, leaf fall, sparks and ash; particles in a box around the camera, strength and wind.
+- **Placed lights** — map entities `entities` with `kind: 'light'` (`LightData`: point or spot, colour, intensity, range, cone, pitch, shadows). In the editor — an icon and a range sphere on the selected one; in the game — real sources.
+- **Spawn point** — `spawn` and the facing `meta.spawnYaw` (°, 0 — toward +X, 90 — toward +Z). The game places the hero there if the map is opened with `?map=…` (the default playground — as before).
 
-## 6. Префабы
+## 6. Prefabs
 
-Сборки — функции `src/level/kit.ts` (дерево, холм, скала, скальный массив, русло, водопад, мост, портал, стены, лестница, площадка, стог). Всё, что они ставят через `level.set`, пишется одной правкой. **Библиотека** (29.10.2026) — запечённые пресеты из `assets/prefabs/` ([design-prefab-library.md](design-prefab-library.md)): блоки + декор + свет относительно опоры, разделы — категории каталога; в режиме «Поставить» **R** поворачивает пресет на 90° (клетки, поворот блоков, рыск декора и свет — вместе). **Мои префабы** — сохранённое выделение в том же формате в localStorage `malina.editor.prefabs`; ПКМ → «Сохранить в библиотеку (JSON)» скачивает его как файл для `assets/prefabs/`.
+Kits are functions in `src/level/kit.ts` (tree, hill, cliff, rock outcrop, riverbed, waterfall, bridge, portal, walls, stairway, platform, haystack). Everything they place via `level.set` is written as a single edit. **Library** (2026-10-29) — baked presets from `assets/prefabs/` ([design-prefab-library.md](design-prefab-library.md)): blocks + decor + light relative to the anchor, sections — the catalogue categories; in "Place" mode **R** rotates the preset by 90° (cells, block rotation, decor yaw and lights — together). **My prefabs** — a saved selection in the same format in localStorage `malina.editor.prefabs`; RMB → "Save to library (JSON)" downloads it as a file for `assets/prefabs/`.
 
-## 7. Оружие
+## 7. Weapons
 
-Вкладка «Оружие» (`src/dev/editor/weapons-panel.ts`, реестр `src/weapons.ts`): список с категориями и поиском, вращающееся превью модели и дуги каждого удара комбо в масштабе, все характеристики и три удара — ползунками, цвета частей модели, сравнение баланса (DPS, урон комбо, досягаемость, охват, оценка — меч = 100). «Сделать активным» пишет числа в `SWORD` (`applyWeapon`), игра берёт активное оружие при старте (`?weapon=<id>` — любое). Хранится в localStorage `malina.weapons` и `malina.weapon`. Шанс и множитель крита пока только в расчёте баланса, в бою не используются.
+The "Weapons" tab (`src/dev/editor/weapons-panel.ts`, registry `src/weapons.ts`): a list with categories and search, a rotating model preview and the arcs of every combo strike to scale, all stats and the three strikes — as sliders, colours of the model parts, balance comparison (DPS, combo damage, reach, coverage, score — sword = 100). "Make active" writes the numbers into `SWORD` (`applyWeapon`); the game takes the active weapon at start (`?weapon=<id>` — any). Stored in localStorage `malina.weapons` and `malina.weapon`. Crit chance and multiplier are so far only in the balance calculation, not used in combat.
 
-## 8. Для тестов
+## 8. For tests
 
-`window.__malina` в редакторе: прежнее API кистей, декора и ландшафта плюс `select`, `selection`, `gizmo(сдвиг, [ось, градусы])`, `rotateSel`, `nudgeSel`, `deleteSel`, `duplicateSel`, `setTool`, `world`, `changeWorld`, `newLight`, `setSpawn`, `placePrefab(id, x, y, z)`, `viewports`, `setDoc`.
+`window.__malina` in the editor: the previous API of brushes, decor and terrain plus `select`, `selection`, `gizmo(offset, [axis, degrees])`, `rotateSel`, `nudgeSel`, `deleteSel`, `duplicateSel`, `setTool`, `world`, `changeWorld`, `newLight`, `setSpawn`, `placePrefab(id, x, y, z)`, `viewports`, `setDoc`.
 
-## 9. Дальше
+## 9. Next
 
-1. Сохранять раскладку окна и вьюпортов между запусками.
-2. Норы, сундуки и двери как сущности с иконками и деталями.
-3. Крит и вес оружия — в бой; цвета следа клинка — из оружия.
+1. Save the window and viewport layout between runs.
+2. Burrows, chests and doors as entities with icons and details.
+3. Crit and weapon weight — into combat; blade trail colours — from the weapon.

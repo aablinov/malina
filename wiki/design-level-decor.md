@@ -1,21 +1,21 @@
-# Свободный декор поверх блоков
+# Free decor on top of blocks
 
-Версия 1.4 от 24.10.2026. Опирается на [design-level-blocks.md](design-level-blocks.md) (сетка, палитра, рендер) и [style-guide.md](style-guide.md).
+Version 1.4 of 2026-10-24. Builds on [design-level-blocks.md](design-level-blocks.md) (grid, palette, rendering) and [style-guide.md](style-guide.md).
 
-## 1. Решение
+## 1. Decision
 
-В Minecraft Dungeons мир не из «честных» блоков: каркас уровня — сетка 1 м, а колонны, корни, цепи, знамёна, фонари — отдельные меши, **сделанные как будто из блоков**, и стоят они где угодно и под любым углом. Иллюзию держит одно правило — **одинаковая плотность пикселей**: 16 на метр у всего, плюс общая палитра и рубленые формы.
+In Minecraft Dungeons the world is not made of "honest" blocks: the level's skeleton is a 1 m grid, while columns, roots, chains, banners and lanterns are separate meshes **made to look as if they were built from blocks**, and they stand anywhere and at any angle. The illusion is held by a single rule — **uniform pixel density**: 16 per metre for everything, plus a shared palette and chunky shapes.
 
-У нас так же:
+We do the same:
 
-- **По чему ходят — блоки.** Пол, стены, ступени, укрытия: воксельная сетка, поиск пути и столкновения с высотой.
-- **Декор лежит, висит, стоит и мешает пройти, но на него не встают.** Позиция с шагом 1/16, любой поворот, наклон и крен.
-- **Без масштаба.** UV декора в метрах, масштаб сломал бы 16 px/м. Разнообразие — отдельными формами.
-- **Логики у декора нет.** Что ломается, горит или открывается — предмет (`src/props.ts`) или сущность (`entities`).
+- **What you walk on is blocks.** Floor, walls, stairs, cover: the voxel grid, pathfinding and height-aware collisions.
+- **Decor lies, hangs, stands and blocks the way, but you cannot stand on it.** Position with a 1/16 step, any yaw, pitch and roll.
+- **No scaling.** Decor UVs are in metres; scaling would break 16 px/m. Variety comes from separate shapes.
+- **Decor has no logic.** Anything that breaks, burns or opens is a prop (`src/props.ts`) or an entity (`entities`).
 
-## 2. Формат в JSON карты
+## 2. Format in the map JSON
 
-Необязательное поле `decor` (у старых карт его нет, `version` остаётся 1):
+An optional `decor` field (old maps do not have it, `version` stays 1):
 
 ```json
 "decor": [
@@ -24,82 +24,82 @@
 ]
 ```
 
-| Поле | Что это |
+| Field | What it is |
 |---|---|
-| `name` | имя из реестра `src/level/decor.ts` — **не переименовывать**, только добавлять |
-| `pos` | точка опоры в метрах, мировые координаты (x, z как у центров клеток) |
-| `rot` | `[рыск, наклон, крен]` в градусах, порядок YXZ; рыск как у блоков — 90° переводит +X в +Z; можно опускать хвост |
-| `on` | клетка, к которой предмет прикреплён: стёрли её в редакторе — предмет удаляется в той же отмене |
+| `name` | a name from the registry `src/level/decor.ts` — **never renamed**, only added |
+| `pos` | the anchor point in metres, world coordinates (x, z as for cell centres) |
+| `rot` | `[yaw, pitch, roll]` in degrees, YXZ order; yaw as for blocks — 90° maps +X to +Z; the tail may be omitted |
+| `on` | the cell the item is attached to: erase it in the editor — the item is removed in the same undo step |
 
-В коде: `Level.decor`, `addDecor` / `removeDecor` / `touchDecor()`, счётчик `decorVersion` (по нему перестраиваются рендер и столкновения).
+In code: `Level.decor`, `addDecor` / `removeDecor` / `touchDecor()`, the `decorVersion` counter (rendering and collisions are rebuilt from it).
 
-## 3. Реестр и формы
+## 3. Registry and shapes
 
-`src/level/decor.ts` — как палитра: `name`, `title`, `category`, `parts` (форма + текстуры в слотах + слой), `anchor`, `solid?`, `light?`.
+`src/level/decor.ts` — like the palette: `name`, `title`, `category`, `parts` (shape + textures in slots + layer), `anchor`, `solid?`, `light?`.
 
-| Опора | Начало координат формы |
+| Anchor | Shape origin |
 |---|---|
-| `floor` | центр низа, растёт вверх |
-| `wall` | точка на стене; предмет спиной к плоскости z = 0, выступает к +Z |
-| `ceiling` | точка на потолке, свисает вниз |
+| `floor` | centre of the bottom, grows upward |
+| `wall` | a point on the wall; the item has its back to the plane z = 0 and protrudes toward +Z |
+| `ceiling` | a point on the ceiling, hangs downward |
 
-Формы — `assets/decor/*.obj` из `scripts/gen-decor.mjs` (`npm run decor`); можно и руками в Blockbench. Общий писатель OBJ — `scripts/obj-writer.mjs` (им же пользуется генератор блоков):
+Shapes — `assets/decor/*.obj` from `scripts/gen-decor.mjs` (`npm run decor`); can also be made by hand in Blockbench. The shared OBJ writer is `scripts/obj-writer.mjs` (the block generator uses it too):
 
-- `tbox` — бокс любого размера, грани режутся по сетке клеток (по X и Z на полуцелых, по Y на целых) — у колонны в 3 м каждая плитка берёт свой тайл, текстура не растягивается (атлас не умеет повторять);
-- `xf` — повернуть и сдвинуть часть; UV считаются до поворота, плотность пикселей та же.
+- `tbox` — a box of any size, faces are cut along the cell grid (on half-integers along X and Z, on integers along Y) — on a 3 m column every tile takes its own texture tile, the texture is not stretched (the atlas cannot repeat);
+- `xf` — rotate and offset a part; UVs are computed before rotation, pixel density stays the same.
 
-Слои — как у блоков (`opaque`, `cutout`, `fire`) плюс новый **`glow`**: светится сам, без освещения, ярче 1 — его подхватывает bloom (грибы, стекло фонаря).
+Layers — as for blocks (`opaque`, `cutout`, `fire`) plus the new **`glow`**: self-lit, no lighting, brighter than 1 — picked up by bloom (mushrooms, lantern glass).
 
-**Мир (24.10.2026, [style-world.md](style-world.md)):** склад (ящики с полосами, стопка, ящичек, сундук, телега, телега с грузом, скамья), фонари (двойной, настенный, низкий), вода (брызги, пена у камней, пена на воде), свечи (кучкой, в ряд, высокая — свет запечён). В витрину не входят — они в зоне «мир».
+**World (2026-10-24, [style-world.md](style-world.md)):** storage yard (striped crates, a stack, a small crate, chest, cart, loaded cart, bench), lanterns (double, wall-mounted, low), water (splashes, foam by stones, foam on water), candles (a bunch, in a row, tall — the light is baked). Not in the showcase — they are in the "world" zone.
 
-**Первый набор (16):** упавшая колонна, обломок колонны, щебень, выпавшие кирпичи, кости и череп; цепь (потолок), корни, паутина, знамя (стена); настенный факел, свечи, светящиеся грибы, фонарь на столбе (свет); грибы, ящик с цветами, стопка ящиков (двор). Новые текстуры: `chain`, `cobweb`, `banner` (малиновое, с ягодой), `bone`, `candle`, `mushroomRed`, `mushroomGlow`, `mushroomStem`, `lanternGlass`, `roots`.
+**First set (16):** a fallen column, a column stump, rubble, loose bricks, bones and a skull; chain (ceiling), roots, cobweb, banner (wall); wall torch, candles, glowing mushrooms, a lantern on a post (light); mushrooms, a flower crate, a stack of crates (yard). New textures: `chain`, `cobweb`, `banner` (raspberry-coloured, with a berry), `bone`, `candle`, `mushroomRed`, `mushroomGlow`, `mushroomStem`, `lanternGlass`, `roots`.
 
-## 4. Рендер
+## 4. Rendering
 
-`src/level/decor-render.ts`, `DecorRenderer` живёт внутри `LevelRenderer` (`view.decor`), поэтому декор есть везде, где есть уровень, — в плейграунде и в редакторе.
+`src/level/decor-render.ts`; `DecorRenderer` lives inside `LevelRenderer` (`view.decor`), so decor exists wherever a level exists — in the playground and in the editor.
 
-- На пару «предмет × слой» — один `InstancedMesh`; материалы и атлас общие с блоками, так что рентген, разрез, тени и bloom работают одинаково (рентген учитывает `instanceMatrix`).
-- AO от соседей у декора нет: низ предметов на полу затемнён при загрузке формы (как угол у блока), яркость экземпляров гуляет на 10 %.
-- Свет декора идёт в общий пул из 8 ближайших `PointLight`.
-- `maxY` (срез редактора) отсекает предметы выше среза. Изменение декора — полная пересборка экземпляров (сотни штук — дёшево), геометрии кэшируются.
+- One `InstancedMesh` per "item × layer" pair; materials and the atlas are shared with blocks, so x-ray, cutaway, shadows and bloom work the same way (x-ray takes `instanceMatrix` into account).
+- Decor gets no AO from neighbours: the bottom of floor items is darkened when the shape loads (like a block corner); instance brightness wanders by 10 %.
+- Decor lights go into the shared pool of the 8 nearest `PointLight`s.
+- `maxY` (the editor slice) cuts off items above the slice. A decor change is a full rebuild of the instances (hundreds of them — cheap); geometries are cached.
 
-## 5. Столкновения
+## 5. Collisions
 
-Декор не пол: встать на него нельзя, он только мешает пройти. У предмета в реестре — `solid`, список боксов в локальных координатах (`w × d × h`, сдвиг `x, z`).
+Decor is not a floor: you cannot stand on it, it only blocks the way. An item in the registry has `solid`, a list of boxes in local coordinates (`w × d × h`, offset `x, z`).
 
-- `decorSolids(level)` (`src/level/collide.ts`) превращает их в плоские `Obstacle`: бокс поворачивается по рыску предмета (наклон и крен не учитываются — коллайдер наклонной формы рисуем руками), низ — на высоте точки опоры. Кэш по `decorVersion`.
-- У `Obstacle` появилось необязательное **`y0`** — низ препятствия. `overlapsY` пропускает препятствие, если тело (ноги … ноги + 1,6 м) его не задевает; пули бьются о `[y0; y0 + h)`. У бочек и ящиков `y0` нет — для них всё как раньше.
-- **Герой:** `hero.update(…, solids(), terrain)`, где `solids()` — предметы склада плюс декор (пересобирается, когда меняется одно из них).
-- **Поиск пути:** те же `solids`; узел занят, если препятствие задевает тело на высоте пола узла (раньше — только для пола ниже 1 м).
-- **Враги и пули:** декор дописан к `obstacles` (`obstaclesOf` + `decorSolids`), оттуда его берут укрытия и путь мобов (`Pathfinder`; ~~`NavGrid`~~ удалён 04.11.2026).
-- **Удар мечом** через декор проходит: `terrain.blocked` смотрит только блоки — колонна не должна прятать чучело от клинка.
-- **F2** рисует коллайдеры декора вместе с остальными препятствиями.
+- `decorSolids(level)` (`src/level/collide.ts`) turns them into flat `Obstacle`s: the box is rotated by the item's yaw (pitch and roll are ignored — a collider for a tilted shape is drawn by hand), the bottom is at the anchor point height. Cached by `decorVersion`.
+- `Obstacle` gained an optional **`y0`** — the obstacle's bottom. `overlapsY` skips an obstacle if the body (feet … feet + 1.6 m) does not touch it; bullets hit against `[y0; y0 + h)`. Barrels and crates have no `y0` — for them everything is as before.
+- **Hero:** `hero.update(…, solids(), terrain)`, where `solids()` is the storage-yard items plus decor (rebuilt when either changes).
+- **Pathfinding:** the same `solids`; a node is occupied if an obstacle touches the body at the node's floor height (previously — only for a floor below 1 m).
+- **Enemies and bullets:** decor is appended to `obstacles` (`obstaclesOf` + `decorSolids`); cover and mob paths take it from there (`Pathfinder`; ~~`NavGrid`~~ removed 2026-11-04).
+- **A sword strike** passes through decor: `terrain.blocked` looks only at blocks — a column must not hide the training dummy from the blade.
+- **F2** draws decor colliders together with the other obstacles.
 
-С коллайдерами: упавшая колонна, обломок колонны, фонарь на столбе, ящик с цветами, стопка ящиков. Щебень, кирпичи, кости, грибы, свечи — проходимые.
+With colliders: fallen column, column stump, lantern on a post, flower crate, stack of crates. Rubble, bricks, bones, mushrooms, candles — passable.
 
-## 6. Редактор
+## 6. Editor
 
-Окно редактора и режим «Выделение» (выбор кликом, поворот по трём осям гизмо, детали) — [design-editor.md](design-editor.md); ниже — режим-кисть «Декор». ~~**Tab** (или кнопка «Режим») переключает редактор между блоками и декором.~~ **Tab** переключает режимы по кругу (выделение → блоки → декор → ландшафт), декор можно и перетащить из панели «Префабы». В режиме декора — своя палитра по категориям с превью: каждый предмет один раз рисуется отдельным маленьким рендером.
+The editor window and the "Selection" mode (pick by click, rotation on three gizmo axes, details) — [design-editor.md](design-editor.md); below is the "Decor" brush mode. ~~**Tab** (or the "Mode" button) switches the editor between blocks and decor.~~ **Tab** cycles the modes (selection → blocks → decor → terrain); decor can also be dragged from the "Prefabs" panel. In decor mode there is its own palette by category with previews: each item is drawn once by a separate small renderer.
 
-| Действие | Как |
+| Action | How |
 |---|---|
-| Поставить | ЛКМ. Под курсором — полупрозрачный «призрак». Куда можно, решает опора предмета (`placeDecor`, `src/level/decor-place.ts`): `floor` — на верх блока (у полублоков и ступеней — на их высоту) или на плоскость y = 0 в пустоте; `wall` — на боковую грань, предмет сам разворачивается спиной к стене; `ceiling` — на низ блока. Точка — с шагом 1/16, плоскость грани — точно |
-| Повернуть | R / Shift+R — рыск ±15°, T — наклон, Y — крен. Без выбора крутится призрак, с выбором — выбранный предмет (одной правкой) |
-| Случайный поворот | Z — для щебня, костей, грибов: после каждой установки новый рыск, кратный 15° |
-| Выбрать и тащить | ЛКМ по предмету (луч по экземплярам `InstancedMesh`), тащить мышью; поворот сохраняется, у настенного рыск берётся от новой стены |
-| Убрать | Shift+ЛКМ по предмету или Del / X |
-| Взять, копия | Q — взять предмет под курсором вместе с поворотом; Ctrl+D — копия выбранного со сдвигом на полметра |
+| Place | LMB. Under the cursor is a translucent "ghost". Where it can go is decided by the item's anchor (`placeDecor`, `src/level/decor-place.ts`): `floor` — onto a block top (for half-blocks and stairs — at their height) or onto the plane y = 0 in empty space; `wall` — onto a side face, the item turns its back to the wall by itself; `ceiling` — onto a block's underside. The point — with a 1/16 step, the face plane — exact |
+| Rotate | R / Shift+R — yaw ±15°, T — pitch, Y — roll. With nothing selected the ghost rotates; with a selection — the selected item (as a single edit) |
+| Random rotation | Z — for rubble, bones, mushrooms: after every placement a new yaw, a multiple of 15° |
+| Select and drag | LMB on an item (a ray against `InstancedMesh` instances), drag with the mouse; rotation is kept, a wall item takes its yaw from the new wall |
+| Remove | Shift+LMB on an item or Del / X |
+| Pick, copy | Q — pick the item under the cursor together with its rotation; Ctrl+D — a copy of the selection offset by half a metre |
 
-Отмена и повтор общие с блоками: правка — либо клетка, либо снимок предмета до и после (`before` / `after`, `null` — нет предмета). **Стёрли клетку — прикреплённые к ней предметы** (`on`) удаляются в той же отмене. Срез по высоте (PgUp / PgDn) прячет и декор. Счётчик декора — в строке состояния.
+Undo and redo are shared with blocks: an edit is either a cell or a snapshot of the item before and after (`before` / `after`, `null` — no item). **Erase a cell — the items attached to it** (`on`) are removed in the same undo step. The height slice (PgUp / PgDn) hides decor too. The decor counter is in the status bar.
 
-## 7. Комнаты и этаж
+## 7. Rooms and the floor
 
-- **«Одевалка» заготовок** (`dressRoom` в `src/level/rooms.ts`): декор детерминированно от клеток, **только проходимый** — пути и укрытия заготовки не меняются. На высоких дальних стенах (−Z, −X) — знамёна через 6 клеток (кроме кладовой), корни, паутина в углу; у стен на полу — щебень, кирпичи, кости (≈ 7 % клеток у стены, не у дверей); у алтаря и у трона босса — свечи, у нор — светящиеся грибы. `npm run map:rooms` пишет декор в `assets/maps/rooms/*.json` — блоки комнат не меняются, правка в редакторе сохраняется как обычно.
-- **Этаж** (`buildFloor`, `src/level/dungeon.ts`): декор комнаты переезжает вместе с ней — `pos` и клетка крепления `on` сдвигаются на `x0, z0`, как сущности.
-- Посмотреть: `?map=dungeon&seed=42&floor=2` (плейграунд собирает этаж сам) или «Этаж…» в редакторе.
+- **The template "dresser"** (`dressRoom` in `src/level/rooms.ts`): decor deterministically from the cells, **passable only** — the template's paths and cover do not change. On the tall far walls (−Z, −X) — banners every 6 cells (except the storage room), roots, a cobweb in the corner; on the floor by the walls — rubble, bricks, bones (≈ 7 % of cells by a wall, not by doors); by the altar and the boss's throne — candles, by burrows — glowing mushrooms. `npm run map:rooms` writes the decor into `assets/maps/rooms/*.json` — the room blocks do not change, editing in the editor is saved as usual.
+- **Floor** (`buildFloor`, `src/level/dungeon.ts`): a room's decor moves with it — `pos` and the attachment cell `on` are shifted by `x0, z0`, like entities.
+- To see it: `?map=dungeon&seed=42&floor=2` (the playground assembles the floor itself) or "Floor…" in the editor.
 
-Тест «этаж подземелья»: весь декор внутри комнат, ни одно крепление не висит в воздухе.
+The "dungeon floor" test: all decor is inside rooms, no attachment hangs in mid-air.
 
-## 8. Плейграунд
+## 8. Playground
 
-Витрина за южной стеной продлена: ряд 5 — стена из кирпича с настенным декором (корни, паутина, знамёна, факелы), навес с цепями и перед ней все напольные предметы с подписями. В самой арене: знамёна между факелами на дальних стенах, корни и настенный факел на западной стене, паутина в углу, упавшая колонна, обломок, щебень и кости, фонари у пруда и в углу, светящиеся грибы, ящики с цветами у южной стены, стопка ящиков, свечи на площадке 2 м.
+The showcase behind the south wall was extended: row 5 — a brick wall with wall decor (roots, cobweb, banners, torches), a canopy with chains and, in front of it, all floor items with captions. In the arena itself: banners between torches on the far walls, roots and a wall torch on the west wall, a cobweb in the corner, a fallen column, a stump, rubble and bones, lanterns by the pond and in the corner, glowing mushrooms, flower crates by the south wall, a stack of crates, candles on the 2 m platform.

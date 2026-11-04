@@ -1,55 +1,55 @@
-# Свет «как в Unreal»: слой вдохновения
+# Unreal-style lighting: the inspiration layer
 
-Версия 1.5 от 24.10.2026. Палитра земли — [style-terrain.md](style-terrain.md). Дополняет [style-guide.md](style-guide.md) (раздел «Цвет и свет»). Источник — [sources/mcd-lighting.md](sources/mcd-lighting.md): 4 скриншота Minecraft Dungeons (Unreal Engine 4). Код — `src/lighting.ts`, класс `Lighting`; в плейграунде **U** переключает «как в Unreal» ↔ простой свет, **B** — постобработку целиком, **L** — день и ночь.
+Version 1.5 of 2026-10-24. Ground palette — [style-terrain.md](style-terrain.md). Complements [style-guide.md](style-guide.md) (the "Colour and light" section). Source — [sources/mcd-lighting.md](sources/mcd-lighting.md): 4 screenshots of Minecraft Dungeons (Unreal Engine 4). Code — `src/lighting.ts`, class `Lighting`; in the playground **U** toggles Unreal-style ↔ simple light, **B** — post-processing as a whole, **L** — day and night.
 
-## Почему картинка «анриловская»
+## Why the picture looks "Unreal"
 
-У всех игр на Unreal узнаваемый набор по умолчанию: фильмический тонмаппинг, мягкие тени с цветной заливкой неба, затенение в щелях, bloom, дымка, цветокоррекция и — у Minecraft Dungeons особенно — малая глубина резкости, из-за которой мир выглядит игрушечной диорамой (её мы пока не повторяем — дорого, см. слой 8). Каждый приём по отдельности незаметен, вместе — «тот самый» свет.
+All games on Unreal share a recognisable default set: filmic tonemapping, soft shadows with a coloured sky fill, shading in crevices, bloom, haze, colour grading and — in Minecraft Dungeons especially — a shallow depth of field, which makes the world look like a toy diorama (we do not reproduce it yet — expensive, see layer 8). Each technique on its own is unnoticeable, together — "that" light.
 
-## Слои по порядку
+## Layers in order
 
-| # | Слой | Как у нас | Настройки (день) |
+| # | Layer | Ours | Settings (day) |
 |---|---|---|---|
-| 1 | **Солнце** | `DirectionalLight` тёплое `#ffdcae`, низко и сбоку (`sunOffset` −20, 26, 12) — длинные тени вправо-вниз, как на скриншотах; тени PCF soft 2048² вокруг героя | 2,2 |
-| 2 | **Небо** | `HemisphereLight` голубое сверху, тёплое песочное снизу (отражённый свет) — тени светлые и голубоватые, бока блоков в тени остаются коричневыми, а не чёрными, как в Minecraft Dungeons | `#bfe4ff` / `#d8c49a`, 2,0 |
-| 3 | **AO** | `GTAOPass` (радиус 0,55 м, 12 сэмплов, смешивание 0,85). Вырезные, прозрачные и самосветящиеся сетки, а также спрайты (вспышки) и точки в проход нормалей не попадают (`SolidAOPass`) — иначе трава-плоскости дают пятна, а вспышки заклинаний — чёрные квадраты. Блоки уже затенены по вершинам, AO добавляет щели у декора, предметов и ног героя | |
-| 4 | **Bloom** | `UnrealBloomPass`: огонь, магия, светящиеся грибы, стекло фонаря (слой `glow`) | 0,42 (ночь 0,75) |
-| 5 | **Тонмаппинг** | ACES, экспозиция 1,02 | |
-| 6 | **Цветокоррекция** | после тонмаппинга: тени → бирюза (−0,02, +0,012, +0,045), светлое чуть теплее (+0,02, +0,012, −0,004), насыщенность ×1,0 и контраст ×0,98 — пастель, как в референсе, виньетка 0,12 (едва заметная) | |
-| 7 | **Дымка** | `Fog` от камеры: начинается за героем (0,9 × дистанции камеры), густеет вдаль (4,2 ×) к светлому голубому `#d6ecf4` — дальнее светлеет, как воздух на скриншотах | |
-| ~~8~~ | ~~**Tilt-shift**~~ | **Убран 23.10.2026:** два полноэкранных прохода гаусса на полном разрешении (при DPR 2 — 2048 × 1536) заметно съедали кадры. Если вернуть — только на уменьшенной копии кадра и с размытием по глубине | |
+| 1 | **Sun** | `DirectionalLight` warm `#ffdcae`, low and from the side (`sunOffset` −20, 26, 12) — long shadows to the right and down, as in the screenshots; PCF soft shadows 2048² around the hero | 2.2 |
+| 2 | **Sky** | `HemisphereLight` blue from above, warm sandy from below (bounced light) — shadows are light and bluish, the sides of blocks in shadow stay brown, not black, as in Minecraft Dungeons | `#bfe4ff` / `#d8c49a`, 2.0 |
+| 3 | **AO** | `GTAOPass` (radius 0.55 m, 12 samples, blend 0.85). Cut-out, transparent and self-lit meshes, as well as sprites (flashes) and points, do not enter the normal pass (`SolidAOPass`) — otherwise grass planes give blotches and spell flashes give black squares. Blocks are already vertex-shaded, AO adds crevices at decor, items and the hero's feet | |
+| 4 | **Bloom** | `UnrealBloomPass`: fire, magic, glowing mushrooms, lantern glass (the `glow` layer) | 0.42 (night 0.75) |
+| 5 | **Tonemapping** | ACES, exposure 1.02 | |
+| 6 | **Colour grading** | after tonemapping: shadows → turquoise (−0.02, +0.012, +0.045), highlights slightly warmer (+0.02, +0.012, −0.004), saturation ×1.0 and contrast ×0.98 — pastel, as in the reference, vignette 0.12 (barely noticeable) | |
+| 7 | **Haze** | `Fog` from the camera: starts behind the hero (0.9 × the camera distance), thickens into the distance (4.2 ×) toward a light blue `#d6ecf4` — the far part brightens, like the air in the screenshots | |
+| ~~8~~ | ~~**Tilt-shift**~~ | **Removed on 2026-10-23:** two full-screen Gaussian passes at full resolution (at DPR 2 — 2048 × 1536) noticeably ate frames. If brought back — only on a downscaled copy of the frame and with depth-based blur | |
 
-Ночь: лунный синий свет 0,6, небо `#5f8ed6`, дымка `#1b3c5c`, тени сильнее уходят в синеву; светят факелы, грибы, фонари и светлячки (8 ближайших источников — настоящие `PointLight`).
+Night: a lunar blue light 0.6, sky `#5f8ed6`, haze `#1b3c5c`, shadows go deeper into blue; torches, mushrooms, lanterns and fireflies shine (the 8 nearest sources — real `PointLight`s).
 
-## Настройки мира карты
+## The map's world settings
 
-С 24.10.2026 день задаётся картой: `meta.world` (`src/world.ts`) — солнце, небо и глобальный свет, дымка, погода, постобработка; правится в редакторе («Настройки мира», наборы в «Окружении», [design-editor.md](design-editor.md)). `Lighting.applyWorld` подменяет дневной набор, ночь (L) остаётся своей. Без `meta.world` всё как описано выше. Дымка в настройках — в метрах для камеры игры (24 м до героя), в редакторе масштабируется по дальности камеры. Погода — `src/weather.ts`.
+Since 2026-10-24 the day is set by the map: `meta.world` (`src/world.ts`) — sun, sky and global light, haze, weather, post-processing; edited in the editor ("World settings", presets in "Environment", [design-editor.md](design-editor.md)). `Lighting.applyWorld` replaces the day set, night (L) keeps its own. Without `meta.world` everything is as described above. Haze in the settings — in metres for the game camera (24 m to the hero), in the editor it scales with the camera distance. Weather — `src/weather.ts`.
 
-## Цена кадра
+## Frame cost
 
-Замер GPU-временем (`EXT_disjoint_timer_query_webgl2`), плейграунд, ретина 2048 × 1536:
+Measured by GPU time (`EXT_disjoint_timer_query_webgl2`), playground, retina 2048 × 1536:
 
-| Что | мс на кадр |
+| What | ms per frame |
 |---|---|
-| без постобработки (сразу на экран, с MSAA) | 7,8 |
-| было: буфер DPR 2, AO в полном разрешении | 37 |
-| из них AO | ≈ 15 |
-| bloom, цветокоррекция | < 0,5 |
-| **стало: буфер не плотнее DPR 1,5, AO в половину буфера** | **12,5** |
-| то же с MSAA 4× на буфере (не берём) | 35,6 |
-| **сейчас: буфер не плотнее DPR 1,25** (1280 × 960 на 2048 × 1536) | **10,0** — как без постобработки (10,3 в том же замере) |
+| without post-processing (straight to screen, with MSAA) | 7.8 |
+| was: DPR 2 buffer, AO at full resolution | 37 |
+| of which AO | ≈ 15 |
+| bloom, colour grading | < 0.5 |
+| **became: buffer no denser than DPR 1.5, AO at half the buffer** | **12.5** |
+| the same with 4× MSAA on the buffer (not taken) | 35.6 |
+| **now: buffer no denser than DPR 1.25** (1280 × 960 on 2048 × 1536) | **10.0** — same as without post-processing (10.3 in the same measurement) |
 
-Главная цена — полноэкранный HDR-буфер на ретине и AO в полном разрешении (он ещё раз рисует сцену ради нормалей). Поэтому `POST_MAX_DPR = 1,25` (было 1,5 — снизили ради запаса по кадрам) и `SolidAOPass.setSize` делит размер пополам; AO мягкий, разницы на глаз нет, пиксельные текстуры остаются чёткими.
+The main cost is the full-screen HDR buffer on retina and AO at full resolution (it draws the scene once more for the normals). Hence `POST_MAX_DPR = 1.25` (was 1.5 — lowered for frame headroom) and `SolidAOPass.setSize` halves the size; AO is soft, there is no visible difference, pixel textures stay crisp.
 
-## Правила
+## Rules
 
-- **Тени цветные, а не чёрные.** Если в тени не видно текстуры — мало неба, а не много солнца.
-- **Дымка — светлая и голубая.** Серый «грязный» туман по-прежнему не используем (style-guide: «туман и грязные фильтры — нет» уточнено: воздушная дымка вдали — да).
-- **Светится мало что.** Слой `glow` и огонь — только для настоящих источников света и магии.
-- **Виньетка едва заметна** (0,12), плёночного зерна и хроматической аберрации нет.
+- **Shadows are coloured, not black.** If the texture is not visible in shadow — there is too little sky, not too much sun.
+- **Haze is light and blue.** Grey "dirty" fog is still not used (style-guide: "fog and dirty filters — no" refined: atmospheric haze in the distance — yes).
+- **Few things glow.** The `glow` layer and fire — only for real light sources and magic.
+- **The vignette is barely noticeable** (0.12), no film grain and no chromatic aberration.
 
-## Что дальше
+## What next
 
-- Отсвет факела на соседние блоки сильнее (сейчас 8 источников на сцену; в подземелье их больше — нужен запечённый «свет в вершинах» для дальних факелов).
-- Травяная бахрома по краям уступов и густая россыпь мелкой травы — из того же источника, это уже декор.
-- Дешёвая замена tilt-shift: размытие на четверти разрешения и смешивание по глубине — если «диорама» понадобится снова.
+- A stronger torch glow on neighbouring blocks (currently 8 sources per scene; in the dungeon there are more — baked "light in vertices" is needed for distant torches).
+- Grass fringe along ledge edges and a dense scatter of small grass — from the same source, that is already decor.
+- A cheap tilt-shift replacement: blur at a quarter of the resolution and blending by depth — if the "diorama" is needed again.

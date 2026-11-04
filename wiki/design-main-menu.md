@@ -1,46 +1,46 @@
-# Главное меню
+# Main menu
 
-Версия 1.2 от 03.11.2026: друзья и чат комнаты в лагере, вход в идущий бой (раздел 4). Версия 1.1 от 02.11.2026: сетевая игра — панель лагеря работает с сервером (раздел 4, [design-multiplayer.md](design-multiplayer.md)). Версия 1.0 от 31.10.2026: стартовый экран, лагерь (снаряжение и выбор карты обороны куста), настройки, пауза и итог боя, заглушки сетевой игры. Образец — меню Minecraft Dungeons (экран героя с гнёздами снаряжения, вкладки сверху, лобби онлайн-игры у костра). Инвентарь — [design-inventory.md](design-inventory.md), карты — [design-tower-defence.md](design-tower-defence.md).
+Version 1.2 of 2026-11-03: friends and room chat in the camp, joining a running battle (section 4). Version 1.1 of 2026-11-02: multiplayer — the camp panel works with the server (section 4, [design-multiplayer.md](design-multiplayer.md)). Version 1.0 of 2026-10-31: start screen, camp (gear and Bush Defence map selection), settings, pause and battle result, multiplayer stubs. The model is the Minecraft Dungeons menu (hero screen with gear slots, tabs on top, online lobby by the campfire). Inventory — [design-inventory.md](design-inventory.md), maps — [design-tower-defence.md](design-tower-defence.md).
 
-## 1. Маршрут
+## 1. Routing
 
-- Страница без параметров — **меню** (`src/menu/menu.ts`, `runMenu`).
-- `?map=…` или `?dev=playground` — сразу игра, как раньше (`wantsGame` в `src/devflag.ts`); `?dev=editor` — редактор. Все тесты ходят мимо меню через `?dev=playground`.
-- «Начать игру» перезагружает страницу на `?map=td2&from=menu` (`battleUrl`, `src/menu/session.ts`): WebGL и сцена меню не живут рядом с боем, а профиль общий — localStorage `malina.profile`, надетое в лагере подхватывается в бою.
-- Из боя «В лагерь» — `?menu=lobby`: меню открывается сразу в лагере.
+- A page without parameters — the **menu** (`src/menu/menu.ts`, `runMenu`).
+- `?map=…` or `?dev=playground` — straight into the game, as before (`wantsGame` in `src/devflag.ts`); `?dev=editor` — the editor. All tests bypass the menu via `?dev=playground`.
+- "Start game" reloads the page to `?map=td2&from=menu` (`battleUrl`, `src/menu/session.ts`): WebGL and the menu scene do not live alongside the battle, but the profile is shared — localStorage `malina.profile`, what is equipped in the camp is picked up in battle.
+- From battle, "To camp" — `?menu=lobby`: the menu opens straight in the camp.
 
-## 2. Экраны
+## 2. Screens
 
-**Стартовый.** Фон — ночной лагерь у костра (`src/menu/scene.ts`): поляна из блоков, костёр с языками огня, искрами и светом, ящики, бочка, пучки травы, бирюзовая дымка; у огня — герой в надетом. Слева логотип и три кнопки: **Одиночная игра**, **Сетевая игра** (метка «скоро»), **Настройки**; при включённых dev-инструментах ниже мелко — «Плейграунд» и «Редактор». ↑/↓ и Enter, мышь.
+**Start screen.** Background — a night camp by a campfire (`src/menu/scene.ts`): a glade of blocks, a campfire with tongues of flame, sparks and light, crates, a barrel, tufts of grass, turquoise haze; by the fire — the hero in equipped gear. On the left, the logo and three buttons: **Single player**, **Multiplayer** (label "soon"), **Settings**; with dev tools enabled, smaller below — "Playground" and "Editor". ↑/↓ and Enter, mouse.
 
-**Лагерь** (`src/menu/lobby.ts`). Камера наезжает на героя, он слева (тянуть мышью — повернуть). Сверху вкладки **Снаряжение · Карта** (Q / E), режим, малина и очки зачарования, ⚙ — настройки.
-- *Снаряжение*: уровень и опыт, сила снаряжения и сила по видам, гнёзда по группам как в MCD — оружие (ближнее, лук), броня, артефакты (3), аура. Клик — карточка справа (сила, редкость, название, описание, свойства), двойной клик, «Сменить» или **I** — инвентарь на вкладке этого вида (`Inventory.show(tab)`); «Все вещи» — инвентарь целиком. Пока инвентарь открыт, фон меню стоит — у инвентаря свой рендер героя.
-- *Карта*: три карты обороны куста по сложности (`src/menu/campaign.ts`) — Лавовая котловина `td` (лёгкая), Кристальная поляна `td2` (средняя), Замок на лугу `td3` (трудная). Справа — описание, волны, дороги, здоровье куста и казна (числа берутся из `meta.td` карты). Отбитая карта — метка «пройдена». Двойной клик по карте — сразу в бой.
-- Внизу «Назад» (Esc), подсказка, **Начать игру** (Enter). Выбранная карта и режим запоминаются (`malina.menu`).
+**Camp** (`src/menu/lobby.ts`). The camera zooms in on the hero, who is on the left (drag with the mouse to rotate). Tabs on top: **Gear · Map** (Q / E), mode, raspberries and enchantment points, ⚙ — settings.
+- *Gear*: level and experience, gear power and power by type, slots grouped as in MCD — weapons (melee, bow), armour, artifacts (3), aura. Click — a card on the right (power, rarity, name, description, properties); double-click, "Change" or **I** — the inventory on that type's tab (`Inventory.show(tab)`); "All items" — the whole inventory. While the inventory is open the menu background freezes — the inventory has its own hero render.
+- *Map*: three Bush Defence maps by difficulty (`src/menu/campaign.ts`) — Lava Basin `td` (easy), Crystal Glade `td2` (medium), Castle on the Meadow `td3` (hard). On the right — description, waves, roads, bush health and treasury (numbers come from the map's `meta.td`). A repelled map gets a "completed" mark. Double-click on a map — straight into battle.
+- At the bottom: "Back" (Esc), a hint, **Start game** (Enter). The selected map and mode are remembered (`malina.menu`).
 
-**Настройки** (`src/menu/settings-panel.ts`, `malina.settings`): общая громкость и музыка (сразу), качество (плотность пикселей 1,5 или 1 — со следующего боя), постобработка, тени, подсказка по управлению в начале боя. То же окно — на паузе в бою, там постобработка, тени и подсказка меняются сразу.
+**Settings** (`src/menu/settings-panel.ts`, `malina.settings`): master volume and music (immediate), quality (pixel density 1.5 or 1 — from the next battle), post-processing, shadows, controls hint at the start of a battle. The same window on pause in battle, where post-processing, shadows and the hint change immediately.
 
-## 3. Бой из меню (`?from=menu`)
+## 3. Battle from the menu (`?from=menu`)
 
-- **Esc** — пауза (`src/menu/pause.ts`): время стоит; «Продолжить», «Настройки», «Начать заново», «Выйти в лагерь».
-- Конец обороны — итог поверх карты: «Куст отбит!» / «Куст засох», сколько волн отбито и врагов повержено; «Ещё раз» (Enter) и «В лагерь». Победа отмечает карту пройденной.
-- Без отладочной телеметрии и строки F-клавиш в подсказке; заголовок вкладки — название карты.
-- **Малина героя.** Оборона ведёт казну в малине профиля и на старте ставит туда казну карты. Перед боем малина героя откладывается в sessionStorage (`stashBerries`) и возвращается при входе в меню (`takeStash`) — бой её не съедает.
+- **Esc** — pause (`src/menu/pause.ts`): time stops; "Continue", "Settings", "Restart", "Exit to camp".
+- End of defence — a result over the map: "The bush held!" / "The bush withered", how many waves repelled and enemies defeated; "Again" (Enter) and "To camp". Victory marks the map completed.
+- No debug telemetry and no F-key line in the hint; the tab title is the map name.
+- **Hero's raspberries.** The defence keeps its treasury in the profile's raspberries and puts the map's treasury there at the start. Before battle, the hero's raspberries are stashed in sessionStorage (`stashBerries`) and returned on entering the menu (`takeStash`) — the battle does not eat them.
 
-## 4. Сетевая игра
+## 4. Multiplayer
 
-~~Заглушка: панель без сервера, «Начать игру» закрыта~~ — заменено сервером ([design-multiplayer.md](design-multiplayer.md)).
+~~Stub: a panel without a server, "Start game" disabled~~ — replaced by the server ([design-multiplayer.md](design-multiplayer.md)).
 
-Тот же лагерь, при входе сразу на вкладке «Карта», справа панель по образцу MCD (`Lobby.onlineHtml`):
-- **сервер недоступен** — адрес и «Проверить снова»;
-- **нет входа** — поле имени и «Войти»;
-- **вошёл** — «Создать онлайн-сессию», «Закрытая игра», вход по коду, «Сессии» с «Обновить» (комнаты в бою — с пометкой «в бою», войти можно), «Друзья»: добавить по имени, на связи ли, где играет, «Войти» к нему, ✕ — убрать;
-- **в комнате** — код, места (хост ♛, готов / не готов, нет связи; у хоста — ✕ убрать), чат комнаты, «Покинуть комнату», друзья.
+The same camp, opened straight on the "Map" tab, with a panel on the right modelled on MCD (`Lobby.onlineHtml`):
+- **server unavailable** — the address and "Check again";
+- **not signed in** — a name field and "Sign in";
+- **signed in** — "Create online session", "Private game", join by code, "Sessions" with "Refresh" (rooms in battle are marked "in battle", joining is allowed), "Friends": add by name, whether online, where they are playing, "Join" them, ✕ — remove;
+- **in a room** — code, seats (host ♛, ready / not ready, no connection; the host has ✕ to remove), room chat, "Leave room", friends.
 
-«Начать игру» у хоста ведёт в бой всю комнату, у гостя кнопка становится «Готов» / «Не готов». Карту выбирает хост, у гостей она следует за комнатой.
+"Start game" for the host takes the whole room into battle; for a guest the button becomes "Ready" / "Not ready". The host picks the map; for guests it follows the room.
 
-`src/menu/session.ts`: `NET` — экземпляр `NetClient` (`src/net/client.ts`), `OnlineLobby` — `RoomInfo` протокола. Число игроков идёт в бой через `?players=N` → `td.setPlayers`, код комнаты — через `&room=`.
+`src/menu/session.ts`: `NET` — the `NetClient` instance (`src/net/client.ts`), `OnlineLobby` — the protocol's `RoomInfo`. The player count goes into battle via `?players=N` → `td.setPlayers`, the room code via `&room=`.
 
-## 5. Тесты
+## 5. Tests
 
-`tests/menu.spec.ts`: старт → одиночная → надеть топор двойным кликом через инвентарь → карта `td2` → бой (12 волн, казна 350, топор надет) → пауза → «Выйти в лагерь», малина героя на месте; сетевая без сервера — «Сервер недоступен», старт закрыт (с сервером — `tests/net.spec.ts`); победа в обороне отмечает карту пройденной.
+`tests/menu.spec.ts`: start → single player → equip the axe by double-click through the inventory → map `td2` → battle (12 waves, treasury 350, axe equipped) → pause → "Exit to camp", the hero's raspberries are intact; multiplayer without a server — "Server unavailable", start disabled (with a server — `tests/net.spec.ts`); a defence victory marks the map completed.

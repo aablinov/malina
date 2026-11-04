@@ -1,104 +1,104 @@
-# Мир: наборы блоков, декора и сборок по Minecraft Dungeons
+# World: block, decor and kit sets after Minecraft Dungeons
 
-Версия 1.4 от 29.10.2026. Источник — [sources/mcd-world.md](sources/mcd-world.md) (скриншоты 9–15). Гамма и приёмы — [style-terrain.md](style-terrain.md), свет — [style-lighting.md](style-lighting.md), декор как механизм — [design-level-decor.md](design-level-decor.md).
+Version 1.4 of 2026-10-29. Source — [sources/mcd-world.md](sources/mcd-world.md) (screenshots 9–15). Palette and techniques — [style-terrain.md](style-terrain.md), light — [style-lighting.md](style-lighting.md), decor as a mechanism — [design-level-decor.md](design-level-decor.md).
 
-Каждая тема — 3–4 сочетаемых элемента в той же пастельной гамме и с той же плотностью 16 px/м, плюс сборки в `src/level/kit.ts` («поставь в эту точку», детерминированные от координат). Всё вместе — зона **«мир»** плейграунда за восточной стеной (проём на z −1…1, `src/level/world-zone.ts`), в витрину эти категории не входят.
+Each theme — 3–4 combinable elements in the same pastel palette and at the same density of 16 px/m, plus kits in `src/level/kit.ts` ("put it at this point", deterministic from the coordinates). All together — the **"world"** zone of the playground beyond the eastern wall (an opening at z −1…1, `src/level/world-zone.ts`); these categories are not part of the showcase.
 
-## 1. Двор со складом (скриншот 10)
+## 1. Yard with a storage yard (screenshot 10)
 
-| Элемент | Что | Где |
+| Element | What | Where |
 |---|---|---|
-| Пол двора | `yard_floor` (+ ступени, полублок): `#c39552`, штрихи `#a7794a` «ёлочкой». Уступы — полублоком | палитра «двор» |
-| Камень ограды | `wall_stone` (+ ступени, полублок, стенка): крупные скруглённые камни едва заметны, `#a1a8b0` | палитра «двор» |
-| Сено | `hay`: жёлтый `#cda652`, две обвязки `#c25a26`, светлая кайма сверху | палитра «дерево» |
-| Склад | декор: `crate_banded`, `crates_banded_stack`, `crate_small`, `chest` (золотая окантовка), `cart`, `cart_loaded`, `bench` | декор «склад» |
-| Фонари | `lantern_post_double`, `lantern_wall` (на стену), `lantern_short` — стекло в слое `glow`, настоящий свет | декор «фонари» |
-| Сборки | `steppedWall` — ограда, высота гуляет блоками, полублоки сверху; `floorRect`; `hayStack` — стог по маске рядов | `kit.ts` |
+| Yard floor | `yard_floor` (+ stairs, half-block): `#c39552`, strokes `#a7794a` in a "herringbone". Ledges — with a half-block | palette "yard" |
+| Fence stone | `wall_stone` (+ stairs, half-block, wall): large rounded stones barely visible, `#a1a8b0` | palette "yard" |
+| Hay | `hay`: yellow `#cda652`, two bindings `#c25a26`, a light border on top | palette "wood" |
+| Storage | decor: `crate_banded`, `crates_banded_stack`, `crate_small`, `chest` (gold trim), `cart`, `cart_loaded`, `bench` | decor "storage" |
+| Lanterns | `lantern_post_double`, `lantern_wall` (on a wall), `lantern_short` — the glass in the `glow` layer, real light | decor "lanterns" |
+| Kits | `steppedWall` — a fence, the height wanders by blocks, half-blocks on top; `floorRect`; `hayStack` — a stack by a row mask | `kit.ts` |
 
-## 2. Река с водопадом и мостом (скриншот 11)
+## 2. River with a waterfall and a bridge (screenshot 11)
 
-| Элемент | Что | Где |
+| Element | What | Where |
 |---|---|---|
-| Водопад | `waterfall`: свой слой `falls`, текстура струй `#1f88ab` бежит вниз (`fallsTex.offset.y = t·1,6`) | палитра «скалы и вода» |
-| Река | `river`: свой слой `river`, вода темнее пруда (`#356577`), поворот блока — направление течения (`flow`, м/с). В шейдере блики, каустика и светлые штрихи уносит течением; береговая пена слабее (узкое русло) | палитра |
-| Мост | `bridge_deck` (доски `#c49458`, поворот задаёт направление), `bridge_beam` (брус лёжа), `bridge_post` (столб 12/16, 1,5 м для столкновений) | палитра |
-| Брызги и пена | декор `waterfall_splash`, `waterfall_foam`, `foam_patch` (плоские пятна на воде) | декор «вода» |
-| Сборки | `riverBed` (русло на полтора блока ниже травы, песок под водой), `waterfall`, `bridgeX` (настил, брусья, столбы), `cliffSteps` (скалы ступенями к воде) | `kit.ts` |
+| Waterfall | `waterfall`: its own layer `falls`, a texture of streams `#1f88ab` runs downward (`fallsTex.offset.y = t·1.6`) | palette "cliffs and water" |
+| River | `river`: its own layer `river`, water darker than the pond (`#356577`), the block's rotation — the direction of flow (`flow`, m/s). In the shader the glints, caustics and light strokes are carried by the current; the shore foam is weaker (a narrow channel) | palette |
+| Bridge | `bridge_deck` (boards `#c49458`, rotation sets the direction), `bridge_beam` (a beam lying down), `bridge_post` (a post 12/16, 1.5 m for collisions) | palette |
+| Splashes and foam | decor `waterfall_splash`, `waterfall_foam`, `foam_patch` (flat patches on the water) | decor "water" |
+| Kits | `riverBed` (a channel a block and a half below the grass, sand under the water), `waterfall`, `bridgeX` (deck, beams, posts), `cliffSteps` (cliffs stepping down to the water) | `kit.ts` |
 
-## 3. Края уровня (скриншот 12)
+## 3. Level edges (screenshot 12)
 
-| Элемент | Что | Где |
+| Element | What | Where |
 |---|---|---|
-| Скала | `cliff` (+ ступени, полублок): светлая `#9aa2ab`, вертикальные пласты | палитра «скалы и вода» |
-| Скала тёмная | `cliff_dark` `#7b8996` — целыми столбами, читаются пласты | палитра |
-| Скала с травой | `cliff_grass`: верх травы с бахромой и пучками, бок — скала с полосой травы | палитра |
-| Сборки | `cliffMass` — массив, высота по шуму, столбцы светлые/тёмные, трава сверху; `stairway` — лестница из ступеней любого камня | `kit.ts` |
+| Cliff | `cliff` (+ stairs, half-block): light `#9aa2ab`, vertical strata | palette "cliffs and water" |
+| Dark cliff | `cliff_dark` `#7b8996` — in whole columns, the strata read | palette |
+| Cliff with grass | `cliff_grass`: a grass top with fringe and tufts, the side — cliff with a strip of grass | palette |
+| Kits | `cliffMass` — a massif, height by noise, light/dark columns, grass on top; `stairway` — a staircase of stairs of any stone | `kit.ts` |
 
-Правило: высокие скалы — на дальних сторонах (−X, −Z), со стороны камеры — 1–2 блока.
+Rule: tall cliffs — on the far sides (−X, −Z), on the camera side — 1–2 blocks.
 
-## 4. Холмы и свечи (скриншот 13)
+## 4. Hills and candles (screenshot 13)
 
-| Элемент | Что | Где |
+| Element | What | Where |
 |---|---|---|
-| Полублок травы | `grass_slab` — мягкие уступы; бахрома, пучки и рваный край считаются от высоты полублока (`topOf` в мешере) | палитра «холмы» |
-| Пышная листва | `leaves_fluffy`: куб с гроздьями листьев (`leavesClump`) и «шапки» на 2/16 снаружи граней (`leavesPuff`) — силуэт кроны пушится. Тона: `#4c6e2a` / `#6a8c37` / `#90b04e` / `#a8c860` | палитра |
-| Свечи | декор `candles_group`, `candles_row`, `candle_tall` — **свет запечён**: без PointLight, тёплый цвет добавляется к излучению вершин блоков в радиусе 2–3 м (атрибут `bake`) — светит и ночью, кадр не дороже | декор «свечи» |
-| Сборки | `landscape` / `hill` — проходимый ландшафт; `rockOutcrop` — скала; `tree` — ствол и крона-эллипсоид из пышной листвы; `rampart` — стена с зубцами через 3 блока, между ними — место под свечи (подробно — раздел «Рельеф: ландшафт и скалы») | `kit.ts` |
+| Grass half-block | `grass_slab` — soft ledges; fringe, tufts and the ragged edge are computed from the half-block's height (`topOf` in the mesher) | palette "hills" |
+| Fluffy foliage | `leaves_fluffy`: a cube with clusters of leaves (`leavesClump`) and "caps" 2/16 outside the faces (`leavesPuff`) — the crown silhouette fluffs up. Tones: `#4c6e2a` / `#6a8c37` / `#90b04e` / `#a8c860` | palette |
+| Candles | decor `candles_group`, `candles_row`, `candle_tall` — **light is baked**: no PointLight, a warm colour is added to the vertex emission of blocks within 2–3 m (attribute `bake`) — shines at night too, the frame costs no more | decor "candles" |
+| Kits | `landscape` / `hill` — walkable terrain; `rockOutcrop` — a cliff; `tree` — a trunk and an ellipsoid crown of fluffy foliage; `rampart` — a wall with merlons every 3 blocks, between them — room for candles (details — the section "Relief: terrain and cliffs") | `kit.ts` |
 
-## 5. Портал (скриншот 14)
+## 5. Portal (screenshot 14)
 
-| Элемент | Что | Где |
+| Element | What | Where |
 |---|---|---|
-| Сияние | `portal`: тонкая плита, слой `portal` (свой материал: светится сам, ярче 1 — bloom; снизу вверх бегут светлые полосы, края мерцают), запечённый золотой свет `#ffc248` на 4,5 м | палитра «портал» |
-| Рама | `portal_frame` — тёмный камень `#4c5155` с фаской и спокойным квадратным узором | палитра |
-| Перемычка | `portal_trim` — тот же камень с золотым меандром `#d9a640` | палитра |
-| Пол | `portal_floor` — светлые тёплые плиты `#b3a693`, природный — трава заходит рваным краем | палитра |
-| Сборка | `portal(x, y, z, w, h)` — проём в скале лицом к +Z: рама, перемычка, сияние на блок вглубь, дёрн сверху, перед ним пол из плит и проход, прорубленный до земли (выход ничто не перекрывает) | `kit.ts` |
+| Glow | `portal`: a thin slab, layer `portal` (its own material: self-lit, brighter than 1 — bloom; light bands run from bottom to top, the edges shimmer), baked golden light `#ffc248` over 4.5 m | palette "portal" |
+| Frame | `portal_frame` — dark stone `#4c5155` with a chamfer and a calm square pattern | palette |
+| Lintel | `portal_trim` — the same stone with a golden meander `#d9a640` | palette |
+| Floor | `portal_floor` — light warm slabs `#b3a693`, natural — grass comes in with a ragged edge | palette |
+| Kit | `portal(x, y, z, w, h)` — an opening in a cliff facing +Z: frame, lintel, the glow one block deep, turf on top, in front of it a floor of slabs and a passage cut down to the ground (nothing blocks the exit) | `kit.ts` |
 
-## 6. Разнообразие холмов (скриншот 15)
+## 6. Variety of hills (screenshot 15)
 
-| Элемент | Что | Где |
+| Element | What | Where |
 |---|---|---|
-| Ступени тропинки | `path_stairs`, `path_slab` — земляные ступени на склонах | палитра «холмы» |
-| Сухая трава | `dry_grass` — высокие светло-жёлтые стебли `#cdb862` | палитра |
-| Ромашки | `daisies` — низкие белые цветки с жёлтой серединкой | палитра |
-| Холм с обрывом | `hill(..., { stone: 'x+' })` — одна сторона из скалы с травой | `kit.ts` |
+| Path stairs | `path_stairs`, `path_slab` — earthen stairs on slopes | palette "hills" |
+| Dry grass | `dry_grass` — tall light-yellow stalks `#cdb862` | palette |
+| Daisies | `daisies` — low white flowers with a yellow centre | palette |
+| Hill with a drop | `hill(..., { stone: 'x+' })` — one side made of cliff with grass | `kit.ts` |
 
-В зоне: ландшафт на всю зону и скалы (см. «Рельеф: ландшафт и скалы»).
+In the zone: terrain across the whole zone and cliffs (see "Relief: terrain and cliffs").
 
-## Рельеф: ландшафт и скалы (скриншоты 13–17)
+## Relief: terrain and cliffs (screenshots 13–17)
 
-Рельеф — **две разные сущности**. Путать их нельзя: первая версия (пирамидки) и вторая (плиты по блоку с лестницами) пытались сделать одно из другого — заменены 24.10.2026.
+Relief is **two different entities**. They must not be confused: the first version (little pyramids) and the second (block-high slabs with staircases) tried to make one out of the other — replaced on 2026-10-24.
 
-| Сущность | Что это | Проходимость |
+| Entity | What it is | Walkability |
 |---|---|---|
-| **Ландшафт** — `landscape`, `hill` | холмистая местность всей карты: огромные плиты в 3–4 слоя, **слой — 0,5 м** (полный блок травы или полублок травы сверху) | **везде и с любой стороны**: соседние клетки отличаются не больше чем на слой, шаг героя 0,5 м — лестницы и пандусы не нужны, мобы стоят на любом уровне |
-| **Скала** — `rockOutcrop`, `cliffMass` | каменный массив с извилистым контуром, отвесными боками из светлых и тёмных пластов и травой сверху | **непроходима** — так и задумано; в неё встраивают то, к чему ведёт один вход (портал, пещера), на низкую можно поставить земляные ступени (`stairway`) |
+| **Terrain** — `landscape`, `hill` | the hilly ground of the whole map: huge slabs in 3–4 layers, **a layer is 0.5 m** (a full grass block or a grass half-block on top) | **everywhere and from any side**: neighbouring cells differ by no more than a layer, the hero's step is 0.5 m — no staircases or ramps needed, mobs stand on any level |
+| **Cliff** — `rockOutcrop`, `cliffMass` | a stone massif with a winding outline, sheer sides of light and dark strata and grass on top | **impassable** — by design; things with a single entrance (a portal, a cave) are built into it, earthen stairs (`stairway`) can be put on a low one |
 
-**Как строится ландшафт** (`src/level/kit.ts`):
-1. Карта высот — крупный шум (масштаб 24–32 клетки) с искажением координат: контуры извилистые, как береговая линия, без прямоугольников.
-2. S-кривая: широкие ровные площадки, перепады собраны в короткие склоны.
-3. К ровным местам (дорога, двор, русло — `flat`) высота плавно спадает по полю расстояний за `fade` клеток.
-4. Сглаживание `settle`: каждый уровень отдельно — большинство в окне 5 × 5, затем 3 × 3, затем мелкие области меньше 14 клеток заливаются — контуры плавные, без зубцов и ямок.
-5. Проходимость: колонна выше соседа больше чем на слой — понижается, пока не станет так.
-6. Постройка: n слоёв = n/2 полных блоков и полублок травы сверху, если n нечётно. В «каменных» местах (`stone`, доля площади по шуму) бока слоёв — скала, верх — трава: ландшафт сочетается с камнем по краям.
+**How terrain is built** (`src/level/kit.ts`):
+1. A height map — large-scale noise (scale 24–32 cells) with coordinate distortion: winding outlines like a coastline, without rectangles.
+2. An S-curve: wide flat plateaus, the elevation changes gathered into short slopes.
+3. Toward flat places (road, yard, channel — `flat`) the height falls off smoothly along a distance field over `fade` cells.
+4. Smoothing `settle`: each level separately — the majority in a 5 × 5 window, then 3 × 3, then small regions under 14 cells are filled in — the outlines are smooth, without notches or pits.
+5. Walkability: a column higher than a neighbour by more than a layer — is lowered until it is not.
+6. Construction: n layers = n/2 full blocks and a grass half-block on top if n is odd. In "stony" places (`stone`, a share of the area by noise) the sides of the layers are cliff, the top is grass: the terrain blends with stone at the edges.
 
-**В редакторе** (Tab до режима «Ландшафт»): ползунки — размер по X и Z (6–64 м), слои по 0,5 м (1–10), крупность плит, доля камня; ЛКМ по земле — поставить кусок (края спадают к земле, подъём к середине); **земля** куска — трава или снег (кнопки в инструменте, `GROUNDS` в `kit.ts`: верх, полублок, бок, скала с этим верхом; поле `ground` в `meta.lands`, старые куски без поля — трава). Кусок — **объект**: в карте (`meta.lands`) лежат его центр, параметры и изменённые клетки (что было и что стало), поэтому его можно выбрать и после сохранения. ЛКМ по куску — выбрать (зелёная рамка, ползунки показывают его параметры), Shift+ЛКМ — новый кусок поверх. Ползунки и «Случайно» (новое зерно шума: другие изгибы краёв и углов) перестраивают выбранный кусок на месте, стрелки двигают его, Del убирает — клетки возвращаются как были до него; блоки, поставленные поверх куска руками, перестройка не трогает. Подряд идущие правки одного куска — одна запись в отмене.
+**In the editor** (Tab to the "Terrain" mode): sliders — size along X and Z (6–64 m), layers of 0.5 m (1–10), slab coarseness, stone share; LMB on the ground — place a piece (the edges fall off to the ground, rising toward the middle); the piece's **ground** — grass or snow (buttons in the tool, `GROUNDS` in `kit.ts`: top, half-block, side, cliff with that top; the `ground` field in `meta.lands`, old pieces without the field — grass). A piece is an **object**: the map (`meta.lands`) holds its centre, parameters and changed cells (what was and what became), so it can be selected even after saving. LMB on a piece — select (a green frame, the sliders show its parameters), Shift+LMB — a new piece on top. The sliders and "Random" (a new noise seed: different bends of edges and corners) rebuild the selected piece in place, the arrows move it, Del removes it — the cells go back to what they were before it; blocks placed on top of the piece by hand are not touched by a rebuild. Consecutive edits of one piece — one undo entry.
 
-В зоне «мир»: ландшафт в 4 слоя (до 2 м) на всю зону, скалы по краям (две на юге, одна у дороги со ступенями наверх), портал — в скале к северу от дороги лицом к ней, выход сразу на дорогу. Тест «мир» ведёт героя на самую высокую плиту без лестниц.
+In the "world" zone: terrain in 4 layers (up to 2 m) across the whole zone, cliffs along the edges (two in the south, one by the road with stairs up), the portal — in the cliff north of the road facing it, the exit straight onto the road. The "world" test leads the hero onto the highest slab without staircases.
 
-## Калибровка (на экране, освещённое, медиана)
+## Calibration (on screen, lit, median)
 
-| Что | Скриншот | У нас |
+| What | Screenshot | Ours |
 |---|---|---|
-| Пол двора | `#c59b5c` | `#c29b53` |
-| Верх каменной ограды | `#83868e` | `#909290` |
-| Настил моста | `#b68c58` | `#bb955b` |
-| Река | `#44687a` | между `#25576f` и `#44869b` — цвет `#356577` выбран серединой двух замеров |
-| Пол портала | `#af9f8e` | `#d0ba9c` — светлее: на него падает запечённый золотой свет, как на скриншоте |
+| Yard floor | `#c59b5c` | `#c29b53` |
+| Top of the stone fence | `#83868e` | `#909290` |
+| Bridge deck | `#b68c58` | `#bb955b` |
+| River | `#44687a` | between `#25576f` and `#44869b` — the colour `#356577` was chosen as the middle of two measurements |
+| Portal floor | `#af9f8e` | `#d0ba9c` — lighter: the baked golden light falls on it, as in the screenshot |
 
-## Как сочетать
+## How to combine
 
-- Сначала земля и скалы (`cliffMass`, `hill`), потом то, что в них врезано (`riverBed`, `portal`, лестницы), потом декор.
-- Декор света: фонари — настоящий свет (8 ближайших), свечи и портал — запечённый, их можно ставить сколько угодно.
-- Новая поверхность — в той же гамме: `softFill`, пятна, а не пиксельный шум ([style-terrain.md](style-terrain.md)).
+- First the ground and cliffs (`cliffMass`, `hill`), then what is cut into them (`riverBed`, `portal`, staircases), then decor.
+- Light decor: lanterns — real light (the 8 nearest), candles and the portal — baked, they can be placed in any number.
+- A new surface — in the same palette: `softFill`, blotches, not pixel noise ([style-terrain.md](style-terrain.md)).

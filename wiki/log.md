@@ -1,434 +1,434 @@
-# Журнал
+# Journal
 
-Только добавляем записи в конец, старые не правим. Заголовок записи — `## [ГГГГ-ММ-ДД] тип | что`, тип: `код`, `вики`, `источник`, `решение`. Последние записи: `grep "^## \[" wiki/log.md | tail -5`.
+Entries are only appended at the end, old ones are not edited. Entry header — `## [YYYY-MM-DD] type | what`, type: `code`, `wiki`, `source`, `decision`. Latest entries: `grep "^## \[" wiki/log.md | tail -5`.
 
-## [2026-10-22] вики | Снимок проектных документов
-Вики скопирована из проекта Claude «malina»: бриф, ADR-001…004, дизайн подземелья и блоков, стиль с 9 референсами.
+## [2026-10-22] wiki | Snapshot of the project documents
+The wiki was copied from the Claude project "malina": the brief, ADR-001…004, dungeon and block design, the style with 9 references.
 
-## [2026-10-23] код | Плейграунд без дома
-Двор с двухэтажным домом за восточной стеной удалён, стена сплошная. Тест «дом во дворе» убран, поиск пути теперь проверяется подъёмом на площадку 2 м в витрине. Разрез над героем (`ceilingAt`, `setCut`) остался общим.
-Страницы: [design-level-blocks.md](design-level-blocks.md).
+## [2026-10-23] code | Playground without the house
+The yard with the two-storey house beyond the east wall was removed, the wall is solid. The "house in the yard" test was removed, pathfinding is now checked by climbing onto the 2 m platform in the showcase. The cutaway above the hero (`ceilingAt`, `setCut`) remains shared.
+Pages: [design-level-blocks.md](design-level-blocks.md).
 
-## [2026-10-23] вики | Вики по схеме Карпатого
-`README.md` → [index.md](index.md) (оглавление по разделам), заведены [log.md](log.md) и правила [CLAUDE.md](CLAUDE.md), папка источников `sources/`.
+## [2026-10-23] wiki | Wiki per Karpathy's scheme
+`README.md` → [index.md](index.md) (table of contents by section), [log.md](log.md) and the rules [CLAUDE.md](CLAUDE.md) were set up, the sources folder `sources/`.
 
-## [2026-10-23] код | Декор, этап 1: формат, формы, рендер, витрина
-Поле `decor` в карте, реестр `src/level/decor.ts` (16 предметов), формы `assets/decor/*.obj` из `scripts/gen-decor.mjs` (общий писатель `obj-writer.mjs`: грани режутся по сетке клеток, повороты частей), рендер `InstancedMesh` в `LevelRenderer`, слой `glow`. Витрина декора и декор в арене плейграунда. Тест «декор».
-Страницы: [design-level-decor.md](design-level-decor.md).
+## [2026-10-23] code | Decor, phase 1: format, shapes, rendering, showcase
+The `decor` field in the map, the registry `src/level/decor.ts` (16 items), shapes `assets/decor/*.obj` from `scripts/gen-decor.mjs` (shared writer `obj-writer.mjs`: faces are cut along the cell grid, part rotations), `InstancedMesh` rendering in `LevelRenderer`, the `glow` layer. Decor showcase and decor in the playground arena. Test "decor".
+Pages: [design-level-decor.md](design-level-decor.md).
 
-## [2026-10-23] код | Декор, этап 2: столкновения
-`decorSolids` — боксы декора как плоские препятствия; у `Obstacle` появился низ `y0` (`overlapsY`). Декор останавливает героя, его обходят путь по клику, враги (`NavGrid`) и пули; меч бьёт сквозь. Тест «декор мешает пройти».
-Страницы: [design-level-decor.md](design-level-decor.md).
+## [2026-10-23] code | Decor, phase 2: collisions
+`decorSolids` — decor boxes as flat obstacles; `Obstacle` got a bottom `y0` (`overlapsY`). Decor stops the hero, is avoided by the click path, by enemies (`NavGrid`) and by bullets; the sword strikes through. Test "decor blocks the way".
+Pages: [design-level-decor.md](design-level-decor.md).
 
-## [2026-10-23] код | Декор, этап 3: редактор
-Режим «Декор» по Tab: палитра с превью, призрак под курсором, опоры пол / стена / потолок (`placeDecor`), выбор и перенос мышью, поворот, наклон, крен, случайный поворот, копия, удаление; общая отмена с блоками, стёртая клетка уносит прикреплённый декор. Тест «редактор: декор».
-Страницы: [design-level-decor.md](design-level-decor.md).
+## [2026-10-23] code | Decor, phase 3: editor
+"Decor" mode on Tab: a palette with previews, a ghost under the cursor, floor / wall / ceiling supports (`placeDecor`), selection and moving with the mouse, rotation, tilt, roll, random rotation, copy, delete; shared undo with blocks, an erased cell takes the attached decor with it. Test "editor: decor".
+Pages: [design-level-decor.md](design-level-decor.md).
 
-## [2026-10-23] код | Декор, этап 4: комнаты и этаж
-Комнаты-заготовки «одеваются» проходимым декором (`dressRoom`), этаж переносит декор комнат со сдвигом крепления. Плейграунд научился `?map=dungeon&seed=…&floor=…` (README это уже обещал). Тест «этаж подземелья».
-Страницы: [design-level-decor.md](design-level-decor.md), [design-level-blocks.md](design-level-blocks.md).
+## [2026-10-23] code | Decor, phase 4: rooms and floor
+Room templates are "dressed" with walkable decor (`dressRoom`), the floor carries the rooms' decor over with the attachment offset. The playground learned `?map=dungeon&seed=…&floor=…` (the README already promised it). Test "dungeon floor".
+Pages: [design-level-decor.md](design-level-decor.md), [design-level-blocks.md](design-level-blocks.md).
 
-## [2026-10-23] источник | Скриншоты Minecraft Dungeons: свет и декор
-4 скриншота в `sources/mcd-lighting/`, конспект: тёплое низкое солнце, голубые тени, AO, tilt-shift, дымка, декор вне сетки, травяная бахрома.
-Страницы: [sources/mcd-lighting.md](sources/mcd-lighting.md), [style-lighting.md](style-lighting.md), [style-guide.md](style-guide.md).
+## [2026-10-23] source | Minecraft Dungeons screenshots: light and decor
+4 screenshots in `sources/mcd-lighting/`, summary: a warm low sun, blue shadows, AO, tilt-shift, haze, off-grid decor, grass fringe.
+Pages: [sources/mcd-lighting.md](sources/mcd-lighting.md), [style-lighting.md](style-lighting.md), [style-guide.md](style-guide.md).
 
-## [2026-10-23] код | Свет как в Unreal
-`src/lighting.ts` (`Lighting`): солнце ниже и теплее, небо заливает тени, GTAO без травы и листьев, bloom, цветокоррекция после ACES, дымка от камеры, tilt-shift. Плейграунд берёт свет оттуда; U — сравнить с простым светом. Тест «свет как в Unreal».
-Страницы: [style-lighting.md](style-lighting.md).
+## [2026-10-23] code | Unreal-style lighting
+`src/lighting.ts` (`Lighting`): the sun lower and warmer, the sky fills the shadows, GTAO without grass and leaves, bloom, colour grading after ACES, haze from the camera, tilt-shift. The playground takes its light from there; U — compare with simple light. Test "Unreal-style lighting".
+Pages: [style-lighting.md](style-lighting.md).
 
-## [2026-10-23] вики | Проверка и бриф
-Lint: битых ссылок нет, все страницы и источники есть в оглавлении. В шапку брифа — запись о декоре и свете.
-Страницы: [project-brief.md](project-brief.md).
+## [2026-10-23] wiki | Check and brief
+Lint: no broken links, all pages and sources are in the table of contents. A note about decor and light in the brief's header.
+Pages: [project-brief.md](project-brief.md).
 
-## [2026-10-23] код | Без tilt-shift
-Размытие верха и низа кадра убрано из `src/lighting.ts`: два полноэкранных прохода на полном разрешении съедали FPS. Остались солнце, небо, AO, bloom, цветокоррекция, дымка.
-Страницы: [style-lighting.md](style-lighting.md), [sources/mcd-lighting.md](sources/mcd-lighting.md).
+## [2026-10-23] code | No tilt-shift
+The blur of the top and bottom of the frame was removed from `src/lighting.ts`: two full-screen passes at full resolution were eating FPS. Sun, sky, AO, bloom, colour grading and haze remain.
+Pages: [style-lighting.md](style-lighting.md), [sources/mcd-lighting.md](sources/mcd-lighting.md).
 
-## [2026-10-23] код | Трава поверх блоков: бахрома и пучки
-Мешер сам добавляет травяную бахрому на края уступов и пучки травы с цветками пятнами (`fringe`, `tufts` в палитре, слой `detail` без теней). В плейграунде — холм в три яруса у западной стены. Тест «трава поверх блоков».
-Страницы: [design-level-blocks.md](design-level-blocks.md), [sources/mcd-lighting.md](sources/mcd-lighting.md).
+## [2026-10-23] code | Grass on top of blocks: fringe and tufts
+The mesher itself adds a grass fringe on ledge edges and grass tufts with flowers in patches (`fringe`, `tufts` in the palette, the `detail` layer without shadows). On the playground — a three-tier hill by the west wall. Test "grass on top of blocks".
+Pages: [design-level-blocks.md](design-level-blocks.md), [sources/mcd-lighting.md](sources/mcd-lighting.md).
 
-## [2026-10-23] код | Постобработка втрое дешевле
-Замер GPU: постобработка стоила 37 мс на кадр (ретина 2048 × 1536), из них AO ≈ 15 мс. Буфер постобработки теперь не плотнее DPR 1,5, AO — в половину буфера: 12,5 мс (без постобработки — 7,8). Тест света проверяет разрешения.
-Страницы: [style-lighting.md](style-lighting.md).
+## [2026-10-23] code | Post-processing three times cheaper
+GPU measurement: post-processing cost 37 ms per frame (retina 2048 × 1536), of which AO ≈ 15 ms. The post-processing buffer is now no denser than DPR 1.5, AO at half the buffer: 12.5 ms (without post-processing — 7.8). The lighting test checks the resolutions.
+Pages: [style-lighting.md](style-lighting.md).
 
-## [2026-10-23] код | Буфер постобработки — DPR 1,25
-`POST_MAX_DPR` 1,5 → 1,25: на ретине 2048 × 1536 буфер 1280 × 960, постобработка 10 мс — как кадр без неё.
-Страницы: [style-lighting.md](style-lighting.md).
+## [2026-10-23] code | Post-processing buffer — DPR 1.25
+`POST_MAX_DPR` 1.5 → 1.25: on retina 2048 × 1536 the buffer is 1280 × 960, post-processing 10 ms — same as a frame without it.
+Pages: [style-lighting.md](style-lighting.md).
 
-## [2026-10-23] код | Земля и трава в пастели Minecraft Dungeons
-Текстуры травы, земли, дорожки, песка, гравия, камня перерисованы мягкой заливкой (`softFill`) без пиксельного шума; пятна цвета по миру (`macroTint`, блоки `natural`); свет мягче (небо 2,0, солнце 2,2, тёплый отражённый снизу), цветокоррекция без подъёма насыщенности. Цвета откалиброваны по пикселям скриншотов: трава `#81ae51` при цели `#84aa58`, дорожка `#cfaa61` при `#cba060`.
-Страницы: [style-terrain.md](style-terrain.md), [style-lighting.md](style-lighting.md), [sources/mcd-lighting.md](sources/mcd-lighting.md).
+## [2026-10-23] code | Ground and grass in Minecraft Dungeons pastel
+The textures of grass, dirt, path, sand, gravel and stone were redrawn with a soft fill (`softFill`) without pixel noise; patches of colour across the world (`macroTint`, `natural` blocks); softer light (sky 2.0, sun 2.2, warm bounce from below), colour grading without a saturation boost. Colours calibrated by screenshot pixels: grass `#81ae51` against a target of `#84aa58`, path `#cfaa61` against `#cba060`.
+Pages: [style-terrain.md](style-terrain.md), [style-lighting.md](style-lighting.md), [sources/mcd-lighting.md](sources/mcd-lighting.md).
 
-## [2026-10-23] код | Кладка и листва в пастели Minecraft Dungeons
-Кирпич, булыжник, плиты, мох и листва перерисованы мягко (`softBricks`, `softCobble`, `overlayBlobs`, `softLeaves`), у руинного кирпича все варианты в сланцевой гамме, разброс между блоками камня 0,03. Калибровка по пикселям: булыжник `#aeacad` при цели `#a3a8ad`, плиты ≈ `#a6a6a6`, листва `#7a9948` при `#789a45`.
-Страницы: [style-terrain.md](style-terrain.md).
+## [2026-10-23] code | Masonry and foliage in Minecraft Dungeons pastel
+Brick, cobblestone, slabs, moss and foliage were redrawn softly (`softBricks`, `softCobble`, `overlayBlobs`, `softLeaves`), all variants of ruin brick are in a slate palette, the spread between stone blocks is 0.03. Pixel calibration: cobblestone `#aeacad` against a target of `#a3a8ad`, slabs ≈ `#a6a6a6`, foliage `#7a9948` against `#789a45`.
+Pages: [style-terrain.md](style-terrain.md).
 
-## [2026-10-23] код | Дороги как в Minecraft Dungeons
-Дорожка перекрашена по скриншоту (медиана `#cc9f5b` при цели `#c89c5d`, мягкие следы ≈ 0,3 м). Край трава/дорога рваный: маски `bleed` в мешере (0–8 px, полутон, островки) и неровный край по шуму в генераторе плейграунда; дороги плейграунда — 3 м. Тест травы проверяет наложения края.
-Страницы: [style-terrain.md](style-terrain.md), [design-level-blocks.md](design-level-blocks.md).
+## [2026-10-23] code | Roads as in Minecraft Dungeons
+The path was recoloured from the screenshot (median `#cc9f5b` against a target of `#c89c5d`, soft tracks ≈ 0.3 m). The grass/road edge is ragged: `bleed` masks in the mesher (0–8 px, half-tone, islands) and an uneven edge by noise in the playground generator; playground roads are 3 m. The grass test checks the edge overlays.
+Pages: [style-terrain.md](style-terrain.md), [design-level-blocks.md](design-level-blocks.md).
 
-## [2026-10-24] код | Мир: двор, река с водопадом, края уровня
-По скриншотам 10–12: блоки ограды и пола двора, сено в цветах скриншота; декор склада (ящики с полосами, стопка, ящичек, сундук, телега и телега с грузом, скамья), фонари двойной / настенный / низкий. Скалы (светлая, тёмная, с травой, ступени, полублок), водопад (слой `falls`, струи бегут вниз), река с течением (слой `river`, атрибут `flow` в шейдере), мост (настил, брус, столб), брызги и пена. Сборки `src/level/kit.ts`, зона «мир» за восточной стеной (`src/level/world-zone.ts`).
-Страницы: style-world.md (следующей записью).
+## [2026-10-24] code | World: yard, river with a waterfall, level edges
+From screenshots 10–12: fence and yard floor blocks, hay in the screenshot's colours; storage yard decor (striped crates, a stack, a small box, a chest, a cart and a loaded cart, a bench), double / wall / low lanterns. Cliffs (light, dark, with grass, stairs, half-block), waterfall (the `falls` layer, streams run downward), a river with a current (the `river` layer, the `flow` attribute in the shader), a bridge (deck, beam, post), splashes and foam. Kits `src/level/kit.ts`, the "world" zone beyond the east wall (`src/level/world-zone.ts`).
+Pages: style-world.md (in the next entry).
 
-## [2026-10-24] код | Мир: холмы, свечи с запечённым светом, портал
-По скриншотам 13–15: полублок травы (бахрома и пучки — с высоты полублока), пышная листва (куб и «шапки» над гранями), сухая трава, ромашки, ступени и полублок тропинки; свечи кучкой, в ряд и высокая — свет запекается в соседние блоки (атрибут `bake`, добавляется к излучению, без PointLight); портал — золотое сияние (слой `portal`, полосы бегут вверх, запечённый свет), рама, перемычка с инкрустацией, пол. Сборки: холм террасами (мягкий, с обрывом, с флорой), дерево, крепостная стена, портал. Тест «мир».
-Страницы: style-world.md (следующей записью).
+## [2026-10-24] code | World: hills, candles with baked light, portal
+From screenshots 13–15: a grass half-block (fringe and tufts — at half-block height), lush foliage (a cube and "caps" over the faces), dry grass, daisies, path stairs and half-block; candles in a cluster, in a row and a tall one — light is baked into neighbouring blocks (the `bake` attribute, added to emission, without PointLight); portal — golden glow (the `portal` layer, stripes run upward, baked light), frame, lintel with inlay, floor. Kits: a terraced hill (soft, with a drop, with flora), a tree, a fortress wall, a portal. Test "world".
+Pages: style-world.md (in the next entry).
 
-## [2026-10-24] источник | Скриншоты мира Minecraft Dungeons
-7 скриншотов в `sources/mcd-world/` (дороги, двор, водопад и мост, скалы, холмы и свечи, портал, холмы), конспект с цветами по пикселям. Новая страница наборов [style-world.md](style-world.md); строки про новые слои и декор — в design-level-blocks и design-level-decor. Цвет реки вернул на середину двух замеров.
-Страницы: [sources/mcd-world.md](sources/mcd-world.md), [style-world.md](style-world.md), [design-level-blocks.md](design-level-blocks.md), [design-level-decor.md](design-level-decor.md).
+## [2026-10-24] source | Minecraft Dungeons world screenshots
+7 screenshots in `sources/mcd-world/` (roads, yard, waterfall and bridge, cliffs, hills and candles, portal, hills), a summary with colours by pixel. New kits page [style-world.md](style-world.md); rows about the new layers and decor — in design-level-blocks and design-level-decor. The river colour returned to the middle of two measurements.
+Pages: [sources/mcd-world.md](sources/mcd-world.md), [style-world.md](style-world.md), [design-level-blocks.md](design-level-blocks.md), [design-level-decor.md](design-level-decor.md).
 
-## [2026-10-24] код | Холмы-плиты вместо пирамидок
-По скриншотам 16, 17: `hill` переписан — широкие плиты с перепадом в 1 блок, углы срезаны ступенчатой диагональю; новая сборка `plateaus` — ландшафт по карте высот (крупный шум, уровни, сглаживание `settle`, скала на перепадах ≥ 2); пандусы из полублоков, достижимость площадок гарантирована поиском в ширину. Зона «мир»: ландшафт-плато и холм-плиты с порталом. Тест «мир» проверяет подъём на плато.
-Страницы: [style-world.md](style-world.md), [sources/mcd-world.md](sources/mcd-world.md).
+## [2026-10-24] code | Slab hills instead of little pyramids
+From screenshots 16, 17: `hill` rewritten — wide slabs with a 1-block step, corners cut with a stepped diagonal; a new kit `plateaus` — terrain from a height map (coarse noise, levels, `settle` smoothing, rock on steps ≥ 2); ramps from half-blocks, reachability of the platforms is guaranteed by breadth-first search. The "world" zone: a plateau terrain and slab hills with a portal. The "world" test checks climbing onto the plateau.
+Pages: [style-world.md](style-world.md), [sources/mcd-world.md](sources/mcd-world.md).
 
-## [2026-10-24] код | Рельеф: проходимый ландшафт и непроходимые скалы
-Холмы разделены на две сущности. Ландшафт (`landscape`, `hill`) — плиты в 4 слоя по 0,5 м (блок или полублок травы), извилистые контуры по шуму с искажением, сглаживание по уровням, перепад между соседями не больше слоя — проходим отовсюду без лестниц; бока слоёв местами каменные. Скала (`rockOutcrop`) — непроходимый массив; портал встроен в скалу к северу от дороги, выход прорублен к дороге. Лестницы и пандусы доступа из ландшафта убраны.
-Страницы: [style-world.md](style-world.md).
+## [2026-10-24] code | Relief: walkable terrain and impassable cliffs
+Hills split into two entities. Terrain (`landscape`, `hill`) — slabs in 4 layers of 0.5 m (a grass block or half-block), winding contours by distorted noise, smoothing by level, the step between neighbours no more than one layer — walkable from anywhere without stairs; the sides of the layers are stone in places. Cliff (`rockOutcrop`) — an impassable mass; the portal is built into the cliff north of the road, the exit is cut toward the road. Access stairs and ramps from the terrain were removed.
+Pages: [style-world.md](style-world.md).
 
-## [2026-10-24] код | Ландшафт в редакторе
-Третий режим редактора «Ландшафт»: ползунки размера по X и Z, слоёв по 0,5 м, крупности и доли камня, кнопка «Случайно» (новые изгибы краёв и углов); клик ставит кусок, ползунки перестраивают последний на месте, отмена — одной правкой. У `landscape` появился потолок `max`. Тест «редактор: ландшафт».
-Страницы: [style-world.md](style-world.md).
+## [2026-10-24] code | Terrain in the editor
+A third editor mode "Terrain": sliders for size in X and Z, 0.5 m layers, coarseness and stone share, a "Random" button (new bends of edges and corners); a click places a piece, the sliders rebuild the last one in place, undo — as one edit. `landscape` got a `max` ceiling. Test "editor: terrain".
+Pages: [style-world.md](style-world.md).
 
-## [2026-10-24] код | Редактор: выбор и правка кусков ландшафта
-Кусок ландшафта стал объектом карты: `meta.lands` хранит центр, параметры и изменённые клетки. В режиме «Ландшафт» клик по куску выбирает его (зелёная рамка с заливкой), ползунки и «Случайно» правят выбранный, стрелки двигают, Del убирает; ручные блоки поверх куска перестройка сохраняет; подряд идущие правки куска — одна запись в отмене. Тест «редактор: ландшафт» проверяет выбор, правку, сдвиг, удаление, JSON и отмену.
-Страницы: [style-world.md](style-world.md).
+## [2026-10-24] code | Editor: selecting and editing terrain pieces
+A terrain piece became a map object: `meta.lands` stores the centre, parameters and changed cells. In "Terrain" mode a click on a piece selects it (green frame with fill), the sliders and "Random" edit the selected one, arrows move it, Del removes it; manual blocks on top of a piece survive the rebuild; consecutive edits of a piece — one undo record. The "editor: terrain" test checks selection, editing, moving, deletion, JSON and undo.
+Pages: [style-world.md](style-world.md).
 
-## [2026-10-24] код | Редактор в духе Unreal Engine
-Новое окно: меню и панель инструментов, префабы с категориями, поиском и превью, вьюпорты 1/2/4 вида, аутлайнер, детали, настройки мира. Выделение кликом и рамкой, гизмо переноса и поворота по осям, отмена правок свойств. Настройки мира (`meta.world`, `src/world.ts`), погода (`src/weather.ts`), поставленный свет и взгляд точки появления — в карте и в игре. Вкладка «Оружие»: реестр `src/weapons.ts`, превью, характеристики, баланс, `Knight.setWeapon`.
-Страницы: [design-editor.md](design-editor.md), [design-level-blocks.md](design-level-blocks.md), [design-level-decor.md](design-level-decor.md), [style-lighting.md](style-lighting.md).
+## [2026-10-24] code | Editor in the spirit of Unreal Engine
+A new window: menu and toolbar, prefabs with categories, search and previews, viewports with 1/2/4 views, outliner, details, world settings. Selection by click and marquee, translate and rotate gizmo along axes, undo of property edits. World settings (`meta.world`, `src/world.ts`), weather (`src/weather.ts`), placed light and the spawn point's view direction — in the map and in the game. The "Weapons" tab: registry `src/weapons.ts`, preview, stats, balance, `Knight.setWeapon`.
+Pages: [design-editor.md](design-editor.md), [design-level-blocks.md](design-level-blocks.md), [design-level-decor.md](design-level-decor.md), [style-lighting.md](style-lighting.md).
 
-## [2026-10-24] вики | Как запускать тесты
-Рецепт прогона Playwright: `mise exec` для node и установленный Google Chrome через `PW_CHROMIUM`; `npx playwright install` в песочнице агента виснет без сети. Рецепт продублирован в корневых `AGENTS.md` и `CLAUDE.md`, README и бриф ссылаются на него.
-Страницы: [dev-testing.md](dev-testing.md), [project-brief.md](project-brief.md).
+## [2026-10-24] wiki | How to run the tests
+The Playwright recipe: `mise exec` for node and the installed Google Chrome via `PW_CHROMIUM`; `npx playwright install` hangs in the agent sandbox without network. The recipe is duplicated in the root `AGENTS.md` and `CLAUDE.md`, the README and the brief link to it.
+Pages: [dev-testing.md](dev-testing.md), [project-brief.md](project-brief.md).
 
-## [2026-10-24] код | HUD и инвентарь в духе Minecraft Dungeons
-Новый HUD (`src/hud/hud.ts`): панель с очками зачарования, инвентарём, тремя артефактами и полосой душ, сердцем и жизнями, зельем, картой, перекатом, стрелами, малиной и опытом; эффекты и задание сверху. Инвентарь (`src/hud/inventory.ts`): герой в 3D с надетым, вкладки, сетка, карточка, зачарования ромбами, разбор. Предметы и прокачка — `src/items.ts`, бой — `src/gear.ts` (стрелы на ПКМ, артефакты, зелье, души, уровни), иконки кодом — `src/icons.ts`. Клавиши: E — зелье, F — использовать, M — карта, F9 — звук. Сундуки дают стрелы и предмет. Тесты: HUD, снаряжение в бою, инвентарь.
-Страницы: [design-inventory.md](design-inventory.md).
+## [2026-10-24] code | HUD and inventory in the spirit of Minecraft Dungeons
+New HUD (`src/hud/hud.ts`): a bar with enchantment points, inventory, three artifacts and a soul bar, heart and lives, potion, map, dodge roll, arrows, raspberries and experience; effects and the objective at the top. Inventory (`src/hud/inventory.ts`): the hero in 3D with equipped gear, tabs, a grid, a card, enchantments as diamonds, salvage. Items and levelling — `src/items.ts`, combat — `src/gear.ts` (arrows on RMB, artifacts, potion, souls, levels), icons by code — `src/icons.ts`. Keys: E — potion, F — use, M — map, F9 — sound. Chests give arrows and an item. Tests: HUD, gear in combat, inventory.
+Pages: [design-inventory.md](design-inventory.md).
 
-## [2026-10-24] код | Броня и лук на герое, кузнец и торговец, карта в стиле Diablo
-Броня видна на герое (`ArmorLook`, `Knight.setArmor`), лук — в левой руке при выстреле (`Knight.shootPose`). Лавки кузнеца и торговца на плейграунде (`src/merchants.ts`) и окно торговли (`src/hud/shop.ts`): случайные вещи за малину, перековка +1 к силе, стрелы, особый товар. Карта с туманом войны (`src/hud/automap.ts`): мини-карта, Tab — поверх игры, M — полная. Чёрные квадраты у заклинаний: GTAO рисовал спрайты вспышек в нормалях — теперь прячет их; взрывы артефактов без дыма.
-Страницы: [design-inventory.md](design-inventory.md), [style-lighting.md](style-lighting.md).
+## [2026-10-24] code | Armour and bow on the hero, blacksmith and merchant, Diablo-style map
+Armour is visible on the hero (`ArmorLook`, `Knight.setArmor`), the bow — in the left hand when shooting (`Knight.shootPose`). Blacksmith and merchant shops on the playground (`src/merchants.ts`) and the trade window (`src/hud/shop.ts`): random items for raspberries, reforging +1 power, arrows, a special item. A map with fog of war (`src/hud/automap.ts`): mini-map, Tab — over the game, M — full. Black squares near spells: GTAO was drawing flash sprites into the normals — now it hides them; artifact explosions without smoke.
+Pages: [design-inventory.md](design-inventory.md), [style-lighting.md](style-lighting.md).
 
-## [2026-10-24] код | Волшебные сундуки, яркие трофеи и малина
-Сундук заменён: синий с золотом, радужные камни, свет из-под крышки; открытие — тряска, вспышка, столб света, конфетти, лут фонтаном. Трофеи — столб света с белой сердцевиной, звезда лучей, кольца; малина — крупная ягода с ореолом, подбор со вспышкой и звуком по гамме. Звуки сокровищ с эхом (`src/audio.ts`), общие текстуры свечения — `src/loot-look.ts`.
-Страницы: [design-inventory.md](design-inventory.md).
+## [2026-10-24] code | Magic chests, bright trophies and raspberries
+The chest replaced: blue with gold, rainbow gems, light from under the lid; opening — shake, flash, a pillar of light, confetti, loot in a fountain. Trophies — a pillar of light with a white core, a star of rays, rings; raspberries — a large berry with a halo, pickup with a flash and a sound on the scale. Treasure sounds with echo (`src/audio.ts`), shared glow textures — `src/loot-look.ts`.
+Pages: [design-inventory.md](design-inventory.md).
 
-## [2026-10-24] код | Заклинания: 4 стартовых с анатомией каста
-Новая страница дизайна магии: каркас, 20 заклинаний с боссов, 5 аур, анатомия каста. Сделаны искра, огненный шар, ледяной дождь и слабое лечение (`src/spells.ts`): заряд удержанием 1/2/3, круг рун и гул, удар с засветкой, светом, стоп-кадром и «тишиной перед ударом», следы на полу. В `fx.ts` — `screenFlash`, `light`, `decal`, `hitstop`; в `audio.ts` — шина с `duck`, `hum`, звуки заклинаний. Стартовый набор: огненный шар, искра, лечение; заклинания не выпадают из сундуков. Тест «заклинания».
-Страницы: [design-spells.md](design-spells.md), [design-inventory.md](design-inventory.md).
+## [2026-10-24] code | Spells: 4 starters with the anatomy of a cast
+A new magic design page: the framework, 20 spells from bosses, 5 auras, the anatomy of a cast. Done: spark, fireball, ice rain and weak heal (`src/spells.ts`): charge by holding 1/2/3, a rune circle and a hum, an impact with a flash, light, freeze-frame and "silence before the strike", marks on the floor. In `fx.ts` — `screenFlash`, `light`, `decal`, `hitstop`; in `audio.ts` — a bus with `duck`, `hum`, spell sounds. The starter set: fireball, spark, heal; spells do not drop from chests. Test "spells".
+Pages: [design-spells.md](design-spells.md), [design-inventory.md](design-inventory.md).
 
-## [2026-10-24] код | Заклинания: круги каста по школам и новый звук
-Круг каста из 5–7 слоёв на школу (кольца, квадрат и ромб, гексаграмма, снежинка, пламя, цветок, символы) раскрывается ступенями по заряду, с третьей — кружат символы, с четвёртой — стена лучей (`src/sigils.ts`). Звук переписан (`src/spell-audio.ts`): пентатоника, тёплые голоса, низ через насыщение, компрессор и реверберация, заряд ступенями с пульсом и фанфарой полного заряда.
-Страницы: [design-spells.md](design-spells.md).
+## [2026-10-24] code | Spells: cast circles by school and new sound
+A cast circle of 5–7 layers per school (rings, square and diamond, hexagram, snowflake, flame, flower, symbols) unfolds in steps by charge, from the third — symbols circle, from the fourth — a wall of rays (`src/sigils.ts`). The sound rewritten (`src/spell-audio.ts`): pentatonic, warm voices, lows through saturation, compressor and reverb, charge in steps with a pulse and a full-charge fanfare.
+Pages: [design-spells.md](design-spells.md).
 
-## [2026-10-24] код | Ауры: четвёртое гнездо, пять аур, вспышка ×3
-Кровавый пакт, Бастион, Ярость, Ясность, Терновый венец (`src/auras.ts`): тусклый круг школы под героем и свой знак, урон копит шкалу, R — вспышка ×3 на 5 с с большим кругом и аккордом. Гнездо в HUD и инвентаре, вкладка «Ауры», иконки, звуки. Пока боссов нет — ауры лежат в инвентаре. Тест «ауры».
-Страницы: [design-spells.md](design-spells.md).
+## [2026-10-24] code | Auras: a fourth slot, five auras, ×3 burst
+Blood Pact, Bastion, Fury, Clarity, Crown of Thorns (`src/auras.ts`): a dim school circle under the hero and its own sign, damage fills a gauge, R — a ×3 burst for 5 s with a large circle and a chord. A slot in the HUD and inventory, the "Auras" tab, icons, sounds. While there are no bosses — auras lie in the inventory. Test "auras".
+Pages: [design-spells.md](design-spells.md).
 
-## [2026-10-24] код | 20 заклинаний с боссов
-Реестр `src/magic/` (`BossSpell`: школа, ступень пафоса, `cast`) и группы: огонь и лёд, молния и свет, тьма и аркана, земля — с иконками. Новые школы свет, тьма, земля, аркана: цвета, узоры кругов (лучи, пентаграмма, спираль, око, камни, трещины, мечи), аккорды заряда. Пафос по редкости `Spells.pomp`: стоп-кадр, замедление, ударные волны, затемнение мира, отъезд камеры, крупное название, хор (`fx.slowmo`, `darken`, `zoom`, `title`). Облик титана — усиление героя через `Spells.buff`. Пока боссов нет, заклинания не выпадают. Тест «заклинания с боссов».
-Страницы: [design-spells.md](design-spells.md).
+## [2026-10-24] code | 20 spells from bosses
+The registry `src/magic/` (`BossSpell`: school, pomp tier, `cast`) and groups: fire and ice, lightning and light, darkness and arcana, earth — with icons. New schools light, darkness, earth, arcana: colours, circle patterns (rays, pentagram, spiral, eye, stones, cracks, swords), charge chords. Pomp by rarity `Spells.pomp`: freeze-frame, slow motion, shockwaves, world darkening, camera pull-back, a large title, choir (`fx.slowmo`, `darken`, `zoom`, `title`). Titan form — hero buff via `Spells.buff`. While there are no bosses, spells do not drop. Test "spells from bosses".
+Pages: [design-spells.md](design-spells.md).
 
-## [2026-10-24] код | Обычные заклинания — у торговца за малину
-Пять обычных заклинаний помечены `spell: 'shop'`: торговец продаёт их четвёртым товаром (клавиша 4, цена 110 + 12 · сила), с боссов и в бесплатный набор они не попадают; в инвентаре с начала лежат только 15 заклинаний с боссов. Тест торговца проверяет покупку заклинания.
-Страницы: [design-spells.md](design-spells.md), [design-inventory.md](design-inventory.md).
+## [2026-10-24] code | Common spells — at the merchant for raspberries
+Five common spells marked `spell: 'shop'`: the merchant sells them as the fourth item (key 4, price 110 + 12 · power), they do not come from bosses or in the free set; the inventory holds only the 15 boss spells from the start. The merchant test checks buying a spell.
+Pages: [design-spells.md](design-spells.md), [design-inventory.md](design-inventory.md).
 
-## [2026-10-25] код | Стражи Малины: список и первый — Багровый дракон
-Согласован список стражей (8 мини-боссов, 5 боссов с выбором из двух гримуаров, 3 финальных). Сделан каркас `src/bosses/` (цель, полоса, арена с невидимым квадратом и решётками, гримуар) и Багровый дракон: укус, хвост, дыхание с горящим полом, «Небесный молот», оглушение с открытым сердцем ×2, фаза 2, гримуар. Арена — за северной стеной плейграунда; тест Playwright «страж».
-Страницы: [design-bosses.md](design-bosses.md), [design-spells.md](design-spells.md).
+## [2026-10-25] code | Wardens of Malina: the list and the first — the Crimson Dragon
+The list of wardens agreed (8 mini-bosses, 5 bosses with a choice of two grimoires, 3 finals). The `src/bosses/` framework done (target, bar, arena with an invisible square and grates, grimoire) and the Crimson Dragon: bite, tail, breath with burning floor, "Sky Hammer", stun with an open heart ×2, phase 2, grimoire. The arena — beyond the north wall of the playground; Playwright test "warden".
+Pages: [design-bosses.md](design-bosses.md), [design-spells.md](design-spells.md).
 
-## [2026-10-25] код | Скелет дракона по Эндер-дракону
-Дракон был несбалансирован — короткая шея, крылья-доски. Общий `DragonRig` по пропорциям Эндер-дракона: корпус 24 × 24 × 64, шея 5 и хвост 12 звеньев с пластинами, голова с мордой и челюстью, крылья из двух звеньев со ступенчатой перепонкой, IK задних лап; цвета — `DragonLook`. Багровый дракон переведён на него, дистанции атак подогнаны под новую длину.
-Страницы: [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Dragon skeleton after the Ender Dragon
+The dragon was unbalanced — a short neck, plank wings. A shared `DragonRig` with the Ender Dragon's proportions: body 24 × 24 × 64, neck of 5 and tail of 12 segments with plates, a head with snout and jaw, wings of two segments with a stepped membrane, IK on the hind legs; colours — `DragonLook`. The Crimson Dragon moved onto it, attack distances adjusted to the new length.
+Pages: [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Дракон: лапы рептилии и ловкость
-Колени задних лап смотрят назад, стоя ноги согнуты; передние — локтем назад. Дракон вдвое быстрее, кружит боком на средней дистанции, прыгает: отскок назад (герой под мордой, после хвоста), вбок после укуса, бросок на героя издалека. Тест «страж ловкий».
-Страницы: [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Dragon: reptile legs and agility
+The hind legs' knees face backward, standing legs are bent; the front ones — elbow backward. The dragon is twice as fast, circles sideways at medium range, jumps: a back-hop (the hero under the snout, after the tail), sideways after a bite, a lunge at the hero from afar. Test "agile warden".
+Pages: [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Дракон: стойка рептилии
-Дракон стоял высоко на прямых ногах — анатомически неверно. Теперь как ящерица: брюхо в ~0,7 м от земли (лёжа — на земле), лапы раскинуты вбок, колени и локти в стороны, все четыре на земле; IK во фронтальной плоскости, ходьба диагональными парами, корпус и хвост изгибаются. Дыхание направлено положе под низкую голову.
-Страницы: [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Dragon: reptile stance
+The dragon stood high on straight legs — anatomically wrong. Now like a lizard: belly ~0.7 m above the ground (lying — on the ground), legs splayed sideways, knees and elbows outward, all four on the ground; IK in the frontal plane, walking in diagonal pairs, body and tail bend. Breath aimed flatter under the low head.
+Pages: [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Драконы убраны, восемь мини-боссов в духе MCD
-Дракон удалён (`crimson-dragon.ts`, `dragon-rig.ts`). Новый список стражей — схематичные, не больше 8 подвижных частей. Каркас `MiniBoss` (метки, снаряды, зоны, подручные, ярость, оглушение); восемь мини-боссов на восьми аренах зала стражей; новое заклинание «Разрыв» (`blink`) с Кота-могильщика. Тесты `страж «id»` для каждого.
-Страницы: [design-bosses.md](design-bosses.md), [design-spells.md](design-spells.md).
+## [2026-10-25] code | Dragons removed, eight mini-bosses in the spirit of MCD
+The dragon deleted (`crimson-dragon.ts`, `dragon-rig.ts`). A new list of wardens — schematic, no more than 8 moving parts. The `MiniBoss` framework (markers, projectiles, zones, minions, rage, stun); eight mini-bosses on eight arenas of the wardens' hall; a new spell "Rift" (`blink`) from the Gravedigger Cat. Tests `warden "id"` for each.
+Pages: [design-bosses.md](design-bosses.md), [design-spells.md](design-spells.md).
 
-## [2026-10-25] код | Малина со стражей и пять боссов этажа
-Из повергнутого стража бьёт фонтан малины (`Props.fountain`): здоровье ÷ 20 у мини-боссов, ÷ 10 у боссов этажа. Боссы этажа (`tier = 'boss'`) роняют пару гримуаров — легендарное заклинание или аура, взял один — второй гаснет. Пять боссов на аренах 27 × 24 м дальше по коридору зала: Рдяный Змей, Громовой Зверь, Королева Звёздного Сада, Судия Ордена, Генерал Рдян. Тесты `страж «id»` — для всех тринадцати.
-Страницы: [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Raspberries from wardens and five floor bosses
+A fountain of raspberries bursts from a defeated warden (`Props.fountain`): health ÷ 20 for mini-bosses, ÷ 10 for floor bosses. Floor bosses (`tier = 'boss'`) drop a pair of grimoires — a legendary spell or aura, take one — the other goes out. Five bosses on 27 × 24 m arenas further down the hall corridor: the Ruddy Serpent, the Thunder Beast, the Queen of the Star Garden, the Judge of the Order, General Rdyan. Tests `warden "id"` — for all thirteen.
+Pages: [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Три финальных стража
-Хозяйка Вечной Зимы, Павшая Звезда, Первый Садовник (`tier = 'final'`) — на самых больших аренах (31 × 30 м) в конце коридора зала. На 50 % превращение с крупным названием, затемнением и отъездом камеры; роняют мифические гримуары и 530–580 малины. Тесты `страж «id»` — для всех шестнадцати.
-Страницы: [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Three final wardens
+The Mistress of Eternal Winter, the Fallen Star, the First Gardener (`tier = 'final'`) — on the largest arenas (31 × 30 m) at the end of the hall corridor. At 50 % a transformation with a large title, darkening and camera pull-back; they drop mythic grimoires and 530–580 raspberries. Tests `warden "id"` — for all sixteen.
+Pages: [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Масштаб стражей от уровня и числа игроков
-`src/bosses/scaling.ts`: здоровье ×(1 + 0,15·(ур − 1))·(1 + 0,75·(игроков − 1)), урон ×(1 + 0,1·(ур − 1))·(1 + 0,1·(игроков − 1)), малина ×(1 + 0,1·(ур − 1))·игроков. Весь урон стражей домножается в одной точке — обёртке `hurtHero` в `Boss`. На плейграунде уровень — по герою, в панели F1 — уровень и число игроков; полоса показывает «ур. · игроков». Тест «масштаб стражей».
-Страницы: [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Warden scaling by level and number of players
+`src/bosses/scaling.ts`: health ×(1 + 0.15·(lvl − 1))·(1 + 0.75·(players − 1)), damage ×(1 + 0.1·(lvl − 1))·(1 + 0.1·(players − 1)), raspberries ×(1 + 0.1·(lvl − 1))·players. All warden damage is multiplied at a single point — the `hurtHero` wrapper in `Boss`. On the playground the level follows the hero, in the F1 panel — level and number of players; the bar shows "lvl · players". Test "warden scaling".
+Pages: [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Масштаб стражей мягче
-Со старыми формулами стражи на высоких уровнях выходили сложными, как в Dark Souls. Теперь здоровье +6 % за уровень и +50 % за игрока, урон +3 % за уровень и от игроков не растёт, малина +5 % за уровень; базовые числа стражей (уровень 1, соло) не тронуты — проверены игрой. Тест «масштаб стражей» — по новым числам.
-Страницы: [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Gentler warden scaling
+With the old formulas, wardens at high levels came out as hard as Dark Souls. Now health +6 % per level and +50 % per player, damage +3 % per level and does not grow with players, raspberries +5 % per level; the wardens' base numbers (level 1, solo) untouched — verified by play. The "warden scaling" test — on the new numbers.
+Pages: [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Замеры и устранение подлагиваний: прогрев, пулы, экземпляры, фонтан волнами
-Оверлей F8 (`src/dev/perf.ts`) и перф-тест `tests/perf.spec.ts` (`PERF_GPU=1` — на настоящем GPU). Прогрев шейдеров и текстур при загрузке (`src/fx-zoo.ts`), частицы и временные тела из пулов (`src/pool.ts`, `src/fx.ts`), молнии и огненные кубы экземплярами (`src/fx-bolts.ts`), фонтан малины волнами с капом 60 кучек и освобождением подобранного (`src/props.ts`), общие материалы гримуара, тени раз в кадр и AO дешевле (`src/lighting.ts`), DOM без полноэкранных фильтров, бюджет 32 аудиоголосов (`src/audio.ts`). Худший кадр смерти стража на GPU 52 → 12,7 мс, шквала заклинаний 30,7 → 9,5 мс; программы и текстуры в бою не растут.
-Страницы: [dev-performance.md](dev-performance.md), [dev-testing.md](dev-testing.md).
+## [2026-10-25] code | Measuring and removing stutter: warm-up, pools, instances, fountain in waves
+The F8 overlay (`src/dev/perf.ts`) and the perf test `tests/perf.spec.ts` (`PERF_GPU=1` — on the real GPU). Warm-up of shaders and textures at load (`src/fx-zoo.ts`), particles and temporary bodies from pools (`src/pool.ts`, `src/fx.ts`), lightning and fire cubes as instances (`src/fx-bolts.ts`), the raspberry fountain in waves with a cap of 60 piles and release of picked-up ones (`src/props.ts`), shared grimoire materials, shadows once per frame and cheaper AO (`src/lighting.ts`), DOM without full-screen filters, a budget of 32 audio voices (`src/audio.ts`). The worst frame of a warden's death on the GPU 52 → 12.7 ms, of a spell barrage 30.7 → 9.5 ms; programs and textures do not grow in combat.
+Pages: [dev-performance.md](dev-performance.md), [dev-testing.md](dev-testing.md).
 
-## [2026-10-25] код | Стоимость кадра: уровень раз в кадр, погода и светлячки на GPU, индексированный мешер
-`view.sync/update` ушли из тика в `render()`; погода (`src/weather.ts`) и светлячки считаются в вершинном шейдере по сиду и времени; мешер (`src/level/mesher.ts`) строит индексированную геометрию с общими вершинами форм и атрибутами по слоям — данные вершин плейграунда 45,9 → 21,6 МБ; путь героя в оверлее и миникарта без покадровых аллокаций.
-Страницы: [dev-performance.md](dev-performance.md).
+## [2026-10-25] code | Frame cost: level once per frame, weather and fireflies on the GPU, indexed mesher
+`view.sync/update` moved from the tick into `render()`; weather (`src/weather.ts`) and fireflies are computed in the vertex shader by seed and time; the mesher (`src/level/mesher.ts`) builds indexed geometry with shared shape vertices and per-layer attributes — playground vertex data 45.9 → 21.6 MB; the hero's path in the overlay and the mini-map without per-frame allocations.
+Pages: [dev-performance.md](dev-performance.md).
 
-## [2026-10-25] код | Регионы 32 × 32 м: процедурный мир, стриминг, бюджет мешинга, сохранение состояния
-`?map=world&seed=N`: мир генерируется регионами по сиду (`src/world/gen.ts`), менеджер (`src/world/regions.ts`) держит квадрат радиуса 2 вокруг героя и выгружает дальние с задержкой; мешер строит чанки с бюджетом 4 мс на кадр; ящики, бочки и сундуки — сущности региона со стабильными id, их состояние и разведка карты сохраняются в localStorage; карта (`src/hud/automap.ts`) — тайлами и растёт с миром. Тест `tests/world.spec.ts`.
-Страницы: [dev-performance.md](dev-performance.md).
+## [2026-10-25] code | 32 × 32 m regions: procedural world, streaming, meshing budget, state saving
+`?map=world&seed=N`: the world is generated in regions by seed (`src/world/gen.ts`), the manager (`src/world/regions.ts`) keeps a square of radius 2 around the hero and unloads distant ones with a delay; the mesher builds chunks with a budget of 4 ms per frame; crates, barrels and chests are region entities with stable ids, their state and map exploration are saved in localStorage; the map (`src/hud/automap.ts`) — in tiles and grows with the world. Test `tests/world.spec.ts`.
+Pages: [dev-performance.md](dev-performance.md).
 
-## [2026-10-25] решение | Мир — фиксированная карта, регионы стримят её в сцену
-Бесконечного мира не будет: карта фиксированная (сгенерированная заранее), 512 × 512 м и больше. Регионы 32 × 32 м остаются как разбиение: `src/world/map-source.ts` копирует чанки, декор и сущности карты в живой уровень вокруг игроков и убирает за радиусом; большая карта стримится сама, любая — с `?stream=1`. Процедурный генератор остаётся отладочным источником.
-Страницы: [dev-performance.md](dev-performance.md).
+## [2026-10-25] decision | The world is a fixed map, regions stream it into the scene
+There will be no infinite world: the map is fixed (generated in advance), 512 × 512 m and larger. 32 × 32 m regions remain as the partitioning: `src/world/map-source.ts` copies the map's chunks, decor and entities into the live level around the players and removes them beyond the radius; a large map streams by itself, any map — with `?stream=1`. The procedural generator remains a debugging source.
+Pages: [dev-performance.md](dev-performance.md).
 
 
-## [2026-10-25] вики | План рядовых мобов
-Новая страница: 30 рядовых мобов Ордена Малины в шести семьях — маги (лечит, атакует, призывает), рыцари малины, порождения куста, павшие садовники, звери, конструкты. Общие правила, роли, очки орды, первая партия из 8.
-Страницы: [design-mobs.md](design-mobs.md).
+## [2026-10-25] wiki | Plan for rank-and-file mobs
+A new page: 30 rank-and-file mobs of the Raspberry Order in six families — mages (heals, attacks, summons), raspberry knights, bush spawn, fallen gardeners, beasts, constructs. General rules, roles, horde points, the first batch of 8.
+Pages: [design-mobs.md](design-mobs.md).
 
-## [2026-10-25] код | Рядовые мобы: первая партия
-Класс `Mob` и стая `Pack` (`src/mobs/`), метки, снаряды и зоны вынесены из `MiniBoss` в `Field`. Восемь мобов: целительница, жгучий маг, призыватель, оруженосец, щитоносец, малинёныш, увядший садовник, малиновый волк. Витрина в F1, малина с павших, масштаб как у стражей. Два теста.
-Страницы: [design-mobs.md](design-mobs.md), [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Rank-and-file mobs: first batch
+The `Mob` class and the `Pack` (`src/mobs/`), markers, projectiles and zones moved out of `MiniBoss` into `Field`. Eight mobs: healer, searing mage, summoner, squire, shield-bearer, raspberry whelp, withered gardener, raspberry wolf. Showcase in F1, raspberries from the fallen, scaling as for wardens. Two tests.
+Pages: [design-mobs.md](design-mobs.md), [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Казарма Ордена на плейграунде
-Комната за западной стеной (проход z −1…1): 16 мобов первой партии на постах, группы просыпаются по одной, после выхода гарнизон возвращается. Карта пересобрана (`npm run map:playground`). У садовника мотыга теперь в руках. Тест «казарма Ордена».
-Страницы: [design-mobs.md](design-mobs.md).
+## [2026-10-25] code | Order barracks on the playground
+A room beyond the west wall (passage z −1…1): 16 mobs of the first batch at their posts, groups wake one at a time, after leaving the garrison returns. The map rebuilt (`npm run map:playground`). The gardener now holds the hoe in his hands. Test "Order barracks".
+Pages: [design-mobs.md](design-mobs.md).
 
-## [2026-10-25] код | Рядовые мобы: вторая партия, Терновый сад
-Рыцари: копейщик, арбалетчик, знаменосец (знамя воодушевляет рыцарей, `rally`), молотобоец. Порождения куста: слизень (делится дважды), колючий клубок, лоза-хлыст, бутон-плевун, терновое чудище. Комнаты мобов обобщены (`MOB_ROOMS`): казарма расширена под гвардию, новая комната «Терновый сад». Тест «мобы второй партии», тесты мобов и комнат расширены.
-Страницы: [design-mobs.md](design-mobs.md).
+## [2026-10-25] code | Rank-and-file mobs: second batch, Thorn Garden
+Knights: spearman, crossbowman, standard-bearer (the banner inspires knights, `rally`), hammerer. Bush spawn: slime (splits twice), thorn ball, whip vine, spitter bud, thorn monster. Mob rooms generalised (`MOB_ROOMS`): the barracks extended for the guard, a new room "Thorn Garden". Test "second batch mobs", mob and room tests extended.
+Pages: [design-mobs.md](design-mobs.md).
 
-## [2026-10-25] код | Рядовые мобы: третья партия, погост и логово
-Павшие садовники: сборщик с серпом, костяной лучник, огонёк-плакальщик (сквозь стены), пугало с воронами. Звери: кабанчик, жук-ягодник (под землёй), лозоплёт (сеть замедляет), улей со шмелями. В `Mob` — `dash`, `ghost`, `vanish`, `heroSlow`; `Field.shot`; у героя `slow`. Комнаты «Старый погост» (проход в западной стене, z −17…−15) и «Звериное логово». Тест «мобы третьей партии».
-Страницы: [design-mobs.md](design-mobs.md).
+## [2026-10-25] code | Rank-and-file mobs: third batch, graveyard and den
+Fallen gardeners: reaper with a sickle, bone archer, mourner wisp (through walls), scarecrow with crows. Beasts: little boar, berry beetle (underground), vine-weaver (the net slows), a hive with bumblebees. In `Mob` — `dash`, `ghost`, `vanish`, `heroSlow`; `Field.shot`; the hero has `slow`. Rooms "Old Graveyard" (passage in the west wall, z −17…−15) and "Beast Den". Test "third batch mobs".
+Pages: [design-mobs.md](design-mobs.md).
 
-## [2026-10-25] код | Рядовые мобы: четвёртая партия, мастерская
-Конструкты: друзовый големчик, котелок-прыгун, обелиск-хранитель (купол — `Mob.ward`, урон ×0,5), корзина-мимик, бочонок варенья (взрыв бьёт и мобов). У `Mob` — `vanish()`. Комната «Мастерская Ордена» за Терновым садом. Все 30 рядовых сделаны. Тест «мобы четвёртой партии».
-Страницы: [design-mobs.md](design-mobs.md).
+## [2026-10-25] code | Rank-and-file mobs: fourth batch, workshop
+Constructs: little druse golem, hopping cauldron, guardian obelisk (dome — `Mob.ward`, damage ×0.5), basket mimic, jam keg (the explosion hits mobs too). `Mob` has `vanish()`. The room "Order Workshop" beyond the Thorn Garden. All 30 rank-and-file done. Test "fourth batch mobs".
+Pages: [design-mobs.md](design-mobs.md).
 
-## [2026-10-25] код | Закалка оружия, синергии, спец-удары и новое оружие
-Зачарования ближнего боя — закалка: цвет клинка, шлейф из двух цветов, искры, серп удара, эффект попадания (`src/temper.ts`, `src/weapon-arts.ts`). 28 синергий пар на добивающем, резонанс трёх (`src/weapon-synergies.ts`). Спец-удар Q по шкале — у каждого из 14 видов свой (`SpecialMove` в `Knight`). Новое оружие: катана, нагакиба, убийца драконов, клинки понтифика (парные, `offhand`), посох, алебарда, рапира, кастеты. Панель F1 — оружие и закалка. Тест «закалка».
-Страницы: [design-weapon-arts.md](design-weapon-arts.md), [design-inventory.md](design-inventory.md).
+## [2026-10-25] code | Weapon tempering, synergies, weapon arts and new weapons
+Melee enchantments are tempering: blade colour, a two-colour trail, sparks, the strike crescent, hit effect (`src/temper.ts`, `src/weapon-arts.ts`). 28 pair synergies on the finisher, resonance of three (`src/weapon-synergies.ts`). A Q weapon art on a gauge — each of the 14 kinds has its own (`SpecialMove` in `Knight`). New weapons: katana, nagakiba, dragonslayer, pontiff blades (paired, `offhand`), staff, halberd, rapier, knuckles. The F1 panel — weapons and tempering. Test "tempering".
+Pages: [design-weapon-arts.md](design-weapon-arts.md), [design-inventory.md](design-inventory.md).
 
-## [2026-10-25] код | Свои позы и звуки у каждого вида оружия
-Восемь стилей ударов комбо (`STYLES` в `src/knight.ts`): меч, тяжёлое, катана, выпад, кинжал, древковое, парное (левая рука со своим наклоном клинка), кулаки. Звук оружия `src/weapon-audio.ts`: свой взмах, попадание и миги спец-удара у каждого вида. Редактор по-прежнему правит только правую руку. Тест «закалка» проверяет стили.
-Страницы: [design-weapon-arts.md](design-weapon-arts.md).
+## [2026-10-25] code | Own poses and sounds for every weapon kind
+Eight combo strike styles (`STYLES` in `src/knight.ts`): sword, heavy, katana, thrust, dagger, polearm, paired (the left hand with its own blade tilt), fists. Weapon sound `src/weapon-audio.ts`: each kind has its own swing, hit and weapon-art moments. The editor still edits only the right hand. The "tempering" test checks the styles.
+Pages: [design-weapon-arts.md](design-weapon-arts.md).
 
-## [2026-10-25] код | Торговцы без «наугад», всё оружие в инвентаре
-Окно торговли — сетка всех товаров вкладками с ценой под каждым, карточка выбранного со сравнением с надетым, покупка выбранного (`src/hud/shop.ts`). Цена — по характеристикам, редкости и силе (`src/prices.ts`). Торговец продаёт всё, кузнец — оружие, броню и перековку. Все 16 оружий — в инвентаре плейграунда, в старые сохранения докладываются. Тест «кузнец и торговец» переписан.
-Страницы: [design-inventory.md](design-inventory.md).
+## [2026-10-25] code | Merchants without "random", all weapons in the inventory
+The trade window — a grid of all goods in tabs with the price under each, a card of the selected one with a comparison to the equipped, purchase of the selected (`src/hud/shop.ts`). Price — by stats, rarity and power (`src/prices.ts`). The merchant sells everything, the blacksmith — weapons, armour and reforging. All 16 weapons — in the playground inventory, added into old saves. The "blacksmith and merchant" test rewritten.
+Pages: [design-inventory.md](design-inventory.md).
 
-## [2026-10-25] код | Семь наступательных аур
-Горнило, Стужа, Грозовой венец, Карающий ореол, Голодная тень, Каменная поступь, Вихрь клинков — `src/aura-offense.ts`, по одной на школу; лежат в инвентаре с начала. Пульс по таймеру бьёт врагов вокруг героя, кольцо зоны под ногами, вспышка ×3; урон самой ауры копит шкалу вполовину. У целей появились замедление, ослабление и оглушение; бочки и ящики помечены `prop`. Тест «наступательные ауры».
-Страницы: [design-spells.md](design-spells.md).
+## [2026-10-25] code | Seven offensive auras
+Crucible, Frost, Storm Crown, Punishing Halo, Hungry Shadow, Stone Tread, Whirl of Blades — `src/aura-offense.ts`, one per school; lie in the inventory from the start. A pulse on a timer hits enemies around the hero, a zone ring underfoot, a ×3 burst; the aura's own damage fills the gauge at half rate. Targets got slow, weakness and stun; barrels and crates are marked `prop`. Test "offensive auras".
+Pages: [design-spells.md](design-spells.md).
 
-## [2026-10-25] код | Ауры у торговца
-У торговца вкладка «Ауры»: все двенадцать, цена 210 при силе 1 (уникальная редкость). Карточка ауры — общая функция `auraLines` в `src/aura-offense.ts` для инвентаря и лавки. Тест «кузнец и торговец» проверяет вкладку и покупку.
-Страницы: [design-inventory.md](design-inventory.md), [design-spells.md](design-spells.md).
+## [2026-10-25] code | Auras at the merchant
+The merchant has an "Auras" tab: all twelve, price 210 at power 1 (unique rarity). The aura card — the shared `auraLines` function in `src/aura-offense.ts` for the inventory and the shop. The "blacksmith and merchant" test checks the tab and purchase.
+Pages: [design-inventory.md](design-inventory.md), [design-spells.md](design-spells.md).
 
-## [2026-10-25] код | Ауры с боссов по шансам
-Двенадцать аур разложены по пяти боссам этажа по стихии: Змей — Горнило / Пакт, Зверь — Гроза / Ярость, Королева — Ясность / Клинки / Стужа, Судия — Бастион / Ореол, Генерал — Терн / Тень / Поступь. `MiniBoss.auras` — [id, шанс %], аура тянется раз за победу. Тест «ауры с боссов».
-Страницы: [design-bosses.md](design-bosses.md).
+## [2026-10-25] code | Auras from bosses by chance
+The twelve auras distributed among the five floor bosses by element: Serpent — Crucible / Pact, Beast — Storm / Fury, Queen — Clarity / Blades / Frost, Judge — Bastion / Halo, General — Thorns / Shadow / Tread. `MiniBoss.auras` — [id, chance %], one aura is rolled per victory. Test "auras from bosses".
+Pages: [design-bosses.md](design-bosses.md).
 
-## [2026-10-25] код | Ауры у торговца убраны
-Вкладка «Ауры» у торговца убрана: ауры падают с боссов этажа по шансам, на плейграунде лежат в инвентаре. Общая карточка ауры `auraLines` осталась у инвентаря и лавки.
-Страницы: [design-inventory.md](design-inventory.md), [design-spells.md](design-spells.md).
+## [2026-10-25] code | Auras at the merchant removed
+The "Auras" tab at the merchant removed: auras drop from floor bosses by chance, on the playground they lie in the inventory. The shared aura card `auraLines` stays in the inventory and the shop.
+Pages: [design-inventory.md](design-inventory.md), [design-spells.md](design-spells.md).
 
-## [2026-10-25] код | Сочные эффекты оружия и элементальная небрежность
-Ленты-шлейфы по кривым (`src/fx-streaks.ts`, `fx.streak`), жирные кольца со стеной света (`fx.ring`), случайные элементальные траектории (`WeaponArts.curve`, `wisp`, `sparks`): души, капли, цепные молнии, серпы, звёзды и метеоры каждый раз летят по-своему. Взмах и попадание — с разбросом и искрами-лентами. Материал лент — в прогреве.
-Страницы: [design-weapon-arts.md](design-weapon-arts.md).
+## [2026-10-25] code | Juicy weapon effects and elemental sloppiness
+Trail ribbons along curves (`src/fx-streaks.ts`, `fx.streak`), fat rings with a wall of light (`fx.ring`), random elemental trajectories (`WeaponArts.curve`, `wisp`, `sparks`): souls, drops, chain lightning, crescents, stars and meteors fly differently every time. Swing and hit — with spread and ribbon sparks. The ribbon material — in the warm-up.
+Pages: [design-weapon-arts.md](design-weapon-arts.md).
 
-## [2026-10-25] код | Базовые заклинания: огонь, призыв, малиновая кровь, свет
-Десять заклинаний у торговца (`spell: 'shop'`), в плейграунде — у героя с начала: огненная стена, огненный ураган, малый армагеддон, стая волков, малый элементаль, каменный голем, малиновые когти, рой малинок, малиновый клинок, ослепляющая вспышка (`src/magic/base-*.ts`). Новые школы «призыв» и «кровь» (цвета, круги, аккорды), общий ход призванных `minions.ts`, плата здоровьем и кровотечение `blood-core.ts`, крючок «удар мечом» для усилений. Призванные — приманки (`src/decoys.ts`): моб целится в ближайшего из героя и призванных, голем перетягивает на себя. Тест «базовые заклинания».
-Страницы: [design-spells.md](design-spells.md).
+## [2026-10-25] code | Base spells: fire, summoning, raspberry blood, light
+Ten spells at the merchant (`spell: 'shop'`), on the playground — with the hero from the start: fire wall, fire hurricane, lesser armageddon, wolf pack, lesser elemental, stone golem, raspberry claws, swarm of raspberries, raspberry blade, blinding flash (`src/magic/base-*.ts`). New schools "summoning" and "blood" (colours, circles, chords), shared movement of summons `minions.ts`, payment in health and bleeding `blood-core.ts`, a "sword strike" hook for buffs. Summons are decoys (`src/decoys.ts`): a mob targets the nearest of the hero and summons, the golem pulls aggro to itself. Test "base spells".
+Pages: [design-spells.md](design-spells.md).
 
-## [2026-10-25] код | Соллер, Рыцарь Солнца
-Моб №31, одиночка не из Ордена (`src/mobs/soller.ts`): доспех — калька Солера из Асторы, в покое славит солнце, воздев руки, под столбом света; серия мечом, солнечное копьё, молитва лечит раз за бой, ушёл герой — возвращается на пост. Солнечная поляна в углу арены плейграунда. Тест «Соллер».
-Страницы: [design-mobs.md](design-mobs.md).
+## [2026-10-25] code | Soller, Knight of the Sun
+Mob no. 31, a loner not of the Order (`src/mobs/soller.ts`): the armour is a copy of Solaire of Astora, at rest praises the sun with arms raised under a pillar of light; a sword series, a sun spear, a prayer heals once per battle, the hero left — returns to his post. The Sunny Glade in a corner of the playground arena. Test "Soller".
+Pages: [design-mobs.md](design-mobs.md).
 
-## [2026-10-29] код | Одно место применения заклинаний
-Стартовые заклинания вынесены из класса `Spells` в `src/magic/starters.ts`; все заклинания — в одном реестре `SPELLS` (`src/magic/registry.ts`, тип `Spell` вместо `BossSpell`, полнота проверяется типами), `spellOf(kind)` отличает заклинание от обычного артефакта. У `Spell` — хуки заряда `self`, `orb`, `charging` вместо проверок `kind === 'heal'` внутри `Spells`. В `gear.ts` вместо двух `switch` — общие проверки, затем `Spells.cast` или `plain` для обычных артефактов. Поведение не менялось.
-Страницы: [design-spells.md](design-spells.md).
+## [2026-10-29] code | One place for casting spells
+Starter spells moved out of the `Spells` class into `src/magic/starters.ts`; all spells — in one registry `SPELLS` (`src/magic/registry.ts`, the `Spell` type instead of `BossSpell`, completeness checked by types), `spellOf(kind)` tells a spell from an ordinary artifact. `Spell` has charge hooks `self`, `orb`, `charging` instead of `kind === 'heal'` checks inside `Spells`. In `gear.ts`, instead of two `switch`es — shared checks, then `Spells.cast` or `plain` for ordinary artifacts. Behaviour unchanged.
+Pages: [design-spells.md](design-spells.md).
 
-## [2026-10-29] источник | Референсы холмистых земель с поселениями
-17 скриншотов Elden Ring и Minecraft Dungeons: дороги из плит, лагерь, золотые деревья, статуи, капеллы-руины, кладбище, мельницы, дома, хижины, грядки, пирс — `sources/refs-settlements/`, конспект [sources/refs-settlements.md](sources/refs-settlements.md).
-Страницы: [design-prefab-library.md](design-prefab-library.md).
+## [2026-10-29] source | References of hilly lands with settlements
+17 screenshots of Elden Ring and Minecraft Dungeons: slab roads, a camp, golden trees, statues, ruined chapels, a graveyard, windmills, houses, huts, garden beds, a pier — `sources/refs-settlements/`, summary [sources/refs-settlements.md](sources/refs-settlements.md).
+Pages: [design-prefab-library.md](design-prefab-library.md).
 
-## [2026-10-29] код | Библиотека пресетов, партия 1: формат, генератор, поворот, вкладка, витрина
-Каталог пресетов по референсам и формат `LibraryPrefab` (`src/level/prefab-lib/`): строители с локальной картой, декором и светом, `bake` → `assets/prefabs/*.json` (`npm run prefabs`), постановка `stampPrefab` с поворотом на 90°, вкладка «Библиотека» в редакторе (R — повернуть), «Сохранить в библиотеку (JSON)» у своих префабов, витрина `?map=prefabs`. Четыре пробных пресета в вариантах: стог, дуб, ограда, лагерь. Тест `tests/prefabs.spec.ts`.
-Страницы: [design-prefab-library.md](design-prefab-library.md), [design-editor.md](design-editor.md).
+## [2026-10-29] code | Preset library, batch 1: format, generator, rotation, tab, showcase
+A catalogue of presets by references and the `LibraryPrefab` format (`src/level/prefab-lib/`): builders with a local map, decor and light, `bake` → `assets/prefabs/*.json` (`npm run prefabs`), placement `stampPrefab` with 90° rotation, the "Library" tab in the editor (R — rotate), "Save to library (JSON)" for own prefabs, the `?map=prefabs` showcase. Four trial presets in variants: haystack, oak, fence, camp. Test `tests/prefabs.spec.ts`.
+Pages: [design-prefab-library.md](design-prefab-library.md), [design-editor.md](design-editor.md).
 
-## [2026-10-29] код | Библиотека пресетов, партия 2: дорога и природа
-20 строителей (45 пресетов с вариантами): дороги из плит (прямая, поворот, перекрёсток, обрыв), земляные тропы, лестница, луга (цветочный и сухой), пруд, ручей с бродом, золотые лиственницы, мёртвое дерево, ель, кусты, золотая роща, пень с брёвнами, валуны. Новые блоки `leaves_gold` (жёлтый / оранжевый тон по хэшу), `flower_orange`, `tiles_broken`; декор «природа» — `tree_dead`, `reeds`, `stump`, `rock_small`, `leaf_litter`. Витрина переносит ряд длиннее 96 м. Тест библиотеки считает категории по JSON.
-Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+## [2026-10-29] code | Preset library, batch 2: road and nature
+20 builders (45 presets with variants): slab roads (straight, turn, crossroads, drop), dirt paths, stairs, meadows (flowery and dry), pond, stream with a ford, golden larches, dead tree, spruce, bushes, golden grove, stump with logs, boulders. New blocks `leaves_gold` (yellow / orange tint by hash), `flower_orange`, `tiles_broken`; "nature" decor — `tree_dead`, `reeds`, `stump`, `rock_small`, `leaf_litter`. The showcase wraps a row longer than 96 m. The library test counts categories from JSON.
+Pages: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
 
-## [2026-10-29] код | Библиотека пресетов, партия 3: руины
-11 строителей (`src/level/prefab-lib/builders-ruins.ts`, 22 пресета): арка, акведук с обрушенным пролётом, стена с окном, угол, ряд колонн, капелла с колокольней (дерево внутри / алтарь и обрушенная башня), круглая башня, площадка со статуями, алтарь со свечами, кладбище, чаши. Руинный кирпич получил ступени, полублок и стенку; декор «руины» — `gravestone` × 3, `grave_cross`, `statue_hooded`, `stone_bowl`, `pot_clay`, `ivy` (настенный, cutout), `skull`; текстуры `clay`, `ivy`.
-Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+## [2026-10-29] code | Preset library, batch 3: ruins
+11 builders (`src/level/prefab-lib/builders-ruins.ts`, 22 presets): arch, aqueduct with a collapsed span, wall with a window, corner, row of columns, chapel with a bell tower (a tree inside / an altar and a collapsed tower), round tower, platform with statues, altar with candles, graveyard, bowls. Ruin brick got stairs, a half-block and a thin wall; "ruins" decor — `gravestone` × 3, `grave_cross`, `statue_hooded`, `stone_bowl`, `pot_clay`, `ivy` (wall-mounted, cutout), `skull`; textures `clay`, `ivy`.
+Pages: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
 
-## [2026-10-29] код | Библиотека пресетов, партия 4: поселение
-17 строителей (`src/level/prefab-lib/builders-settlement.ts`, 34 пресета): мельница с крыльями (целыми / сломанными), сарай, двухэтажный дом с балконом и лестницей, каменный дом с трубой, соломенная хижина, разрушенный дом, навес, заборы (прямой, угол, ворота), колодец, грядки, прилавок, вышка, пирс, каменный мостик, сломанная телега. Блоки `crops` / `crops_ripe`, `roof_thatch_*`, `shingles_*`; декор «поселение» — `windmill_sails` (+ `_broken`), `barrel`, `barrel_broken`, `sack`, `sacks_pile`, `well_roof`, `bucket`, `ladder`, `tent`, `scarecrow`, `firewood_pile`, `signpost`, `cart_broken`; текстуры ростков, соломы, черепицы, бочки, мешковины, палаточной ткани. Помощники `walls`, `gableX`, `hipRoof`, `fenceRun`.
-Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+## [2026-10-29] code | Preset library, batch 4: settlement
+17 builders (`src/level/prefab-lib/builders-settlement.ts`, 34 presets): windmill with sails (intact / broken), barn, two-storey house with a balcony and stairs, stone house with a chimney, thatched hut, ruined house, shelter, fences (straight, corner, gate), well, garden beds, stall, watchtower, pier, stone footbridge, broken cart. Blocks `crops` / `crops_ripe`, `roof_thatch_*`, `shingles_*`; "settlement" decor — `windmill_sails` (+ `_broken`), `barrel`, `barrel_broken`, `sack`, `sacks_pile`, `well_roof`, `bucket`, `ladder`, `tent`, `scarecrow`, `firewood_pile`, `signpost`, `cart_broken`; textures of sprouts, thatch, shingles, barrel, sackcloth, tent cloth. Helpers `walls`, `gableX`, `hipRoof`, `fenceRun`.
+Pages: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
 
-## [2026-10-29] код | Библиотека пресетов, партия 5: композиции
-Вложенные пресеты: `stampInto` и `c.put` / `c.putEntity` в `build.ts` — средний пресет запекается своим строителем и вкладывается со сдвигом и поворотом, код не дублируется, JSON средних не меняется. Пять композиций (`builders-compositions.ts`, 10 пресетов): деревня с мельницей, хутор у дороги, лагерь разбойников (новый блок `stake_fence`), руины у кладбища, обрыв со статуей. В библиотеке 115 пресетов по 57 строителям.
-Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+## [2026-10-29] code | Preset library, batch 5: compositions
+Nested presets: `stampInto` and `c.put` / `c.putEntity` in `build.ts` — a medium preset is baked by its own builder and nested with an offset and rotation, no code duplication, the JSON of medium presets does not change. Five compositions (`builders-compositions.ts`, 10 presets): a village with a windmill, a farmstead by the road, a bandit camp (new block `stake_fence`), ruins by a graveyard, a drop with a statue. The library has 115 presets from 57 builders.
+Pages: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
 
-## [2026-10-29] код | Библиотека пресетов, партия 6: биом «снег» и земля на выбор
-Земля ландшафта на выбор (`GROUNDS` в `kit.ts`: трава, снег; кнопки в инструменте «Ландшафт», `meta.lands[].ground`), витрина кладёт ряд биома на его землю. Блоки снега и льда (`snow`, `snow_slab`, `snow_layer`, `cliff_snow`, `ice`, `ice_cracked`, `ice_slab`, `frozen_water`, `leaves_snow`, `dead_bush_snow`), декор «снег» (сугробы, сосульки, шипы, снеговик, бревно и камни под снегом), набор «Зима». Пост-проход `snowCap` и `snowy(id)` — снежные варианты готовых пресетов без копий; `Mat` у помощников руин. 36 снежных пресетов (`builders-snow.ts`), в библиотеке 151.
-Страницы: [design-prefab-library.md](design-prefab-library.md), [style-world.md](style-world.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+## [2026-10-29] code | Preset library, batch 6: the "snow" biome and a choice of ground
+Terrain ground of choice (`GROUNDS` in `kit.ts`: grass, snow; buttons in the "Terrain" tool, `meta.lands[].ground`), the showcase puts a biome's row on its ground. Snow and ice blocks (`snow`, `snow_slab`, `snow_layer`, `cliff_snow`, `ice`, `ice_cracked`, `ice_slab`, `frozen_water`, `leaves_snow`, `dead_bush_snow`), "snow" decor (drifts, icicles, spikes, snowman, a log and stones under snow), the "Winter" kit. The `snowCap` post-pass and `snowy(id)` — snowy variants of existing presets without copies; `Mat` in the ruins helpers. 36 snow presets (`builders-snow.ts`), 151 in the library.
+Pages: [design-prefab-library.md](design-prefab-library.md), [style-world.md](style-world.md), [sources/refs-settlements.md](sources/refs-settlements.md).
 
-## [2026-10-29] код | Библиотека пресетов, партия 7: биом «джунгли с кристаллами»
-`builders-jungle.ts` (14 строителей, 28 пресетов, композиция `temple_ruins_jungle`), 20 блоков (земля — мозаика ровных блоков по шуму: `jungle_floor`, `jungle_floor_red`, `moss_teal`, `moss_block` через `jungleGroundAt`, `temple_stone` с резьбой, `crystal` — форма из трёх призм в слое `glow` с запечённым бирюзовым светом), 9 предметов декора (гроздь кристаллов, лианы, корни, идол, кувшинки), земля `jungle` в ландшафте, набор окружения «Джунгли». Прежние JSON пресетов не изменились.
-Страницы: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
+## [2026-10-29] code | Preset library, batch 7: the "jungle with crystals" biome
+`builders-jungle.ts` (14 builders, 28 presets, the composition `temple_ruins_jungle`), 20 blocks (ground — a mosaic of flat blocks by noise: `jungle_floor`, `jungle_floor_red`, `moss_teal`, `moss_block` via `jungleGroundAt`, `temple_stone` with carving, `crystal` — a shape of three prisms in the `glow` layer with baked turquoise light), 9 decor items (a crystal cluster, lianas, roots, an idol, water lilies), the `jungle` ground in terrain, the "Jungle" environment kit. The earlier preset JSONs did not change.
+Pages: [design-prefab-library.md](design-prefab-library.md), [sources/refs-settlements.md](sources/refs-settlements.md).
 
-## [2026-10-30] источник | Нарисованная карта первого уровня
-Рисунок острова и его разметка (биомы, дороги, группы врагов, засады, патрули, мосты, лут) — `sources/map-01/`, конспект [sources/map-01.md](sources/map-01.md).
-Страницы: [design-map-island.md](design-map-island.md).
+## [2026-10-30] source | The hand-drawn map of the first level
+The drawing of the island and its markup (biomes, roads, enemy groups, ambushes, patrols, bridges, loot) — `sources/map-01/`, summary [sources/map-01.md](sources/map-01.md).
+Pages: [design-map-island.md](design-map-island.md).
 
-## [2026-10-30] код | Карта 1 «Остров» из пресетов
-Генератор `src/level/island-map.ts` в пикселях плана: суша и биомы многоугольниками, скальная кромка берега, мосты через проливы с перилами, мелкие реки с настилами, скальные массивы и пещеры, форт с частоколом, храм-арена с тремя воротами, ~100 пресетов, лес и трава по сетке занятости. В `meta` — группы мобов (посты с `aggro` для засад и `route` для патрулей, `respawn: false`), арена стража (`home`, `gates[]`), торговцы, цель; лут — сущности `chest` / `crate` / `barrel` / `terminal`. Плейграунд читает всё это на любой карте, препятствия врагов при стриминге — по регионам. `npm run map:island`, `?map=island`, тест `tests/island.spec.ts`.
-Страницы: [design-map-island.md](design-map-island.md), [design-mobs.md](design-mobs.md).
+## [2026-10-30] code | Map 1 "Island" from presets
+The generator `src/level/island-map.ts` in plan pixels: land and biomes as polygons, a rocky shoreline, bridges over straits with railings, small rivers with decking, rock masses and caves, a fort with a palisade, a temple arena with three gates, ~100 presets, forest and grass on an occupancy grid. In `meta` — mob groups (posts with `aggro` for ambushes and `route` for patrols, `respawn: false`), the warden's arena (`home`, `gates[]`), merchants, the objective; loot — entities `chest` / `crate` / `barrel` / `terminal`. The playground reads all of this on any map, enemy obstacles under streaming — by region. `npm run map:island`, `?map=island`, test `tests/island.spec.ts`.
+Pages: [design-map-island.md](design-map-island.md), [design-mobs.md](design-mobs.md).
 
-## [2026-10-30] код | Оборона куста, этап 1: постройка башен
-Режим tower defence на карте с `meta.td` (`src/td/`): площадки с подсветкой, меню постройки по F и по клику (герой сам подходит), пять карточек с ценами, улучшение до III и продажа; башня бьёт первого по дороге, пока — стрелковая вышка с арбалетом. Черновая карта `td` (`src/level/td-map.ts`, `npm run map:td`): три дороги от логов-пещер, 17 площадок, площадь куста. Чучела, склад и подписи плейграунда больше не ставятся на картах; сундуки и ящики карты без регионов встают из сущностей. Тест `tests/td.spec.ts`.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-10-30] code | Bush Defence, phase 1: building towers
+The tower defence mode on a map with `meta.td` (`src/td/`): highlighted pads, a build menu on F and on click (the hero walks up himself), five cards with prices, upgrade to III and selling; the tower shoots the first one along the road, for now — an archer tower with a crossbow. The draft map `td` (`src/level/td-map.ts`, `npm run map:td`): three roads from cave lairs, 17 pads, the bush square. Training dummies, the storage yard and the playground labels are no longer placed on maps; chests and crates of a map without regions come from entities. Test `tests/td.spec.ts`.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-10-30] код | Оборона куста, этап 2: пять видов башен
-Модели и выстрелы всех башен в `src/td/tower.ts`: морозный шпиль (сгусток, замедление, на III — иней по площади), катапульта (камень по дуге, взрыв с отбросом), огненная жаровня (конус пламени, горение 3 с), волшебный обелиск (сфера-лента, ослабление, цепь по соседям). Тест на пять видов в `tests/td.spec.ts`.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-10-30] code | Bush Defence, phase 2: five kinds of towers
+Models and shots of all towers in `src/td/tower.ts`: frost spire (a bolt, slow, at III — area rime), catapult (a stone on an arc, an explosion with knockback), fire brazier (a cone of flame, burning 3 s), arcane obelisk (a ribbon sphere, weakness, a chain to neighbours). A test for the five kinds in `tests/td.spec.ts`.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-10-30] код | Оборона куста, этап 3: куст малины и марш по дорогам
-`src/td/bush.ts` — куст как приманка с здоровьем из `meta.td.bush`, засыхает при нуле (`state = 'lost'`). `Mob.march` (`src/mobs/mob.ts`): маршрут в один конец с `progress`, тревога только от героя рядом (выстрелы башен издалека не отвлекают), поводок 10 м. `pickDecoy` видит приманку из её `taunt`. `td.spawnOn(kind, lane)`, кнопки «На дорогу» в F1, полоса куста в HUD.
-Страницы: [design-tower-defence.md](design-tower-defence.md), [design-mobs.md](design-mobs.md).
+## [2026-10-30] code | Bush Defence, phase 3: the raspberry bush and the march along the roads
+`src/td/bush.ts` — the bush as a decoy with health from `meta.td.bush`, withers at zero (`state = 'lost'`). `Mob.march` (`src/mobs/mob.ts`): a one-way route with `progress`, an alarm only from the hero nearby (tower shots from afar do not distract), a 10 m leash. `pickDecoy` sees the decoy via its `taunt`. `td.spawnOn(kind, lane)`, "To the road" buttons in F1, the bush bar in the HUD.
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-mobs.md](design-mobs.md).
 
-## [2026-10-30] код | Оборона куста, этап 4: волны и новые враги
-Десять волн в `src/td/waves.ts` (`meta.td.waves`): группы по дорогам с шагом и задержкой, награда за отбитую, отдых 20 с, **G** — раньше срока с бонусом, уровень стаи растёт, победа после последней. Три врага под TD в `src/mobs/td-foes.ts`: ягодный гонец (быстрый, хрупкий), лозовый таран (кора спереди ×0,35, 160 здоровья), пыльцевой мотылёк (летит сквозь препятствия).
-Страницы: [design-tower-defence.md](design-tower-defence.md), [design-mobs.md](design-mobs.md).
+## [2026-10-30] code | Bush Defence, phase 4: waves and new enemies
+Ten waves in `src/td/waves.ts` (`meta.td.waves`): groups by road with a step and a delay, a reward for a repelled one, 20 s rest, **G** — early with a bonus, the pack level grows, victory after the last. Three TD enemies in `src/mobs/td-foes.ts`: berry courier (fast, fragile), vine battering ram (bark in front ×0.35, 160 health), pollen moth (flies through obstacles).
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-mobs.md](design-mobs.md).
 
-## [2026-10-30] код | Оборона куста, этап 5: спаун из логов
-`src/td/lair.ts`: логово на каждой дороге — рунное кольцо и завеса в пещере, тревога за 6 с до волны по этой дороге, вспышка и гул при выходе каждого врага; HUD называет дороги следующей волны. Тест в `tests/td.spec.ts`.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-10-30] code | Bush Defence, phase 5: spawning from lairs
+`src/td/lair.ts`: a lair on every road — a rune ring and a veil in the cave, an alarm 6 s before a wave on that road, a flash and a hum as each enemy exits; the HUD names the roads of the next wave. Test in `tests/td.spec.ts`.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-10-31] код | Оборона куста, этап 6: лавовая карта
-Блоки «лава» (`ash_ground`, `basalt`, `cliff_lava`, `lava` — новый слой жидкости с эмиссией и запечённым светом), генератор `src/level/td-map.ts` по референсу: разломы и озёра лавы с мостами и перилами на дорогах, вулканы с кратерами и потёками, обожжённые скалы, заборчики, фонари, жаровни, клетки и кости у логов; дымка и искры над лавой (`src/td/lava-fx.ts`), герой в лаве горит; мир — тёплый полумрак с пеплом.
-Страницы: [design-tower-defence.md](design-tower-defence.md), [design-level-blocks.md](design-level-blocks.md).
+## [2026-10-31] code | Bush Defence, phase 6: lava map
+"Lava" blocks (`ash_ground`, `basalt`, `cliff_lava`, `lava` — a new liquid layer with emission and baked light), the generator `src/level/td-map.ts` after the reference: rifts and lava lakes with bridges and railings on the roads, volcanoes with craters and flows, scorched cliffs, little fences, lanterns, braziers, cages and bones by the lairs; haze and sparks over lava (`src/td/lava-fx.ts`), the hero burns in lava; the world — a warm dusk with ash.
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-level-blocks.md](design-level-blocks.md).
 
-## [2026-10-31] код | Оборона куста: баланс и масштаб по игрокам
-Волны крупнее (≈ 420 врагов соло вместо ≈ 250, награды выше), уровень стаи растёт 1, 4, 7, … вместо 1, 3, 5. Новый `src/td/scaling.ts`: число врагов, здоровье и награда растут с числом игроков (× 1 + 0,5·(игроков − 1)); `td.setPlayers`, на плейграунде — из выбора «Игроков» в F1. Тест на масштаб.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-10-31] code | Bush Defence: balance and scaling by players
+Larger waves (≈ 420 enemies solo instead of ≈ 250, higher rewards), the pack level grows 1, 4, 7, … instead of 1, 3, 5. New `src/td/scaling.ts`: the number of enemies, health and reward grow with the number of players (× 1 + 0.5·(players − 1)); `td.setPlayers`, on the playground — from the "Players" choice in F1. A scaling test.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-10-31] источник | Четыре референса TD-карт
-Скриншоты из постановки задачи «Оборона куста» — `sources/td-refs/`: кристальная поляна, лесная тропа, зимняя поляна, лавовая котловина; конспект с тем, что взято.
-Страницы: [sources/td-refs.md](sources/td-refs.md), [design-tower-defence.md](design-tower-defence.md).
+## [2026-10-31] source | Four TD map references
+Screenshots from the "Bush Defence" task statement — `sources/td-refs/`: crystal glade, forest path, winter glade, lava basin; a summary of what was taken.
+Pages: [sources/td-refs.md](sources/td-refs.md), [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-10-31] код | Оборона куста 2: кристальная поляна
-Карта `td2` (`src/level/td-glade-map.ts`): рвы со стенками, синие порталы-логова (`portal_blue`), грибы-светильники (`shroom_*`), погода «светлячки». Двенадцать волн (`waves-glade.ts`), стая с уровня 7 — `meta.td.level`. Новые враги №35–37: кристальный панцирник (панцирь гасит 6 ударов), споровик (лечит соседей, облако при смерти), радужный скакун (прыжки по дороге). Тесты `tests/td2.spec.ts`.
-Страницы: [design-tower-defence.md](design-tower-defence.md), [design-mobs.md](design-mobs.md), [design-level-blocks.md](design-level-blocks.md).
+## [2026-10-31] code | Bush Defence 2: Crystal Glade
+Map `td2` (`src/level/td-glade-map.ts`): moats with walls, blue portal lairs (`portal_blue`), lamp mushrooms (`shroom_*`), "fireflies" weather. Twelve waves (`waves-glade.ts`), the pack from level 7 — `meta.td.level`. New enemies no. 35–37: crystal shellback (the shell absorbs 6 hits), sporeling (heals neighbours, a cloud on death), rainbow hopper (hops along the road). Tests `tests/td2.spec.ts`.
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-mobs.md](design-mobs.md), [design-level-blocks.md](design-level-blocks.md).
 
-## [2026-10-31] источник | Восемь референсов замка
-Картинки из постановки задачи «осада замка» — `sources/castle-refs/`: пять артов крепостей (форт на острове сверху, город на скале, усадьба у озера, красные крыши, цитадель на воде) и три скриншота BFME с площадками на стене, двором и проломом; конспект с тем, что взято. Замок в игре — на лугу, не на острове.
-Страницы: [sources/castle-refs.md](sources/castle-refs.md), [design-tower-defence.md](design-tower-defence.md).
+## [2026-10-31] source | Eight castle references
+Images from the "castle siege" task statement — `sources/castle-refs/`: five fortress artworks (an island fort from above, a city on a cliff, a manor by a lake, red roofs, a citadel on water) and three BFME screenshots with pads on the wall, a courtyard and a breach; a summary of what was taken. The castle in the game is on a meadow, not on an island.
+Pages: [sources/castle-refs.md](sources/castle-refs.md), [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-10-31] код | Оборона куста 3: осада замка
-Карта `td3` (`src/level/td-castle-map.ts`): замок на лугу — стены с зубцами и дорожкой поверху, бастионы с площадками (`TdPad.y`), лестницы, ворота с калиткой, двор с кустом; враги с четырёх сторон. Стены и ворота — `src/td/wall.ts` (`meta.td.walls`): приманки со здоровьем, трещины, пролом убирает блоки и продолжает дорогу врагов (`TdLane.inner`, `Mob.extendMarch`), F у стены — починка за малину, полоски стен в HUD. Враги №38–39: пнёвый подрывник (броня ×0,3, взрыв 160 по стене), лозовая баллиста (расстреливает ворота с 9 м). Башни: стенная баллиста (болт насквозь, пробивает броню — удар без направления) и котёл со смолой (лужа: вязнут и горят), `meta.td.towers`. Десять волн `waves-castle.ts`. Тесты `tests/td3.spec.ts`.
-Страницы: [design-tower-defence.md](design-tower-defence.md), [design-mobs.md](design-mobs.md).
+## [2026-10-31] code | Bush Defence 3: castle siege
+Map `td3` (`src/level/td-castle-map.ts`): a castle on a meadow — walls with battlements and a walkway on top, bastions with pads (`TdPad.y`), stairs, a gate with a wicket, a courtyard with the bush; enemies from four sides. Walls and gates — `src/td/wall.ts` (`meta.td.walls`): decoys with health, cracks, a breach removes blocks and extends the enemies' road (`TdLane.inner`, `Mob.extendMarch`), F at a wall — repair for raspberries, wall bars in the HUD. Enemies no. 38–39: stump sapper (armour ×0.3, 160 explosion against the wall), vine ballista (shoots the gate from 9 m). Towers: wall ballista (a bolt straight through, pierces armour — a hit without direction) and tar cauldron (a puddle: they bog down and burn), `meta.td.towers`. Ten waves `waves-castle.ts`. Tests `tests/td3.spec.ts`.
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-mobs.md](design-mobs.md).
 
-## [2026-10-31] код | Замок на лугу: ямы в траве
-Сухая трава и ромашки — растения без коллизии — стояли в слое земли карты `td3`, герой проваливался в клетку и не мог выйти. Теперь земля везде трава, растения поверх неё; тест проверяет, что пол на лугу нигде не ниже земли.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-10-31] code | Castle on the Meadow: holes in the grass
+Dry grass and daisies — plants without collision — sat in the ground layer of map `td3`, the hero fell into the cell and could not get out. Now the ground is grass everywhere, plants on top of it; the test checks that the floor on the meadow is nowhere below the ground.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-10-31] код | Замок на лугу: туман над лагерями
-`src/td/mist-fx.ts` — туман вокруг начала каждой дороги (`meta.td.mist`: радиус, плотность, цвет): слои мягких плоскостей, плывут и дышат; дымка мира плотнее (20–52 м). Точки выхода врагов с замка не видны.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-10-31] code | Castle on the Meadow: mist over the camps
+`src/td/mist-fx.ts` — mist around the start of each road (`meta.td.mist`: radius, density, colour): layers of soft planes, drifting and breathing; the world haze is denser (20–52 m). The enemies' exit points are not visible from the castle.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-10-31] код | Главное меню
-`src/menu/`: страница без параметров открывает меню — стартовый экран у костра (одиночная, сетевая, настройки), лагерь со снаряжением и выбором карты обороны куста, бой через `?map=…&from=menu` с паузой по Esc, итогом и «В лагерь»; малина героя откладывается на время боя. Настройки (`malina.settings`): громкость (`setVolume`, `setMusicVolume`), качество, постобработка, тени. Сетевая игра — заглушка (`session.ts`). Тесты `tests/menu.spec.ts`.
-Страницы: [design-main-menu.md](design-main-menu.md), [design-inventory.md](design-inventory.md).
+## [2026-10-31] code | Main menu
+`src/menu/`: a page without parameters opens the menu — the start screen at the campfire (single player, multiplayer, settings), the camp with gear and a choice of Bush Defence map, battle via `?map=…&from=menu` with pause on Esc, a summary and "To camp"; the hero's raspberries are set aside for the duration of the battle. Settings (`malina.settings`): volume (`setVolume`, `setMusicVolume`), quality, post-processing, shadows. Multiplayer — a stub (`session.ts`). Tests `tests/menu.spec.ts`.
+Pages: [design-main-menu.md](design-main-menu.md), [design-inventory.md](design-inventory.md).
 
-## [2026-11-01] код | Оборона: слизни на марше, проходы к площадкам
-Слизень и лоза сами не ходят и стояли у логова — волна 4 лавы не кончалась; теперь по дороге слизень скачет, лоза ползёт, половинки слизня идут той же дорогой (`Mob.marchPace`, `Mob.joinMarch`). На поляне `td2` стенки рвов обступали площадки — проёмы через каждые 9 м и шире у площадок; тест достижимости площадок на всех картах.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-11-01] code | Defence: slimes on the march, passages to the pads
+The slime and the vine do not walk by themselves and stood at the lair — wave 4 on lava never ended; now along the road the slime hops, the vine crawls, slime halves follow the same road (`Mob.marchPace`, `Mob.joinMarch`). On the `td2` glade the moat walls hemmed in the pads — openings every 9 m and wider at the pads; a pad reachability test on all maps.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-11-01] код | Оборона: прочность башен, грызуны и колдунчики
-Башни получили прочность, ломаются в руины и чинятся за 40 % вложенного с прежним уровнем. Башня — осадная приманка только для охотников (`Mob.hunter`): бобёр-грызун грызёт, ледяной колдунчик замораживает на 4 с (лёд бьётся двумя ударами, морозный шпиль не мёрзнет).
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-11-01] code | Defence: tower durability, gnawers and warlocks
+Towers got durability, break into ruins and are repaired for 40 % of the investment at the previous level. A tower is a siege decoy only for hunters (`Mob.hunter`): the gnawer beaver gnaws, the ice warlock freezes for 4 s (the ice breaks with two hits, the frost spire does not freeze).
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-11-01] код | Оборона: плотнее волны, мини-боссы, маркитант
-Волны ×1,3 по группам от трёх врагов, грызуны и колдунчики с третьей волны; мини-боссы (великан, королева слизней, снежный шаман) в волнах 3, 6, 9 (и 12 на поляне). Маркитант у точки появления продаёт снаряжение за малину боя по редкости (80/160/260); купленное только на бой — снаряжение откладывается, как малина.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-11-01] code | Defence: denser waves, mini-bosses, sutler
+Waves ×1.3 for groups of three enemies or more, gnawers and warlocks from the third wave; mini-bosses (giant, slime queen, snow shaman) in waves 3, 6, 9 (and 12 on the glade). The sutler at the spawn point sells gear for battle raspberries by rarity (80/160/260); what is bought is for the battle only — gear is set aside, like raspberries.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-11-01] код | Оборона: подсказки для детей 10–14 лет
-Разбор механик для детей и десять предложений — новая страница; сделан топ-3: магнит малины и сбор урожая после волны, карточка следующей волны с охотниками и мини-боссом, сигнал «башня в беде» в HUD, на карте и звуком.
-Страницы: [td-playability-kids.md](td-playability-kids.md), [design-tower-defence.md](design-tower-defence.md), [index.md](index.md).
+## [2026-11-01] code | Defence: hints for children aged 10–14
+A breakdown of the mechanics for children and ten proposals — a new page; the top 3 done: a raspberry magnet and harvest collection after a wave, a next-wave card with hunters and the mini-boss, a "tower in trouble" signal in the HUD, on the map and by sound.
+Pages: [td-playability-kids.md](td-playability-kids.md), [design-tower-defence.md](design-tower-defence.md), [index.md](index.md).
 
-## [2026-11-01] код | Оборона: в бой как новый герой, заклинания и ауры у маркитанта
-В бою обороны герой — с набором нового героя силы 1 (`Profile.tdKit`), своё снаряжение возвращается в лагере; маркитант продаёт все заклинания и все ауры за малину боя по редкости — выбор «башни или герой»; цены маркитанта ×3 (240/480/780, стрелы 45).
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-11-01] code | Defence: into battle as a new hero, spells and auras at the sutler
+In a defence battle the hero has a new hero's kit of power 1 (`Profile.tdKit`), own gear comes back in the camp; the sutler sells all spells and all auras for battle raspberries by rarity — the "towers or hero" choice; sutler prices ×3 (240/480/780, arrows 45).
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-11-01] код | Оборона: звездочёт, грозовой шпиль, сердце зимы
-Три дорогие башни по площади на всех картах: звездочёт (500, метеорит в самую толпу), грозовой шпиль (350, молния цепью 6–10), сердце зимы (400, вьюга вокруг и ледяная волна с оглушением). Пасека, ветряк и гонг — первая попытка, по плейтесту бесполезны — не вошли. Клавиши меню по месту в списке карты, меню — по пять в ряд.
-Страницы: [design-tower-defence.md](design-tower-defence.md).
+## [2026-11-01] code | Defence: stargazer, storm spire, heart of winter
+Three expensive area towers on all maps: stargazer (500, a meteor into the thickest crowd), storm spire (350, chain lightning 6–10), heart of winter (400, a blizzard around and an ice wave with stun). Apiary, windmill and gong — a first attempt, useless in the playtest — not included. Menu keys by position in the map list, menus — five per row.
+Pages: [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-11-02] код | Сервер сетевой игры и общий бой
-`server/` на TypeScript (Node, type stripping) и SQLite (`node:sqlite`): вход по имени и токену, профили героев на сервере с версиями, комнаты с кодом, готовностью и хостом (переживают перезапуск), ретрансляция боя, итог и история боёв с потолком наград; лагерь — панель сетевой игры (`src/net/client.ts`). Общий бой обороны (`src/net/coop.ts`): хост ведёт героев гостей, мобы бьют ближайшего героя (`src/party.ts`), гость видит бой по снимкам, строит башни из общей казны командами хосту. Тесты `server/test/`, `tests/net.spec.ts`.
-Страницы: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md), [project-brief.md](project-brief.md), [index.md](index.md).
+## [2026-11-02] code | Multiplayer server and shared battle
+`server/` in TypeScript (Node, type stripping) and SQLite (`node:sqlite`): login by name and token, hero profiles on the server with versions, rooms with a code, readiness and a host (survive a restart), battle relay, a summary and battle history with a reward cap; the camp — a multiplayer panel (`src/net/client.ts`). Shared defence battle (`src/net/coop.ts`): the host drives the guests' heroes, mobs hit the nearest hero (`src/party.ts`), the guest sees the battle from snapshots, builds towers from the shared treasury by commands to the host. Tests `server/test/`, `tests/net.spec.ts`.
+Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md), [project-brief.md](project-brief.md), [index.md](index.md).
 
-## [2026-11-03] код | Общий бой: снаряжение, действия, имена, своя малина, награда
-Чужие герои — со своим снаряжением (`KitMsg`, `Gear` на каждого, свои числа удара `Knight.tune`) и действиями (`ActMsg`: артефакты, зелье, аура, спец-удар, лук); куклы у гостя играют атаки; имена над героями. Малина у каждого своя (`TowerDefense.personal`, `Purse`), кучки с врагов общие — у хоста, кто подобрал, того и малина (`Props.collectors`, `BattleSnap.piles`); маркитант у гостя открыт; награда — непотраченная малина и опыт, каждый сдаёт сам (`battle.loot`, миграция 002).
-Страницы: [design-multiplayer.md](design-multiplayer.md), [design-tower-defence.md](design-tower-defence.md).
+## [2026-11-03] code | Shared battle: gear, actions, names, own raspberries, reward
+Remote heroes — with their own gear (`KitMsg`, a `Gear` for each, own hit numbers `Knight.tune`) and actions (`ActMsg`: artifacts, potion, aura, weapon art, bow); puppets on the guest play attacks; names above heroes. Raspberries are each player's own (`TowerDefense.personal`, `Purse`), piles from enemies are shared — at the host, whoever picks up gets the raspberries (`Props.collectors`, `BattleSnap.piles`); the sutler is open on the guest; the reward — unspent raspberries and experience, each hands in his own (`battle.loot`, migration 002).
+Pages: [design-multiplayer.md](design-multiplayer.md), [design-tower-defence.md](design-tower-defence.md).
 
-## [2026-11-03] код | Сеть: плавность, смена хоста, повтор, опоздавшие, друзья, чат
-Сверка места гостя по учтённому вводу и отброс, буфер снимков, зоны и лава для героев гостей, флаги кукол и заморозка башен, заряд заклинаний и звуки чужих героев. Хост ушёл посреди боя — бой ведёт следующий (`battle.host`, `TowerDefense.takeOver`); пауза без остановки; «Ещё раз» (`room.again`); вход в идущий бой; друзья (миграция 003), чат, список игроков с пингом. Тесты — `tests/net-party.spec.ts`.
-Страницы: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md).
+## [2026-11-03] code | Network: smoothness, host migration, replay, late joiners, friends, chat
+Reconciliation of the guest's position by acknowledged input and discard, a snapshot buffer, zones and lava for guests' heroes, puppet flags and tower freezing, spell charge and sounds of remote heroes. The host left mid-battle — the next one runs the battle (`battle.host`, `TowerDefense.takeOver`); pause without stopping; "Again" (`room.again`); joining a battle in progress; friends (migration 003), chat, a player list with ping. Tests — `tests/net-party.spec.ts`.
+Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md).
 
-## [2026-11-04] код | Сеть: подготовка к серверному бою — страж границы, `test:net`
-Начало перехода на серверно-авторитарный бой (план по образцу Quake 3): `tsconfig.server.json` проверяет `src/sim`, `src/net`, `src/game` без DOM, `server/test/sim-boundary.test.ts` грузит их в Node и запрещает сцену, DOM, FX и `Math.random`; `npm run test:net`; импорты с `.ts` в `collision`/`nav`/`level` для Node, `TdMist` в `td/types.ts`.
-Страницы: [dev-testing.md](dev-testing.md).
+## [2026-11-04] code | Network: preparing for the server battle — the boundary guard, `test:net`
+The start of the transition to a server-authoritative battle (the plan modelled on Quake 3): `tsconfig.server.json` checks `src/sim`, `src/net`, `src/game` without DOM, `server/test/sim-boundary.test.ts` loads them in Node and forbids the scene, DOM, FX and `Math.random`; `npm run test:net`; imports with `.ts` in `collision`/`nav`/`level` for Node, `TdMist` in `td/types.ts`.
+Pages: [dev-testing.md](dev-testing.md).
 
-## [2026-11-04] код | Сеть: канал, транспорты и кодек снимков
-Сетевой слой выделен в чистый код с тестами на `node:test` (`channel.test.ts`, `snapshot.test.ts`): `Channel` с надёжной и ненадёжной полосами и seq/ack по образцу netchan Quake 3, транспорты над WebSocket и петля в памяти с потерями, `SnapshotRing`/`SnapshotView` — дельты снимков от подтверждённого клиентом. В игре пока не используется — подключится вместе с серверным боем.
-Страницы: [design-multiplayer.md](design-multiplayer.md).
+## [2026-11-04] code | Network: channel, transports and snapshot codec
+The network layer extracted into pure code with tests on `node:test` (`channel.test.ts`, `snapshot.test.ts`): `Channel` with reliable and unreliable lanes and seq/ack modelled on Quake 3's netchan, transports over WebSocket and an in-memory loopback with losses, `SnapshotRing`/`SnapshotView` — snapshot deltas from the one acknowledged by the client. Not used in the game yet — it will be connected together with the server battle.
+Pages: [design-multiplayer.md](design-multiplayer.md).
 
-## [2026-11-04] код | Оборона: симуляция отделена от вида
-Правила обороны, башни, стены, куст, логова и кучки малины — в `src/sim/` (без сцены, DOM и `Math.random`, сид в `world.rng`), вид — в `src/cgame/` по записям сущностей и событиям через `SnapshotView`, меню и HUD — `td-ui.ts`; `src/td/td.ts`, `tower.ts`, `wall.ts`, `bush.ts`, `lair.ts` удалены. Хост-режим общего боя (`src/net/coop.ts`) удалён до серверного боя, сетевые Playwright-тесты пропущены. Тесты симуляции — `server/test/sim-td.test.ts`.
-Страницы: [design-tower-defence.md](design-tower-defence.md), [design-multiplayer.md](design-multiplayer.md).
+## [2026-11-04] code | Defence: simulation separated from the view
+Defence rules, towers, walls, bush, lairs and raspberry piles — in `src/sim/` (no scene, DOM or `Math.random`, the seed in `world.rng`), the view — in `src/cgame/` from entity records and events via `SnapshotView`, menu and HUD — `td-ui.ts`; `src/td/td.ts`, `tower.ts`, `wall.ts`, `bush.ts`, `lair.ts` deleted. The host mode of the shared battle (`src/net/coop.ts`) removed until the server battle, the network Playwright tests skipped. Simulation tests — `server/test/sim-td.test.ts`.
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-multiplayer.md](design-multiplayer.md).
 
-## [2026-11-04] код | Безголовый бой: герой, снаряжение и мобы в Node
-Вместо переписывания героя, магии (6400 строк) и 30 видов мобов — те же классы без рендера: `src/headless.ts` (канвас-заглушка, `nullFx`), `rnd()`/`useRng` в `src/rng.ts` (все `Math.random` героя, снаряжения, магии и мобов — через него, на время `world.step` — сид мира), приманки по мирам (`useDecoys`), `party.ts` удалён — отряд через `MobHooks`. Весь `src` грузится Node: импорты с `.ts`, свойства-параметры конструкторов переписаны в поля. Тест `server/test/headless.test.ts`: настоящая волна на `td` и детерминизм.
-Страницы: [design-multiplayer.md](design-multiplayer.md), [dev-testing.md](dev-testing.md).
+## [2026-11-04] code | Headless battle: hero, gear and mobs in Node
+Instead of rewriting the hero, magic (6400 lines) and 30 kinds of mobs — the same classes without rendering: `src/headless.ts` (a canvas stub, `nullFx`), `rnd()`/`useRng` in `src/rng.ts` (every `Math.random` of the hero, gear, magic and mobs goes through it, during `world.step` — the world seed), decoys per world (`useDecoys`), `party.ts` deleted — the party via `MobHooks`. All of `src` loads in Node: imports with `.ts`, constructor parameter properties rewritten as fields. Test `server/test/headless.test.ts`: a real wave on `td` and determinism.
+Pages: [design-multiplayer.md](design-multiplayer.md), [dev-testing.md](dev-testing.md).
 
-## [2026-11-04] код | Серверно-авторитарный бой: матч на сервере, клиент по снимкам
-Решение — [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md). `PROTOCOL = 2`: `relay`, `battle.end`, `battle.loot`, `battle.host` сняты; `src/game/battle.ts` + `match.ts` — безголовый бой партии и матч (команды по одной на такт, кольцо снимков, дельты, награды), `server/game/` — раннер и WebSocket `/game` над `Channel`; комнаты создают и закрывают матч, награды считает сервер. Клиент `src/cgame/net-battle.ts`: предсказание своего героя, чужие герои и куклы по записям, зеркало обороны, чат и имена. Тесты: `match.test.ts`, `rooms.test.ts` переписан, `tests/net.spec.ts` — дымовой на два браузера; `net-party.spec.ts` снят.
-Страницы: [design-multiplayer.md](design-multiplayer.md), [index.md](index.md), [dev-testing.md](dev-testing.md).
+## [2026-11-04] code | Server-authoritative battle: the match on the server, the client from snapshots
+The decision — [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md). `PROTOCOL = 2`: `relay`, `battle.end`, `battle.loot`, `battle.host` removed; `src/game/battle.ts` + `match.ts` — the headless party battle and the match (one command per tick, a snapshot ring buffer, deltas, rewards), `server/game/` — the runner and the WebSocket `/game` over `Channel`; rooms create and close the match, the server computes the rewards. The client `src/cgame/net-battle.ts`: prediction of the own hero, remote heroes and puppets from records, the defence mirror, chat and names. Tests: `match.test.ts`, `rooms.test.ts` rewritten, `tests/net.spec.ts` — a smoke test across two browsers; `net-party.spec.ts` removed.
+Pages: [design-multiplayer.md](design-multiplayer.md), [index.md](index.md), [dev-testing.md](dev-testing.md).
 
-## [2026-11-04] код | Сервер: руны без DOM, устойчивость матча к ошибкам
-Заряд заклинания ронял сервер: `src/sigils.ts` рисовал руну через `document.createElement` — теперь `makeCanvas` из `src/headless.ts`. Ошибка в обработке сообщения клиента или в шаге симуляции больше не роняет процесс: лог, игроку подсказка, при падении шага матч честно прерывается. Тест `server/test/headless-gear.test.ts`: все артефакты и заклинания, все ауры и спец-удары оружия творятся на безголовом сервере.
-Страницы: [design-multiplayer.md](design-multiplayer.md), [dev-testing.md](dev-testing.md).
+## [2026-11-04] code | Server: runes without DOM, match resilience to errors
+Charging a spell crashed the server: `src/sigils.ts` drew a rune via `document.createElement` — now `makeCanvas` from `src/headless.ts`. An error in handling a client message or in a simulation step no longer crashes the process: a log, a hint to the player, on a step failure the match is honestly aborted. Test `server/test/headless-gear.test.ts`: all artifacts and spells, all auras and weapon arts are cast on the headless server.
+Pages: [design-multiplayer.md](design-multiplayer.md), [dev-testing.md](dev-testing.md).
 
-## [2026-11-04] код | Сеть по Quake 3: кольцо снимков у клиента, пачки команд, время сервера, баги
-Сверка с архитектурой Quake III Arena ([arch-layers.md](arch-layers.md)). `SnapshotView` хранит 32 принятых состояния и применяет дельту от любой базы из истории (раньше при RTT ≥ 50 мс половина дельт отбрасывалась), события в дельте — по группам на снимок, без дублей. Клиент шлёт пачку последних трёх команд (`CMD_DUP`), сервер отбрасывает дубли по `seq`; интерполяция чужих героев и кукол — по `Delta.tick` с оценкой сдвига часов. Баги: перекат не уходил серверу (`clearEdges` до отправки), события обороны играли дважды, цифра подбора малины у места 0, герой после обрыва повторял последнюю команду вечно, `ack` залипал после перезагрузки страницы; окно надёжных переполнено — 4010; плата маркитанту проверяется; инвентарь и стоп-кадр не останавливают такты в сетевом бою.
-Страницы: [design-multiplayer.md](design-multiplayer.md), [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md), [arch-layers.md](arch-layers.md), [index.md](index.md).
+## [2026-11-04] code | Network after Quake 3: snapshot ring buffer on the client, command batches, server time, bugs
+A check against the Quake III Arena architecture ([arch-layers.md](arch-layers.md)). `SnapshotView` keeps 32 received states and applies a delta from any base in history (before, at RTT ≥ 50 ms half the deltas were discarded), events in a delta — grouped per snapshot, no duplicates. The client sends a batch of the last three commands (`CMD_DUP`), the server discards duplicates by `seq`; interpolation of remote heroes and puppets — by `Delta.tick` with a clock offset estimate. Bugs: the dodge roll did not reach the server (`clearEdges` before sending), defence events played twice, the raspberry pickup number at position 0, the hero after a disconnect repeated the last command forever, `ack` got stuck after a page reload; the reliable window overflowed — 4010; the sutler payment is checked; the inventory and freeze-frame do not stop ticks in a network battle.
+Pages: [design-multiplayer.md](design-multiplayer.md), [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md), [arch-layers.md](arch-layers.md), [index.md](index.md).
 
-## [2026-11-04] код | Клиент по Quake 3: единая очередь событий, ввод такта, приказы мыши, `act` по порядку
-`src/cgame/events.ts` — кольцо системных событий (`Sys_QueEvent`/`Com_EventLoop`): обработчики DOM и транспорт `/game` только кладут, `drainEvents()` в начале кадра разбирает ввод и сетевые кадры перед тактами. `input.ts` — клавиши с защёлками (тап короче такта не теряется), мышь, действия героя с клавиш и HUD исполняются в такте по порядку, а не в `keydown`. `orders.ts` — приказы мыши вынесены из плейграунда. `act` уходит с номером команды, сервер держит его до неё (`Seat.acts`). Тесты: `events.test.ts`, порядок `act` в `match.test.ts`.
-Страницы: [arch-layers.md](arch-layers.md), [design-multiplayer.md](design-multiplayer.md).
+## [2026-11-04] code | Client after Quake 3: unified event queue, tick input, mouse orders, `act` in order
+`src/cgame/events.ts` — a ring buffer of system events (`Sys_QueEvent`/`Com_EventLoop`): DOM handlers and the `/game` transport only enqueue, `drainEvents()` at the start of the frame sorts input and network frames before the ticks. `input.ts` — keys with latches (a tap shorter than a tick is not lost), the mouse, hero actions from keys and the HUD execute in the tick in order, not in `keydown`. `orders.ts` — mouse orders moved out of the playground. `act` leaves with the command number, the server holds it until that command (`Seat.acts`). Tests: `events.test.ts`, the `act` order in `match.test.ts`.
+Pages: [arch-layers.md](arch-layers.md), [design-multiplayer.md](design-multiplayer.md).
 
-## [2026-11-04] код | Мозг мобов как бот Quake 3: мысль 10 Гц, движитель на такт, путь в обход, куклы по намерению
-`Mob.update` разделён на `think()` (раз в 0,1 с: цель, тревога, режим, атака) и `mover()` (каждый такт: дорога, патруль, погоня, путь). Погоня, упёршаяся в стену, просит путь у `MobHooks.route` (`Pathfinder`, бюджет 4 за такт мира — сервер и плейграунд). Снимок несёт направление шага моба, куклы клиента шагают по нему. Стражи переведены на `rnd()`, часы — на время боя; страж границы проверяет весь геймплей сервера. `src/nav.ts` удалён (`distToObstacle` — в `collision.ts`). Тест `mob-brain.test.ts`.
-Страницы: [design-mobs.md](design-mobs.md), [arch-layers.md](arch-layers.md), [design-multiplayer.md](design-multiplayer.md), [design-level-blocks.md](design-level-blocks.md), [design-level-decor.md](design-level-decor.md), [project-brief.md](project-brief.md).
+## [2026-11-04] code | Mob brain as a Quake 3 bot: thought at 10 Hz, mover per tick, detour path, puppets by intent
+`Mob.update` split into `think()` (once per 0.1 s: target, alarm, mode, attack) and `mover()` (every tick: road, patrol, chase, path). A chase stuck against a wall asks `MobHooks.route` for a path (`Pathfinder`, a budget of 4 per world tick — server and playground). The snapshot carries the mob's step direction, client puppets step along it. Wardens moved to `rnd()`, the clock — to battle time; the boundary guard checks all server gameplay. `src/nav.ts` deleted (`distToObstacle` — in `collision.ts`). Test `mob-brain.test.ts`.
+Pages: [design-mobs.md](design-mobs.md), [arch-layers.md](arch-layers.md), [design-multiplayer.md](design-multiplayer.md), [design-level-blocks.md](design-level-blocks.md), [design-level-decor.md](design-level-decor.md), [project-brief.md](project-brief.md).
 
-## [2026-11-04] код | Сеть: дубли команд только при потерях, permessage-deflate на /game, замеры трафика
-`Transport.lossy` — по WebSocket клиент шлёт одну команду в кадре (пачка из трёх утраивала исходящий поток до 27 КБ/с), дубли остаются для петли с потерями и будущего транспорта без TCP. `/game` сжат permessage-deflate с общим контекстом: на проводе вниз 16,5 → 1,3 КБ/с, вверх 10,7 → 2,7 КБ/с. Замеры и вывод про бинарный кодек — в [dev-performance.md](dev-performance.md). Тест: матч по петле с потерями 25 %.
-Страницы: [design-multiplayer.md](design-multiplayer.md), [dev-performance.md](dev-performance.md), [index.md](index.md).
+## [2026-11-04] code | Network: command duplicates only under losses, permessage-deflate on /game, traffic measurements
+`Transport.lossy` — over WebSocket the client sends one command per frame (the batch of three tripled the outgoing stream to 27 KB/s), duplicates remain for the lossy loopback and a future transport without TCP. `/game` is compressed with permessage-deflate with a shared context: on the wire down 16.5 → 1.3 KB/s, up 10.7 → 2.7 KB/s. Measurements and the conclusion about a binary codec — in [dev-performance.md](dev-performance.md). Test: a match over the loopback with 25 % losses.
+Pages: [design-multiplayer.md](design-multiplayer.md), [dev-performance.md](dev-performance.md), [index.md](index.md).
 
-## [2026-11-04] код | Сеть: Safari не подключался к /game — сжатие без навязанных параметров клиента
-Safari предлагает голый `permessage-deflate`, а `ws` с жёстким `clientMaxWindowBits` отвергал все предложения и отвечал 400 — соединения боя не было. Параметры клиента больше не навязываются (`DEFLATE` в `game-hub.ts`), сжатие договаривается и с Chrome, и с Safari. Тест `game-hub.test.ts`: рукопожатие с тремя видами предложений.
-Страницы: [design-multiplayer.md](design-multiplayer.md).
+## [2026-11-04] code | Network: Safari could not connect to /game — compression without imposed client parameters
+Safari offers bare `permessage-deflate`, and `ws` with a hard `clientMaxWindowBits` rejected all offers and answered 400 — there was no battle connection. Client parameters are no longer imposed (`DEFLATE` in `game-hub.ts`), compression is negotiated with both Chrome and Safari. Test `game-hub.test.ts`: the handshake with three kinds of offers.
+Pages: [design-multiplayer.md](design-multiplayer.md).

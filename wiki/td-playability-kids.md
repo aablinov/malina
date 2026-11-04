@@ -1,58 +1,58 @@
-# Оборона куста глазами ребёнка 10–14 лет
+# Bush Defence through the eyes of a 10–14-year-old
 
-Версия 1.0 от 01.11.2026. Разбор механик режима [design-tower-defence.md](design-tower-defence.md) по плейтесту: где ребёнку трудно или скучно, что делают лучшие игры жанра и что из этого берём. Три предложения из топа уже сделаны (раздел 4), остальные — бэклог с оценкой.
+Version 1.0 of 2026-11-01. A playtest-based review of the mechanics of the [design-tower-defence.md](design-tower-defence.md) mode: where a child finds it hard or boring, what the best games of the genre do, and what we take from that. Three proposals from the top are already done (section 4); the rest is a backlog with estimates.
 
-## 1. Для кого и чего хотим
+## 1. Who it is for and what we want
 
-Игрок — 10–14 лет: читает быстро, но не любит длинный текст; любит **героя в гуще боя** больше, чем меню; переживает проигрыш остро, но охотно пробует снова, если видно, что пошло не так. Тон — дружелюбное приключение, а не Dark Souls. Из этого — три правила:
+The player is 10–14 years old: reads quickly but dislikes long text; prefers **a hero in the thick of battle** over menus; takes a loss hard but gladly tries again if it is clear what went wrong. The tone is a friendly adventure, not Dark Souls. From this, three rules:
 
-1. **Видно — значит понятно.** Опасность показывается на экране (метка, цвет, звук), а не прячется в цифрах.
-2. **Одно решение за раз.** «Башня или меч», «чинить или строить» — да; таблицы и тонкая экономика — нет.
-3. **Ошибка не наказывает навсегда.** Сломанное чинится, упущенное возвращается, у проигрыша есть понятная причина.
+1. **Visible means understandable.** Danger is shown on screen (marker, colour, sound), not hidden in numbers.
+2. **One decision at a time.** "Tower or sword", "repair or build" — yes; tables and fine-grained economy — no.
+3. **A mistake never punishes forever.** What is broken can be repaired, what was missed comes back, a loss has a clear reason.
 
-## 2. Что есть и где трение
+## 2. What exists and where the friction is
 
-| Механика | Что хорошо | Где трение для ребёнка |
+| Mechanic | What works | Where a child hits friction |
 |---|---|---|
-| Площадки и башни за малину | Простое меню 1–5, видно цену, улучшение и продажа | Не видно дальность до постройки; непонятно, какую башню против кого |
-| Волны по дорогам | Логова тревожатся, баннер волны, G — раньше срока с бонусом | Кто придёт — только название волны; охотники и мини-боссы — сюрприз |
-| Малина с павших — кучками | Сочно, звук серии | Бегать за каждой кучкой посреди боя — ребёнок выбирает между боем и сбором, и малина пропадает впустую |
-| Охотники на башни (новое) | Герою есть работа, кроме постройки | Башню грызут за экраном — игрок узнаёт, когда она уже руины |
-| Мини-боссы (новое) | Событие каждые три волны | Без предупреждения — непонятно, к чему готовиться |
-| Маркитант (новое) | Выбор «башня или меч» | Цены и сила оружия ребёнку надо сравнивать; помогает стрелка ▲ / ▼ в лавке |
-| Поражение | N — заново, быстро | Вся карта с первой волны: на 9-й волне это 15 минут прогресса |
-| Дороги и стенки (td2) | Красиво | Стенки обступали площадки — не пройти (исправлено) |
+| Pads and towers for raspberries | Simple menu 1–5, price visible, upgrade and sell | Range not visible before building; unclear which tower counters whom |
+| Waves along the roads | Lairs raise the alarm, wave banner, G — call early for a bonus | Who is coming — only the wave name; hunters and mini-bosses are a surprise |
+| Raspberries from the fallen — in piles | Juicy, streak sound | Chasing every pile in the middle of a fight — the child chooses between fighting and gathering, and raspberries are wasted |
+| Tower hunters (new) | The hero has work besides building | A tower gets gnawed off-screen — the player finds out when it is already ruins |
+| Mini-bosses (new) | An event every three waves | No warning — unclear what to prepare for |
+| Sutler (new) | The "tower or sword" choice | A child has to compare prices and weapon power; the ▲ / ▼ arrow in the shop helps |
+| Defeat | N — restart, fast | The whole map from wave one: on wave 9 that is 15 minutes of progress |
+| Roads and walls (td2) | Pretty | The walls boxed in the pads — unreachable (fixed) |
 
-## 3. Лучшие практики жанра
+## 3. Best practices of the genre
 
-- **Kingdom Rush** — превью волны (иконки врагов у входа), ранний вызов за награду (у нас есть), герой на поле, звёзды за карту.
-- **Bloons TD** — круг дальности при постройке, явные «контры» (лёд против быстрых), бесконечная перепроба волны.
-- **Plants vs. Zombies** — понятные роли с первого взгляда, новые враги по одному с подсказкой, автосбор солнца рядом с курсором.
-- **Dungeon Defenders / Orcs Must Die** — герой и ловушки вместе, лавка между волнами, сигнал «ядро атакуют» со стрелкой.
-- **Общее для детских TD** — ресурсы собираются сами или в один клик, угрозы читаются цветом (лёд — синий, огонь — оранжевый), проигрыш ведёт к откату на волну назад, а не к началу.
+- **Kingdom Rush** — wave preview (enemy icons at the entrance), early call for a reward (we have it), hero on the field, stars per map.
+- **Bloons TD** — range circle while building, explicit "counters" (ice against fast ones), endless wave retries.
+- **Plants vs. Zombies** — roles clear at first glance, new enemies introduced one at a time with a hint, auto-collecting sun near the cursor.
+- **Dungeon Defenders / Orcs Must Die** — hero and traps together, a shop between waves, a "core under attack" signal with an arrow.
+- **Common to kids' TD** — resources are collected automatically or in one click, threats are readable by colour (ice — blue, fire — orange), a loss rolls back one wave, not to the start.
 
-## 4. Предложения: польза и цена
+## 4. Proposals: value and cost
 
-Польза — для детей 10–14 лет; цена — работы в коде. Отмеченные ✅ сделаны.
+Value — for children aged 10–14; cost — work in code. Those marked ✅ are done.
 
-| # | Предложение | Польза | Цена | Статус |
+| # | Proposal | Value | Cost | Status |
 |---|---|---|---|---|
-| 1 | **Магнит малины**: тянет с 6 м (было 2,4), после отбитой волны вся малина летит к герою | высокая | низкая | ✅ |
-| 2 | **Карточка следующей волны**: кто и сколько, охотники (⚠ грызун, ❄ колдунчик) и ♛ мини-босс цветом | высокая | низкая | ✅ |
-| 3 | **Сигнал «башня в беде»**: мигающая строка со стрелкой и расстоянием, метка на карте, короткий звук, если башня далеко | высокая | средняя | ✅ |
-| 4 | Круг дальности башни при наведении на карточку в меню площадки | высокая | низкая | бэклог |
-| 5 | Повтор волны вместо начала карты: «Куст засох — попробовать волну N снова» с башнями как в начале волны | высокая | средняя | бэклог |
-| 6 | Подсказка-«контра» в меню площадки: «против мотыльков — шпиль», «против колдунчиков — шпиль, он не мёрзнет» | средняя | низкая | бэклог |
-| 7 | Первое появление нового врага — карточка с картинкой и одной строкой «как бить» (как в PvZ) | средняя | средняя | бэклог |
-| 8 | Лёгкий режим в настройках: куст ×1,5, малина ×1,3, пауза при открытом меню площадки | средняя | низкая | бэклог |
-| 9 | Звёзды за карту (куст цел на 100/60/30 %) и отметка в лагере | средняя | низкая | бэклог |
-| 10 | Пауза постройки: время замедляется ×0,3, пока открыто меню площадки | средняя | низкая | бэклог |
+| 1 | **Raspberry magnet**: pulls from 6 m (was 2.4), after a repelled wave all raspberries fly to the hero | high | low | ✅ |
+| 2 | **Next-wave card**: who and how many, hunters (⚠ gnawer, ❄ warlock) and ♛ mini-boss in colour | high | low | ✅ |
+| 3 | **"Tower in trouble" signal**: a blinking line with an arrow and distance, a marker on the map, a short sound if the tower is far away | high | medium | ✅ |
+| 4 | Tower range circle when hovering a card in the pad menu | high | low | backlog |
+| 5 | Retry the wave instead of the whole map: "The bush withered — try wave N again" with towers as at the start of the wave | high | medium | backlog |
+| 6 | "Counter" hint in the pad menu: "against moths — spire", "against warlocks — spire, it does not freeze" | medium | low | backlog |
+| 7 | First appearance of a new enemy — a card with a picture and one line "how to beat it" (as in PvZ) | medium | medium | backlog |
+| 8 | Easy mode in settings: bush ×1.5, raspberries ×1.3, pause while the pad menu is open | medium | low | backlog |
+| 9 | Stars per map (bush intact at 100/60/30 %) and a mark in the camp | medium | low | backlog |
+| 10 | Build pause: time slows to ×0.3 while the pad menu is open | medium | low | backlog |
 
-Почему эти три первыми: они **дешёвые и снимают главное трение** — ребёнок перестаёт разрываться между боем и сбором, заранее знает, что идёт, и узнаёт о беде с башней вовремя. Новые механики (охотники, мини-боссы) без 2 и 3 читались бы как несправедливость.
+Why these three first: they are **cheap and remove the main friction** — the child stops being torn between fighting and gathering, knows in advance what is coming, and learns about a tower in trouble in time. The new mechanics (hunters, mini-bosses) would have read as unfair without 2 and 3.
 
-## 5. Как сделано (топ-3)
+## 5. How it is done (top 3)
 
-- **Магнит** — `Props.berryReach` (на картах обороны 6 м), `Props.harvest()` — 4 с вся малина на земле летит к герою; вызывается из `TowerDefense`, когда волна отбита (`TdHooks.harvest`).
-- **Карточка волны** — `TowerDefense.wavePreview()` в HUD обороны, пока волна не идёт: виды и число (с учётом игроков), охотники синим, мини-босс малиновым.
-- **Башня в беде** — `Tower.onAlarm` (ранена, заморожена, разрушена) → `TowerDefense.alarms`: строка `.td-alarm` со стрелкой в экранном направлении камеры и расстоянием, метка на мини-карте (`alarmMarkers`), двойной писк не чаще раза в 2 с, если башня дальше 8 м. Сигнал снимается сам: через 4 с (руины — 8 с), когда лёд растаял или руины починили.
-- Тест — `tests/td-help.spec.ts`.
+- **Magnet** — `Props.berryReach` (6 m on defence maps), `Props.harvest()` — for 4 s all raspberries on the ground fly to the hero; called from `TowerDefense` when a wave is repelled (`TdHooks.harvest`).
+- **Wave card** — `TowerDefense.wavePreview()` in the defence HUD while no wave is running: kinds and count (accounting for players), hunters in blue, mini-boss in raspberry.
+- **Tower in trouble** — `Tower.onAlarm` (wounded, frozen, destroyed) → `TowerDefense.alarms`: a `.td-alarm` line with an arrow in the camera's screen direction and the distance, a marker on the minimap (`alarmMarkers`), a double beep no more than once per 2 s if the tower is farther than 8 m. The signal clears itself: after 4 s (ruins — 8 s), when the ice has melted or the ruins are repaired.
+- Test — `tests/td-help.spec.ts`.

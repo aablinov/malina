@@ -1,115 +1,115 @@
-# Малина: описание проекта для нового чата
+# Malina: project description for a new chat
 
-> **22.10.2026 — поворот (ADR-004):** игра вернулась к мистической кооп-зачистке подземелий с мечами, топорами и магией в добром детском стиле (`claude/adr-004-mystic-coop-melee.md`, `claude/style-guide.md`). Огнестрел, рикошеты, гранаты, тактическая стойка и все враги (жуки, арахниды, тюремщики) удалены. Герой — `src/knight.ts` (меч: комбо из трёх ударов со следом клинка, перекат на пробел; прыжка нет), управление мышью как в Minecraft Dungeons (клик — идти, клик по цели — подойти и бить, Shift + клик — бить на месте, 1/2/3 — слоты заклинаний; путь в обход стен — `src/level/pathfind.ts`), вода анимирована шейдером. Разделы ниже про стволы и врагов описывают удалённый код и остаются как история.
+> **2026-10-22 — pivot (ADR-004):** the game has returned to mystic co-op dungeon clearing with swords, axes and magic in a kind children's style (`claude/adr-004-mystic-coop-melee.md`, `claude/style-guide.md`). Firearms, ricochets, grenades, the tactical stance and all enemies (beetles, arachnids, jailers) have been removed. The hero is `src/knight.ts` (sword: a three-hit combo with a blade trail, dodge roll on space; no jump), mouse control as in Minecraft Dungeons (click — walk, click on a target — approach and strike, Shift + click — strike in place, 1/2/3 — spell slots; pathing around walls — `src/level/pathfind.ts`), water is animated by a shader. The sections below about guns and enemies describe removed code and remain as history.
 
-> **23.10.2026 — декор и свет (см. [log.md](log.md)):** плейграунд без дома во дворе; поверх блоков — свободный декор (колонны, щебень, цепи, корни, паутина, знамёна, факелы, фонари, грибы; формат, рендер, столкновения, редактор по Tab, комнаты подземелья — `claude/design-level-decor.md`); свет «как в Unreal» — `src/lighting.ts`, `claude/style-lighting.md`. Вики ведётся по схеме Карпатого: [index.md](index.md), [log.md](log.md), [CLAUDE.md](CLAUDE.md).
+> **2026-10-23 — decor and light (see [log.md](log.md)):** the playground without the house in the yard; on top of blocks — free decor (columns, rubble, chains, roots, cobwebs, banners, torches, lanterns, mushrooms; format, rendering, collisions, editor on Tab, dungeon rooms — `claude/design-level-decor.md`); Unreal-style lighting — `src/lighting.ts`, `claude/style-lighting.md`. The wiki follows Karpathy's scheme: [index.md](index.md), [log.md](log.md), [CLAUDE.md](CLAUDE.md).
 
-Документ, с которого стоит начинать новый чат. Дополняют его:
-- `claude/adr-001-dungeon-roguelite.md` — почему делаем кооп-подземелья;
-- `claude/adr-002-realistic-weapons-tactical-movement.md` — реальное оружие, тактическое движение, броня, плейграунд;
-- `claude/adr-003-visual-style.md` — графика в стиле Minecraft Dungeons, без гиперреализма;
-- `claude/adr-004-mystic-coop-melee.md` и `claude/style-guide.md` — ближний бой и магия, референсы стиля;
-- `claude/design-dungeon.md` — правила, цифры и этапы.
+The document to start a new chat from. It is complemented by:
+- `claude/adr-001-dungeon-roguelite.md` — why we are making co-op dungeons;
+- `claude/adr-002-realistic-weapons-tactical-movement.md` — real weapons, tactical movement, armour, the playground;
+- `claude/adr-003-visual-style.md` — graphics in the style of Minecraft Dungeons, no hyperrealism;
+- `claude/adr-004-mystic-coop-melee.md` and `claude/style-guide.md` — melee and magic, style references;
+- `claude/design-dungeon.md` — rules, numbers and phases.
 
-## Что это
+## What this is
 
-«Малина» — браузерная воксельная игра с изометрической камерой в стиле Minecraft Dungeons. Сейчас идёт переход к **кооперативному тактическому рогалику «Улей»**:
-- отряд до 4 игроков в бронежилетах и касках, с реальными стволами (АК-74, AR-15, двустволка, СВД, ПКМ…), зачищает процедурные этажи подземелья от орд жуков;
-- игроки собирают билд из усилений и обвесов;
-- малина — валюта, лечение и итог забега.
+"Malina" is a browser voxel game with an isometric camera in the style of Minecraft Dungeons. It is currently transitioning to the **cooperative tactical roguelite "The Hive"**:
+- a squad of up to 4 players in body armour and helmets, with real guns (AK-74, AR-15, double-barrel shotgun, SVD, PKM…), clears procedural dungeon floors of beetle hordes;
+- players assemble a build from power-ups and attachments;
+- raspberries are the currency, healing and the result of a run.
 
-**Стиль графики** — как в Minecraft Dungeons: воксели, блочные персонажи, пиксельные текстуры, яркий свет. **Гиперреализм не нужен.** Реализм только в механике (оружие, перезарядка, броня, стойка), внешний вид стилизованный (ADR-003).
+**Graphics style** — as in Minecraft Dungeons: voxels, blocky characters, pixel textures, bright light. **No hyperrealism needed.** Realism only in mechanics (weapons, reloading, armour, stance), the look is stylised (ADR-003).
 
-~~Сеть пока не делаем~~ — есть сервер и общий бой обороны: лобби, профили, история боёв, хост ведёт героев гостей ([design-multiplayer.md](design-multiplayer.md)).
+~~No networking for now~~ — there is a server and a shared defence battle: lobby, profiles, battle history, the host drives the guests' heroes ([design-multiplayer.md](design-multiplayer.md)).
 
-## Стек и сборка
+## Stack and build
 
-- **Язык и движок:** TypeScript (strict), three.js 0.169; постобработка EffectComposer + UnrealBloom + OutputPass, тонмаппинг ACES.
-- **Сборка:** Vite 5 + `vite-plugin-singlefile` — вся игра собирается в один `dist/index.html`, открывается без сервера.
-  - Динамический `import()` в такой сборке инлайнится и исполняется сразу, поэтому точки входа — функции (`runGame`, `runPlayground`), а `main.ts` выбирает, какую вызвать.
-- **Команды:**
-  - `npm run dev` — разработка на localhost:5173;
-  - `npm run typecheck` — проверка типов;
-  - `npm run build` — tsc + сборка `dist/index.html`;
-  - `npm test` — Playwright-тесты плейграунда (нужен собранный `dist`); как запускать — [dev-testing.md](dev-testing.md): node через `mise exec`, браузер — Google Chrome через `PW_CHROMIUM`.
-- **Текстуры, иконки и звуки** генерируются кодом (canvas и Web Audio), внешних ассетов нет.
+- **Language and engine:** TypeScript (strict), three.js 0.169; post-processing EffectComposer + UnrealBloom + OutputPass, ACES tone mapping.
+- **Build:** Vite 5 + `vite-plugin-singlefile` — the whole game is built into a single `dist/index.html`, opens without a server.
+  - A dynamic `import()` in such a build gets inlined and executes immediately, so the entry points are functions (`runGame`, `runPlayground`) and `main.ts` chooses which one to call.
+- **Commands:**
+  - `npm run dev` — development on localhost:5173;
+  - `npm run typecheck` — type check;
+  - `npm run build` — tsc + build of `dist/index.html`;
+  - `npm test` — Playwright tests of the playground (needs a built `dist`); how to run — [dev-testing.md](dev-testing.md): node via `mise exec`, browser — Google Chrome via `PW_CHROMIUM`.
+- **Textures, icons and sounds** are generated by code (canvas and Web Audio), there are no external assets.
 
-## Где лежит и как работаем
+## Where it lives and how we work
 
-- **Репозиторий:** `/Users/andrey/dev/malina` на Mac пользователя (git).
-  - **Не коммитить:** коммиты делает сам пользователь.
-  - Перед перезаписью сверять файлы на устройстве (md5 или diff) — пользователь мог что-то править.
-  - Закоммичена версия «фермы»; файлы режима «открытой карты» (`lobby.ts`, `map.ts`, `mission.ts`, `minimap.ts`, `profile.ts`, `session.ts`) лежат неотслеженными, а `main.ts`/`shop.ts`/`textures.ts` той версии в репозитории нет. `lobby.ts`, `mission.ts`, `minimap.ts` с фермой не компилируются и исключены из `tsconfig.json` до этапа 1.
-- **Опубликованная игра:** артефакт Claude «Малина» (сейчас там версия открытой карты), обновляется по той же ссылке после каждой правки.
-- **Плейграунд:** отдельный артефакт «Плейграунд Малины» (https://claude.ai/artifact/GTimWfP8VdvEQuHVA8rkK4), собирается `VITE_PLAYGROUND=only npx vite build --outDir /tmp/pgonly`.
-  - Для публикации из `dist/index.html` убрать `doctype`/`html`/`head`/`body`/`meta`/`title`.
-  - В начало добавить `<title>Малина</title><style>:root{color-scheme:dark}</style>`.
-- **Тесты:** Playwright (`playwright.config.ts`, `tests/`), запуск — [dev-testing.md](dev-testing.md).
-  - Аргументы запуска: `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`; свой Chromium — через `PW_CHROMIUM`.
-  - Отладочный хук плейграунда `window.__malina` (`mode: 'playground'`): `hero`, `input`, `dummies`, `beetles`, `obstacles`, `GUNS`, `HERO`, `script(on)` — ввод из теста вместо клавиатуры, `step(sec)` — прогнать симуляцию (фиксированный шаг 1/60), `press('crouch' | 'roll' | 'reload' | 'primary' | 'pistol')`, `setAim(x, z)`, `setCam(dist, dir?)`, `equip(id)`, `spawnBeetle(kind)`, `resetTargets()`.
-  - Хук старой игры (ферма): `G`, `player`, `camera`, `combat`, `startGame`, `equip`, `step`.
-  - Страницу игры открывать с `waitUntil: 'domcontentloaded'`: без сети шрифты Google задерживают `load`.
-- **Язык общения и интерфейса:** русский.
-- **Стартовые деньги для тестов:** 1000 ягод (`START_BERRIES` в `config.ts`).
+- **Repository:** `/Users/andrey/dev/malina` on the user's Mac (git).
+  - **Do not commit:** the user makes the commits himself.
+  - Before overwriting, compare the files on the device (md5 or diff) — the user may have edited something.
+  - The "farm" version is committed; the "open map" mode files (`lobby.ts`, `map.ts`, `mission.ts`, `minimap.ts`, `profile.ts`, `session.ts`) lie untracked, and `main.ts`/`shop.ts`/`textures.ts` of that version are not in the repository. `lobby.ts`, `mission.ts`, `minimap.ts` do not compile with the farm and are excluded from `tsconfig.json` until phase 1.
+- **Published game:** the Claude artifact "Malina" (currently the open-map version is there), updated at the same link after every edit.
+- **Playground:** a separate artifact "Malina Playground" (https://claude.ai/artifact/GTimWfP8VdvEQuHVA8rkK4), built with `VITE_PLAYGROUND=only npx vite build --outDir /tmp/pgonly`.
+  - To publish from `dist/index.html`, remove `doctype`/`html`/`head`/`body`/`meta`/`title`.
+  - Add `<title>Малина</title><style>:root{color-scheme:dark}</style>` at the beginning.
+- **Tests:** Playwright (`playwright.config.ts`, `tests/`), how to run — [dev-testing.md](dev-testing.md).
+  - Launch arguments: `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`; a custom Chromium — via `PW_CHROMIUM`.
+  - Playground debug hook `window.__malina` (`mode: 'playground'`): `hero`, `input`, `dummies`, `beetles`, `obstacles`, `GUNS`, `HERO`, `script(on)` — input from the test instead of the keyboard, `step(sec)` — run the simulation (fixed step 1/60), `press('crouch' | 'roll' | 'reload' | 'primary' | 'pistol')`, `setAim(x, z)`, `setCam(dist, dir?)`, `equip(id)`, `spawnBeetle(kind)`, `resetTargets()`.
+  - Hook of the old game (farm): `G`, `player`, `camera`, `combat`, `startGame`, `equip`, `step`.
+  - Open the game page with `waitUntil: 'domcontentloaded'`: without network, Google fonts delay `load`.
+- **Language of communication and interface:** Russian.
+- **Starting money for tests:** 1000 berries (`START_BERRIES` in `config.ts`).
 
-## Карта кода (`src/`)
+## Code map (`src/`)
 
-| Файл | Что внутри сейчас | Судьба |
+| File | What is inside now | Fate |
 |---|---|---|
-| `main.ts` | точка входа: `?dev=playground` → плейграунд, иначе игра | оставить |
-| `game.ts` | бывший `main.ts` режима фермы: экраны, цикл, HUD, хук `__malina`; **F9** в меню → плейграунд | переписать под забег (этап 1) |
-| `devflag.ts` | флаг инструментов разработчика (`VITE_DEV_TOOLS=off` выключает; `VITE_PLAYGROUND=only` — сборка, которая сразу открывает плейграунд) | оставить |
-| `tuning.ts` | **все настраиваемые числа:** `HERO` (скорости, выносливость, перекат, стойка), `SPREAD`, `RICOCHET`, `GUNS` (ПМ, АК-74, двустволка, AR-15), `CALIBERS`, `BEETLES`; сброс и экспорт JSON | дополнять (броня, гранаты, остальные стволы) |
-| `collision.ts` | препятствия — повёрнутые прямоугольники с высотой; выталкивание круга со скольжением; лучи против препятствий и кругов | оставить; комнаты строят препятствия так же |
-| `firearms.ts` | определения реальных стволов (калибр, режим огня, вес, слот) и блочные модели с точками для анимации: дуло, рукоять, цевьё, шахта магазина, затвор, блок стволов двустволки | добавить остальные стволы и обвесы |
-| `gunplay.ts` | `GunState` (магазин + патронник, перезарядка такт./полн./переламывание с событиями), `Gunner` (основной, ПМ, запас по калибрам, смена 0,4 с, дуплет), `traceShot` (мгновенная пуля на высоте дула, спад урона после дальности, рикошет 50%), seed-ГСЧ | добавить пробитие, гранаты, обвесы |
-| `hero.ts` | `Hero`: блочный боец (таз, позвоночник, грудь, голова в каске, руки и ноги на двухзвенной IK, жилет с подсумками, нашивка цвета отряда); ходьба/бег/прицел/присед/перекат, выносливость, раздельный верх и низ (±70°), ход спиной, стрейф, отдача в плечи, перезарядка с выпадающим магазином, переламывание двустволки; ввод — `HeroInput` (под сеть) | добавить броню, шлем, падение/подъём, гранаты |
-| `dev/playground.ts` | сцена плейграунда, ввод, камера, трассеры, сколы, «рентген» стен, HUD, телеметрия, хук | служебное |
-| `dev/dummies.ts`, `dev/panel.ts`, `dev/overlay.ts`, `dev/playground.css` | мишени (неподвижные 5–30 м, на рельсе 2/4/6 м/с, стрелок), панель F1, оверлеи F2/F3 | служебное |
-| `player.ts`, `weapons.ts`, `combat.ts` | старые герой-фермер, 8 стволов в стиле Doom Eternal, стрельба с модами — **используются только фермой** (`game.ts`) | удалить на этапе 1a, когда игра перейдёт на `hero.ts`/`gunplay.ts`; рикошеты/трофеи/плевки из `combat.ts` перенести |
-| `jailer.ts`, `cover.ts` | **тюремщики** — бойцы ЧВК в чёрном, украли малину. Тело — тот же `Hero` (форма через `HeroLook`, балаклава), ИИ пишет `HeroInput`. Стрелок AR-15 (укрытие → прячется → выглядывает очередями, перезарядка в укрытии), Двустволка (перебежки, дуплет вплотную), Огнемётчик (`flamer` в `firearms.ts`, струя 6,5 м, горение; баллоны на спине — отдельная цель, взрыв 3,8 м бьёт всех). Тревога будит пост. `cover.ts` — точки укрытий у граней препятствий. Пули в `traceShot` учитывают `shieldY`: присевший за низким укрытием неуязвим | ядро ЧВК-врагов |
-| `props.ts` | **склад** (x −13…−2, z 10…19): бочки (`Barrel`: 20 hp → горят 1,1 с → взрыв 3,6 м/75, цепная реакция), ящики с припасами (`SupplyCrate`: E → крышка, 7 предметов лута веером, подбор с притяжением), терминал (`HealthTerminal`: E → 30 hp/с, заряд 100, +6/с), деревянные ящики (`BreakCrate`: 45 hp, обломки, 35% — малина). `Props.solids` — препятствия для движения, пуль и навигации (пересборка `NavGrid` и укрытий при изменении), `Props.targets` — цели. `Shootable.topY`: пуля выше пролетает; прицел на предмете опускает выстрел игрока | встроить в комнаты этажа |
-| `grenade.ts` | гранаты РГД-5 (`GRENADE` в tuning): дуга под точку, отскоки от стен, пола и крыш укрытий, фитиль 3,2 с, мигающее кольцо радиуса; взрыв в playground `explode()` — укрытие между взрывом и целью режет урон до ×0,2. Бросок — жест `Hero.throwGesture(hold)` левой рукой (готов к броску игрока) | готово: гранаты игрока на `G` (удержание 4→14 м до курсора, дуга и кольцо прицела, 3 шт, `hero.grenades`, `onGrenade`); арахниды отпрыгивают от гранат, взрыв будит врагов в 2,5 радиуса |
-| `arachnid.ts` | **арахниды** в духе «Звёздного десанта» (блочные, полосы светятся bloom): Воин (ближний бой, фланг, бей-и-беги, давит на перезарядке), Ткач (держит 6–11 м, ядовитая паутина с упреждением: замедление ×0,45 и яд), Прыгун (прыжок на героя до 3 длин тела, после — оглушён 0,55 с). Общий ИИ: замечает наведённый ствол (угол + разброс) и отпрыгивает через время реакции, уходит с линии огня, ноги на IK шагают двумя группами | ядро орды на этапе 1a |
-| ~~`nav.ts`~~ | удалён 04.11.2026 — путь мобов и героя считает `level/pathfind.ts` ([design-mobs.md](design-mobs.md), раздел 6) | — |
-| `ik.ts` | двухзвенная IK (руки и ноги героя, ноги арахнидов) | оставить |
-| `beetle.ts` | 5 видов жуков, ИИ; цель — интерфейс `BeetleTarget { pos, down }` | оставить; добавить орду, яйца, щитоносца, элиток; перебалансировать здоровье под новый урон |
-| `fx.ts` | частицы, вспышки, гильзы, взрывы, цифры урона, `custom` | оставить |
-| `audio.ts` | синтез звуков; добавлены ПМ, АК, AR, двустволка (одиночный и дуплет), щелчок, магазин, затвор, переламывание, шаги | оставить |
-| `textures.ts`, `icons.ts` | пиксельные текстуры (добавлены `pixelTex`, `checkerTex`), иконки HUD | оставить |
-| `lobby.ts`, `shop.ts`, `session.ts`, `profile.ts`, `minimap.ts`, `map.ts`, `mission.ts`, `world.ts`, `bush.ts`, `daynight.ts`, `config.ts` | как раньше (см. ADR-001) | без изменений |
+| `main.ts` | entry point: `?dev=playground` → playground, otherwise the game | keep |
+| `game.ts` | the former `main.ts` of the farm mode: screens, loop, HUD, the `__malina` hook; **F9** in the menu → playground | rewrite for the run (phase 1) |
+| `devflag.ts` | developer tools flag (`VITE_DEV_TOOLS=off` disables; `VITE_PLAYGROUND=only` — a build that opens the playground right away) | keep |
+| `tuning.ts` | **all tunable numbers:** `HERO` (speeds, stamina, dodge roll, stance), `SPREAD`, `RICOCHET`, `GUNS` (PM, AK-74, double-barrel, AR-15), `CALIBERS`, `BEETLES`; reset and JSON export | extend (armour, grenades, the remaining guns) |
+| `collision.ts` | obstacles — rotated rectangles with height; pushing a circle out with sliding; rays against obstacles and circles | keep; rooms build obstacles the same way |
+| `firearms.ts` | definitions of real guns (calibre, fire mode, weight, slot) and blocky models with points for animation: muzzle, grip, handguard, magazine well, bolt, barrel block of the double-barrel | add the remaining guns and attachments |
+| `gunplay.ts` | `GunState` (magazine + chamber, tactical/full/break-open reload with events), `Gunner` (primary, PM, reserve by calibre, 0.4 s switch, double shot), `traceShot` (instant bullet at muzzle height, damage falloff past range, 50% ricochet), seeded RNG | add penetration, grenades, attachments |
+| `hero.ts` | `Hero`: a blocky fighter (pelvis, spine, chest, helmeted head, arms and legs on two-bone IK, vest with pouches, squad-colour patch); walk/run/aim/crouch/dodge roll, stamina, separate upper and lower body (±70°), walking backwards, strafing, recoil into the shoulders, reload with a dropping magazine, breaking open the double-barrel; input — `HeroInput` (ready for networking) | add armour, helmet, falling/getting up, grenades |
+| `dev/playground.ts` | the playground scene, input, camera, tracers, chips, wall "x-ray", HUD, telemetry, the hook | utility |
+| `dev/dummies.ts`, `dev/panel.ts`, `dev/overlay.ts`, `dev/playground.css` | targets (stationary 5–30 m, on a rail 2/4/6 m/s, a shooter), the F1 panel, F2/F3 overlays | utility |
+| `player.ts`, `weapons.ts`, `combat.ts` | the old farmer hero, 8 Doom Eternal-style guns, shooting with mods — **used only by the farm** (`game.ts`) | delete in phase 1a, when the game moves to `hero.ts`/`gunplay.ts`; move ricochets/trophies/spit from `combat.ts` |
+| `jailer.ts`, `cover.ts` | **jailers** — PMC fighters in black, they stole the raspberries. The body is the same `Hero` (shape via `HeroLook`, balaclava), the AI writes `HeroInput`. AR-15 rifleman (cover → hides → peeks out in bursts, reloads in cover), Double-barrel (dashes, double shot point-blank), Flamethrower (`flamer` in `firearms.ts`, 6.5 m jet, burning; tanks on the back — a separate target, a 3.8 m explosion hits everyone). The alarm wakes the post. `cover.ts` — cover points at obstacle faces. Bullets in `traceShot` respect `shieldY`: crouched behind low cover is invulnerable | the core of PMC enemies |
+| `props.ts` | **storage yard** (x −13…−2, z 10…19): barrels (`Barrel`: 20 hp → burn 1.1 s → explosion 3.6 m/75, chain reaction), supply crates (`SupplyCrate`: E → lid, 7 loot items in a fan, pickup with attraction), terminal (`HealthTerminal`: E → 30 hp/s, charge 100, +6/s), wooden crates (`BreakCrate`: 45 hp, debris, 35% — raspberries). `Props.solids` — obstacles for movement, bullets and navigation (`NavGrid` and covers rebuilt on change), `Props.targets` — targets. `Shootable.topY`: a bullet higher flies over; aiming at an item lowers the player's shot | build into the floor's rooms |
+| `grenade.ts` | RGD-5 grenades (`GRENADE` in tuning): arc under the point, bounces off walls, floor and cover roofs, 3.2 s fuse, a blinking radius ring; explosion in playground `explode()` — cover between the explosion and the target cuts damage to ×0.2. The throw — the `Hero.throwGesture(hold)` gesture with the left hand (ready for the player's throw) | done: player grenades on `G` (hold 4→14 m toward the cursor, arc and aim ring, 3 pcs, `hero.grenades`, `onGrenade`); arachnids jump away from grenades, the explosion wakes enemies within 2.5 radii |
+| `arachnid.ts` | **arachnids** in the spirit of "Starship Troopers" (blocky, stripes glow with bloom): Warrior (melee, flank, hit-and-run, presses during reload), Weaver (keeps 6–11 m, poisonous web with lead: slow ×0.45 and poison), Jumper (jump at the hero up to 3 body lengths, stunned 0.55 s afterwards). Shared AI: notices an aimed gun (angle + spread) and jumps away after a reaction time, leaves the line of fire, IK legs step in two groups | the core of the horde in phase 1a |
+| ~~`nav.ts`~~ | deleted 2026-11-04 — paths of mobs and the hero are computed by `level/pathfind.ts` ([design-mobs.md](design-mobs.md), section 6) | — |
+| `ik.ts` | two-bone IK (the hero's arms and legs, arachnid legs) | keep |
+| `beetle.ts` | 5 kinds of beetles, AI; the target is the `BeetleTarget { pos, down }` interface | keep; add the horde, eggs, shield-bearer, elites; rebalance health for the new damage |
+| `fx.ts` | particles, flashes, shell casings, explosions, damage numbers, `custom` | keep |
+| `audio.ts` | sound synthesis; added PM, AK, AR, double-barrel (single and double shot), click, magazine, bolt, break-open, footsteps | keep |
+| `textures.ts`, `icons.ts` | pixel textures (added `pixelTex`, `checkerTex`), HUD icons | keep |
+| `lobby.ts`, `shop.ts`, `session.ts`, `profile.ts`, `minimap.ts`, `map.ts`, `mission.ts`, `world.ts`, `bush.ts`, `daynight.ts`, `config.ts` | as before (see ADR-001) | unchanged |
 
-## Текущее состояние
+## Current state
 
-**Этап 0 сделан в первой итерации** (21.10.2026):
-- плейграунд по `?dev=playground` или F9 в меню: шахматный пол 48 × 48 м с разметкой каждые 5 м и крестом нуля, стены 3 м (со стороны камеры 0,5 м), укрытия 0,9 и 2 м, колонна, угол, коридор 2 м с проёмом 1 м, стена 45°, стрельбище 5/10/15/20/30 м (мишени разнесены по ширине дорожки), подвижная мишень, манекен-стрелок (плюёт на высоте 1,55 м: стоя попадает, в приседе — над каской), подписи на полу; высокие стены между камерой и героем становятся прозрачными;
-- герой и стрельба: всё из разделов 8.1 и 10.1–10.2, кроме ранений/хромоты, вставки пластин и брони (этап 1a);
-- инструменты F1–F8, P, «.», B, N, Ctrl+1…5, Ctrl+0;
-- Playwright: 2 теста зелёные — 10 м по клеткам + 6 одиночных по манекену на 10 м (6 попаданий × 11, 6 патронов, тактическая перезарядка до 30 + 1); скорости ходьбы, бега, приседа, прицела, перекат 5 м и его цена;
-- ферма (`game.ts`) работает как раньше.
+**Phase 0 done in the first iteration** (2026-10-21):
+- the playground via `?dev=playground` or F9 in the menu: a checkerboard floor 48 × 48 m with markings every 5 m and a cross at zero, 3 m walls (0.5 m on the camera side), covers 0.9 and 2 m, a column, a corner, a 2 m corridor with a 1 m opening, a 45° wall, a shooting range 5/10/15/20/30 m (targets spread across the lane width), a moving target, a shooter dummy (spits at 1.55 m height: hits when standing, over the helmet when crouched), labels on the floor; tall walls between the camera and the hero become transparent;
+- hero and shooting: everything from sections 8.1 and 10.1–10.2, except wounds/limping, plate inserts and armour (phase 1a);
+- tools F1–F8, P, ".", B, N, Ctrl+1…5, Ctrl+0;
+- Playwright: 2 tests green — 10 m by cells + 6 single shots at the dummy at 10 m (6 hits × 11, 6 rounds, tactical reload to 30 + 1); walk, run, crouch, aim speeds, a 5 m dodge roll and its cost;
+- the farm (`game.ts`) works as before.
 
-**Загон врагов** (вторая итерация): у нулевой точки стоят 5 жуков и 3 арахнида и спят; попадание или пуля рядом будит только первого на пути пули; N возвращает всех на места. Ctrl+1…5 убраны. Хук: `enemies`, `arachnids`, `wake(kind?)`, `resetEnemies()`, `raycast`, `minObsDist`. Третий тест Playwright: выстрел будит только воина, воин уклоняется, прыгун за низким укрытием не перелетает через него.
+**Enemy pen** (second iteration): 5 beetles and 3 arachnids stand sleeping at the zero point; a hit or a bullet nearby wakes only the first one on the bullet's path; N returns everyone to their places. Ctrl+1…5 removed. Hook: `enemies`, `arachnids`, `wake(kind?)`, `resetEnemies()`, `raycast`, `minObsDist`. Third Playwright test: a shot wakes only the warrior, the warrior dodges, the jumper behind low cover does not jump over it.
 
-**Пост ЧВК** (третья итерация): три тюремщика у угла комнаты (x 16–22, z 12–13) едят малину, пока не разбудишь; из убитых высыпается малина. Четвёртый тест Playwright: тревога будит весь пост, присевший за низким укрытием не получает урона, баллоны взрываются от пуль со спины.
+**PMC post** (third iteration): three jailers at the room corner (x 16–22, z 12–13) eat raspberries until you wake them; raspberries spill from the killed. Fourth Playwright test: the alarm wakes the whole post, crouched behind low cover takes no damage, tanks explode from bullets in the back.
 
-**Четвёртая итерация:** у тюремщиков красные светящиеся глаза (`HeroLook.eyes`); Двустволка бросает гранаты (2 шт, пауза 7 с, 5–13 м, разброс растёт с дальностью) в засевшего героя — за укрытием, присел или стоит на месте; тюремщики убегают от лежащих гранат. Пятый тест Playwright это проверяет.
+**Fourth iteration:** jailers have red glowing eyes (`HeroLook.eyes`); the Double-barrel throws grenades (2 pcs, 7 s pause, 5–13 m, spread grows with range) at a hunkered-down hero — behind cover, crouched or standing still; jailers run from lying grenades. The fifth Playwright test checks this.
 
-**Пятая итерация:** склад с интерактивными предметами, счётчик малины в HUD, подсказка «E — …». Седьмой тест Playwright проверяет склад.
+**Fifth iteration:** a storage yard with interactive items, a raspberry counter in the HUD, the hint "E — …". The seventh Playwright test checks the storage yard.
 
-**Известные упрощения и что подбирать в плейграунде:**
-- старые жуки ходят сквозь стены к герою (арахниды обходят по навсетке) (их выталкивает из препятствий, но пути они не ищут); урон пуль по жукам ×0,25 (`BEETLES.dmgScale`), пока здоровье жуков в старом масштабе;
-- раскачка АК-74 при длинной очереди доходит до ~5,5° — возможно, многовато;
-- поза героя и пропорции (руки 0,33 + 0,31 м, ствол ×0,85) подобраны на глаз по скриншотам, нужна живая проверка.
+**Known simplifications and what to tune on the playground:**
+- old beetles walk through walls toward the hero (arachnids go around via the nav grid) (they are pushed out of obstacles but do not search for paths); bullet damage to beetles ×0.25 (`BEETLES.dmgScale`) while beetle health is on the old scale;
+- the AK-74 sway on a long burst reaches ~5.5° — possibly too much;
+- the hero's pose and proportions (arms 0.33 + 0.31 m, gun ×0.85) were eyeballed from screenshots, a live check is needed.
 
-## Следующий шаг
+## Next step
 
-1. **Пользователь щупает плейграунд** и правит числа в F1 («Скопировать JSON» → перенести в `tuning.ts`); доводим анимации по отзывам.
-2. **Гранаты РГД-5** (если остаётся в этапе 0).
-3. **Этап 1a «Тир»:** арена с ордами жуков, броня и HUD; игра переходит на `hero.ts`/`gunplay.ts`, старые `player.ts`/`weapons.ts`/`combat.ts` удаляются.
-4. **Этап 1b «Этаж»:** 6 комнат, усиления, босс «Матка».
+1. **The user tries the playground** and edits numbers in F1 ("Copy JSON" → move into `tuning.ts`); we polish animations from feedback.
+2. **RGD-5 grenades** (if it stays in phase 0).
+3. **Phase 1a "Shooting range":** an arena with beetle hordes, armour and HUD; the game moves to `hero.ts`/`gunplay.ts`, the old `player.ts`/`weapons.ts`/`combat.ts` are deleted.
+4. **Phase 1b "Floor":** 6 rooms, power-ups, the boss "Queen".
 
-## Как начать новый чат
+## How to start a new chat
 
-Скопируй в новый чат этого проекта:
+Copy into a new chat of this project:
 
-> Продолжаем «Малину». Прочитай в проекте `claude/project-brief.md`, `claude/adr-001-dungeon-roguelite.md`, `claude/adr-002-realistic-weapons-tactical-movement.md`, `claude/adr-003-visual-style.md` и `claude/design-dungeon.md`. Код — в `/Users/andrey/dev/malina`. Этап 0 (плейграунд) сделан в первой итерации — продолжаем по разделу «Следующий шаг».
+> We continue "Malina". Read in the project `claude/project-brief.md`, `claude/adr-001-dungeon-roguelite.md`, `claude/adr-002-realistic-weapons-tactical-movement.md`, `claude/adr-003-visual-style.md` and `claude/design-dungeon.md`. The code is in `/Users/andrey/dev/malina`. Phase 0 (the playground) was done in the first iteration — we continue per the "Next step" section.

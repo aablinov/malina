@@ -1,560 +1,560 @@
-# Малина: Улей. Дизайн-документ
+# Malina: The Hive. Design document
 
-Версия 0.3 от 21.10.2026.
+Version 0.3 of 2026-10-21.
 
-**Решения:**
-- `claude/adr-001-dungeon-roguelite.md` — режим: кооп-подземелья;
-- `claude/adr-002-realistic-weapons-tactical-movement.md` — оружие, движение, броня.
+**Decisions:**
+- `claude/adr-001-dungeon-roguelite.md` — the mode: co-op dungeons;
+- `claude/adr-002-realistic-weapons-tactical-movement.md` — weapons, movement, armour.
 
-Все цифры — стартовые, их подбирают по плейтестам и в плейграунде разработчика (раздел 16).
+All numbers are starting values, tuned by playtests and in the developer playground (section 16).
 
-## 1. Суть
+## 1. Essence
 
-Кооперативный изометрический тактический шутер-рогалик на 1–4 игрока. Жуки утащили урожай малины в подземный улей. Отряд в бронежилетах и касках, с реальными стволами (АК-74, AR-15, двустволка…) спускается вниз, зачищает комнаты от орд жуков и собирает билд из усилений и обвесов. Задача — вынести как можно больше малины. Между забегами — ферма-хаб, где вынесенная малина превращается в постоянные улучшения.
+A co-op isometric tactical roguelite shooter for 1–4 players. Beetles dragged the raspberry harvest into an underground hive. A squad in body armour and helmets, with real guns (AK-74, AR-15, double-barrel shotgun…), descends, clears rooms of beetle hordes and assembles a build out of perks and attachments. The goal is to carry out as many raspberries as possible. Between runs — a farm hub where the raspberries carried out turn into permanent upgrades.
 
-**Ключевые фишки:**
-- **Малина** — деньги, лечение и итог забега одновременно. Каждую ягоду надо решить: потратить у торговца, съесть ради здоровья или донести до конца.
-- **Тактический отряд против орды.** Перезарядка, отдача, броня и выносливость заставляют прикрывать друг друга, а не просто зажимать огонь.
+**Key features:**
+- **Raspberries** are money, healing and the run's score all at once. Every berry needs a decision: spend it at the merchant, eat it for health or carry it to the end.
+- **A tactical squad against the horde.** Reloading, recoil, armour and stamina make you cover each other instead of just holding the trigger.
 
-**Ориентиры:**
-- Minecraft Dungeons — вид, камера, воксели;
-- Enter the Gungeon / Gunfire Reborn — комнаты, усиления;
-- Hades — хаб;
-- Ready or Not / Escape from Tarkov — ощущение оружия, брони и стойки, упрощённо под изометрию;
-- Helldivers 2 — кооп против орды жуков.
+**Reference points:**
+- Minecraft Dungeons — look, camera, voxels;
+- Enter the Gungeon / Gunfire Reborn — rooms, perks;
+- Hades — the hub;
+- Ready or Not / Escape from Tarkov — the feel of weapons, armour and stance, simplified for isometry;
+- Helldivers 2 — co-op against a beetle horde.
 
-## 2. Игровой цикл
+## 2. Game loop
 
-**Забег (20–25 мин):** лобби → спуск на этаж 1 → комнаты → босс → этаж 2 → … → босс этажа 3 → итоги → ферма.
+**Run (20–25 min):** lobby → descent to floor 1 → rooms → boss → floor 2 → … → floor 3 boss → results → farm.
 
-**Комната:**
-1. Отряд входит в боевую комнату — двери закрываются.
-2. Отряд отбивается от 2–3 волн.
-3. Двери открываются, падает награда, и каждый выбирает 1 усиление из 3.
-4. Отряд пополняется и идёт к одной из следующих дверей.
+**Room:**
+1. The squad enters a combat room — the doors close.
+2. The squad fends off 2–3 waves.
+3. The doors open, the reward drops, and each player picks 1 perk out of 3.
+4. The squad restocks and goes to one of the next doors.
 
-**Мета:** вынесенная малина сажается на ферме, кусты дают постоянные бонусы и открывают стволы.
+**Meta:** the raspberries carried out are planted on the farm; bushes give permanent bonuses and unlock guns.
 
-## 3. Этаж и генерация
+## 3. Floor and generation
 
-| Параметр | Значение |
+| Parameter | Value |
 |---|---|
-| Этажей в забеге | 3 |
-| Комнат на этаж | 6–8 |
-| Время на этаж | ~7 мин |
-| Сетка этажа | 5 × 5 ячеек |
-| Шаг ячейки | 32 м |
-| Размер комнаты | 20 × 20 или 24 × 16 блоков |
-| Ширина двери | 3 блока, по центру стороны |
-| Коридор | 3 блока в ширину, без боёв |
+| Floors per run | 3 |
+| Rooms per floor | 6–8 |
+| Time per floor | ~7 min |
+| Floor grid | 5 × 5 cells |
+| Cell pitch | 32 m |
+| Room size | 20 × 20 or 24 × 16 blocks |
+| Door width | 3 blocks, centred on the side |
+| Corridor | 3 blocks wide, no fights |
 
-### Алгоритм
+### Algorithm
 
-- Детерминированный от seed (под будущую сеть, `rng(seed)` уже есть в `map.ts`).
-- **Главный путь:** случайное блуждание по сетке от старта, длина 5–6 комнат, последняя — босс.
-- **Ответвления:** 1–2 штуки по 1–2 комнаты; там элитные комнаты, кладовые, алтари.
-- **Набор комнат на этаже:**
-  - старт;
-  - 3–4 боевые;
-  - 1 элитная (на ответвлении);
-  - 1 кладовая или торговец (торговец обязательно на этажах 2 и 3);
-  - 0–1 алтарь;
-  - босс.
-- **Заготовки комнат** — ASCII-шаблоны в коде: `#` стена, `.` пол, `o` колонна или укрытие, `=` низкое укрытие (за ним приседают), `~` кислота, `n` нора (точка появления жуков), `c` сундук. На этаж нужно 8–10 боевых шаблонов, плюс отражение и поворот.
-- **Укрытия важны:** в тактической стрельбе нужны места, где присесть и перезарядиться. В каждой боевой комнате 3–6 укрытий.
-- **Визуал:** камень, мох, улей с тлеющими блоками; стены низкие со стороны камеры.
+- Deterministic by seed (for future networking; `rng(seed)` already exists in `map.ts`).
+- **Main path:** a random walk over the grid from the start, 5–6 rooms long, the last one is the boss.
+- **Branches:** 1–2 of them, 1–2 rooms each; elite rooms, storerooms and altars are there.
+- **Room set per floor:**
+  - start;
+  - 3–4 combat;
+  - 1 elite (on a branch);
+  - 1 storeroom or merchant (the merchant is mandatory on floors 2 and 3);
+  - 0–1 altar;
+  - boss.
+- **Room templates** — ASCII templates in code: `#` wall, `.` floor, `o` column or cover, `=` low cover (crouch behind it), `~` acid, `n` burrow (beetle spawn point), `c` chest. A floor needs 8–10 combat templates, plus mirroring and rotation.
+- **Cover matters:** tactical shooting needs places to crouch and reload. Every combat room has 3–6 covers.
+- **Visuals:** stone, moss, a hive with smouldering blocks; walls are low on the camera side.
 
-**Иконки над дверями:** перед выбором видно, что за дверью — бой, элита, кладовая, торговец, алтарь, босс.
+**Icons above doors:** before choosing you can see what is behind the door — combat, elite, storeroom, merchant, altar, boss.
 
-## 4. Типы комнат
+## 4. Room types
 
-| Тип | Что внутри | Награда |
+| Type | What is inside | Reward |
 |---|---|---|
-| Боевая | 2–3 волны, двери закрыты | малина и патроны с жуков, 1 усиление каждому |
-| Элитная | бюджет ×1,6, плюс 1 элитный жук | усиление редкостью выше, 30 малины, обвес |
-| Кладовая | сундуки 30–60 малины, патроны, пластины; в 30% случаев засада (одна волна) | малина и снаряжение |
-| Торговец | оружие, патроны, броня, обвесы, лечение, перебросить усиления | — |
-| Алтарь | бонус в обмен на проклятие до конца этажа | по выбору |
-| Босс | босс этажа плюс подручные | 80 малины, легендарное усиление, спуск ниже |
+| Combat | 2–3 waves, doors closed | raspberries and ammo from beetles, 1 perk each |
+| Elite | budget ×1.6, plus 1 elite beetle | a perk of higher rarity, 30 raspberries, an attachment |
+| Storeroom | chests with 30–60 raspberries, ammo, plates; 30% chance of an ambush (one wave) | raspberries and gear |
+| Merchant | weapons, ammo, armour, attachments, healing, reroll perks | — |
+| Altar | a bonus in exchange for a curse until the end of the floor | by choice |
+| Boss | the floor boss plus minions | 80 raspberries, a legendary perk, descent below |
 
-## 5. Орды
+## 5. Hordes
 
-**Бюджет боевой комнаты:**
+**Combat room budget:**
 
 ```
-B = (24 + 8 * k) * (1 + 0.5 * (игроков - 1))
+B = (24 + 8 * k) * (1 + 0.5 * (players - 1))
 ```
 
-`k` — номер боевой комнаты с начала забега (0, 1, 2, …). На первой комнате соло это 24 очка, на 12-й — 120.
+`k` is the combat room's number from the start of the run (0, 1, 2, …). In the first room solo that is 24 points, in the 12th — 120.
 
-**Волны:**
-- Бюджет делится на волны 40% / 35% / 25%; при `B < 40` волн две.
-- Следующая волна приходит, когда убито 75% текущей или прошло 15 с.
-- Между волнами 3 с затишья — окно для перезарядки.
+**Waves:**
+- The budget is split into waves 40% / 35% / 25%; with `B < 40` there are two waves.
+- The next wave comes when 75% of the current one is killed or 15 s have passed.
+- Between waves 3 s of calm — a window to reload.
 
-**Стоимость жуков** (статы в `beetle.ts`):
+**Beetle costs** (stats in `beetle.ts`):
 
-| Жук | Очки | Роль |
+| Beetle | Points | Role |
 |---|---|---|
-| Мелкий | 2 | толпа |
-| Быстрый | 2 | давит на позицию |
-| Плевун | 4 | дальний, держит дистанцию |
-| Бомбардир | 6 | очередь из трёх капель |
-| Носорог | 8 | танк |
-| Яйцо (новый) | 3 | через 6 с вылупляются 3 мелких, если не разбить |
-| Щитоносец (новый) | 6 | броня спереди, уязвим сзади, для взрывов и СВД |
+| Small | 2 | crowd |
+| Fast | 2 | pressures the position |
+| Spitter | 4 | ranged, keeps distance |
+| Bombardier | 6 | a burst of three drops |
+| Rhino | 8 | tank |
+| Egg (new) | 3 | after 6 s hatches 3 small ones if not broken |
+| Shieldbearer (new) | 6 | armour in front, vulnerable from behind, for explosives and the SVD |
 
-**Уровень жуков по этажу:** этаж 1 — 1–2, этаж 2 — 3–4, этаж 3 — 5–6. Формулы:
-- здоровье ×(1 + 0,4·(ур − 1));
-- урон ×(1 + 0,2·(ур − 1));
-- скорость ×(1 + 0,05·(ур − 1)).
+**Beetle level by floor:** floor 1 — 1–2, floor 2 — 3–4, floor 3 — 5–6. Formulas:
+- health ×(1 + 0.4·(lv − 1));
+- damage ×(1 + 0.2·(lv − 1));
+- speed ×(1 + 0.05·(lv − 1)).
 
-**Элитный жук:** здоровье ×3, размер ×1,3, аура, одно свойство из списка:
-- ускоряет соседей;
-- взрывается при смерти;
-- призывает мелких;
-- регенерирует.
+**Elite beetle:** health ×3, size ×1.3, an aura, one property from the list:
+- speeds up neighbours;
+- explodes on death;
+- summons small ones;
+- regenerates.
 
-## 6. Боссы
+## 6. Bosses
 
-~~Здоровье боссов умножается на (1 + 0,75·(игроков − 1)).~~ Заменено: здоровье, урон и малина стражей растут с уровнем и числом игроков — [design-bosses.md](design-bosses.md), раздел 7.
+~~Boss health is multiplied by (1 + 0.75·(players − 1)).~~ Replaced: wardens' health, damage and raspberries grow with level and player count — [design-bosses.md](design-bosses.md), section 7.
 
-| Этаж | Босс | Здоровье (соло) | Механика |
+| Floor | Boss | Health (solo) | Mechanic |
 |---|---|---|---|
-| 1 | Матка | 600 | откладывает яйца (3 каждые 8 с); при 50% здоровья зарывается и вылезает в другом месте |
-| 2 | Носорог-таран | 1100 | разгон с предупреждающей линией; врезается в колонну — оглушён 3 с, получает ×2 урона; лобовая броня держит пули слабее 7,62 |
-| 3 | Королева улья | 1800 | 3 фазы: плевки веером → призыв элиток → кислотный пол по секторам |
+| 1 | Brood Mother | 600 | lays eggs (3 every 8 s); at 50% health burrows and emerges elsewhere |
+| 2 | Ram Rhino | 1100 | a charge with a warning line; hits a column — stunned 3 s, takes ×2 damage; frontal armour holds bullets weaker than 7.62 |
+| 3 | Hive Queen | 1800 | 3 phases: fan of spit → summoning elites → acid floor by sectors |
 
-## 7. Малина
+## 7. Raspberries
 
-**Источники за этаж** (ожидание соло):
+**Sources per floor** (expected, solo):
 
-| Источник | Сколько |
+| Source | How many |
 |---|---|
-| Мелкий, быстрый жук | 1 |
-| Плевун, бомбардир | 2 |
-| Носорог | 4 |
-| Элитный жук | 10 |
-| Кладовая | 30–60 |
-| Босс | 80 |
-| **Итого за этаж** | **~130–180** |
+| Small, fast beetle | 1 |
+| Spitter, bombardier | 2 |
+| Rhino | 4 |
+| Elite beetle | 10 |
+| Storeroom | 30–60 |
+| Boss | 80 |
+| **Total per floor** | **~130–180** |
 
-**Лечение:** клавиша `H` — съесть 5 малины и получить +20 здоровья. Перезарядка 1,5 с, во время еды скорость ×0,5. Аптечки с жуков падают реже: 8%.
+**Healing:** key `H` — eat 5 raspberries and gain +20 health. Cooldown 1.5 s, speed ×0.5 while eating. Medkits drop from beetles more rarely: 8%.
 
-**Итог забега:**
-- малина в мешке на выходе уходит в профиль;
-- если отряд погиб — уходит 50%.
+**Run result:**
+- raspberries in the bag at the exit go to the profile;
+- if the squad died — 50% goes.
 
-**Кооператив:** у каждого свой мешок; отдать напарнику 10 ягод — клавиша `V`, если он рядом.
+**Co-op:** everyone has their own bag; give a teammate 10 berries — key `V` when they are nearby.
 
-## 8. Оружие
+## 8. Weapons
 
-Реальные образцы, игровые характеристики. Воксельные модели с узнаваемыми силуэтами.
+Real models, game stats. Voxel models with recognisable silhouettes.
 
-### 8.1. Общая механика
+### 8.1. Shared mechanics
 
-- **Магазин и запас:** патроны в магазине и в запасе по калибру. HUD показывает `24 / 90`.
-- **Перезарядка (`R`):**
-  - **тактическая** — в магазине ещё есть патроны: быстрее, +1 в патроннике;
-  - **полная** — магазин пуст: дольше.
-  - Перезарядку прерывает бег и перекат; уже вставленные патроны дробовика сохраняются.
-  - При пустом магазине и нажатом огне перезарядка начинается автоматически.
-- **Разброс:**
-  - базовый у каждого ствола;
-  - множители: прицел ×0,4, присед ×0,7, движение ×1,3;
-  - на бегу стрелять нельзя.
-- **Отдача:**
-  - каждый выстрел добавляет «раскачку» до потолка;
-  - раскачка спадает за 0,25–0,4 с после отпускания;
-  - в изометрии видна как подброс прицела и увеличение разброса.
-- **Прицеливание (ПКМ):** скорость ×0,6, разброс ×0,4, камера сдвигается на 15% в сторону прицела.
-- **Пробитие:** 7,62×54R проходит насквозь через 1 цель (СВД — через 2) с потерей 30% урона за цель.
-- **Рикошеты** остаются: 50% от стен.
+- **Magazine and reserve:** ammo in the magazine and in reserve by calibre. The HUD shows `24 / 90`.
+- **Reload (`R`):**
+  - **tactical** — the magazine still has rounds: faster, +1 in the chamber;
+  - **full** — the magazine is empty: longer.
+  - A reload is interrupted by sprinting and the dodge roll; shotgun shells already inserted are kept.
+  - With an empty magazine and fire held, the reload starts automatically.
+- **Spread:**
+  - a base value per gun;
+  - multipliers: aiming ×0.4, crouch ×0.7, moving ×1.3;
+  - no shooting while sprinting.
+- **Recoil:**
+  - every shot adds "climb" up to a ceiling;
+  - the climb settles in 0.25–0.4 s after release;
+  - in isometry it shows as the reticle kicking up and the spread growing.
+- **Aiming (RMB):** speed ×0.6, spread ×0.4, the camera shifts 15% towards the aim.
+- **Penetration:** 7.62×54R passes through 1 target (the SVD — through 2) losing 30% damage per target.
+- **Ricochets** stay: 50% off walls.
 
-### 8.2. Калибры
+### 8.2. Calibres
 
-| Калибр | Стволы | Макс. запас | Пачка у торговца |
+| Calibre | Guns | Max reserve | Pack at the merchant |
 |---|---|---|---|
-| 9 мм | ПМ, Glock 17, MP5 | 120 | 30 шт за 10 малины |
-| 5,45×39 | АК-74, АКС-74У | 180 | 60 шт за 15 |
-| 5,56×45 | AR-15 | 180 | 60 шт за 15 |
-| 12 калибр | двустволка, МР-133 | 32 | 16 шт за 12 |
-| 7,62×54R | СВД, ПКМ | 150 | 50 шт за 20 |
+| 9 mm | PM, Glock 17, MP5 | 120 | 30 rounds for 10 raspberries |
+| 5.45×39 | AK-74, AKS-74U | 180 | 60 rounds for 15 |
+| 5.56×45 | AR-15 | 180 | 60 rounds for 15 |
+| 12 gauge | double-barrel, MP-133 | 32 | 16 rounds for 12 |
+| 7.62×54R | SVD, PKM | 150 | 50 rounds for 20 |
 
-Патроны падают с жуков: 70% к одному из ваших калибров, 30% случайно.
+Ammo drops from beetles: 70% for one of your calibres, 30% random.
 
-### 8.3. Стволы
+### 8.3. Guns
 
-| Ствол | Класс | Калибр | Урон | Темп, выстр/с | Магазин | Перезарядка такт. / полн., с | Дальность, м | Вес | Цена | Особенность |
+| Gun | Class | Calibre | Damage | Rate, shots/s | Magazine | Reload tact. / full, s | Range, m | Weight | Price | Special |
 |---|---|---|---|---|---|---|---|---|---|---|
-| ПМ | пистолет | 9 мм | 9 | 4 (полуавт.) | 8 | 1,1 / 1,5 | 14 | лёгкий | старт | всегда во втором слоте |
-| Glock 17 | пистолет | 9 мм | 8 | 6 (полуавт.) | 17 | 1,0 / 1,4 | 15 | лёгкий | 25 | — |
-| Двустволка | дробовик | 12 к | 6 × 8 дробин | 2,5 | 2 | — / 2,0 | 8 | средний | 35 | дуплет: удержать ЛКМ 0,3 с — оба ствола сразу, отбрасывает жуков |
-| МР-133 | дробовик | 12 к | 5 × 8 дробин | 1,2 | 6 | 0,45 на патрон | 9 | средний | 55 | заряжается по одному патрону, можно прервать |
-| MP5 | ПП | 9 мм | 7 | 13 | 30 | 1,9 / 2,4 | 15 | лёгкий | 50 | малая отдача |
-| АКС-74У | автомат | 5,45 | 9 | 11 | 30 | 2,2 / 2,7 | 15 | лёгкий | 65 | сильная отдача |
-| АК-74 | автомат | 5,45 | 11 | 10 | 30 | 2,4 / 3,0 | 20 | средний | 90 | надёжный середняк |
-| AR-15 | автомат | 5,56 | 10 | 12 | 30 | 2,1 / 2,6 | 22 | средний | 95 | точнее АК: разброс ×0,8 |
-| СВД | марксманская | 7,62R | 45 | 1,6 | 10 | 2,6 / 3,2 | 30 | средний | 120 | пробивает 2 цели |
-| ПКМ | пулемёт | 7,62R | 12 | 11 | 100 (лента) | — / 5,0 | 22 | тяжёлый | 160 | без приседа и прицела разброс ×1,6; скорость ×0,85 |
+| PM | pistol | 9 mm | 9 | 4 (semi-auto) | 8 | 1.1 / 1.5 | 14 | light | starter | always in the second slot |
+| Glock 17 | pistol | 9 mm | 8 | 6 (semi-auto) | 17 | 1.0 / 1.4 | 15 | light | 25 | — |
+| Double-barrel | shotgun | 12 ga | 6 × 8 pellets | 2.5 | 2 | — / 2.0 | 8 | medium | 35 | double shot: hold LMB 0.3 s — both barrels at once, knocks beetles back |
+| MP-133 | shotgun | 12 ga | 5 × 8 pellets | 1.2 | 6 | 0.45 per shell | 9 | medium | 55 | loads one shell at a time, can be interrupted |
+| MP5 | SMG | 9 mm | 7 | 13 | 30 | 1.9 / 2.4 | 15 | light | 50 | low recoil |
+| AKS-74U | assault rifle | 5.45 | 9 | 11 | 30 | 2.2 / 2.7 | 15 | light | 65 | strong recoil |
+| AK-74 | assault rifle | 5.45 | 11 | 10 | 30 | 2.4 / 3.0 | 20 | medium | 90 | a reliable all-rounder |
+| AR-15 | assault rifle | 5.56 | 10 | 12 | 30 | 2.1 / 2.6 | 22 | medium | 95 | more accurate than the AK: spread ×0.8 |
+| SVD | marksman | 7.62R | 45 | 1.6 | 10 | 2.6 / 3.2 | 30 | medium | 120 | penetrates 2 targets |
+| PKM | machine gun | 7.62R | 12 | 11 | 100 (belt) | — / 5.0 | 22 | heavy | 160 | without crouch and aim spread ×1.6; speed ×0.85 |
 
-**Вес:**
-- лёгкий — скорость ×1,0;
-- средний — ×0,95;
-- тяжёлый — ×0,85, бег не быстрее 5,2 м/с.
+**Weight:**
+- light — speed ×1.0;
+- medium — ×0.95;
+- heavy — ×0.85, sprint no faster than 5.2 m/s.
 
-**Слоты:**
-- основной ствол;
-- пистолет;
-- гранаты.
+**Slots:**
+- primary gun;
+- pistol;
+- grenades.
 
-Переключение основной / пистолет — 0,4 с. Взять в руки пистолет при пустом основном быстрее перезарядки — классический тактический приём.
+Switching primary / pistol — 0.4 s. Drawing the pistol when the primary is empty is faster than reloading — a classic tactical move.
 
-### 8.4. Гранаты
+### 8.4. Grenades
 
-| Граната | Урон | Радиус | Фитиль | Носить | Цена |
+| Grenade | Damage | Radius | Fuse | Carry | Price |
 |---|---|---|---|---|---|
-| РГД-5 | 70 | 4 м | 3,2 с | до 3 | 15 |
+| RGD-5 | 70 | 4 m | 3.2 s | up to 3 | 15 |
 
-Бросок — клавиша `G`, удержание задаёт дальность до 14 м. Граната отскакивает от стен.
+Throw — key `G`, holding sets the range up to 14 m. The grenade bounces off walls.
 
-### 8.5. Обвесы
+### 8.5. Attachments
 
-По одному в слот: прицел, дуло, цевьё, магазин, тактический.
+One per slot: sight, muzzle, handguard, magazine, tactical.
 
-| Обвес | Слот | Эффект | Цена |
+| Attachment | Slot | Effect | Price |
 |---|---|---|---|
-| Коллиматор | прицел | разброс в прицеле ещё ×0,7 | 35 |
-| Глушитель | дуло | жуки замечают вдвое ближе; урон −5% | 40 |
-| Пламегаситель | дуло | отдача −10%, вспышка меньше | 25 |
-| Рукоятка | цевьё | отдача −25% | 35 |
-| Увеличенный магазин | магазин | ёмкость +50%, перезарядка +15% | 45 |
-| Фонарь | тактический | освещает тёмные комнаты; жуки в луче получают +10% урона | 30 |
+| Red dot | sight | spread while aiming a further ×0.7 | 35 |
+| Suppressor | muzzle | beetles notice you at half the distance; damage −5% | 40 |
+| Flash hider | muzzle | recoil −10%, smaller flash | 25 |
+| Foregrip | handguard | recoil −25% | 35 |
+| Extended magazine | magazine | capacity +50%, reload +15% | 45 |
+| Flashlight | tactical | lights up dark rooms; beetles in the beam take +10% damage | 30 |
 
-## 9. Броня и шлем
+## 9. Armour and helmet
 
-**Как считается урон:**
-1. Броня поглощает `D × R` урона (R — процент поглощения), пока у неё есть очки.
-2. Здоровье теряет остальное.
-3. Очки брони уменьшаются на поглощённую величину.
+**How damage is computed:**
+1. Armour absorbs `D × R` damage (R is the absorption percentage) while it has points.
+2. Health loses the rest.
+3. Armour points decrease by the absorbed amount.
 
-| Бронежилет | Очки брони | Поглощение | Скорость | Цена |
+| Body armour | Armour points | Absorption | Speed | Price |
 |---|---|---|---|---|
-| Класс 1, лёгкий | 40 | 30% | ×1,0 | 40 |
-| Класс 2, средний | 70 | 40% | ×0,95 | 80 |
-| Класс 3, тяжёлый | 110 | 50% | ×0,88 | 140 |
+| Class 1, light | 40 | 30% | ×1.0 | 40 |
+| Class 2, medium | 70 | 40% | ×0.95 | 80 |
+| Class 3, heavy | 110 | 50% | ×0.88 | 140 |
 
-| Шлем | Очки | Эффект | Цена |
+| Helmet | Points | Effect | Price |
 |---|---|---|---|
-| Каска | 30 | −25% урона от плевков и взрывов; без оглушения | 35 |
+| Helmet | 30 | −25% damage from spit and explosions; no stun | 35 |
 
-**Бронепластина:**
-- +35 очков жилету;
-- вставляется 2,5 с (клавиша `4`), идти можно медленно;
-- носить до 3, цена 20, иногда падает с элиток и из сундуков.
+**Armour plate:**
+- +35 points to the vest;
+- inserted in 2.5 s (key `4`), you can walk slowly;
+- carry up to 3, price 20, sometimes drops from elites and from chests.
 
-**Когда броня на нуле:** жилет остаётся на модели, но тёмный и в трещинах, поглощения нет.
+**When armour is at zero:** the vest stays on the model but dark and cracked, no absorption.
 
-**Старт забега:** класс 1 и каска (или то, что открыто на ферме).
+**Run start:** class 1 and a helmet (or whatever is unlocked on the farm).
 
-## 10. Игроки, передвижение и анимация
+## 10. Players, movement and animation
 
-### 10.1. Параметры
+### 10.1. Parameters
 
-| Параметр | Значение |
+| Parameter | Value |
 |---|---|
-| Здоровье | 100 |
-| Выносливость | 100 |
+| Health | 100 |
+| Stamina | 100 |
 
-| Состояние | Скорость, м/с | Стрельба | Выносливость |
+| State | Speed, m/s | Shooting | Stamina |
 |---|---|---|---|
-| Ходьба (тактический шаг) | 4,4 | да | — |
-| Бег (`Shift`) | 6,6 | нет, оружие опущено | −12/с |
-| Прицеливание (ПКМ) | 2,6 | да, разброс ×0,4 | — |
-| Присед (`C`, переключение) | 2,2 | да, разброс ×0,7, ниже силуэт — плевки чаще пролетают над головой | — |
-| Присед + прицел | 1,6 | да, разброс ×0,28 | — |
-| Перекат (`Space`) | 5 м за 0,45 с, неуязвимость 0,2 с | нет | −30 |
+| Walk (tactical pace) | 4.4 | yes | — |
+| Sprint (`Shift`) | 6.6 | no, weapon lowered | −12/s |
+| Aiming (RMB) | 2.6 | yes, spread ×0.4 | — |
+| Crouch (`C`, toggle) | 2.2 | yes, spread ×0.7, lower silhouette — spit flies overhead more often | — |
+| Crouch + aim | 1.6 | yes, spread ×0.28 | — |
+| Dodge roll (`Space`) | 5 m in 0.45 s, invulnerable 0.2 s | no | −30 |
 
-- **Восстановление выносливости:** 25/с через 0,8 с после траты.
-- **Если выносливость на нуле:** бег и перекат недоступны 2 с.
+- **Stamina regeneration:** 25/s starting 0.8 s after spending.
+- **If stamina is at zero:** sprint and dodge roll unavailable for 2 s.
 
-### 10.2. Тактическая стойка и анимация
+### 10.2. Tactical stance and animation
 
-Анимация процедурная: блочные части модели вращаются в коде, без скелета.
+Animation is procedural: the blocky parts of the model are rotated in code, no skeleton.
 
-**Модель героя:**
-- таз, корпус, грудь, шея, голова;
-- плечо, предплечье, кисть ×2;
-- бедро, голень, стопа ×2;
-- снаряжение: жилет с подсумками, каска, разгрузка;
-- цвета жилета и нашивки — цвет игрока в отряде.
+**Hero model:**
+- pelvis, torso, chest, neck, head;
+- upper arm, forearm, hand ×2;
+- thigh, shin, foot ×2;
+- gear: a vest with pouches, a helmet, a chest rig;
+- vest colours and patches — the player's colour in the squad.
 
-**Базовая стойка:**
-- таз опущен на 12% роста;
-- колени согнуты на 25°;
-- корпус наклонён вперёд на 8°;
-- оружие у плеча, приклад упирается.
+**Base stance:**
+- pelvis lowered by 12% of height;
+- knees bent 25°;
+- torso leaned forward 8°;
+- weapon at the shoulder, stock braced.
 
-**Раздельный верх и низ:**
-- ноги идут по направлению движения, корпус и голова повёрнуты к прицелу;
-- если угол между ними больше 70°, таз доворачивается;
-- **стрейф** — приставной шаг;
-- **ход спиной** — шаг назад короче, скорость ×0,8.
+**Separate upper and lower body:**
+- the legs walk in the movement direction, the torso and head turn to the aim;
+- if the angle between them exceeds 70°, the pelvis turns to follow;
+- **strafe** — a side step;
+- **walking backwards** — a shorter step back, speed ×0.8.
 
-**Ходьба:**
-- шаг 0,9 м, перенос веса с ноги на ногу;
-- корпус покачивается на ±2°;
-- оружие слегка гуляет («sway»), в прицеле меньше.
+**Walking:**
+- 0.9 m stride, weight shifting from foot to foot;
+- the torso sways ±2°;
+- the weapon drifts slightly ("sway"), less while aiming.
 
-**Бег:** корпус наклонён на 20°, оружие опущено к груди, шаги длиннее.
+**Sprint:** torso leaned 20°, weapon lowered to the chest, longer strides.
 
-**Присед:** колени на 70°, таз ниже на 35%.
+**Crouch:** knees at 70°, pelvis 35% lower.
 
-**Выстрел:** отдача толкает плечи и голову назад на 3–6° по классу оружия, затвор и гильза.
+**Shot:** recoil pushes the shoulders and head back 3–6° by weapon class, bolt and casing.
 
-**Перезарядка:**
-- магазин выпадает (воксельный кубик падает на пол), рука идёт к подсумку, новый магазин вставляется, затвор передёргивается при полной перезарядке;
-- у двустволки — переламывание ствола;
-- у МР-133 — патроны по одному.
+**Reload:**
+- the magazine drops out (a voxel cube falls to the floor), the hand goes to the pouch, a new magazine is inserted, the bolt is racked on a full reload;
+- the double-barrel — breaking the barrel open;
+- the MP-133 — shells one at a time.
 
-**Ранение:** вздрагивание корпуса, при <30% здоровья — тяжёлое дыхание и лёгкая хромота.
+**Wounded:** the torso flinches; below 30% health — heavy breathing and a slight limp.
 
-**Вставка пластины:** рука к груди, жилет вспыхивает.
+**Inserting a plate:** the hand to the chest, the vest flashes.
 
-### 10.3. Падение и кооператив
+### 10.3. Downed and co-op
 
-| Параметр | Значение |
+| Parameter | Value |
 |---|---|
-| Падение | 0 здоровья — лежит 20 с, может ползти и стрелять из пистолета; напарник поднимает за 3 с (держать `E` рядом) |
-| Не подняли | встаёт в следующей комнате с 30% здоровья и без брони |
-| Все упали | забег окончен |
-| Соло | 1 «ягодный тотем» на забег: автоматически встаёшь с 50% здоровья |
-| Камера в кооперативе | следует за центром отряда; игрок не может уйти дальше 18 м от остальных |
+| Downed | at 0 health — lies for 20 s, can crawl and shoot the pistol; a teammate revives in 3 s (hold `E` nearby) |
+| Not revived | gets up in the next room with 30% health and no armour |
+| Everyone down | the run is over |
+| Solo | 1 "berry totem" per run: you get up automatically with 50% health |
+| Camera in co-op | follows the squad's centre; a player cannot go further than 18 m from the others |
 
-**Масштаб на число игроков:**
-- бюджет орды ×(1 + 0,5·(n − 1));
-- здоровье боссов ×(1 + 0,75·(n − 1));
-- малина с жуков без изменений — её делят.
+**Scaling by player count:**
+- horde budget ×(1 + 0.5·(n − 1));
+- boss health ×(1 + 0.75·(n − 1));
+- raspberries from beetles unchanged — they are shared.
 
-**Роли получаются из снаряжения**, жёстких классов нет:
-- штурмовик — АК или AR и тяжёлый жилет;
-- поддержка — ПКМ;
-- стрелок — СВД;
-- «дверной» — дробовик.
+**Roles come from gear**, there are no hard classes:
+- assault — AK or AR and a heavy vest;
+- support — PKM;
+- marksman — SVD;
+- "doorman" — shotgun.
 
-## 11. Торговец
+## 11. Merchant
 
-Цены оружия, брони и обвесов — в разделах 8–9. Дополнительно:
+Prices for weapons, armour and attachments are in sections 8–9. In addition:
 
-| Товар | Цена |
+| Item | Price |
 |---|---|
-| Улучшение ствола ★2 / ★3 / ★4 / ★5 (+12% урона, −8% отдачи за звезду) | 25 / 45 / 70 / 100 |
-| Лечение +50 | 25 |
-| Перебросить предложенные усиления | 20 |
+| Gun upgrade ★2 / ★3 / ★4 / ★5 (+12% damage, −8% recoil per star) | 25 / 45 / 70 / 100 |
+| Healing +50 | 25 |
+| Reroll the offered perks | 20 |
 
-## 12. Усиления (билд забега)
+## 12. Perks (the run's build)
 
-После каждой боевой комнаты каждый выбирает 1 из 3. Шансы редкости:
+After every combat room each player picks 1 of 3. Rarity chances:
 
-| Редкость | Обычная комната | Элитная комната |
+| Rarity | Regular room | Elite room |
 |---|---|---|
-| Обычные | 70% | 40% |
-| Редкие | 25% | 45% |
-| Легендарные | 5% | 15% |
+| Common | 70% | 40% |
+| Rare | 25% | 45% |
+| Legendary | 5% | 15% |
 
-У босса легендарное гарантировано.
+At the boss a legendary is guaranteed.
 
-| Усиление | Редкость | Эффект |
+| Perk | Rarity | Effect |
 |---|---|---|
-| Калибр | обычное | +15% урона |
-| Ловкие руки | обычное | перезарядка −20% |
-| Разгрузка | обычное | +30% макс. запас патронов, +1 граната |
-| Стальные нервы | обычное | отдача −25% |
-| Марафонец | обычное | выносливость +40, восстановление +30% |
-| Ягодный желудок | обычное | лечение от малины +50% |
-| Бронник | редкое | броня восстанавливается 2/с вне боя до 50% |
-| Поджог | редкое | 20% пуль поджигают: 4 урона/с, 3 с |
-| Рикошет+ | редкое | рикошеты всегда, +1 отскок |
-| Мародёр | редкое | убийство — 20% шанс вернуть 3 патрона в магазин |
-| Тактик | редкое | перекат досылает 5 патронов в магазин |
-| Пробой | редкое | все пули пробивают 1 цель |
-| Бесконечный магазин | легендарное | 8 с без расхода патронов после каждой перезарядки, перезарядка раз в 30 с |
-| Малиновый взрыв | легендарное | съеденная малина взрывается вокруг на 40 урона |
-| Второе дыхание | легендарное | один раз за этаж встаёшь сам с 50% здоровья |
+| Calibre | common | +15% damage |
+| Quick Hands | common | reload −20% |
+| Chest Rig | common | +30% max ammo reserve, +1 grenade |
+| Nerves of Steel | common | recoil −25% |
+| Marathoner | common | stamina +40, regeneration +30% |
+| Berry Stomach | common | healing from raspberries +50% |
+| Armourer | rare | armour regenerates 2/s out of combat up to 50% |
+| Arson | rare | 20% of bullets ignite: 4 damage/s for 3 s |
+| Ricochet+ | rare | ricochets always, +1 bounce |
+| Marauder | rare | a kill — 20% chance to return 3 rounds to the magazine |
+| Tactician | rare | the dodge roll chambers 5 rounds into the magazine |
+| Breach | rare | all bullets penetrate 1 target |
+| Endless Magazine | legendary | 8 s without spending ammo after every reload, reload once per 30 s |
+| Raspberry Burst | legendary | eaten raspberries explode around you for 40 damage |
+| Second Wind | legendary | once per floor you get up on your own with 50% health |
 
-**Командные усиления** (только в кооперативе, редкие):
+**Team perks** (co-op only, rare):
 
-| Усиление | Эффект |
+| Perk | Effect |
 |---|---|
-| Плечом к плечу | +10% урона за каждого союзника ближе 6 м |
-| Полевой медик | поднимаешь союзника вдвое быстрее, он встаёт с 50% здоровья и 25 брони |
-| Подносчик | раз в комнату отдаёшь союзнику магазин клавишей `V` |
+| Shoulder to Shoulder | +10% damage for every ally within 6 m |
+| Field Medic | you revive an ally twice as fast, they get up with 50% health and 25 armour |
+| Ammo Bearer | once per room you hand an ally a magazine with key `V` |
 
-## 13. Ферма-хаб (мета, этап 3)
+## 13. Farm hub (meta, stage 3)
 
-- Вынесенная малина тратится на посадку кустов: 1 куст — 50 малины, всего 12 грядок.
+- Raspberries carried out are spent on planting bushes: 1 bush — 50 raspberries, 12 beds in total.
 
-| Ряд | Что даёт |
+| Row | What it gives |
 |---|---|
-| Здоровье | +10 макс. здоровья за куст, до 3 |
-| Арсенал | открывает стволы для старта и торговца: Glock → двустволка → АКС-74У → АК-74 → AR-15 → МР-133 → MP5 → СВД → ПКМ |
-| Снаряжение | старт с жилетом класса 2, затем пластина в запасе, затем 2 гранаты |
-| Удача | +1 вариант усиления (до 4), шанс редкого +5% |
-| Запас | старт забега с 20 / 40 / 60 малины |
+| Health | +10 max health per bush, up to 3 |
+| Arsenal | unlocks guns for the start and the merchant: Glock → double-barrel → AKS-74U → AK-74 → AR-15 → MP-133 → MP5 → SVD → PKM |
+| Gear | start with a class 2 vest, then a plate in reserve, then 2 grenades |
+| Luck | +1 perk option (up to 4), rare chance +5% |
+| Stash | start the run with 20 / 40 / 60 raspberries |
 
-Из фермы запускается лобби: номер сессии, отряд, выбор стартового ствола.
+The lobby is launched from the farm: session number, squad, starting gun choice.
 
-## 14. Управление
+## 14. Controls
 
-| Клавиша | Действие |
+| Key | Action |
 |---|---|
-| `WASD` | ходьба |
-| Мышь | прицел (корпус поворачивается к курсору) |
-| ЛКМ | огонь (удержание — очередь, у двустволки — дуплет) |
-| ПКМ | прицеливание (удерживать) |
-| `R` | перезарядка |
-| `Shift` | бег |
-| `C` | присед (переключение) |
-| `Space` | перекат |
-| `1` / `2` | основной ствол / пистолет |
-| `G` | граната (удержание — дальность) |
-| `4` | бронепластина |
-| `H` | съесть малину |
-| `V` | отдать малину (или магазин с «Подносчиком») |
-| `E` | взаимодействие (двери, сундуки, торговец, подъём союзника) |
-| `F` | фонарь |
-| `Tab` | карта этажа |
-| `Esc` | пауза |
-| `M` | звук |
+| `WASD` | walk |
+| Mouse | aim (the torso turns to the cursor) |
+| LMB | fire (hold — burst; double-barrel — double shot) |
+| RMB | aim (hold) |
+| `R` | reload |
+| `Shift` | sprint |
+| `C` | crouch (toggle) |
+| `Space` | dodge roll |
+| `1` / `2` | primary gun / pistol |
+| `G` | grenade (hold — range) |
+| `4` | armour plate |
+| `H` | eat raspberries |
+| `V` | give raspberries (or a magazine with "Ammo Bearer") |
+| `E` | interact (doors, chests, merchant, reviving an ally) |
+| `F` | flashlight |
+| `Tab` | floor map |
+| `Esc` | pause |
+| `M` | sound |
 
-Клавиши инструментов разработчика — в разделе 16, этап 0.
+Developer tool keys are in section 16, stage 0.
 
-## 15. Интерфейс
+## 15. Interface
 
-- **Слева вверху:** этаж и комната, оставшиеся волны.
-- **Справа вверху:** мини-карта этажа.
-- **Снизу по центру:**
-  - здоровье, под ним полоса брони и иконка каски;
-  - основной ствол и пистолет с иконками обвесов;
-  - патроны `в магазине / в запасе`, которые краснеют, когда в магазине <25%;
-  - гранаты, пластины, мешок малины, иконки усилений.
-- **У героя на земле:** дуга выносливости, заметная только при трате.
-- **Над головами союзников:** имя, здоровье и броня; у упавшего — таймер.
-- **Выбор усиления:** 3 карточки посреди экрана, у каждого игрока свой выбор.
+- **Top left:** floor and room, remaining waves.
+- **Top right:** floor mini-map.
+- **Bottom centre:**
+  - health, below it the armour bar and the helmet icon;
+  - primary gun and pistol with attachment icons;
+  - ammo `in magazine / in reserve`, which turns red when the magazine is below 25%;
+  - grenades, plates, raspberry bag, perk icons.
+- **On the ground at the hero:** a stamina arc, visible only while spending.
+- **Above allies' heads:** name, health and armour; a downed one has a timer.
+- **Perk choice:** 3 cards in the middle of the screen, each player has their own choice.
 
-## 16. Этапы и объём прототипа
+## 16. Stages and prototype scope
 
-### Этап 0. Плейграунд разработчика (делать первым)
+### Stage 0. Developer playground (build first)
 
-Служебный уровень только для разработчика. **Не игровой:** без целей, наград и прогресса. Нужен, чтобы отрабатывать и настраивать механики в чистых условиях, а потом использовать в игре без копирования кода. Сначала — передвижение и стрельба персонажа.
+A utility level for the developer only. **Not gameplay:** no goals, rewards or progress. Needed to work out and tune mechanics in clean conditions and then use them in the game without copying code. First — character movement and shooting.
 
-**Вход:**
-- по адресу с параметром `?dev=playground`;
-- или клавишей `F9` в главном меню.
+**Entry:**
+- by address with the parameter `?dev=playground`;
+- or with the `F9` key in the main menu.
 
-В обычной игре пункт не показывается, в сборке для игроков его можно отключить флагом.
+In the regular game the item is not shown; in the player build it can be disabled with a flag.
 
-**Сцена:**
-- **Пол** 48 × 48 м в шахматную клетку 1 × 1 м, два нейтральных серых тона.
-  - Каждые 5 м — линия разметки темнее.
-  - В центре — крест нулевой точки.
-  - Клетка служит линейкой: по ней видно скорость, длину шага и дальность.
-- **Стены по периметру** высотой 3 м, тоже в шахматную клетку, другим оттенком. Со стороны камеры стены низкие (0,5 м), как в игре.
-- **Геометрия для проверки:**
-  - низкие укрытия 0,9 м (за ними приседают);
-  - высокие укрытия 2 м;
-  - колонна;
-  - угол комнаты;
-  - коридор шириной 2 м с дверным проёмом;
-  - стена под углом 45° — для рикошетов и скольжения вдоль стен.
-- **Стрельбище:** дорожка с мишенями на 5 / 10 / 15 / 20 / 30 м, дистанции подписаны на полу.
-- **Свет и картинка:**
-  - свет нейтральный дневной, тени включены;
-  - тумана нет;
-  - bloom и постобработка включаются переключателем, чтобы видеть механику без эффектов.
-- **Камера** та же, что в игре: изометрия, зум колесом.
+**Scene:**
+- **Floor** 48 × 48 m in a 1 × 1 m checkerboard, two neutral grey tones.
+  - Every 5 m — a darker marking line.
+  - In the centre — the origin cross.
+  - The grid serves as a ruler: it shows speed, stride length and range.
+- **Perimeter walls** 3 m high, also checkered, in another shade. On the camera side the walls are low (0.5 m), as in the game.
+- **Geometry for testing:**
+  - low covers 0.9 m (crouch behind them);
+  - high covers 2 m;
+  - a column;
+  - a room corner;
+  - a 2 m wide corridor with a doorway;
+  - a wall at 45° — for ricochets and sliding along walls.
+- **Shooting range:** a lane with targets at 5 / 10 / 15 / 20 / 30 m, distances labelled on the floor.
+- **Light and picture:**
+  - neutral daylight, shadows on;
+  - no fog;
+  - bloom and post-processing toggled by a switch to see the mechanics without effects.
+- **Camera** the same as in the game: isometry, wheel zoom.
 
-**Что реализуется на этапе 0 (в общих модулях игры, не в плейграунде):**
+**What is implemented at stage 0 (in the game's shared modules, not in the playground):**
 
-1. **Персонаж и передвижение** — всё из раздела 10.1–10.2:
-   - новая модель с суставами и снаряжением;
-   - тактическая стойка, раздельный верх и низ, стрейф, ход спиной;
-   - ходьба, бег, прицеливание, присед, перекат, выносливость;
-   - коллизии со стенами и укрытиями со скольжением вдоль стены.
-2. **Стрельба** — раздел 8.1:
-   - сначала ПМ и АК-74, затем двустволка и AR-15;
-   - магазины, тактическая и полная перезарядка с анимацией;
-   - разброс с множителями, отдача и раскачка;
-   - трассеры, вспышка, гильзы, сколы на стенах, рикошеты.
-3. **Гранаты РГД-5** — в конце этапа, если останется время.
+1. **Character and movement** — everything from sections 10.1–10.2:
+   - a new model with joints and gear;
+   - tactical stance, separate upper and lower body, strafe, walking backwards;
+   - walking, sprint, aiming, crouch, dodge roll, stamina;
+   - collisions with walls and covers with sliding along the wall.
+2. **Shooting** — section 8.1:
+   - first the PM and the AK-74, then the double-barrel and the AR-15;
+   - magazines, tactical and full reload with animation;
+   - spread with multipliers, recoil and climb;
+   - tracers, muzzle flash, casings, chips on walls, ricochets.
+3. **RGD-5 grenades** — at the end of the stage, if time remains.
 
-**Инструменты разработчика:**
+**Developer tools:**
 
-| Клавиша | Инструмент |
+| Key | Tool |
 |---|---|
-| `F1` | панель параметров: ползунки скоростей, выносливости, урона, темпа, разброса, отдачи, перезарядки для текущего ствола и персонажа; изменения применяются сразу; кнопки «Скопировать JSON» и «Сбросить» |
-| `F2` | показать коллайдеры и хитбоксы |
-| `F3` | луч прицела и конус текущего разброса |
-| `F4` | телеметрия персонажа: скорость в м/с, состояние (ходьба / бег / присед…), выносливость, разброс, раскачка отдачи, патроны |
-| `F5` | бесконечные патроны |
-| `F6` | бессмертие |
-| `F7` | скорость времени 1 / 0,5 / 0,25 / 0,1 |
-| `P` | пауза кадра; `.` — шаг на один кадр |
-| `F8` | счётчик FPS и времени кадра |
+| `F1` | parameter panel: sliders for speeds, stamina, damage, rate, spread, recoil, reload for the current gun and character; changes apply immediately; "Copy JSON" and "Reset" buttons |
+| `F2` | show colliders and hitboxes |
+| `F3` | aim ray and the current spread cone |
+| `F4` | character telemetry: speed in m/s, state (walk / sprint / crouch…), stamina, spread, recoil climb, ammo |
+| `F5` | infinite ammo |
+| `F6` | invulnerability |
+| `F7` | time speed 1 / 0.5 / 0.25 / 0.1 |
+| `P` | frame pause; `.` — step one frame |
+| `F8` | FPS and frame time counter |
 
-**Мишени:**
-- **Неподвижный манекен** — показывает урон каждого попадания и средний урон в секунду за последние 3 с.
-- **Подвижный манекен на рельсе** — скорость 2 / 4 / 6 м/с, для проверки упреждения и разброса.
-- **Манекен-стрелок** — плюёт раз в 2 с, чтобы проверять броню, перекат и присед.
-- Сброс всех мишеней одной кнопкой.
+**Targets:**
+- **Stationary dummy** — shows the damage of every hit and the average damage per second over the last 3 s.
+- **Moving dummy on a rail** — speed 2 / 4 / 6 m/s, for testing lead and spread.
+- **Shooter dummy** — spits every 2 s to test armour, dodge roll and crouch.
+- Reset all targets with one button.
 
-**Жуки по клавишам** (для проверки ощущения против живого противника): `Ctrl`+`1`…`5` — мелкий, быстрый, плевун, бомбардир, носорог; `Ctrl`+`0` — заморозить ИИ.
+**Beetles by keys** (to test the feel against a live opponent): `Ctrl`+`1`…`5` — small, fast, spitter, bombardier, rhino; `Ctrl`+`0` — freeze the AI.
 
-**Код:**
-- Все настраиваемые числа (скорости, оружие, броня) — в одном файле настроек, например `src/tuning.ts`. Из него читают и игра, и панель.
-- Плейграунд — только сцена и инструменты в `src/dev/`: `playground.ts` (сцена), `panel.ts` (панель), `dummies.ts` (мишени), `overlay.ts` (оверлеи).
-- Механики живут в общих модулях `player.ts`, `weapons.ts`, `combat.ts`.
+**Code:**
+- All tunable numbers (speeds, weapons, armour) in one settings file, e.g. `src/tuning.ts`. Both the game and the panel read from it.
+- The playground is only the scene and tools in `src/dev/`: `playground.ts` (scene), `panel.ts` (panel), `dummies.ts` (targets), `overlay.ts` (overlays).
+- Mechanics live in the shared modules `player.ts`, `weapons.ts`, `combat.ts`.
 
-**Готово, когда:**
-- все состояния движения и четыре ствола работают и выглядят как в разделе 10.2;
-- параметры правятся на лету и копируются в JSON;
-- Playwright-тест открывает плейграунд, проходит 10 м по клеткам, стреляет по манекену на 10 м и проверяет урон и расход патронов.
+**Done when:**
+- all movement states and the four guns work and look as in section 10.2;
+- parameters are edited on the fly and copied to JSON;
+- a Playwright test opens the playground, walks 10 m by the grid, shoots a dummy at 10 m and checks damage and ammo consumption.
 
-### Этап 1a. «Тир» — бой против орды
+### Stage 1a. "Shooting gallery" — fighting the horde
 
-1. Арена 24 × 24 м с укрытиями и бесконечными волнами по бюджету из раздела 5.
-2. Жуки против новой стрельбы и передвижения.
-3. Броня класса 1, каска, бронепластины.
-4. Гранаты РГД-5, если не сделаны на этапе 0.
-5. Боевой HUD: патроны «в магазине / в запасе», броня, выносливость.
+1. A 24 × 24 m arena with covers and endless waves by the budget from section 5.
+2. Beetles against the new shooting and movement.
+3. Class 1 armour, helmet, armour plates.
+4. RGD-5 grenades, if not done at stage 0.
+5. Combat HUD: ammo "in magazine / in reserve", armour, stamina.
 
-**Цель:** бой ощущается весомо и тактически — прятаться за укрытием, перезаряжаться, перекатываться.
+**Goal:** combat feels weighty and tactical — hide behind cover, reload, dodge roll.
 
-### Этап 1b. Этаж
+### Stage 1b. The floor
 
-1. Генератор одного этажа из 6 комнат по seed, 5 шаблонов.
-2. Двери, закрывающиеся в бою, переходы.
-3. Малина как валюта и лечение.
-4. 1 из 3 усилений после боя — 8 штук из списка.
-5. Босс «Матка».
-6. Экран итогов и возврат в лобби.
+1. A generator for one floor of 6 rooms by seed, 5 templates.
+2. Doors closing in combat, transitions.
+3. Raspberries as currency and healing.
+4. 1 of 3 perks after a fight — 8 from the list.
+5. The "Brood Mother" boss.
+6. Results screen and return to the lobby.
 
-### Этап 2
+### Stage 2
 
-Торговец, остальные стволы и обвесы, этажи 2–3 и их боссы, элитки, алтари.
+Merchant, the remaining guns and attachments, floors 2–3 and their bosses, elites, altars.
 
-### Этап 3
+### Stage 3
 
-Ферма-хаб и мета-прогрессия.
+Farm hub and meta-progression.
 
-### Позже
+### Later
 
-Сетевая игра, особые этажи.
+Networked play, special floors.
 
-## 17. Метрики плейтеста
+## 17. Playtest metrics
 
-- **Время комнаты:** 45–75 с.
-- **Здоровье после комнаты:** соло в среднем 40–70%, броня — 0–50%.
-- **Перезарядка в бою:** игрок перезаряжается в укрытии хотя бы половину раз. Если почти всегда в открытую — орды слишком плотные или магазины малы.
-- **Смерть на первом этаже:** в 20–30% забегов новичка.
-- **Малина в конце этажа:** игрок выбирает между лечением, патронами и бронёй. Если хватает на всё — урезать доход.
+- **Room time:** 45–75 s.
+- **Health after a room:** solo on average 40–70%, armour 0–50%.
+- **Reloading in combat:** the player reloads in cover at least half the time. If almost always in the open — the hordes are too dense or the magazines too small.
+- **Death on the first floor:** in 20–30% of a newcomer's runs.
+- **Raspberries at the end of the floor:** the player chooses between healing, ammo and armour. If there is enough for everything — cut the income.

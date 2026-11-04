@@ -1,124 +1,124 @@
-# Сетевая игра — сервер
+# Multiplayer — server
 
-Версия 2.2 от 04.11.2026: дельты применяются из очереди событий перед тактами, действия `act` с номером команды исполняются сервером в порядке с движением (раздел 7, [arch-layers.md](arch-layers.md)). Версия 2.1 от 04.11.2026: кольцо принятых снимков у клиента (дельты от прежней базы не теряются при задержке), пачки команд, интерполяция по времени сервера, герой после обрыва стоит (раздел 7); слои и соответствие Quake 3 — [arch-layers.md](arch-layers.md). Версия 2.0 от 04.11.2026: бой считает сервер ([adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md)) — симуляция без рендера, канал с seq/ack, дельты снимков по `/game`, предсказание своего героя у клиента, награды от сервера; хост-модель, миграция хоста, `relay`, `battle.end`/`battle.loot` и `CoopHost`/`CoopGuest` сняты, `PROTOCOL = 2` (разделы 1, 3, 6–8). ~~Версии 1.0–1.4 (02–03.11.2026): хост-авторитарная модель — бой считает браузер хоста, сервер ретранслирует и доверяет итогу~~ — заменено. Лагерь — [design-main-menu.md](design-main-menu.md), масштаб волн — [design-tower-defence.md](design-tower-defence.md), раздел 5, раскладка симуляции и вида — там же, раздел 15.
+Version 2.2 of 2026-11-04: deltas are applied from the event queue before ticks, `act` actions carrying a command number are executed by the server in order with movement (section 7, [arch-layers.md](arch-layers.md)). Version 2.1 of 2026-11-04: a ring of received snapshots on the client (deltas from an older base are not lost under latency), command batches, interpolation by server time, the hero stands still after a disconnect (section 7); layers and the Quake 3 correspondence — [arch-layers.md](arch-layers.md). Version 2.0 of 2026-11-04: the battle is computed by the server ([adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md)) — simulation without rendering, a channel with seq/ack, snapshot deltas over `/game`, prediction of own hero on the client, rewards from the server; the host model, host migration, `relay`, `battle.end`/`battle.loot` and `CoopHost`/`CoopGuest` are removed, `PROTOCOL = 2` (sections 1, 3, 6–8). ~~Versions 1.0–1.4 (2026-11-02 – 2026-11-03): host-authoritative model — the host's browser computes the battle, the server relays and trusts the outcome~~ — replaced. Camp — [design-main-menu.md](design-main-menu.md), wave scaling — [design-tower-defence.md](design-tower-defence.md), section 5, the split of simulation and view — same page, section 15.
 
-## 1. Модель
+## 1. Model
 
-- **Серверно-авторитарная, как в Quake 3.** Сервер крутит бой на такте 1/60 (кадр 50 мс = 3 такта, снимок после кадра — 20 Гц), клиенты шлют команды ввода (`Cmd`, одна на такт), получают дельты снимков, предсказывают своего героя и интерполируют остальных. Лобби, чат, профили и история — на том же сервере.
-- **Один код симуляции** для сервера и браузера: `src/sim/` (чистые правила обороны) и безголовые `Knight`, `Gear`, `Mob` (`src/headless.ts`); одиночная игра степает мир локально, сетевая — видит снимки. Игровая случайность — `rnd()` под сидом мира (`src/rng.ts`).
-- **До четырёх героев** (`MAX_PLAYERS`, `src/bosses/scaling.ts`).
-- **Один порт:** REST `/api/*`, WebSocket лобби `/ws` и WebSocket боя `/game` на `node:http`. `STATIC=dist` — сервер отдаёт и игру.
-- **Протокол общий:** `src/net/protocol.ts` (лобби, `PROTOCOL = 2`) и `src/net/game-protocol.ts` (бой). Версия не совпала — соединение закрывается с 4001.
+- **Server-authoritative, as in Quake 3.** The server runs the battle on a 1/60 tick (a 50 ms frame = 3 ticks, a snapshot after each frame — 20 Hz), clients send input commands (`Cmd`, one per tick), receive snapshot deltas, predict their own hero and interpolate the others. Lobby, chat, profiles and history — on the same server.
+- **One simulation code base** for server and browser: `src/sim/` (pure defence rules) and headless `Knight`, `Gear`, `Mob` (`src/headless.ts`); single-player steps the world locally, multiplayer sees snapshots. Game randomness — `rnd()` under the world seed (`src/rng.ts`).
+- **Up to four heroes** (`MAX_PLAYERS`, `src/bosses/scaling.ts`).
+- **One port:** REST `/api/*`, lobby WebSocket `/ws` and battle WebSocket `/game` on `node:http`. `STATIC=dist` — the server also serves the game.
+- **Shared protocol:** `src/net/protocol.ts` (lobby, `PROTOCOL = 2`) and `src/net/game-protocol.ts` (battle). Version mismatch — the connection closes with 4001.
 
-## 2. Запуск
+## 2. Running
 
 ```
-npm run server        # http://localhost:8787, база ./data/malina.db
+npm run server        # http://localhost:8787, database ./data/malina.db
 PORT=9000 DB_PATH=/var/malina.db STATIC=dist npm run server
-npm run server:test   # node:test, база в памяти
+npm run server:test   # node:test, in-memory database
 ```
 
-- Node ≥ 22.18 выполняет `.ts` сам (type stripping), сборки нет.
-- В серверном коде нельзя писать свойства в параметрах конструктора и `enum`, а импорты — с расширением `.ts`. Проверка типов — `tsc -p tsconfig.server.json` (входит в `npm run typecheck`).
-- SQLite — встроенный `node:sqlite`, без нативных зависимостей; WebSocket — пакет `ws`.
-- Адрес сервера для игры: `?server=http://…` (запоминается в `malina.server`). Иначе берётся тот же адрес, если игру отдал сервер, иначе `http://localhost:8787`.
+- Node ≥ 22.18 runs `.ts` itself (type stripping), no build step.
+- Server code may not use property declarations in constructor parameters or `enum`, and imports must carry the `.ts` extension. Type check — `tsc -p tsconfig.server.json` (part of `npm run typecheck`).
+- SQLite — the built-in `node:sqlite`, no native dependencies; WebSocket — the `ws` package.
+- Server address for the game: `?server=http://…` (remembered in `malina.server`). Otherwise the same origin is used if the game was served by the server, else `http://localhost:8787`.
 
-## 3. Код
+## 3. Code
 
-| Файл | Что внутри |
+| File | What is inside |
 |---|---|
-| `server/main.ts` | конфиг из env (`PORT`, `HOST`, `DB_PATH`, `STATIC`, `MAPS`), остановка по SIGINT |
-| `server/app.ts` | сборка: база, менеджер комнат, REST, WebSocket, уборка раз в секунду |
-| `server/db.ts`, `migrations.ts` | открытие базы (WAL, внешние ключи), миграции по `PRAGMA user_version`, `tx()` |
-| `server/repo/*.ts` | запросы: игроки, профили, комнаты, матчи |
-| `server/auth.ts` | токен — 32 случайных байта, в базе хранится только sha256 |
-| `server/http.ts` | маршруты REST, CORS `*` (вход по заголовку, без cookie) |
-| `server/hub.ts` | соединения: `hello`, лимиты частоты, разбор и раздача сообщений |
-| `server/rooms.ts` | `RoomManager`: места, хост, готовность, старт (создаёт матч), обрыв, итог матча → награды, восстановление после перезапуска |
-| `server/game/runner.ts`, `game-hub.ts` | раннер матчей (один таймер на процесс, кадр 50 мс) и WebSocket `/game`: `hello` с токеном и матчем, дальше канал ведёт матч |
-| `src/game/battle.ts`, `match.ts` | безголовый бой (мир, герои партии по профилям, стая, удар меча, лава) и матч: очереди команд, кольцо снимков, дельты каждому, наборы и действия, итог с наградами |
-| `src/net/game-protocol.ts` | `Cmd`, записи героя и врага (`HeroEnt`, `MobEnt`), сообщения канала боя, такт и кадр |
-| `server/validate.ts` | проверка профиля и сообщений без библиотек |
-| `server/maps.ts` | карты с `meta.td` из `assets/maps`: какие можно выбрать и потолок малины за бой |
-| `src/net/transport.ts`, `ws-transport.ts`, `loopback.ts` | транспорт канала: интерфейс, над WebSocket (браузер и `ws`), петля в памяти с задержкой, потерями и перестановками от фейковых часов (тесты, одиночная игра) |
-| `src/net/channel.ts` | `Channel` — netchan по Quake 3: в одном кадре надёжная полоса (по порядку, с подтверждением `rack` и повтором через `resendMs`, окно 64) и ненадёжная (последний побеждает по `seq`, старые кадры отбрасываются, `ack` — последний принятый) |
-| `src/net/snapshot.ts` | `SnapshotRing` (кольцо последних снимков мира, дельта от подтверждённого клиентом — `add`/`upd`/`del` и события по группам на каждый снимок после базового; подтверждения нет или оно выпало из кольца — полный, `base: 0`) и `SnapshotView` (копия мира у клиента с историей 32 принятых состояний, как `cl.snapshots` в Quake 3: дельта от любой базы из истории применяется, события играются только новее уже применённого; база неизвестна — `rejected`, нужен полный) |
-| `src/sim/` | симуляция боя без сцены и DOM — общий код сервера и браузера: мир с сидом, события, записи сущностей; пока — оборона (башни, стены, куст, кучки), герои и враги через крючки ([design-tower-defence.md](design-tower-defence.md), раздел 15) |
-| `src/cgame/` | клиентская половина: вью по записям и событиям, эффекты, меню и HUD обороны; `events.ts` — очередь системных событий (ввод и кадры сети разбираются перед тактами), `input.ts` — ввод такта с защёлками и действиями, `orders.ts` — приказы мыши; `net-battle.ts` — клиент сетевого боя (канал к `/game`, предсказание, чужие герои, куклы, зеркало обороны, список игроков, чат, имена) |
-| `src/headless.ts`, `src/rng.ts` | безголовый режим: герой, снаряжение с магией и мобы — те же классы без рендера (three в Node, канвас-заглушка, `nullFx` с таймерами `custom`/`streak`, в которых живёт урон заклинаний); игровая случайность `rnd()` на время шага мира — генератор мира с сидом (`useRng`); приманки — список мира (`useDecoys`), герои отряда — крючки `MobHooks.heroes`/`hurtKnight` вместо глобальных `party`/`decoys` |
-| `src/net/client.ts` | `NetClient` браузера; `NET` в `src/menu/session.ts` — его экземпляр |
-| `src/party.ts` | отряд героев у хоста: мобы выбирают ближайшего, удары по герою гостя |
+| `server/main.ts` | config from env (`PORT`, `HOST`, `DB_PATH`, `STATIC`, `MAPS`), shutdown on SIGINT |
+| `server/app.ts` | assembly: database, room manager, REST, WebSocket, cleanup once a second |
+| `server/db.ts`, `migrations.ts` | opening the database (WAL, foreign keys), migrations by `PRAGMA user_version`, `tx()` |
+| `server/repo/*.ts` | queries: players, profiles, rooms, matches |
+| `server/auth.ts` | token — 32 random bytes, only the sha256 is stored in the database |
+| `server/http.ts` | REST routes, CORS `*` (sign-in by header, no cookie) |
+| `server/hub.ts` | connections: `hello`, rate limits, parsing and dispatching messages |
+| `server/rooms.ts` | `RoomManager`: seats, host, readiness, start (creates a match), disconnect, match result → rewards, recovery after restart |
+| `server/game/runner.ts`, `game-hub.ts` | match runner (one timer per process, 50 ms frame) and WebSocket `/game`: `hello` with token and match, then the channel drives the match |
+| `src/game/battle.ts`, `match.ts` | headless battle (world, party heroes from profiles, pack, sword strike, lava) and match: command queues, snapshot ring, deltas for everyone, kits and actions, result with rewards |
+| `src/net/game-protocol.ts` | `Cmd`, hero and enemy records (`HeroEnt`, `MobEnt`), battle channel messages, tick and frame |
+| `server/validate.ts` | profile and message validation without libraries |
+| `server/maps.ts` | maps with `meta.td` from `assets/maps`: which can be selected and the raspberry cap per battle |
+| `src/net/transport.ts`, `ws-transport.ts`, `loopback.ts` | channel transport: interface, over WebSocket (browser and `ws`), in-memory loopback with latency, loss and reordering driven by a fake clock (tests, single-player) |
+| `src/net/channel.ts` | `Channel` — netchan after Quake 3: in one frame a reliable lane (in order, acknowledged by `rack` and resent after `resendMs`, window 64) and an unreliable one (last wins by `seq`, old frames dropped, `ack` — last received) |
+| `src/net/snapshot.ts` | `SnapshotRing` (ring of the latest world snapshots, delta from the snapshot the client acknowledged — `add`/`upd`/`del` plus events grouped per snapshot after the base; no acknowledgement or it fell out of the ring — full, `base: 0`) and `SnapshotView` (the client's copy of the world with a history of 32 received states, like `cl.snapshots` in Quake 3: a delta from any base in the history is applied, events are played only if newer than those already applied; base unknown — `rejected`, a full one is needed) |
+| `src/sim/` | battle simulation without scene or DOM — shared code of server and browser: a seeded world, events, entity records; so far — the defence (towers, walls, bush, piles), heroes and enemies via hooks ([design-tower-defence.md](design-tower-defence.md), section 15) |
+| `src/cgame/` | the client half: a view from records and events, effects, defence menu and HUD; `events.ts` — the system event queue (input and network frames are processed before ticks), `input.ts` — tick input with latches and actions, `orders.ts` — mouse orders; `net-battle.ts` — the network battle client (channel to `/game`, prediction, other heroes, puppets, defence mirror, player list, chat, names) |
+| `src/headless.ts`, `src/rng.ts` | headless mode: hero, gear with magic and mobs — the same classes without rendering (three in Node, a canvas stub, `nullFx` with `custom`/`streak` timers, where spell damage lives); game randomness `rnd()` for the duration of a world step — the seeded world generator (`useRng`); decoys — the world's list (`useDecoys`), party heroes — hooks `MobHooks.heroes`/`hurtKnight` instead of global `party`/`decoys` |
+| `src/net/client.ts` | the browser's `NetClient`; `NET` in `src/menu/session.ts` — its instance |
+| `src/party.ts` | the hero party on the host: mobs pick the nearest, hits on a guest's hero |
 
-Чтобы сервер мог импортировать каталог предметов (`src/items.ts`) для проверки профиля и начисления опыта (`Profile.addXp`), `rng` вынесен в `src/rng.ts`, без three.
+So that the server can import the item catalogue (`src/items.ts`) for profile validation and experience grants (`Profile.addXp`), `rng` was moved out to `src/rng.ts`, without three.
 
-## 4. Схема SQLite
+## 4. SQLite schema
 
-- `players` — id, имя, `name_key` (нижний регистр: NOCASE в SQLite не понимает кириллицу), хеш токена, время.
-- `profiles` — `ProfileData` целиком в JSON и `version`.
-- `rooms` — код из шести букв, хост, карта, `max`, `private`, `state` (`lobby | battle | closed`), сид.
-- `room_members` — место, готовность, `gone_at`.
-- `matches` — карта, число игроков, сид, начало и конец, результат (`won | lost | abandoned`), волна.
-- `match_players` — место героя, малина и опыт за бой.
+- `players` — id, name, `name_key` (lower case: NOCASE in SQLite does not understand Cyrillic), token hash, time.
+- `profiles` — the whole `ProfileData` as JSON and `version`.
+- `rooms` — a six-letter code, host, map, `max`, `private`, `state` (`lobby | battle | closed`), seed.
+- `room_members` — seat, readiness, `gone_at`.
+- `matches` — map, player count, seed, start and end, result (`won | lost | abandoned`), wave.
+- `match_players` — hero seat, raspberries and experience for the battle.
 
-Время везде — миллисекунды Unix. Новая схема — только новой миграцией в конце списка.
+Time is Unix milliseconds everywhere. A new schema — only via a new migration at the end of the list.
 
-## 5. Вход и профиль
+## 5. Sign-in and profile
 
 - `POST /api/auth {name}` → `{playerId, name, token}`.
-  - Имя — 2–16 букв, цифр, пробелов, `_` и `-`; без учёта регистра.
-  - Занятое имя → 409. Своё имя со своим токеном — тот же герой.
-- `POST /api/auth/rename`, `GET /api/me`. Токен хранится в `localStorage['malina.net']`; потерял токен — героя не вернуть, как и сохранение в localStorage.
-- `GET /api/profile`, `PUT /api/profile {version, data}` — оптимистичная блокировка: по старой версии → 409 и свежий профиль.
-- Проверка (`checkProfile`):
-  - форма `ProfileData`, конечные неотрицательные числа, размер ≤ 256 КБ;
-  - надето только то, что лежит в сумке;
-  - неизвестные предметы выбрасываются, как в `Profile.load`.
+  - Name — 2–16 letters, digits, spaces, `_` and `-`; case-insensitive.
+  - Name taken → 409. Own name with own token — the same hero.
+- `POST /api/auth/rename`, `GET /api/me`. The token is stored in `localStorage['malina.net']`; lose the token — the hero cannot be recovered, same as a save in localStorage.
+- `GET /api/profile`, `PUT /api/profile {version, data}` — optimistic locking: with a stale version → 409 and the fresh profile.
+- Validation (`checkProfile`):
+  - the shape of `ProfileData`, finite non-negative numbers, size ≤ 256 KB;
+  - only items that are in the bag may be equipped;
+  - unknown items are thrown away, as in `Profile.load`.
 
-  От читов в хост-модели это не защищает — отсекаем мусор.
-- **Синхронизация** (`NetClient.syncProfile`, в лагере после возврата отложенной малины и снаряжения):
-  - клиент помнит версию последней синхронизации (`malina.net.version`);
-  - на сервере версия новее → берётся серверный профиль;
-  - иначе на сервер уходит локальный;
-  - дальнейшие изменения в лагере уходят с задержкой 0,8 с.
+  This does not protect against cheats in the host model — it filters out garbage.
+- **Sync** (`NetClient.syncProfile`, in the camp after the stashed raspberries and gear are returned):
+  - the client remembers the version of the last sync (`malina.net.version`);
+  - the server's version is newer → the server profile is taken;
+  - otherwise the local one is sent to the server;
+  - further changes in the camp are sent with a 0.8 s delay.
 
-  Страница боя профиль не связывает: в бою он подменён набором обороны (`Profile.tdKit`).
+  The battle page does not touch the profile: in battle it is replaced by the defence kit (`Profile.tdKit`).
 
-## 6. Комнаты
+## 6. Rooms
 
-- `GET /api/rooms` — публичные комнаты, где есть места: и в лобби, и в идущем бою (`RoomInfo.state`; это и есть `OnlineLobby` из `session.ts`).
-- WebSocket: `room.create {map, max, private}`, `room.join {code}`, `room.leave`, `room.ready`, `room.map` и `room.kick` (только хост), `room.start` (хост, все гости готовы и на связи), `room.again` («Ещё раз» после боя — хост, тем же составом без готовности), `chat {text}` (всем в комнате: имя, место, текст ≤ 200 символов, не чаще раза в 0,4 с). Каждое изменение — `room.state {room, seats, you}` всем в комнате.
-- **Старт:** `battle.start {matchId, map, players, seed, hostSeat, seats}`, строка в `matches`. Лагерь уходит на `?map=…&from=menu&players=N&room=КОД`, страница боя входит на сервер заново. «Ещё раз» — новый `battle.start`, страница боя уходит на него сама.
-- **Вход в идущий бой:** `room.join` в комнату в бою, пока есть место, — строка опоздавшего в матче (для награды) и ему `battle.start`; у остальных его герой появляется по первому вводу и составу комнаты.
-- **Друзья** (`friends`, миграция 003): `POST /api/friends {name}` — добавить по имени (список в одну сторону), `GET /api/friends` — на связи ли и в какой комнате (войти по коду — и в закрытую), `DELETE /api/friends?id=`.
-- **Обрыв связи:**
-  - место держится 30 с (`NET_LIMITS.graceMs`), повторный вход с тем же токеном возвращает на него (с перезагрузкой страницы «В бой» тоже так);
-  - вход того же игрока с другой вкладки закрывает старое соединение (4009);
-  - `hello` не пришёл за 15 с (страница боя занята постройкой карты) — закрыть с 4002, клиент переподключается и вход не забывает; 4003 — только неверный токен. Страница боя подключается сразу, без проверки `/api/health`;
-  - ушёл хост: хостом (корона, права в лобби) становится следующий; бой на сервере идёт дальше без его героя. Ушли все — матч `abandoned`, комната закрыта;
-  - комната опустела — закрыта, код освобождается; закрытые удаляются через сутки.
-- **Перезапуск сервера:** бои → `abandoned`, лобби остаются, все игроки считаются отключёнными, места держатся 10 мин. Страница боя переподключается, видит комнату в лобби — бой прерван («Связь с сервером прервалась»).
-- **Лимиты:**
-  - сообщение ≤ 64 КБ;
-  - ≤ 100 сообщений в секунду на `/ws`; две секунды подряд сверх — закрыть (4008);
-  - команд ввода на `/game` — одна на такт; по транспорту с потерями (`Transport.lossy`: петля с потерями, будущий UDP-подобный) клиент шлёт пачку из последних трёх (`CMD_DUP`, как `cl_packetdup`), по WebSocket — одну (TCP не теряет, дубли только тратили полосу); дубли по `seq` отбрасываются, очередь ≤ 8, старые отбрасываются;
-  - `/game` сжат permessage-deflate с общим контекстом (`DEFLATE` в `server/game/game-hub.ts`, порог 64 байта): снимки похожи от кадра к кадру, на проводе в 4–12 раз меньше — замеры в [dev-performance.md](dev-performance.md);
-  - окно надёжных сообщений (64) переполнено — соединение закрывается с 4010, как Quake 3 роняет клиента, который не подтверждает.
+- `GET /api/rooms` — public rooms with free seats: both in the lobby and in a running battle (`RoomInfo.state`; this is the `OnlineLobby` from `session.ts`).
+- WebSocket: `room.create {map, max, private}`, `room.join {code}`, `room.leave`, `room.ready`, `room.map` and `room.kick` (host only), `room.start` (host, all guests ready and connected), `room.again` ("Again" after a battle — host, same line-up without readiness), `chat {text}` (to everyone in the room: name, seat, text ≤ 200 characters, no more than once per 0.4 s). Every change — `room.state {room, seats, you}` to everyone in the room.
+- **Start:** `battle.start {matchId, map, players, seed, hostSeat, seats}`, a row in `matches`. The camp leaves for `?map=…&from=menu&players=N&room=CODE`, the battle page signs in to the server anew. "Again" — a new `battle.start`, the battle page follows it on its own.
+- **Joining a running battle:** `room.join` into a room in battle, while there is a seat — a late joiner's row in the match (for the reward) and a `battle.start` to them; for the others their hero appears on the first input and the room line-up.
+- **Friends** (`friends`, migration 003): `POST /api/friends {name}` — add by name (one-way list), `GET /api/friends` — whether online and in which room (join by code — into a private one too), `DELETE /api/friends?id=`.
+- **Disconnect:**
+  - the seat is held for 30 s (`NET_LIMITS.graceMs`), re-entry with the same token returns to it (reloading the "To battle" page works the same way);
+  - the same player signing in from another tab closes the old connection (4009);
+  - no `hello` within 15 s (the battle page is busy building the map) — close with 4002, the client reconnects and does not forget the sign-in; 4003 — only for a wrong token. The battle page connects immediately, without checking `/api/health`;
+  - the host left: the next player becomes host (crown, lobby rights); the battle on the server continues without their hero. Everyone left — the match is `abandoned`, the room is closed;
+  - the room emptied — closed, the code is freed; closed rooms are deleted after a day.
+- **Server restart:** battles → `abandoned`, lobbies remain, all players count as disconnected, seats are held for 10 min. The battle page reconnects, sees the room in the lobby — the battle is interrupted ("Connection to the server lost").
+- **Limits:**
+  - message ≤ 64 KB;
+  - ≤ 100 messages per second on `/ws`; two consecutive seconds over — close (4008);
+  - input commands on `/game` — one per tick; over a lossy transport (`Transport.lossy`: the lossy loopback, a future UDP-like one) the client sends a batch of the last three (`CMD_DUP`, like `cl_packetdup`), over WebSocket — one (TCP does not lose, duplicates only wasted bandwidth); duplicates by `seq` are dropped, queue ≤ 8, old ones dropped;
+  - `/game` is compressed with permessage-deflate with a shared context (`DEFLATE` in `server/game/game-hub.ts`, threshold 64 bytes): snapshots are similar from frame to frame, 4–12× smaller on the wire — measurements in [dev-performance.md](dev-performance.md);
+  - the reliable message window (64) overflows — the connection closes with 4010, as Quake 3 drops a client that does not acknowledge.
 
-## 7. Бой
+## 7. Battle
 
-- **Старт.** `room.start` создаёт матч (`Match`): мир карты с сидом, герой каждого места по его профилю с сервера (набор обороны `Profile.tdKit`), стартовая казна каждому (малина у каждого своя). Матч в раннере; страница боя открывает `/game`, шлёт `hello {token, matchId, protocol}` и получает `welcome`, наборы всех и полный снимок.
-- **Канал** (`src/net/channel.ts`): в одном кадре надёжная полоса (`td` постройки, `act` действия — с номером последней команды клиента, сервер исполняет после неё и перед следующей, `kit` наборы, `welcome`, `over`) и ненадёжная (`Cmd` ↔ дельта снимка; по транспорту с потерями — пачка последних трёх команд). `Cmd.snap` — последний применённый клиентом снимок: от него сервер считает следующую дельту, нет такого в кольце (32 снимка) — полный. Пока подтверждение летит, дельты идут от прежней базы — клиент восстанавливает её из своей истории (32 состояния) и применяет; события в дельте сгруппированы по снимкам, играются только те, что новее применённого, — ни дублей, ни потерь при задержке.
-- **Снимок** — записи сущностей (`src/sim/entities.ts`, `src/net/game-protocol.ts`): герои `h<место>` (место, взгляд, здоровье, без сил, ввод, перекат, лук, `ack` ввода, пинг), враги `m<id>` (вид, место, здоровье, флаги, атака и её номер, цель, дорога), оборона `td`, башни, стены, куст, логова, снаряды, лужи, кучки `p<n>`, кошельки `purse<место>`; события (`src/sim/events.ts`) — всех снимков после базового.
-- **Свой герой** предсказан: шаг локально по вводу, команда уходит каждый такт; по `ack` из снимка место сверяется с тем, где герой был на момент этого ввода, расхождение убирается по 20 % за снимок (больше 2,5 м — сразу). Здоровье и «без сил» — сервера.
-- **Чужие герои** — рыцари по вводу из записи, место из буфера снимков по **времени сервера** (`Delta.tick`; оценка сдвига часов как `cl.serverTimeDelta` в Quake 3: сброс при расхождении > 0,5 с, иначе подползает) с задержкой 0,1 с; снаряжение по `kit` (сервер шлёт наборы всех), действия — `act` с местом повторяются для вида.
-- **Враги — куклы** (`Mob.puppet`): появляются по записи, шагают по намерению сервера (`mx`, `mz`) и подтягиваются к месту из буфера, новая атака по номеру — та же атака для вида, пропали из снимка — рассыпаются; урон считает сервер.
-- **Оборона** — зеркало `SimTd` по записям (`TdUi` и подсказки работают как в одиночной), команды меню и `G` — надёжно серверу (`SimTd.remote`); башни, стены, кучки рисует `TdView` по тем же записям, что и в одиночной игре.
-- **Маркитант**: покупка берёт малину из зеркала, разница уходит серверу с набором (`kit.cost`).
-- **Время в сетевом бою не стоит**: инвентарь, лавка, стоп-кадр и замедление заклинаний (`fx.hitstop`/`slowmo`) не останавливают такты и команды — свой герой стоит с пустым вводом, остальные играют. Клиентские события обороны играет только `TdView.apply` (один раз), цифра подобранной малины — над героем своего места.
-- **Итог.** Куст отбит или засох — через 4,5 с (сбор урожая долетел) матч шлёт `over`, комната закрывает матч: история, награда каждому — непотраченная малина и опыт за бой с потолком по карте, `profile.updated`, `battle.over`, комната снова лобби. «Ещё раз» — `room.again`. Вход в идущий бой — герой у точки появления и полный снимок; обрыв — очередь команд сброшена, герой стоит на месте до `graceMs`, потом убирается; новое соединение — новая нумерация команд (`seq` с нуля) и полный снимок.
+- **Start.** `room.start` creates a match (`Match`): the map world with a seed, a hero for each seat from their server-side profile (defence kit `Profile.tdKit`), a starting treasury for each (every player has their own raspberries). The match goes into the runner; the battle page opens `/game`, sends `hello {token, matchId, protocol}` and receives `welcome`, everyone's kits and a full snapshot.
+- **Channel** (`src/net/channel.ts`): in one frame a reliable lane (`td` builds, `act` actions — with the number of the client's last command, the server executes it after that one and before the next, `kit` kits, `welcome`, `over`) and an unreliable one (`Cmd` ↔ snapshot delta; over a lossy transport — a batch of the last three commands). `Cmd.snap` — the last snapshot the client applied: the server computes the next delta from it, none such in the ring (32 snapshots) — full. While the acknowledgement is in flight, deltas come from the older base — the client restores it from its history (32 states) and applies; events in a delta are grouped by snapshot, only those newer than the applied one are played — no duplicates and no losses under latency.
+- **Snapshot** — entity records (`src/sim/entities.ts`, `src/net/game-protocol.ts`): heroes `h<seat>` (position, facing, health, exhausted, input, dodge roll, bow, input `ack`, ping), enemies `m<id>` (kind, position, health, flags, attack and its number, target, road), defence `td`, towers, walls, bush, lairs, projectiles, pools, piles `p<n>`, purses `purse<seat>`; events (`src/sim/events.ts`) — of all snapshots after the base.
+- **Own hero** is predicted: stepped locally from input, a command leaves every tick; by the `ack` from a snapshot the position is reconciled against where the hero was at that input, the discrepancy is removed at 20 % per snapshot (more than 2.5 m — at once). Health and "exhausted" — the server's.
+- **Other heroes** — knights driven by the input from the record, position from the snapshot buffer by **server time** (`Delta.tick`; clock offset estimated like `cl.serverTimeDelta` in Quake 3: reset on a discrepancy > 0.5 s, otherwise creeps up) with a 0.1 s delay; gear from `kit` (the server sends everyone's kits), actions — `act` with a position are replayed for the view.
+- **Enemies are puppets** (`Mob.puppet`): appear from the record, walk by the server's intent (`mx`, `mz`) and are pulled toward the position from the buffer, a new attack by number — the same attack for the view, gone from the snapshot — crumble; damage is computed by the server.
+- **Defence** — a `SimTd` mirror from records (`TdUi` and hints work as in single-player), menu commands and `G` — reliably to the server (`SimTd.remote`); towers, walls, piles are drawn by `TdView` from the same records as in single-player.
+- **Sutler**: a purchase takes raspberries from the mirror, the difference goes to the server with the kit (`kit.cost`).
+- **Time does not stop in a network battle**: inventory, shop, hitstop and spell slow-motion (`fx.hitstop`/`slowmo`) do not stop ticks or commands — own hero stands with empty input, the others play. Client-side defence events are played only by `TdView.apply` (once); the number for picked-up raspberries — above the hero of own seat.
+- **Result.** The bush held or withered — after 4.5 s (the harvest has flown in) the match sends `over`, the room closes the match: history, a reward to each — unspent raspberries and battle experience capped per map, `profile.updated`, `battle.over`, the room is a lobby again. "Again" — `room.again`. Joining a running battle — the hero at the spawn point and a full snapshot; disconnect — the command queue is reset, the hero stands in place until `graceMs`, then is removed; a new connection — new command numbering (`seq` from zero) and a full snapshot.
 
-## 8. Тесты
+## 8. Tests
 
-- `npm run test:net` (`server/test/*.test.ts`, `node:test`, секунды): вход, профиль, комнаты, старт и итог матча с наградами, уход хоста, перезапуск; канал (порядок, потери, окно), кодек снимков; симуляция обороны и детерминизм; безголовый бой с настоящими мобами; матч над петлёй с двумя фейковыми клиентами (ввод, постройка, действия, волна, итог; задержка 60 и 100 мс — ни одной отвергнутой дельты; события ровно один раз; перекат виден другому и двигает героя; обрыв — герой встал, возврат — `ack` с новой нумерации).
-- `tests/net.spec.ts` (Playwright): настоящий сервер и два браузера — вход, комната по коду, «Готов», «Начать игру», обе страницы в серверном бою: снимки идут, герой гостя у хоста идёт по вводу гостя, имена над героями, башня гостя за его малину у обоих, волна — куклы у обоих. ~~`tests/net-party.spec.ts`~~ снят: его сценарии (опоздавший, уход хоста, перезапуск) — в `rooms.test.ts` и `match.test.ts`.
-- `tests/menu.spec.ts`: без сервера панель показывает «Сервер недоступен», старт закрыт.
+- `npm run test:net` (`server/test/*.test.ts`, `node:test`, seconds): sign-in, profile, rooms, match start and result with rewards, host leaving, restart; channel (order, loss, window), snapshot codec; defence simulation and determinism; headless battle with real mobs; a match over the loopback with two fake clients (input, building, actions, wave, result; latency 60 and 100 ms — not a single rejected delta; events exactly once; a dodge roll is visible to the other and moves the hero; disconnect — the hero stopped, return — `ack` with the new numbering).
+- `tests/net.spec.ts` (Playwright): a real server and two browsers — sign-in, room by code, "Ready", "Start game", both pages in a server battle: snapshots flowing, the guest's hero on the host moves by the guest's input, names above heroes, the guest's tower paid with their raspberries on both, a wave — puppets on both. ~~`tests/net-party.spec.ts`~~ removed: its scenarios (late joiner, host leaving, restart) are in `rooms.test.ts` and `match.test.ts`.
+- `tests/menu.spec.ts`: without a server the panel shows "Server unavailable", start is disabled.

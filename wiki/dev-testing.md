@@ -1,30 +1,30 @@
-# Тесты: как запускать Playwright
+# Tests: how to run Playwright
 
-> Версия 2 · 04.11.2026
+> Version 2 · 2026-11-04
 
-Тесты — `tests/playground.spec.ts`, конфиг — `playwright.config.ts`. Они открывают собранный `dist/index.html` без сервера, WebGL — программный (SwiftShader), симуляцию гоняют через `window.__malina`.
+Tests — `tests/playground.spec.ts`, config — `playwright.config.ts`. They open the built `dist/index.html` without a server, WebGL is software (SwiftShader), the simulation is driven through `window.__malina`.
 
-## Быстрые тесты сети и симуляции — `npm run test:net`
+## Fast network and simulation tests — `npm run test:net`
 
 ```bash
 mise exec -- npm run typecheck && mise exec -- npm run test:net
 ```
 
-`server/test/*.test.ts` на `node:test` без браузера: сервер (вход, комнаты, итог), протокол и канал, кодек снимков, симуляция боя с сидом, матч над петлёй в памяти — секунды, не минуты. Гонять перед каждым коммитом; Playwright — только при правках вида и UI и в конце этапа. `headless-gear.test.ts` — все артефакты, заклинания, ауры и спец-удары на безголовом сервере (ловит забытый `document`). `headless.test.ts` — безголовый бой: настоящие `Knight`, `Gear` и стая `Pack` на карте `td` в Node со сценой без рендера и `nullFx` (`src/headless.ts`), волна до конца и хэш детерминизма. `sim-boundary.test.ts` — страж: модули `src/sim`, `src/net`, `src/game` общие для сервера и браузера, грузятся в Node и не трогают DOM, сцену three, FX, звук, `Math.random` и часы (`tsconfig.server.json` проверяет их без `lib: DOM`).
+`server/test/*.test.ts` on `node:test` without a browser: the server (login, rooms, summary), protocol and channel, snapshot codec, seeded battle simulation, a match over an in-memory loopback — seconds, not minutes. Run before every commit; Playwright — only for view and UI changes and at the end of a phase. `headless-gear.test.ts` — all artifacts, spells, auras and weapon arts on the headless server (catches a forgotten `document`). `headless.test.ts` — headless battle: real `Knight`, `Gear` and a `Pack` on the `td` map in Node with a scene without rendering and `nullFx` (`src/headless.ts`), a wave to the end and a determinism hash. `sim-boundary.test.ts` — the guard: the `src/sim`, `src/net`, `src/game` modules shared by server and browser load in Node and do not touch the DOM, the three scene, FX, sound, `Math.random` or the clock (`tsconfig.server.json` checks them without `lib: DOM`).
 
-## Рецепт Playwright (работает у агентов и в песочнице)
+## Playwright recipe (works for agents and in the sandbox)
 
 ```bash
 mise exec -- npm run build
 PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise exec -- npx playwright test
 ```
 
-- **Код игры должен грузиться в Node** (type stripping): импорты только с `.ts`, без `enum` и свойств-параметров конструктора — иначе `headless.test.ts` падает на `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`; найти виновника — `node -e` со `stripTypeScriptTypes` из `node:module` по всем файлам.
-- **Node — через mise** (`mise.toml`: node 26.7.0). Без `mise exec` подхватывается чужой node из `PATH` (например `~/.hermes/node`).
-- **Браузер — установленный Google Chrome** через `PW_CHROMIUM` (`launchOptions.executablePath` в конфиге). Скачивать браузер не нужно.
-- **Не запускать `npx playwright install chromium`** в песочнице агента: в ней нет сети, загрузка виснет на первых сотнях КБ и оставляет `~/Library/Caches/ms-playwright/__dirlock` и недокачанную папку `chromium-*`. Если такое случилось — убить процессы `playwright install` / `oopDownloadBrowserMain` и удалить эти две папки.
-- Ошибка `Executable doesn't exist at …/chromium_headless_shell-…` значит, что забыли `PW_CHROMIUM`, а не что надо качать браузер.
-- 15 тестов идут ≈ 2 минуты в один поток; длинный прогон — в фоне.
-- Перф-тесты `tests/perf.spec.ts` с `PERF_GPU=1` открывают Chrome в окне на настоящем GPU (Metal) — только так время кадра имеет смысл; без флага они проверяют лишь утечки и число программ ([dev-performance.md](dev-performance.md)).
+- **Game code must load in Node** (type stripping): imports only with `.ts`, no `enum` and no constructor parameter properties — otherwise `headless.test.ts` fails with `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`; to find the culprit — `node -e` with `stripTypeScriptTypes` from `node:module` over all files.
+- **Node — via mise** (`mise.toml`: node 26.7.0). Without `mise exec` a foreign node from `PATH` gets picked up (for example `~/.hermes/node`).
+- **Browser — the installed Google Chrome** via `PW_CHROMIUM` (`launchOptions.executablePath` in the config). No need to download a browser.
+- **Do not run `npx playwright install chromium`** in the agent sandbox: it has no network, the download hangs on the first few hundred KB and leaves `~/Library/Caches/ms-playwright/__dirlock` and a half-downloaded `chromium-*` folder. If that happened — kill the `playwright install` / `oopDownloadBrowserMain` processes and delete those two folders.
+- The error `Executable doesn't exist at …/chromium_headless_shell-…` means `PW_CHROMIUM` was forgotten, not that a browser needs downloading.
+- 15 tests take ≈ 2 minutes single-threaded; run a long pass in the background.
+- The perf tests `tests/perf.spec.ts` with `PERF_GPU=1` open Chrome in a window on the real GPU (Metal) — only then does frame time mean anything; without the flag they only check leaks and the number of programs ([dev-performance.md](dev-performance.md)).
 
-Проверено 24.10.2026: 15 из 15 зелёные (node 26.7.0, Playwright 1.56.1, Google Chrome из `/Applications`).
+Verified 2026-10-24: 15 of 15 green (node 26.7.0, Playwright 1.56.1, Google Chrome from `/Applications`).

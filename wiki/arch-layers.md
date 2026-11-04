@@ -1,44 +1,44 @@
-# Слои системы и соответствие Quake III Arena
+# System layers and the mapping to Quake III Arena
 
-Версия 1.2 от 04.11.2026 (мозг мобов как бот — раздел 2). Версия 1.1 от 04.11.2026 (очередь событий и единый ввод — раздел 2). Версия 1.0 от 04.11.2026. Сетевой бой — [design-multiplayer.md](design-multiplayer.md), решение — [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md). Образец — исходники Quake III Arena (`code/qcommon`, `server`, `client`, `cgame`, `game`, `botlib`).
+Version 1.2 of 2026-11-04 (mob brain as a bot — section 2). Version 1.1 of 2026-11-04 (event queue and unified input — section 2). Version 1.0 of 2026-11-04. Network battle — [design-multiplayer.md](design-multiplayer.md), the decision — [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md). The model — the Quake III Arena sources (`code/qcommon`, `server`, `client`, `cgame`, `game`, `botlib`).
 
-## 1. Слои
+## 1. Layers
 
-| Слой | Где | Что внутри | Аналог в Quake 3 |
+| Layer | Where | What is inside | Quake 3 counterpart |
 |---|---|---|---|
-| Симуляция | `src/sim/` | правила обороны: `SimWorld` (тик, `rng` с сидом, события, записи сущностей), `SimTd`, башни, стены, куст, логова, кучки. Без сцены, DOM, звука, `Math.random` и часов — страж `server/test/sim-boundary.test.ts` | `game/` (qagame, `g_*`) |
-| Общий код героя | `src/knight.ts` (`Knight.update`), `src/gear.ts`, `src/mobs/`, `src/bosses/`, магия | один код движения и боя для своего, чужого и серверного героя; на сервере — без рендера через `src/headless.ts` (three в Node, канвас-заглушка, `nullFx`). Движение смешано с анимацией (`animate`, `sampleTrail`). Геймплей сервера — без `Math.random` и часов (страж `sim-boundary.test.ts`) | `game/bg_pmove.c` |
-| Мозг мобов | `src/mobs/mob.ts` (`think`/`mover`), `src/level/pathfind.ts` | мозг раз в 0,1 с (цель, тревога, режим, атака), движитель каждый такт, путь в обход с бюджетом на такт; куклы по намерению из снимка ([design-mobs.md](design-mobs.md), раздел 6) | `botlib/` (`bot_thinktime`, AAS) |
-| Бой и матч | `src/game/battle.ts`, `match.ts` | безголовый бой партии; матч: очереди команд по местам, такт 1/60, кадр 50 мс, кольцо снимков, дельты каждому, награды | `server/sv_client.c`, `sv_snapshot.c`, `sv_game.c` |
-| Сеть | `src/net/` | `Channel` (надёжная и ненадёжная полосы, seq/ack, окно 64, повтор), `SnapshotRing`/`SnapshotView` (дельты и история), протоколы, транспорты (WebSocket, петля) | `qcommon/net_chan.c`, `client/cl_parse.c` |
-| Сервер | `server/` | процесс: лобби `/ws`, бой `/game`, комнаты, раннер матчей (один таймер), база, вход | `server/sv_main.c` |
-| Вид | `src/cgame/` | вью по записям сущностей, эффекты по событиям, HUD обороны, клиент сетевого боя (`net-battle.ts`: предсказание, чужие герои, куклы, зеркало обороны) | `cgame/` (`cg_ents.c`, `cg_predict.c`, `cg_event.c`) |
-| Клиент | `src/dev/playground.ts`, `src/cgame/events.ts`, `input.ts`, `orders.ts` | точка сборки: очередь событий, ввод такта, приказы мыши, цикл кадра, свой герой, камера, HUD, меню; одиночная игра = «listen server» (мир степается на странице) | `client/cl_main.c`, `cl_input.c`, `qcommon/common.c` (`Com_Frame`, `Com_EventLoop`) |
+| Simulation | `src/sim/` | defence rules: `SimWorld` (tick, seeded `rng`, events, entity records), `SimTd`, towers, walls, bush, lairs, piles. No scene, DOM, sound, `Math.random` or clock — guard `server/test/sim-boundary.test.ts` | `game/` (qagame, `g_*`) |
+| Shared hero code | `src/knight.ts` (`Knight.update`), `src/gear.ts`, `src/mobs/`, `src/bosses/`, magic | one movement and combat code for the own, remote and server hero; on the server — without rendering via `src/headless.ts` (three in Node, a canvas stub, `nullFx`). Movement is mixed with animation (`animate`, `sampleTrail`). Server gameplay — without `Math.random` or the clock (guard `sim-boundary.test.ts`) | `game/bg_pmove.c` |
+| Mob brain | `src/mobs/mob.ts` (`think`/`mover`), `src/level/pathfind.ts` | brain once per 0.1 s (target, alarm, mode, attack), mover every tick, detour path with a per-tick budget; puppets by intent from the snapshot ([design-mobs.md](design-mobs.md), section 6) | `botlib/` (`bot_thinktime`, AAS) |
+| Battle and match | `src/game/battle.ts`, `match.ts` | headless party battle; match: command queues per seat, tick 1/60, frame 50 ms, snapshot ring buffer, deltas for each, rewards | `server/sv_client.c`, `sv_snapshot.c`, `sv_game.c` |
+| Network | `src/net/` | `Channel` (reliable and unreliable lanes, seq/ack, window 64, retransmit), `SnapshotRing`/`SnapshotView` (deltas and history), protocols, transports (WebSocket, loopback) | `qcommon/net_chan.c`, `client/cl_parse.c` |
+| Server | `server/` | the process: lobby `/ws`, battle `/game`, rooms, match runner (one timer), database, login | `server/sv_main.c` |
+| View | `src/cgame/` | view from entity records, effects from events, defence HUD, network battle client (`net-battle.ts`: prediction, remote heroes, puppets, defence mirror) | `cgame/` (`cg_ents.c`, `cg_predict.c`, `cg_event.c`) |
+| Client | `src/dev/playground.ts`, `src/cgame/events.ts`, `input.ts`, `orders.ts` | the assembly point: event queue, tick input, mouse orders, frame loop, own hero, camera, HUD, menu; single player = a "listen server" (the world is stepped on the page) | `client/cl_main.c`, `cl_input.c`, `qcommon/common.c` (`Com_Frame`, `Com_EventLoop`) |
 
-## 2. Что перенесено из Quake 3
+## 2. What was carried over from Quake 3
 
-- **Серверный такт и снимки**: сервер крутит такты 1/60 по накопленному времени, снимок после кадра 50 мс (sv_fps 20); клиент подтверждает применённый снимок, сервер считает дельту от него (`Cmd.snap` ↔ `cl.snap.messageNum`).
-- **Кольцо снимков у клиента** (`cl.snapshots[PACKET_BACKUP]`): `SnapshotView` хранит 32 принятых состояния; дельта от прежней базы (подтверждение ещё в пути) применяется из истории. События в дельте сгруппированы по снимкам и играются только новее применённого.
-- **Netchan**: один кадр несёт надёжные сообщения до подтверждения (`reliableCommands`) и ненадёжную часть; пачка последних трёх команд ввода в кадре (`cl_packetdup`).
-- **Usercmd**: `KnightInput` + `Cmd` — единый ввод для своего, чужого и серверного героя; сервер исполняет по одной команде на такт, пустая очередь — повтор последней (как `sv_fps`-сервер между пакетами), обрыв — герой стоит.
-- **Предсказание**: свой герой степается локально, по `ack` из снимка место сверяется с записанным на момент этой команды; расхождение убирается по 20 % за снимок, больше 2,5 м — сразу. Переигрывания команд (`CL_PredictPlayerState`) нет — коррекция смещения.
-- **Интерполяция по времени сервера**: буферы мест чужих героев и кукол — по `Delta.tick`; сдвиг часов оценивается как `cl.serverTimeDelta` (сброс при расхождении > 0,5 с, иначе подползает), рендер на 0,1 с позади.
-- **Единая очередь событий** (`Sys_QueEvent`/`Com_EventLoop`, `src/cgame/events.ts`): обработчики DOM и транспорт сети только кладут событие с меткой времени в кольцо на 256; клавиши интерфейса (пауза → инвентарь → лавка → чат → меню площадки → переключатели клиента) отвечают сразу в обработчике (`keyNow`) — это не игра; `drainEvents()` в начале кадра разбирает накопленное — сетевые кадры каналу, колесо камере, игровой ввод в состояние такта. Дельты сервера применяются перед тактами, а не в `onmessage`.
-- **Ввод такта** (`cl_input.c`, `src/cgame/input.ts`): клавиши с защёлками «нажато с прошлого такта» (тап короче такта не теряется, как `kbutton_t`), мышь с защёлкой клика, действия героя с клавиш и кнопок HUD (зелье, артефакты, аура, спец-удар, предмет, волна) копятся и исполняются в начале такта по порядку — как кнопки usercmd, не в `keydown`. Приказы мыши (`src/cgame/orders.ts`) — слой «цель → путь → `KnightInput`» над тем же вводом.
-- **Действия в порядке с командами**: `act` уходит с номером последней команды клиента; сервер исполняет его, когда эта команда прошла, перед следующей (`Seat.acts`), — порядок «движение → действие» одинаков у клиента и сервера.
-- **Мозг мобов как бот** (`botlib`): `think()` раз в `THINK_S` = 0,1 с выбирает цель, тревогу, режим движения и атаку; `mover()` каждый такт идёт по режиму (дорога, патруль, погоня, путь в обход) общим кодом движения; навигация — `Pathfinder` по запросу, не больше `ROUTE_BUDGET` = 4 путей за такт мира; в снимке — направление шага (`mx`, `mz`), куклы клиента шагают по нему и подтягиваются к месту.
-- **Детерминизм**: игровая случайность только `rnd()`, на время шага мира — генератор мира с сидом (один сид и те же команды — тот же бой).
+- **Server tick and snapshots**: the server runs 1/60 ticks on accumulated time, a snapshot after a 50 ms frame (sv_fps 20); the client acknowledges the applied snapshot, the server computes the delta from it (`Cmd.snap` ↔ `cl.snap.messageNum`).
+- **Snapshot ring buffer on the client** (`cl.snapshots[PACKET_BACKUP]`): `SnapshotView` keeps 32 received states; a delta from an older base (the ack still in flight) is applied from history. Events in a delta are grouped by snapshot and played only if newer than the applied one.
+- **Netchan**: one frame carries reliable messages until acknowledged (`reliableCommands`) plus the unreliable part; a batch of the last three input commands per frame (`cl_packetdup`).
+- **Usercmd**: `KnightInput` + `Cmd` — a single input for the own, remote and server hero; the server executes one command per tick, an empty queue — repeat the last (like an `sv_fps` server between packets), a disconnect — the hero stands still.
+- **Prediction**: the own hero is stepped locally, by the `ack` from the snapshot the position is checked against the one recorded at the moment of that command; the discrepancy is removed by 20 % per snapshot, more than 2.5 m — at once. There is no command replay (`CL_PredictPlayerState`) — offset correction.
+- **Interpolation by server time**: position buffers of remote heroes and puppets — by `Delta.tick`; the clock offset is estimated like `cl.serverTimeDelta` (reset on a discrepancy > 0.5 s, otherwise creeps), rendering 0.1 s behind.
+- **Unified event queue** (`Sys_QueEvent`/`Com_EventLoop`, `src/cgame/events.ts`): DOM handlers and the network transport only put a time-stamped event into a ring buffer of 256; interface keys (pause → inventory → shop → chat → pad menu → client toggles) respond right in the handler (`keyNow`) — that is not the game; `drainEvents()` at the start of the frame sorts what accumulated — network frames to the channel, the wheel to the camera, game input into the tick state. Server deltas are applied before the ticks, not in `onmessage`.
+- **Tick input** (`cl_input.c`, `src/cgame/input.ts`): keys with "pressed since the last tick" latches (a tap shorter than a tick is not lost, like `kbutton_t`), the mouse with a click latch, hero actions from keys and HUD buttons (potion, artifacts, aura, weapon art, item, wave) accumulate and execute at the start of the tick in order — like usercmd buttons, not in `keydown`. Mouse orders (`src/cgame/orders.ts`) — a "target → path → `KnightInput`" layer over the same input.
+- **Actions ordered with commands**: `act` leaves with the number of the client's last command; the server executes it once that command has gone through, before the next one (`Seat.acts`), — the "movement → action" order is the same on client and server.
+- **Mob brain as a bot** (`botlib`): `think()` once per `THINK_S` = 0.1 s picks the target, alarm, movement mode and attack; `mover()` every tick moves by mode (road, patrol, chase, detour path) with the shared movement code; navigation — `Pathfinder` on request, no more than `ROUTE_BUDGET` = 4 paths per world tick; the snapshot carries the step direction (`mx`, `mz`), client puppets step along it and are pulled toward the position.
+- **Determinism**: game randomness is only `rnd()`, during the world step — the seeded world generator (one seed and the same commands — the same battle).
 
-## 3. Чего нет (и план)
+## 3. What is missing (and the plan)
 
-| Концепция Q3 | У нас | Решение |
+| Q3 concept | What we have | Decision |
 |---|---|---|
-| AAS — навигация, посчитанная заранее для всей карты | `Pathfinder` считает путь по запросу (A* по вокселям), с бюджетом на такт | хватает: мобы ходят по дорогам, путь нужен редко |
-| `CL_PredictPlayerState` (переигрывание) | коррекция смещения | при необходимости |
-| Huffman и бинарный кодек, PVS, лаг-компенсация | JSON (~0,8 КБ/снимок на двоих), всем всё, удары без компенсации | не нужно при ≤ 4 игроках |
+| AAS — navigation precomputed for the whole map | `Pathfinder` computes the path on request (A* over voxels), with a per-tick budget | enough: mobs walk the roads, a path is rarely needed |
+| `CL_PredictPlayerState` (replay) | offset correction | if needed |
+| Huffman and a binary codec, PVS, lag compensation | JSON (~0.8 KB/snapshot for two), everything to everyone, hits without compensation | not needed with ≤ 4 players |
 
-## 4. Порядок кадра
+## 4. Frame order
 
-**Сервер** (`MatchRunner.frame` → `Match.frame`): `acc += dt` → до 6 тактов: команда из очереди каждого места (или последняя) → `battle.step(1/60)` (герои и снаряжение, стая, оборона, кучки под `useRng`) → снимок в кольцо → дельта каждому от его `snapAck` + `flush` надёжных → итог через 4,5 с после конца.
+**Server** (`MatchRunner.frame` → `Match.frame`): `acc += dt` → up to 6 ticks: a command from each seat's queue (or the last one) → `battle.step(1/60)` (heroes and gear, the pack, defence, piles under `useRng`) → snapshot into the ring buffer → a delta for each from its `snapAck` + `flush` of reliables → the summary 4.5 s after the end.
 
-**Клиент** (`frame` в `playground.ts`): `drainEvents()` (игровой ввод и сетевые кадры из очереди — дельты сервера применяются здесь; клавиши интерфейса обработаны ещё в `keydown`) → `acc += real` (в сетевом бою — без пауз и стоп-кадров) → до 6 тактов: `readInput` (движение из клавиш, курсор, защёлка переката) → действия с клавиш по порядку → приказы мыши → `gear.update` → `hero.update` (предсказание) → стая/комнаты → `stepTd` (сеть: `NetBattleClient.update` — чужие герои по буферу, куклы, команда в пачке; одиночная: `world.step` и снимок своего мира во вью) → `clearEdges` (защёлки сброшены) → один `render(real)`.
+**Client** (`frame` in `playground.ts`): `drainEvents()` (game input and network frames from the queue — server deltas are applied here; interface keys were handled back in `keydown`) → `acc += real` (in a network battle — without pauses or freeze-frames) → up to 6 ticks: `readInput` (movement from keys, cursor, dodge-roll latch) → key actions in order → mouse orders → `gear.update` → `hero.update` (prediction) → pack/rooms → `stepTd` (network: `NetBattleClient.update` — remote heroes from the buffer, puppets, the command in a batch; single player: `world.step` and a snapshot of the own world into the view) → `clearEdges` (latches reset) → one `render(real)`.

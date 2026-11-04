@@ -1,40 +1,40 @@
-# ADR-003. Визуальный стиль — как в Minecraft Dungeons, без гиперреализма
+# ADR-003. Visual style — as in Minecraft Dungeons, without hyperrealism
 
-- **Статус:** принято, уточнено `claude/adr-004-mystic-coop-melee.md` и `claude/style-guide.md` (22.10.2026): стиль добрый и детский, плейграунд тоже в игровом стиле; пункты про стволы и броню устарели
-- **Дата:** 21.10.2026
-- **Уточняет:** `claude/adr-002-realistic-weapons-tactical-movement.md`
-- **Связано:** `claude/design-dungeon.md`, `claude/project-brief.md`
+- **Status:** accepted, refined by `claude/adr-004-mystic-coop-melee.md` and `claude/style-guide.md` (2026-10-22): the style is friendly and childlike, the playground is in the game style too; the points about guns and armour are outdated
+- **Date:** 2026-10-21
+- **Refines:** `claude/adr-002-realistic-weapons-tactical-movement.md`
+- **Related:** `claude/design-dungeon.md`, `claude/project-brief.md`
 
-## Контекст
+## Context
 
-В ADR-002 решено перейти на реальные образцы оружия (АК-74, AR-15, двустволка…), тактическое передвижение и броню. Ориентиры по ощущению стрельбы — Ready or Not и Escape from Tarkov. Из-за этого можно ошибочно решить, что графика тоже должна стать реалистичной. Пользователь явно это исключил.
+ADR-002 decided to move to real weapon models (AK-74, AR-15, double-barrelled shotgun…), tactical movement and armour. The references for the feel of shooting are Ready or Not and Escape from Tarkov. Because of this one could wrongly decide that the graphics should become realistic too. The user explicitly ruled that out.
 
-## Решение
+## Decision
 
-**Графика остаётся в стиле Minecraft Dungeons, как на референсных скриншотах. Гиперреализм не нужен.**
+**The graphics stay in the Minecraft Dungeons style, as in the reference screenshots. Hyperrealism is not needed.**
 
-**Реализм — только в механике:** названия и силуэты стволов, магазины, перезарядка, отдача, броня, тактическая стойка. Внешний вид — стилизованный воксельный.
+**Realism — only in the mechanics:** the names and silhouettes of guns, magazines, reloading, recoil, armour, the tactical stance. The look — stylised voxel.
 
-### Что входит в стиль
+### What the style includes
 
-- **Камера:** изометрическая перспектива сверху под углом, как сейчас.
-- **Геометрия:** воксельная и блочная — мир из кубов, персонажи и жуки из простых прямоугольных частей.
-- **Пропорции:** слегка игрушечные, как в Minecraft Dungeons: крупная голова, короткие конечности. Тактическая стойка и анимации передаются позой блочных частей, а не детальной анатомией.
-- **Оружие:** блочные модели с узнаваемым силуэтом — рожок АК, ручка для переноски AR-15, два ствола двустволки. Без мелкой детализации и фотореалистичных материалов.
-- **Броня и каска:** такие же блочные. Класс брони читается по форме и цвету, а не по деталям.
-- **Текстуры:** пиксельные, низкого разрешения (16 × 16 на блок), генерируются кодом, как сейчас.
-- **Свет и цвет:** насыщенная палитра, мягкие тени, светящиеся акценты (огни, кристаллы, тлеющие блоки улья), умеренный bloom. Тёмные подземелья с тёплыми и цветными источниками света.
-- **Эффекты:** стилизованные — блочные частицы, яркие вспышки и трассеры, всплывающие цифры урона.
+- **Camera:** an isometric perspective from above at an angle, as now.
+- **Geometry:** voxel and blocky — a world of cubes, characters and beetles out of simple rectangular parts.
+- **Proportions:** slightly toy-like, as in Minecraft Dungeons: a large head, short limbs. The tactical stance and animations are conveyed by the pose of blocky parts, not by detailed anatomy.
+- **Weapons:** blocky models with a recognisable silhouette — the AK's curved magazine, the AR-15's carry handle, the two barrels of the double-barrelled shotgun. No fine detail and no photorealistic materials.
+- **Armour and helmet:** just as blocky. The armour class reads by shape and colour, not by details.
+- **Textures:** pixel, low resolution (16 × 16 per block), generated in code, as now.
+- **Light and colour:** a saturated palette, soft shadows, glowing accents (fires, crystals, smouldering hive blocks), moderate bloom. Dark dungeons with warm and coloured light sources.
+- **Effects:** stylised — blocky particles, bright flashes and tracers, floating damage numbers.
 
-### Что не делаем
+### What we do not do
 
-- Фотореалистичные материалы, PBR-текстуры высокого разрешения, нормал-мапы.
-- Реалистичные пропорции людей, детальные модели оружия с винтиками и надписями.
-- Кровь и реалистичные ранения — у жуков блочные осколки и цветные брызги.
-- Плёночные эффекты «под реализм» (зерно, хроматическая аберрация, сильная виньетка).
+- Photorealistic materials, high-resolution PBR textures, normal maps.
+- Realistic human proportions, detailed weapon models with little screws and markings.
+- Blood and realistic wounds — beetles have blocky shards and coloured splashes.
+- Film effects "for realism" (grain, chromatic aberration, a strong vignette).
 
-## Последствия
+## Consequences
 
-- Модели героя, оружия и брони из ADR-002 строятся из боксов в коде, как текущие `buildGunModel` и модель жуков. Детализация ограничена: стволу хватает 8–20 блоков.
-- Плейграунд разработчика (этап 0) с шахматным полом и стенами — служебная сцена. Его нейтральный вид не задаёт стиль игры.
-- Ориентиры «Ready or Not / Escape from Tarkov» в `design-dungeon.md` относятся только к ощущению оружия, брони и стойки, но не к графике.
+- The hero, weapon and armour models from ADR-002 are built from boxes in code, like the current `buildGunModel` and the beetle model. Detail is limited: 8–20 blocks are enough for a gun.
+- The developer playground (stage 0) with the chequered floor and walls is a utility scene. Its neutral look does not set the game's style.
+- The "Ready or Not / Escape from Tarkov" references in `design-dungeon.md` concern only the feel of weapons, armour and stance, not the graphics.

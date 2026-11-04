@@ -1,64 +1,64 @@
-# Вики «Малины» — оглавление
+# Malina wiki — table of contents
 
-Вики ведётся по схеме «LLM-вики» Андрея Карпатого: **источники** (`sources/`, скриншоты и заметки — не правим) → **страницы** (этот каталог — решения, дизайн, стиль) → **оглавление** (этот файл) и **журнал** ([log.md](log.md)). Правила ведения — [CLAUDE.md](CLAUDE.md).
+The wiki follows Andrej Karpathy's "LLM wiki" scheme: **sources** (`sources/`, screenshots and notes — never edited) → **pages** (this directory — decisions, design, style) → **table of contents** (this file) and **journal** ([log.md](log.md)). Maintenance rules — [CLAUDE.md](CLAUDE.md).
 
-Ссылки вида `claude/…` в старых документах ведут на файлы этой папки с тем же именем.
+Links of the form `claude/…` in older documents point to files in this folder with the same name.
 
-## С чего начать
-| Страница | О чём |
+## Where to start
+| Page | What it covers |
 |---|---|
-| [project-brief.md](project-brief.md) | Что за игра, стек, как работаем, карта кода, текущее состояние и следующий шаг |
-| [log.md](log.md) | Журнал: что и когда менялось в игре и в вики, по одной записи на коммит |
+| [project-brief.md](project-brief.md) | What the game is, the stack, how we work, the code map, current state and the next step |
+| [log.md](log.md) | Journal: what changed in the game and in the wiki and when, one entry per commit |
 
-## Разработка
-| Страница | О чём |
+## Development
+| Page | What it covers |
 |---|---|
-| [dev-testing.md](dev-testing.md) | Как запускать Playwright-тесты: node через mise, браузер — Google Chrome через `PW_CHROMIUM`, без `playwright install` |
-| [arch-layers.md](arch-layers.md) | Слои системы (sim, game, net, server, cgame, клиент) и их соответствие Quake III Arena: что перенесено (netchan, snapshots, usercmd, предсказание), что нет (очередь событий, botlib); порядок кадра клиента и сервера |
-| [dev-performance.md](dev-performance.md) | Производительность: оверлей F8 и перф-тест, замеры до/после, прогрев шейдеров, пулы и экземпляры эффектов, фонтан ягод волнами, тени раз в кадр; правила для нового кода и дорожная карта (регионы, сеть); трафик боя — замеры, сжатие, почему не бинарник |
+| [dev-testing.md](dev-testing.md) | How to run the Playwright tests: node via mise, browser — Google Chrome via `PW_CHROMIUM`, no `playwright install` |
+| [arch-layers.md](arch-layers.md) | System layers (sim, game, net, server, cgame, client) and how they map to Quake III Arena: what was carried over (netchan, snapshots, usercmd, prediction), what was not (event queue, botlib); client and server frame order |
+| [dev-performance.md](dev-performance.md) | Performance: the F8 overlay and the perf test, before/after measurements, shader warm-up, pools and instanced effects, berry fountain in waves, shadows once per frame; rules for new code and the roadmap (regions, network); battle traffic — measurements, compression, why not a binary codec |
 
-## Решения (ADR)
-| Страница | О чём |
+## Decisions (ADR)
+| Page | What it covers |
 |---|---|
-| [adr-001-dungeon-roguelite.md](adr-001-dungeon-roguelite.md) | Основной режим — кооперативный рогалик-зачистка подземелий |
-| [adr-002-realistic-weapons-tactical-movement.md](adr-002-realistic-weapons-tactical-movement.md) | ~~Реальное оружие, тактическое передвижение, броня~~ — заменено ADR-004 |
-| [adr-003-visual-style.md](adr-003-visual-style.md) | Графика в стиле Minecraft Dungeons, без гиперреализма |
-| [adr-004-mystic-coop-melee.md](adr-004-mystic-coop-melee.md) | Назад к мистической кооп-зачистке — мечи, топоры, магия; без огнестрела |
-| [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md) | Серверно-авторитарный бой по образцу Quake 3: сервер считает, клиент предсказывает |
+| [adr-001-dungeon-roguelite.md](adr-001-dungeon-roguelite.md) | The main mode is a cooperative dungeon-clearing roguelite |
+| [adr-002-realistic-weapons-tactical-movement.md](adr-002-realistic-weapons-tactical-movement.md) | ~~Real weapons, tactical movement, armour~~ — replaced by ADR-004 |
+| [adr-003-visual-style.md](adr-003-visual-style.md) | Graphics in the style of Minecraft Dungeons, no hyperrealism |
+| [adr-004-mystic-coop-melee.md](adr-004-mystic-coop-melee.md) | Back to mystic co-op clearing — swords, axes, magic; no firearms |
+| [adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md) | Server-authoritative battle modelled on Quake 3: the server computes, the client predicts |
 
-## Дизайн
-| Страница | О чём |
+## Design
+| Page | What it covers |
 |---|---|
-| [design-dungeon.md](design-dungeon.md) | «Улей»: цикл, генерация этажей, орды, боссы, малина, оружие, броня, передвижение, усиления |
-| [design-level-blocks.md](design-level-blocks.md) | Блоки уровней и редактор: воксельная сетка, карты в JSON, формы в OBJ, палитра, рендер, столкновения |
-| [design-prefab-library.md](design-prefab-library.md) | Библиотека пресетов: готовые куски мира (блоки + декор + свет) в `assets/prefabs/`, генерация кодом, поворот, вкладка «Библиотека», витрина `?map=prefabs`; каталог по референсам — дороги, деревья, руины, поселение, композиции, мелкие детали; партии |
-| [design-editor.md](design-editor.md) | Редактор в духе Unreal: окно, вьюпорты (1/2/4 вида), выделение и гизмо, аутлайнер, детали, префабы, настройки мира и погода, свет, точка появления, оружие и баланс |
-| [design-level-decor.md](design-level-decor.md) | Свободный декор поверх блоков: формат в карте, реестр и формы, рендер экземплярами, столкновения, редактор |
-| [design-inventory.md](design-inventory.md) | HUD и инвентарь как в Minecraft Dungeons: панель с артефактами, сердцем, зельем, стрелами; инвентарь с героем в 3D, сеткой и карточкой; предметы, сила, зачарования, разбор, души, опыт; броня и лук на герое; кузнец и торговец; карта в стиле Diablo |
-| [design-main-menu.md](design-main-menu.md) | Главное меню в духе Minecraft Dungeons: стартовый экран у костра (одиночная, сетевая, настройки), лагерь — снаряжение героя и выбор карты обороны куста td/td2/td3, пауза и итог боя, малина героя переживает бой, панель сетевой игры с сервером |
-| [design-weapon-arts.md](design-weapon-arts.md) | Оружие: список всех 16 (катаны, меч Гатса, клинки понтифика, посох, алебарда, рапира, кастеты), закалка зачарованиями — цвет клинка, шлейф, искры, эффект попадания; 28 синергий пар на добивающем, резонанс трёх; спец-удар Q у каждого вида |
-| [design-spells.md](design-spells.md) | Заклинания и ауры: заряд как в Elden Ring, 4 стартовых (искра, огненный шар, ледяной дождь, лечение), 20 с боссов, 12 аур (7 наступательных), анатомия каста — замах, удар, послевкусие, звук |
-| [design-bosses.md](design-bosses.md) | Стражи Малины в духе MCD: правила схематичности, 5 скелетов, 8 мини-боссов, 5 боссов этажа и 3 финальных — все сделаны, зал из 16 арен; механики, превращения, малина и гримуары на выбор |
-| [design-map-island.md](design-map-island.md) | Карта 1 «Остров»: 256 × 256 м из пресетов по нарисованному плану — биомы, мосты, скальная кромка берега, группы врагов, засады и патрули, страж в храме, торговцы и лут в `meta` карты; генератор в пикселях картинки |
-| [design-tower-defence.md](design-tower-defence.md) | Оборона куста (tower defence): куст малины в центре, дороги врагов, площадки и пять башен за малину, десять волн, три новых врага, логова с тревогой, лавовая карта с разломами, мостами и вулканами; вторая карта — кристальная поляна с порталами, рвами и грибами-светильниками, стая с уровня 7, панцирник, споровик и скакун; третья — осада замка: стены и ворота ломают и чинят, площадки на бастионах, подрывники и лозовые баллисты, стенная баллиста и котёл со смолой; прочность башен и руины, охотники на башни (грызун, ледяной колдунчик), мини-боссы каждую третью волну, маркитант с лавкой на бой |
-| [td-playability-kids.md](td-playability-kids.md) | Оборона куста глазами ребёнка 10–14 лет: где трение, лучшие практики Kingdom Rush, Bloons, PvZ, Dungeon Defenders; десять предложений с оценкой польза/цена, сделан топ-3 — магнит малины, карточка следующей волны, сигнал «башня в беде» |
-| [design-multiplayer.md](design-multiplayer.md) | Сетевая игра: сервер на TypeScript и SQLite — вход по имени и токену, профили на сервере, комнаты с кодом и хостом, общий бой обороны (хост ведёт героев гостей, снимки, враги-куклы у гостя), итог и история боёв, обрыв и перезапуск |
-| [design-mobs.md](design-mobs.md) | Рядовые мобы Ордена Малины: 30 в шести семьях — маги, рыцари, порождения куста, павшие садовники, звери, конструкты; роли, очки орды, как победить; все 30 сделаны четырьмя партиями — класс `Mob`, стая, знамя, купол, замедление, витрина в F1, пять комнат на плейграунде (казарма Ордена, Терновый сад, Старый погост, Звериное логово, Мастерская Ордена); редкий одиночка №31 — Соллер, Рыцарь Солнца, славит солнце под лучом на Солнечной поляне |
+| [design-dungeon.md](design-dungeon.md) | "The Hive": the loop, floor generation, hordes, bosses, raspberries, weapons, armour, movement, power-ups |
+| [design-level-blocks.md](design-level-blocks.md) | Level blocks and the editor: voxel grid, maps in JSON, shapes in OBJ, palette, rendering, collisions |
+| [design-prefab-library.md](design-prefab-library.md) | Preset library: ready-made pieces of the world (blocks + decor + light) in `assets/prefabs/`, generated by code, rotation, the "Library" tab, the `?map=prefabs` showcase; catalogue by references — roads, trees, ruins, settlement, compositions, small details; batches |
+| [design-editor.md](design-editor.md) | Unreal-style editor: window, viewports (1/2/4 views), selection and gizmo, outliner, details, prefabs, world settings and weather, light, spawn point, weapons and balance |
+| [design-level-decor.md](design-level-decor.md) | Free decor on top of blocks: map format, registry and shapes, instanced rendering, collisions, editor |
+| [design-inventory.md](design-inventory.md) | HUD and inventory as in Minecraft Dungeons: bar with artifacts, heart, potion, arrows; inventory with the hero in 3D, a grid and a card; items, power, enchantments, salvage, souls, experience; armour and bow on the hero; blacksmith and merchant; Diablo-style map |
+| [design-main-menu.md](design-main-menu.md) | Main menu in the spirit of Minecraft Dungeons: start screen at the campfire (single player, multiplayer, settings), camp — hero gear and choice of Bush Defence map td/td2/td3, pause and battle summary, the hero's raspberries survive the battle, multiplayer panel with the server |
+| [design-weapon-arts.md](design-weapon-arts.md) | Weapons: the list of all 16 (katanas, Guts' sword, pontiff blades, staff, halberd, rapier, knuckles), tempering with enchantments — blade colour, trail, sparks, hit effect; 28 pair synergies on the finisher, resonance of three; a Q weapon art for every kind |
+| [design-spells.md](design-spells.md) | Spells and auras: charging as in Elden Ring, 4 starters (spark, fireball, ice rain, heal), 20 from bosses, 12 auras (7 offensive), anatomy of a cast — wind-up, impact, aftertaste, sound |
+| [design-bosses.md](design-bosses.md) | Wardens of Malina in the spirit of MCD: rules of schematic design, 5 skeletons, 8 mini-bosses, 5 floor bosses and 3 finals — all done, a hall of 16 arenas; mechanics, transformations, raspberries and a choice of grimoires |
+| [design-map-island.md](design-map-island.md) | Map 1 "Island": 256 × 256 m from presets along a hand-drawn plan — biomes, bridges, rocky shoreline, enemy groups, ambushes and patrols, the warden in the temple, merchants and loot in the map `meta`; generator in image pixels |
+| [design-tower-defence.md](design-tower-defence.md) | Bush Defence (tower defence): a raspberry bush in the centre, enemy roads, pads and five towers for raspberries, ten waves, three new enemies, lairs with an alarm, a lava map with rifts, bridges and volcanoes; second map — Crystal Glade with portals, moats and lamp mushrooms, the pack from level 7, shellback, sporeling and hopper; third — castle siege: walls and gates get broken and repaired, pads on bastions, sappers and vine ballistas, wall ballista and tar cauldron; tower durability and ruins, tower hunters (gnawer, ice warlock), mini-bosses every third wave, a sutler with a shop for the battle |
+| [td-playability-kids.md](td-playability-kids.md) | Bush Defence through the eyes of a 10–14-year-old: where the friction is, best practices from Kingdom Rush, Bloons, PvZ, Dungeon Defenders; ten proposals rated by benefit/cost, top 3 done — raspberry magnet, next-wave card, "tower in trouble" signal |
+| [design-multiplayer.md](design-multiplayer.md) | Multiplayer: server in TypeScript and SQLite — login by name and token, profiles on the server, rooms with a code and a host, shared defence battle (the host drives the guests' heroes, snapshots, enemy puppets on the guest), summary and battle history, disconnect and restart |
+| [design-mobs.md](design-mobs.md) | Rank-and-file mobs of the Raspberry Order: 30 in six families — mages, knights, bush spawn, fallen gardeners, beasts, constructs; roles, horde points, how to beat them; all 30 done in four batches — the `Mob` class, the pack, the banner, the dome, slowing, showcase in F1, five rooms on the playground (Order barracks, Thorn Garden, Old Graveyard, Beast Den, Order Workshop); rare loner no. 31 — Soller, Knight of the Sun, praises the sun under a beam on the Sunny Glade |
 
-## Стиль
-| Страница | О чём |
+## Style
+| Page | What it covers |
 |---|---|
-| [style-guide.md](style-guide.md) | 9 референсов (`style/`) и правила — добрый детский воксельный мир, свет, вода, эффекты |
-| [style-lighting.md](style-lighting.md) | Свет «как в Unreal»: солнце, голубые тени, AO, bloom, цветокоррекция, дымка — слои и настройки |
-| [style-terrain.md](style-terrain.md) | Земля, трава, камень и листва в пастельной гамме Minecraft Dungeons: мягкие текстуры без шума, пятна цвета по миру, палитра, откалиброванная по пикселям |
-| [style-world.md](style-world.md) | Мир по Minecraft Dungeons: двор со складом, река с водопадом и мостом, скалы по краю, холмы со свечами, портал — блоки, декор, сборки `kit.ts`, калибровка |
+| [style-guide.md](style-guide.md) | 9 references (`style/`) and rules — a kind children's voxel world, light, water, effects |
+| [style-lighting.md](style-lighting.md) | Unreal-style lighting: sun, blue shadows, AO, bloom, colour grading, haze — layers and settings |
+| [style-terrain.md](style-terrain.md) | Ground, grass, stone and foliage in the pastel palette of Minecraft Dungeons: soft textures without noise, patches of colour across the world, palette calibrated by pixels |
+| [style-world.md](style-world.md) | The world after Minecraft Dungeons: a yard with a storage yard, a river with a waterfall and a bridge, cliffs along the edge, hills with candles, a portal — blocks, decor, `kit.ts` kits, calibration |
 
-## Источники
-| Источник | Что из него взято |
+## Sources
+| Source | What was taken from it |
 |---|---|
-| [sources/refs-settlements.md](sources/refs-settlements.md) | 17 скриншотов Elden Ring и Minecraft Dungeons: дороги из плит, лагерь, золотые деревья, статуи, капеллы-руины, кладбище, мельницы, дома, хижины, грядки, пирс |
-| [sources/mcd-world.md](sources/mcd-world.md) | 9 скриншотов: дороги, двор, водопад и мост, скалы, холмы и свечи, портал, разные холмы, холмы-плиты |
-| [sources/map-01.md](sources/map-01.md) | Нарисованная карта первого уровня и её разметка: биомы, дороги, группы врагов, засады, патрули, мосты, лут |
-| [sources/mcd-lighting.md](sources/mcd-lighting.md) | 4 скриншота Minecraft Dungeons: свет, tilt-shift, дымка, декор не по сетке, травяная бахрома |
-| [sources/td-refs.md](sources/td-refs.md) | 4 скриншота TD-карт: кристальная поляна (ров-дорога, порталы, грибы-светильники), лесная тропа, зимняя поляна, лавовая котловина — референсы обороны куста |
-| [sources/castle-refs.md](sources/castle-refs.md) | 8 референсов замка для осады (оборона куста 3): пять артов крепостей и три скриншота BFME — площадки на стене, двор, пролом |
+| [sources/refs-settlements.md](sources/refs-settlements.md) | 17 screenshots of Elden Ring and Minecraft Dungeons: slab roads, a camp, golden trees, statues, ruined chapels, a graveyard, windmills, houses, huts, garden beds, a pier |
+| [sources/mcd-world.md](sources/mcd-world.md) | 9 screenshots: roads, the yard, waterfall and bridge, cliffs, hills and candles, portal, assorted hills, slab hills |
+| [sources/map-01.md](sources/map-01.md) | The hand-drawn map of the first level and its markup: biomes, roads, enemy groups, ambushes, patrols, bridges, loot |
+| [sources/mcd-lighting.md](sources/mcd-lighting.md) | 4 screenshots of Minecraft Dungeons: light, tilt-shift, haze, off-grid decor, grass fringe |
+| [sources/td-refs.md](sources/td-refs.md) | 4 screenshots of TD maps: crystal glade (moat road, portals, lamp mushrooms), forest path, winter glade, lava basin — references for Bush Defence |
+| [sources/castle-refs.md](sources/castle-refs.md) | 8 castle references for the siege (Bush Defence 3): five fortress artworks and three BFME screenshots — pads on the wall, courtyard, breach |

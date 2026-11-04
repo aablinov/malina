@@ -1,47 +1,47 @@
-# Карта 1 «Остров»: первая карта из пресетов
+# Map 1 "Island": the first map made of presets
 
-Версия 1.0 от 30.10.2026. План — нарисованная карта [sources/map-01.md](sources/map-01.md) (разметка `sources/map-01/plan.png`); пресеты — [design-prefab-library.md](design-prefab-library.md); мобы — [design-mobs.md](design-mobs.md); стражи — [design-bosses.md](design-bosses.md); регионы — [dev-performance.md](dev-performance.md).
+Version 1.0 of 2026-10-30. The plan — the drawn map [sources/map-01.md](sources/map-01.md) (markup `sources/map-01/plan.png`); presets — [design-prefab-library.md](design-prefab-library.md); mobs — [design-mobs.md](design-mobs.md); wardens — [design-bosses.md](design-bosses.md); regions — [dev-performance.md](dev-performance.md).
 
-## 1. Что это
+## 1. What it is
 
-Первая настоящая карта: 256 × 256 м, главный остров и четыре малых, соединённых мостами. Генератор `src/level/island-map.ts` собирает её из библиотеки пресетов (`npm run map:island` → `assets/maps/island.json`), играть — `dist/index.html?map=island`. Карта больше 400 чанков, поэтому стримится регионами 32 × 32 м. Путь от старта до босса с заходом в деревню — ~700 м, 12–15 минут с боями.
+The first real map: 256 × 256 m, a main island and four small ones connected by bridges. The generator `src/level/island-map.ts` assembles it from the preset library (`npm run map:island` → `assets/maps/island.json`); play — `dist/index.html?map=island`. The map is over 400 chunks, so it streams in 32 × 32 m regions. The path from the start to the boss with a detour through the village is ~700 m, 12–15 minutes with fights.
 
-Координаты в генераторе — **пиксели картинки плана** (1932 × 1916), `px` / `pz` переводят их в метры: 1 м ≈ 7,5 px, центр картинки — начало координат. Так план и код говорят на одном языке: любая точка с картинки переносится в код как есть.
+Coordinates in the generator are **pixels of the plan image** (1932 × 1916); `px` / `pz` convert them to metres: 1 m ≈ 7.5 px, the image centre is the origin. So the plan and the code speak the same language: any point from the picture goes into the code as is.
 
-## 2. Правила сборки
+## 2. Assembly rules
 
-- **Всё игровое — на высоте 0.** Мобы, сундуки, ящики, бочки и торговцы стоят только на ровной земле (`y = 0`, верх блока `y = −1`). Рельеф — непроходимые скальные массивы (`rockOutcrop`), ландшафт плитами не используется.
-- **Море не перейти вброд.** Вода проходима по колено, поэтому вдоль всего берега — скальная кромка в 1–2 блока (через блок не перешагнуть), а между островами — мосты с перилами из забора (`SEA_BRIDGES`, по осям). У концов мостов кромка убрана.
-- **Реки мелкие** — блок `river` с течением, вброд; там, где их пересекает дорога, лежит настил `bridge_deck`. Река — украшение и ориентир, не преграда.
-- **Биомы** — многоугольники (`BIOMES`): земля по биому (трава / снег / мозаика джунглей / песок у берега / гравий у ключей), верх скал тоже по биому (`cliff_grass` / `cliff_snow` / `cliff_jungle`), лес по своим многоугольникам (`FORESTS`): дубы и золотые лиственницы, джунгли, ели под снегом, пальмы у деревни.
-- **Пещеры** (`CAVES`): массив скалы, в нём прорублен проход 3 × 3 и зал 7 × 7 высотой 3 со сводом, кристаллами и факелами; в игре свод срезается, когда герой внутри.
-- **Форт** — частокол `stake_fence` с двумя воротами на дороге и знамёнами, внутри лагерь, вышки, дом, стог. **Храм** — ограда из храмового камня с тремя воротами (восток — главные, юг — на холм, север — к снегу); вся площадка внутри — арена стража.
-- **Сетка занятости** (`used`): дороги, пресеты, посты, лут, стены помечаются, лес и трава сеются только на свободное; у пресетов учитывается габарит с поворотом.
+- **Everything gameplay-related is at height 0.** Mobs, chests, crates, barrels and merchants stand only on flat ground (`y = 0`, block top `y = −1`). Relief is impassable rock outcrops (`rockOutcrop`); terrain in plates is not used.
+- **The sea cannot be waded.** Water is passable knee-deep, so along the whole shore there is a cliff rim of 1–2 blocks (a block cannot be stepped over), and between the islands there are bridges with fence railings (`SEA_BRIDGES`, along the axes). The rim is removed at the bridge ends.
+- **Rivers are shallow** — the `river` block with a current, wadeable; where a road crosses them there is a `bridge_deck`. A river is decoration and a landmark, not a barrier.
+- **Biomes** — polygons (`BIOMES`): ground by biome (grass / snow / jungle mosaic / sand by the shore / gravel by the springs), cliff tops by biome too (`cliff_grass` / `cliff_snow` / `cliff_jungle`), forest by its own polygons (`FORESTS`): oaks and golden larches, jungle, spruces under snow, palms by the village.
+- **Caves** (`CAVES`): a rock outcrop with a 3 × 3 passage cut through it and a 7 × 7 hall 3 high with a vault, crystals and torches; in the game the vault is cut away when the hero is inside.
+- **Fort** — a `stake_fence` palisade with two gates on the road and banners; inside — a camp, watchtowers, a house, a haystack. **Temple** — a fence of temple stone with three gates (east — the main one, south — to the hill, north — to the snow); the whole yard inside is the warden's arena.
+- **Occupancy grid** (`used`): roads, presets, posts, loot and walls are marked; forest and grass are seeded only on free cells; for presets the rotated footprint is taken into account.
 
-## 3. Что в `meta` карты
+## 3. What is in the map's `meta`
 
-Карта несёт игровую начинку в `meta`, плейграунд читает её, когда открыт `?map=…` (`src/dev/playground.ts`):
+The map carries its gameplay filling in `meta`; the playground reads it when opened with `?map=…` (`src/dev/playground.ts`):
 
-| Поле | Что |
+| Field | What |
 |---|---|
-| `mobRooms: MobRoomSpec[]` | группы врагов как комнаты мобов: прямоугольник (считается по постам ± 6 м), `enter`, посты `{ kind, x, z, aggro?, route? }`, `respawn: false` — павшие не возвращаются. `aggro` — с какого расстояния видит героя (засада — 3–9 м, иначе 9), `route` — точки патруля: моб ходит по ним кругом вполсилы, пока не заметил героя (`Mob.route`, `patrol()` в `src/mobs/mob.ts`) |
-| `arenas: BossArenaSpec[]` | арены стражей: `id` из `MINI_BOSSES`, `home` — где стоит страж, `gates[]` — несколько ворот (решётки встают во всех), `trigger`, `exit` |
-| `merchants` | `{ kind: 'smith' \| 'merchant', x, z, yaw }` — лавки |
-| `goal` | `[заголовок, подзаголовок]` задания в HUD |
-| `spawn`, `spawnYaw` | точка появления |
+| `mobRooms: MobRoomSpec[]` | enemy groups as mob rooms: a rectangle (computed from the posts ± 6 m), `enter`, posts `{ kind, x, z, aggro?, route? }`, `respawn: false` — the fallen do not return. `aggro` — from what distance it sees the hero (ambush — 3–9 m, otherwise 9), `route` — patrol points: the mob walks them in a loop at half speed until it notices the hero (`Mob.route`, `patrol()` in `src/mobs/mob.ts`) |
+| `arenas: BossArenaSpec[]` | warden arenas: `id` from `MINI_BOSSES`, `home` — where the warden stands, `gates[]` — several gates (portcullises drop in all of them), `trigger`, `exit` |
+| `merchants` | `{ kind: 'smith' \| 'merchant', x, z, yaw }` — shops |
+| `goal` | `[title, subtitle]` of the quest in the HUD |
+| `spawn`, `spawnYaw` | the spawn point |
 
-Лут — сущности карты `chest` / `crate` / `barrel` / `terminal` (источник здоровья — новый вид, `src/world/map-source.ts`, `Props.addGroup`): становятся предметами региона со стабильными id, открытое и разбитое не возвращается. Препятствия врагов при стриминге считаются по регионам при загрузке (`regionObstacles` в плейграунде), а не по пустой карте на старте.
+Loot — map entities `chest` / `crate` / `barrel` / `terminal` (the health fountain — a new kind, `src/world/map-source.ts`, `Props.addGroup`): they become region props with stable ids; what is opened or broken does not come back. Enemy obstacles under streaming are computed per region on load (`regionObstacles` in the playground), not from the empty map at start.
 
-## 4. Маршрут и группы
+## 4. Route and groups
 
-Старт — лагерь у палатки на юго-западе. Главная дорога: пальмы (малинёныши, слизни) → горячие ключи (кабанчики, жуки-засада, вышка с лучниками, лагерь сборщиков и садовников) → волки в роще → хутор на сваях (торговец) → Терновый сад на грядках (лозы, бутоны, чудище, пугало) → форт Ордена (щитоносцы, оруженосцы, копейщики, арбалетчики на вышках, знаменосец, молотобоец) → мост Б1 → мирная деревня (кузнец, торговец, источник здоровья). От форта плитная дорога через мостик к храму: стража (маги, целительница, призыватель, обелиск с големчиками, мимики) и **Друзовый голем** на площади перед пирамидой.
+Start — the camp by the tent in the south-west. The main road: palms (raspberry sprouts, slimes) → hot springs (boarlets, beetle ambush, a watchtower with archers, a camp of gatherers and gardeners) → wolves in the grove → the hamlet on stilts (merchant) → the Thorn Garden on the beds (vines, buds, the monster, the scarecrow) → the Order's fort (shield-bearers, squires, spearmen, crossbowmen on the towers, a standard-bearer, a hammerer) → bridge B1 → the peaceful village (blacksmith, merchant, health fountain). From the fort a flagstone road over a small bridge to the temple: the guard (mages, a healer, a summoner, an obelisk with little golems, mimics) and the **Druse Golem** on the square in front of the pyramid.
 
-Патрули ходят по дорогам (садовники на юге, два отряда Ордена между хутором, фортом и храмом, слизни у храма, волки в пальмах), засады стоят у дорог с малым `aggro` (жуки под тропой, лозоплёт с малинёнышами в роще, клубки у ворот форта, огоньки с бочонками в руинах, кабанчик на тропе, котелок у скалы, бутоны у моста). Побочные ветки с сундуками: снежная пещера (огоньки, котелки, бочонки), Западный холм (пруд со слизнями, Соллер у статуи, грот с мимиком), уступ с катапультой за мостом Б2, островок за Б3, скала за Б4.
+Patrols walk the roads (gardeners in the south, two Order squads between the hamlet, the fort and the temple, slimes by the temple, wolves in the palms); ambushes stand by the roads with a small `aggro` (beetles under the path, a vine-weaver with raspberry sprouts in the grove, tangles by the fort gates, wisps with kegs in the ruins, a boarlet on the path, a cauldron by the cliff, buds by the bridge). Side branches with chests: the snow cave (wisps, cauldrons, kegs), the West Hill (a pond with slimes, Soller by the statue, a grotto with a mimic), a ledge with a catapult beyond bridge B2, an islet beyond B3, a cliff beyond B4.
 
-Всего 28 групп, ~100 мобов 26 видов, 12 волшебных сундуков, ящики и бочки у лагерей, форта, хутора, храма и деревни.
+In total 28 groups, ~100 mobs of 26 kinds, 12 magic chests, crates and barrels by the camps, the fort, the hamlet, the temple and the village.
 
-## 5. Тест и дальше
+## 5. Test and next
 
-`tests/island.spec.ts`: карта грузится регионами без ошибок, герой стоит на земле, группы, страж, торговцы, лут и цель встают из `meta`; все дороги плана проходимы поиском пути по отрезкам, посты и лут на свободной земле, патруль идёт, засада спит в 6 м и просыпается в 2,5 м.
+`tests/island.spec.ts`: the map loads by regions without errors, the hero stands on the ground, groups, the warden, merchants, loot and the goal are set up from `meta`; all roads of the plan are passable by pathfinding segment by segment, posts and loot are on free ground, a patrol walks, an ambush sleeps at 6 m and wakes at 2.5 m.
 
-Дальше: сыграть и подкрутить плотность врагов и лута, водопады у обрывов, второй этаж у хутора, вернуть корабли, когда появится пресет.
+Next: play it and tune the density of enemies and loot, waterfalls at the drops, a second floor on the hamlet, bring back the ships once there is a preset.
