@@ -3,6 +3,7 @@ import type { Channel } from '../net/channel.ts';
 import { CMD_BACKLOG, LOOT_DELAY, MOB_FLAG, SNAP_RING, TICK, type Cmd, type CmdBatch, type GameClientMsg, type GameServerMsg } from '../net/game-protocol.ts';
 import { CLOSE } from '../net/protocol.ts';
 import type { Equipment, Item, ProfileData } from '../items.ts';
+import type { GearAction } from '../net/protocol.ts';
 import { SnapshotRing, type Delta, type EntityState } from '../net/snapshot.ts';
 import type { Level } from '../level/level.ts';
 import type { SimEvent } from '../sim/events.ts';
@@ -31,6 +32,8 @@ interface Seat {
   ping: number;
   /** Перекат с прошлого снимка — гости увидят его даже между снимками */
   rolled: boolean;
+  /** Действия, ждущие своей команды: исполняются, когда lastSeq дойдёт до их seq (порядок как у клиента) */
+  acts: { seq: number; a: GearAction }[];
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -60,7 +63,7 @@ export class Match {
     const was = this.seats.get(p.seat);
     if (was) return was;
     const hero = this.battle.addHero(p.seat, p.profile);
-    const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false };
+    const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false, acts: [] };
     this.seats.set(p.seat, s);
     this.td.setPlayers(this.seats.size);
     this.broadcast(this.kitOf(s), p.seat);
@@ -89,6 +92,7 @@ export class Match {
     s.last = null;
     s.lastSeq = 0;
     s.rolled = false;
+    s.acts.length = 0;
     // ошибка в обработке чужого сообщения не должна ронять сервер со всеми матчами: записать и жить дальше
     chan.onReliable = (m) => { try { this.onReliable(s, m as GameClientMsg); } catch (e) { this.fail(s, e); } };
     chan.onUnreliable = (u) => { try { if (Array.isArray(u)) for (const c of u) this.onCmd(s, c); } catch (e) { this.fail(s, e); } };
@@ -104,6 +108,7 @@ export class Match {
   private halt(s: Seat): void {
     s.queue.length = 0;
     s.last = null;
+    s.acts.length = 0;
     s.hero.input.move.set(0, 0);
     s.hero.input.attack = false;
     s.hero.bow = false;
@@ -157,11 +162,12 @@ export class Match {
         break;
       }
       case 'act': {
-        const { t: _t, ...a } = m;
+        const { t: _t, seq, ...a } = m;
         void _t;
         if (typeof a.k !== 'string') return;
-        s.hero.gear.perform(a);
-        this.broadcast({ t: 'act', seat, ...a }, seat);
+        // после команды seq (ещё не исполнена) — ждать её; команда уже прошла или номера нет — сразу
+        if (isNum(seq) && seq > s.lastSeq) s.acts.push({ seq, a });
+        else this.doAct(s, a);
         break;
       }
       case 'kit': {
@@ -178,6 +184,11 @@ export class Match {
       }
       default: break;
     }
+  }
+
+  private doAct(s: Seat, a: GearAction): void {
+    s.hero.gear.perform(a);
+    this.broadcast({ t: 'act', seat: s.player.seat, ...a }, s.player.seat);
   }
 
   /** Кадр сервера: такты физики по накопленному времени, потом снимок всем */
@@ -204,6 +215,8 @@ export class Match {
 
   private step(): void {
     for (const s of this.seats.values()) {
+      // действия, чья команда уже исполнена, — до следующей команды (у клиента они идут в начале такта)
+      while (s.acts.length && s.acts[0].seq <= s.lastSeq) this.doAct(s, s.acts.shift()!.a);
       const c = s.queue.shift() ?? s.last;
       if (!c) continue;
       const i = s.hero.input;

@@ -202,3 +202,19 @@ test('матч: обрыв и возврат — полный снимок за�
   assert.ok(!b2.ent('h0'), 'герой ушедшего убран');
   assert.equal(match.seats.size, 1);
 });
+
+test('матч: действие с номером команды исполняется после неё, перед следующей — как в такте клиента', () => {
+  const { clients, run } = setup(2);
+  const [a, b] = clients;
+  run(2);
+  // действие «после команды seq+4»: три команды кадра её не достигают — ждёт; следующий кадр — исполнено и ушло другим
+  b.chan.sendReliable({ t: 'act', seq: b.seq + 4, k: 'potion' });
+  run(1);
+  assert.ok(!a.got.some((m) => m.t === 'act'), 'рано: команда ещё не пришла');
+  run(2);
+  assert.ok(a.got.some((m) => m.t === 'act' && m.seat === 1 && m.k === 'potion'), 'исполнено после своей команды');
+  // без номера или с уже прошедшей командой — сразу
+  b.chan.sendReliable({ t: 'act', seq: 1, k: 'aura' });
+  run(1);
+  assert.ok(a.got.some((m) => m.t === 'act' && m.k === 'aura'));
+});

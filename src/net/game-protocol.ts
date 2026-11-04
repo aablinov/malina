@@ -23,7 +23,8 @@ export interface Cmd {
 export type GameClientMsg =
   | { t: 'hello'; token: string; matchId: string; protocol: number }
   | ({ t: 'td' } & Omit<TdCommand, 't'>)
-  | ({ t: 'act' } & GearAction)
+  /** seq — последняя команда клиента перед действием: сервер исполняет его в том же порядке с движением */
+  | ({ t: 'act'; seq?: number } & GearAction)
   /** Свой набор снаряжения (предметы и надетое) — купил у маркитанта за cost малины боя */
   | { t: 'kit'; items: unknown[]; equip: unknown; cost?: number };
 

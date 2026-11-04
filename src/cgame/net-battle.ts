@@ -14,6 +14,7 @@ import { CMD_DUP, MOB_FLAG, TICK, type Cmd, type CmdBatch, type GameClientMsg, t
 import { CLOSE, PROTOCOL, type GearAction, type SeatInfo, type ServerMsg, type TdCommand } from '../net/protocol.ts';
 import { SnapshotView, type Delta, type EntityState } from '../net/snapshot.ts';
 import { WebSocketTransport, type SocketLike } from '../net/ws-transport.ts';
+import type { EventQueue } from './events.ts';
 import type { SimEvent } from '../sim/events.ts';
 import type { SimTd } from '../sim/td.ts';
 import { SimTower } from '../sim/tower.ts';
@@ -58,6 +59,8 @@ export interface NetBattleHooks {
   swing(k: Knight, g: Gear, step: number): void;
   toast(s: string): void;
   quiet(): boolean;
+  /** Очередь событий клиента: кадры сети применяются при её разборе перед тактами */
+  events: EventQueue;
   /** Бой кончился (итог сервера) */
   onOver(result: 'won' | 'lost' | 'abandoned', wave: number): void;
 }
@@ -173,7 +176,7 @@ export class NetBattleClient {
     const ws = new WebSocket(`${this.h.base.replace(/^http/, 'ws')}/game`);
     this.ws = ws;
     ws.onopen = () => {
-      const chan = new Channel<R, U>(new WebSocketTransport(ws as unknown as SocketLike), { clock: () => performance.now() });
+      const chan = new Channel<R, U>(new WebSocketTransport(ws as unknown as SocketLike, this.h.events), { clock: () => performance.now() });
       this.chan = chan;
       chan.onReliable = (m) => this.onReliable(m as GameServerMsg);
       chan.onUnreliable = (u) => this.onDelta(u as Delta<SimEvent>);
@@ -223,7 +226,8 @@ export class NetBattleClient {
   // ---------- отправка ----------
 
   private sendTd(c: TdCommand): void { this.chan?.sendReliable({ t: 'td', a: c.a, pad: c.pad, wall: c.wall }); }
-  private sendAct(a: GearAction): void { this.chan?.sendReliable({ t: 'act', ...a }); }
+  /** Действие — с номером последней команды: сервер исполнит его после неё, перед следующей, как у клиента */
+  private sendAct(a: GearAction): void { this.chan?.sendReliable({ t: 'act', seq: this.seq, ...a }); }
 
   private sendKit(): void {
     if (!this.chan || !this.joined) return;
