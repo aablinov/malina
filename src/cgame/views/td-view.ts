@@ -19,7 +19,7 @@ import { WallView } from './wall-view.ts';
  * стены, куст и логова по приставке id (src/sim/entities.ts); площадки, стены, дороги и куст стоят там, где говорит `spec`.
  * Меню, HUD и подсказки — не здесь (src/cgame/td-ui.ts)
  */
-export interface TdViewOpts { scene: THREE.Scene; fx: FX; quiet: () => boolean; spec: TdSpec; heroPos: () => THREE.Vector3 }
+export interface TdViewOpts { scene: THREE.Scene; fx: FX; quiet: () => boolean; spec: TdSpec; heroPos: () => THREE.Vector3; seat: () => number }
 
 interface View { set(ent: EntityState): void; update(dt: number): void; dispose(): void; onEvent?(e: SimEvent): void }
 
@@ -38,9 +38,10 @@ export class TdView {
   private readonly quiet: () => boolean;
   private readonly spec: TdSpec;
   private readonly heroPos: () => THREE.Vector3;
+  private readonly seat: () => number;
 
   constructor(o: TdViewOpts) {
-    this.scene = o.scene; this.fx = o.fx; this.quiet = o.quiet; this.spec = o.spec; this.heroPos = o.heroPos;
+    this.scene = o.scene; this.fx = o.fx; this.quiet = o.quiet; this.spec = o.spec; this.heroPos = o.heroPos; this.seat = o.seat;
     this.pads = o.spec.pads.map((p, i) => new PadView(o.scene, p, i));
     this.bushPos = new THREE.Vector3(o.spec.bush.x, 0, o.spec.bush.z);
   }
@@ -51,7 +52,7 @@ export class TdView {
     for (const e of v.added) this.ensure(e);
     for (const e of v.updated) this.ensure(e);
     for (const e of v.events) if (e.id) this.views.get(e.id)?.onEvent?.(e);
-    playTdEvents(v.events, { fx: this.fx, quiet: this.quiet, heroPos: this.heroPos, bushPos: this.bushPos });
+    playTdEvents(v.events, { fx: this.fx, quiet: this.quiet, heroPos: this.heroPos, bushPos: this.bushPos, seat: this.seat });
   }
 
   /** Анимация за кадр/тик: качание, искры, полёт снарядов по k, лужи */

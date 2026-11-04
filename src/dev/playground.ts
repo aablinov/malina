@@ -60,7 +60,6 @@ import { TdUi } from '../cgame/td-ui.ts';
 import { TdView } from '../cgame/views/td-view.ts';
 import { NetBattleClient } from '../cgame/net-battle.ts';
 import '../cgame/net.css';
-import { playTdEvents } from '../cgame/effects.ts';
 import { LavaFx } from '../td/lava-fx.ts';
 import { MistFx } from '../td/mist-fx.ts';
 import type { TdSpec } from '../td/types.ts';
@@ -697,6 +696,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   function readInput(): void {
     if (scripted) return;
+    // инвентарь или лавка открыты (сетевой бой идёт дальше): клавиши и кнопки им, герой стоит
+    if (inventory.open || shop.open) { keys.clear(); lmb = false; }
     const m = new THREE.Vector2();
     if (keys.has('KeyW') || keys.has('ArrowUp')) m.add(FWD);
     if (keys.has('KeyS') || keys.has('ArrowDown')) m.sub(FWD);
@@ -975,7 +976,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     // стартовая казна карты заменяет малину профиля (в лагере своя малина вернётся из отложенной — src/menu/session.ts)
     profile.data.berries = purseMirror = sim.berries(0);
     syncPurse();
-    tdView = new TdView({ scene, fx, quiet: () => scripted, spec: tdSpec, heroPos: () => hero.pos });
+    tdView = new TdView({ scene, fx, quiet: () => scripted, spec: tdSpec, heroPos: () => hero.pos, seat: () => nb?.seat ?? 0 });
     tdUi = new TdUi(document.body, sim, 0, { toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, heroPos: () => hero.pos, sync: syncPurse, alive: () => pk.mobs.filter((m) => !m.dead).length });
   }
   /** Шаг мира обороны и вид по его снимку и событиям (src/cgame/) */
@@ -1001,10 +1002,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (!world || !sim || !tdView || !tdUi) return;
     tdView.menuPad = tdUi.menuPad?.index ?? null;
     const evs = world.takeEvents();
-    snapView.apply({ n: snapView.n + 1, base: 0, tick: world.tick, add: world.entities(), upd: [], del: [], ev: evs });
+    snapView.apply({ n: snapView.n + 1, base: 0, tick: world.tick, add: world.entities(), upd: [], del: [], ev: [evs] });
     tdView.apply(snapView);
     tdUi.events(evs);
-    playTdEvents(evs, { fx, quiet: () => scripted, heroPos: () => hero.pos, bushPos: sim.bush.pos });
   }
   // сетевая игра (src/net/client.ts): страница боя заново входит на сервер — место в комнате держится.
   // Общий бой (src/cgame/net-battle.ts): бой считает сервер, сюда приходят снимки по /game
@@ -1223,12 +1223,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     } else lavaT = 0;
     const healed = props.update(dt, hero);
     if (healed > 0) hero.hp = Math.min(hero.maxHp, hero.hp + healed);
-    clearEdges();
     if (hero.down) { if (downT === 0) gear.onDown(); downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
     pack.update(dt);
     stepTd(dt);
+    // защёлки ввода (перекат) живут до конца такта: их читает и клиент сетевого боя в stepTd
+    clearEdges();
     lavaFx?.update(dt, hero.pos);
     mistFx?.update(dt);
     // комната думает, когда герой рядом или гарнизон в бою; пал весь, а герой вышел — гарнизон снова на постах
@@ -1274,12 +1275,12 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     fpsAcc += real; fpsN++;
     if (fpsAcc > 0.5) { fpsVal = fpsN / fpsAcc; frameMs = (fpsAcc / fpsN) * 1000; fpsAcc = 0; fpsN = 0; }
 
-    // стоп-кадр удара заклинания: время почти стоит (src/fx.ts hitstop)
-    const stop = fx.hitstop > 0 ? 0.04 : fx.slowmo > 0 ? 0.33 : 1;
+    // стоп-кадр удара заклинания: время почти стоит (src/fx.ts hitstop); в сетевом бою — только вид, такты и команды идут
+    const stop = netRoom ? 1 : fx.hitstop > 0 ? 0.04 : fx.slowmo > 0 ? 0.33 : 1;
     fx.updateReal(real);
     // инвентарь открыт — игра на паузе, как в одиночной MCD
-    // сетевой бой не встаёт на паузу: остальные играют дальше (пауза — только меню)
-    if (!paused && !inventory.open && !shop.open && (!battle?.pausing || netRoom)) acc += real * timeScale * stop;
+    // сетевой бой не встаёт на паузу: остальные играют дальше, свой герой стоит (ввод пуст), команды уходят каждый такт
+    if (!paused && (netRoom || (!inventory.open && !shop.open && !battle?.pausing))) acc += real * timeScale * stop;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     perf.begin();
     let n = 0;

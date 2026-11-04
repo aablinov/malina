@@ -39,6 +39,8 @@ export const CLOSE = {
   flood: 4008,
   /** Тот же игрок вошёл с другой вкладки */
   replaced: 4009,
+  /** Окно надёжных сообщений переполнено — клиент не подтверждает (как Q3 роняет клиента) */
+  overflow: 4010,
 } as const;
 
 export type RoomState = 'lobby' | 'battle' | 'closed';

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Channel } from '../net/channel.ts';
-import { CMD_BACKLOG, LOOT_DELAY, MOB_FLAG, SNAP_RING, TICK, type Cmd, type GameClientMsg, type GameServerMsg } from '../net/game-protocol.ts';
+import { CMD_BACKLOG, LOOT_DELAY, MOB_FLAG, SNAP_RING, TICK, type Cmd, type CmdBatch, type GameClientMsg, type GameServerMsg } from '../net/game-protocol.ts';
+import { CLOSE } from '../net/protocol.ts';
 import type { Equipment, Item, ProfileData } from '../items.ts';
 import { SnapshotRing, type Delta, type EntityState } from '../net/snapshot.ts';
 import type { Level } from '../level/level.ts';
@@ -15,7 +16,7 @@ import { HeadlessBattle, type BattleHero } from './battle.ts';
  * кадра — снимок в кольцо и дельта каждому от подтверждённого им. Транспорта не знает: каналы даёт сервер (server/game/)
  */
 export interface MatchPlayer { seat: number; playerId: string; name: string; profile: ProfileData }
-export type GameChannel = Channel<GameClientMsg | GameServerMsg, Cmd | Delta<SimEvent>>;
+export type GameChannel = Channel<GameClientMsg | GameServerMsg, CmdBatch | Delta<SimEvent>>;
 export interface MatchEnd { result: 'won' | 'lost' | 'abandoned'; wave: number; rewards: Map<number, { berries: number; xp: number }> }
 
 interface Seat {
@@ -80,17 +81,39 @@ export class Match {
   attach(seat: number, chan: GameChannel): boolean {
     const s = this.seats.get(seat);
     if (!s) return false;
-    if (s.chan && s.chan !== chan) s.chan.close(4009);
+    if (s.chan && s.chan !== chan) s.chan.close(CLOSE.replaced);
     s.chan = chan;
+    // новое соединение — новая нумерация команд клиента (страница перезагрузилась) и полный снимок
     s.snapAck = 0;
+    s.queue.length = 0;
+    s.last = null;
+    s.lastSeq = 0;
+    s.rolled = false;
     // ошибка в обработке чужого сообщения не должна ронять сервер со всеми матчами: записать и жить дальше
     chan.onReliable = (m) => { try { this.onReliable(s, m as GameClientMsg); } catch (e) { this.fail(s, e); } };
-    chan.onUnreliable = (u) => { try { this.onCmd(s, u as Cmd); } catch (e) { this.fail(s, e); } };
-    chan.onClose = () => { if (s.chan === chan) s.chan = null; };
-    chan.sendReliable({ t: 'welcome', seat, tick: this.tick });
-    for (const o of this.seats.values()) chan.sendReliable(this.kitOf(o));
-    if (this.ended) chan.sendReliable({ t: 'over', result: this.ended.result, wave: this.ended.wave });
+    chan.onUnreliable = (u) => { try { if (Array.isArray(u)) for (const c of u) this.onCmd(s, c); } catch (e) { this.fail(s, e); } };
+    // обрыв: герой встаёт (не повторяет последнюю команду вечно) и стоит, пока комната держит место
+    chan.onClose = () => { if (s.chan === chan) { s.chan = null; this.halt(s); } };
+    this.send(s, { t: 'welcome', seat, tick: this.tick });
+    for (const o of this.seats.values()) this.send(s, this.kitOf(o));
+    if (this.ended) this.send(s, { t: 'over', result: this.ended.result, wave: this.ended.wave });
     return true;
+  }
+
+  /** Команд больше нет: очередь пуста, последняя забыта, ввод героя пустой */
+  private halt(s: Seat): void {
+    s.queue.length = 0;
+    s.last = null;
+    s.hero.input.move.set(0, 0);
+    s.hero.input.attack = false;
+    s.hero.bow = false;
+  }
+
+  /** Надёжно месту; окно переполнено (клиент не подтверждает) — как Q3: соединение закрывается */
+  private send(s: Seat, m: GameServerMsg): void {
+    const c = s.chan;
+    if (!c) return;
+    if (!c.sendReliable(m)) { console.error(`матч ${this.id}, место ${s.player.seat}: окно надёжных переполнено, соединение закрыто`); c.close(CLOSE.overflow); }
   }
 
   detach(seat: number): void {
@@ -99,23 +122,25 @@ export class Match {
     const c = s.chan;
     s.chan = null;
     c.onReliable = null; c.onUnreliable = null; c.onClose = null;
+    this.halt(s);
   }
 
   /** Что-то упало при разборе сообщения места: в лог, игроку — подсказка */
   private fail(s: Seat, e: unknown): void {
     console.error(`матч ${this.id}, место ${s.player.seat}: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
-    s.chan?.sendReliable({ t: 'toast', text: 'Сервер не смог выполнить действие' });
+    this.send(s, { t: 'toast', text: 'Сервер не смог выполнить действие' });
   }
 
   get connected(): number { return [...this.seats.values()].filter((s) => s.chan).length; }
 
   private kitOf(s: Seat): GameServerMsg { return { t: 'kit', seat: s.player.seat, items: s.hero.profile.data.items, equip: s.hero.profile.data.equip }; }
 
-  private broadcast(m: GameServerMsg, except = -1): void { for (const s of this.seats.values()) if (s.player.seat !== except) s.chan?.sendReliable(m); }
+  private broadcast(m: GameServerMsg, except = -1): void { for (const s of this.seats.values()) if (s.player.seat !== except) this.send(s, m); }
 
   private onCmd(s: Seat, c: Cmd): void {
     if (!c || !isNum(c.seq) || !Array.isArray(c.move) || !Array.isArray(c.aim) || c.move.length !== 2 || c.aim.length !== 3 || !c.move.every(isNum) || !c.aim.every(isNum)) return;
-    if (c.seq <= s.lastSeq && c.seq <= (s.queue[s.queue.length - 1]?.seq ?? 0)) return;
+    // уже исполнена или уже в очереди (дубли команд в кадре, повторы) — мимо
+    if (c.seq <= s.lastSeq || c.seq <= (s.queue[s.queue.length - 1]?.seq ?? 0)) return;
     if (isNum(c.snap) && c.snap > s.snapAck) s.snapAck = c.snap;
     if (isNum(c.ping)) s.ping = Math.max(0, Math.min(9999, Math.round(c.ping)));
     s.queue.push(c);
@@ -141,7 +166,8 @@ export class Match {
       }
       case 'kit': {
         if (!Array.isArray(m.items) || typeof m.equip !== 'object' || !m.equip) return;
-        if (isNum(m.cost) && m.cost > 0) this.td.spend(seat, Math.round(m.cost));
+        // плата маркитанту — из казны места; не хватает — набор не меняется, клиенту подсказка (его зеркало поправит снимок)
+        if (isNum(m.cost) && m.cost > 0 && !this.td.spend(seat, Math.round(m.cost))) { this.send(s, { t: 'toast', text: 'Не хватает малины' }); break; }
         const d = s.hero.profile.data;
         d.items = JSON.parse(JSON.stringify(m.items)) as Item[];
         d.equip = JSON.parse(JSON.stringify(m.equip)) as Equipment;
@@ -161,14 +187,14 @@ export class Match {
     let n = 0;
     try {
       while (this.acc >= TICK && n < 6) { this.step(); this.acc -= TICK; n++; }
+      if (n >= 6) this.acc = 0;
+      this.snapshot();
     } catch (e) {
-      // симуляция упала: матч прерван честно, остальные матчи живут
-      console.error(`матч ${this.id}: шаг упал — ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+      // симуляция или снимок упали: матч прерван честно, остальные матчи живут
+      console.error(`матч ${this.id}: кадр упал — ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
       this.finish('abandoned');
       return;
     }
-    if (n >= 6) this.acc = 0;
-    this.snapshot();
     if (this.td.state !== 'play') {
       if (this.endT < 0) this.endT = LOOT_DELAY;
       this.endT -= dt;
@@ -197,11 +223,11 @@ export class Match {
     const events = this.battle.world.takeEvents();
     this.ring.push(this.tick, ents, events);
     for (const s of this.seats.values()) {
+      s.rolled = false;
       if (!s.chan) continue;
       const d = this.ring.delta(s.snapAck);
       if (d) s.chan.sendUnreliable(d);
       s.chan.flush();
-      s.rolled = false;
     }
   }
 
