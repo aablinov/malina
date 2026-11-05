@@ -4,7 +4,7 @@ import type { TowerKind } from '../../src/td/towers.ts';
 import { hashEntities } from '../../src/sim/hash.ts';
 import { tdWorld } from './sim-helpers.ts';
 
-/** Сценарий: башни на всех площадках, какие по карману, волны одна за другой — до победы или поражения */
+/** Scenario: towers on every pad that can be afforded, waves one after another — until victory or defeat */
 function play(id: string, seed: number, ticks: number, build: TowerKind): { hashes: number[]; w: ReturnType<typeof tdWorld> } {
   const w = tdWorld(id, seed, { mobHp: 20 });
   const hashes: number[] = [];
@@ -18,26 +18,26 @@ function play(id: string, seed: number, ticks: number, build: TowerKind): { hash
   return { hashes, w };
 }
 
-test('оборона: башни строятся за малину, волны идут и отбиваются, события и записи сущностей выходят', () => {
+test('defence: towers are built for raspberries, waves come and are repelled, events and entity records come out', () => {
   const w = tdWorld('td', 5, { mobHp: 20 });
   const s = w.sim;
   assert.equal(s.berries(0), w.td.berries);
   assert.ok(s.command(0, { t: 'td', a: 'build:arrow', pad: 0 }));
   assert.ok(s.pads[0].tower);
   assert.equal(s.berries(0), w.td.berries - 100 > 0 ? w.td.berries - s.pads[0].tower!.def.cost : s.berries(0));
-  assert.equal(s.command(0, { t: 'td', a: 'build:arrow', pad: 0 }), false, 'площадка занята');
+  assert.equal(s.command(0, { t: 'td', a: 'build:arrow', pad: 0 }), false, 'pad is taken');
   const built = w.world.events.find((e) => e.t === 'tower.build');
   assert.ok(built && built.id === 't0');
   assert.ok(s.command(0, { t: 'td', a: 'wave' }));
   assert.equal(s.wave, 1);
   for (let i = 0; i < 60 * 40 && s.waveRunning; i++) w.step();
-  assert.ok(s.spawned > 0, 'враги вышли');
-  assert.ok(s.fallen > 0 || s.bush.taken > 0, 'бой был');
+  assert.ok(s.spawned > 0, 'enemies spawned');
+  assert.ok(s.fallen > 0 || s.bush.taken > 0, 'there was a fight');
   const ents = w.world.entities();
   assert.ok(ents.some((e) => e.id === 'td') && ents.some((e) => e.id === 't0') && ents.some((e) => e.id === 'bush') && ents.some((e) => e.id === 'purse0'));
 });
 
-test('оборона: кучки малины летят к герою, подбор — в кошелёк', () => {
+test('defence: raspberry piles fly to the hero, pickup goes to the purse', () => {
   const w = tdWorld('td', 1);
   w.hero.pos.set(10, 0, 10);
   w.world.piles.drop(w.hero.pos.clone().add({ x: 2, y: 0, z: 0 } as never), 7);
@@ -47,16 +47,16 @@ test('оборона: кучки малины летят к герою, подб
   assert.equal(w.sim.berries(0), before + 7);
 });
 
-test('детерминизм: один сид — одни хэши на каждой секунде, другой сид — другие', () => {
+test('determinism: same seed — same hashes every second, another seed — different', () => {
   const a = play('td', 42, 60 * 90, 'arrow'), b = play('td', 42, 60 * 90, 'arrow'), c = play('td', 43, 60 * 90, 'arrow');
   assert.ok(a.hashes.length > 10);
   assert.deepEqual(a.hashes, b.hashes);
   assert.notDeepEqual(a.hashes, c.hashes);
 });
 
-test('все карты обороны: волны доходят до конца с башнями на всех площадках, без зависаний', () => {
+test('all defence maps: waves run to the end with towers on every pad, no hangs', () => {
   for (const id of ['td', 'td2', 'td3']) {
-    // враги-заглушки с 1 здоровья: любая башня бьёт наповал — проверяем, что волны и правила доходят до победы
+    // stub enemies with 1 hp: any tower kills outright — checks that waves and rules reach victory
     const w = tdWorld(id, 7, { mobHp: 1 });
     const s = w.sim;
     for (const p of s.pads) { s.gain(0, 1000); s.command(0, { t: 'td', a: 'build:arrow', pad: p.index }); }
@@ -65,8 +65,8 @@ test('все карты обороны: волны доходят до конц�
       if (!s.waveRunning) s.command(0, { t: 'td', a: 'wave' });
       w.step(); ticks++;
     }
-    assert.equal(s.state, 'won', `${id}: куст отбит`);
-    assert.equal(s.wave, s.waves.length, `${id}: все волны вышли`);
-    assert.ok(w.world.piles.list.length === 0 || w.world.piles.harvestT > 0, `${id}: сбор урожая`);
+    assert.equal(s.state, 'won', `${id}: bush defended`);
+    assert.equal(s.wave, s.waves.length, `${id}: all waves spawned`);
+    assert.ok(w.world.piles.list.length === 0 || w.world.piles.harvestT > 0, `${id}: harvest`);
   }
 });

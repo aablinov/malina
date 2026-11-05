@@ -3,8 +3,8 @@ import type { AuthReply } from '../src/net/protocol.ts';
 import type { PlayerRow, Players } from './repo/players.ts';
 
 /**
- * Вход без пароля: имя героя → случайный токен. Токен хранит браузер (localStorage `malina.net`),
- * в базе — только его sha256. Потерял токен — герой с этим именем потерян, как сохранение в localStorage
+ * Passwordless sign-in: hero name → random token. The browser keeps the token (localStorage `malina.net`),
+ * the database only its sha256. Lose the token and the hero with that name is lost, like a localStorage save
  */
 export const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 export const newToken = (): string => randomBytes(32).toString('base64url');
@@ -14,12 +14,12 @@ export class Auth {
   private readonly players: Players;
   constructor(players: Players) { this.players = players; }
 
-  /** Игрок по токену или null */
+  /** Player by token or null */
   check(token: unknown): PlayerRow | null {
     return typeof token === 'string' && token.length >= 20 && token.length <= 100 ? this.players.byToken(hashToken(token)) : null;
   }
 
-  /** Новый герой; null — имя занято */
+  /** New hero; null — name is taken */
   register(name: string, now: number): AuthReply | null {
     if (this.players.byName(name)) return null;
     const token = newToken(), id = newId();

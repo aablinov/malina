@@ -3,16 +3,16 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Перф-сценарии (wiki/dev-performance.md): смерть финального стража на 30 уровне с 4 игроками и шквал заклинаний.
- * WebGL здесь программный (SwiftShader), поэтому абсолютные миллисекунды условны: ловим подлагивания относительно
- * медианы кадра, утечки геометрий и рост числа шейдерных программ после прогрева. Порог — PERF_MAX_MS (по умолчанию 40 мс).
+ * Perf scenarios (wiki/dev-performance.md): the death of the final warden at level 30 with 4 players and a barrage of spells.
+ * WebGL here is software (SwiftShader), so absolute milliseconds are nominal: we catch hitches relative to
+ * the median frame, geometry leaks and growth of the shader program count after warm-up. The threshold is PERF_MAX_MS (40 ms by default).
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground';
 const MAX_MS = Number(process.env.PERF_MAX_MS || 40);
-/** Время кадра имеет смысл только на настоящем GPU (PERF_GPU=1, см. playwright.config.ts); в SwiftShader проверяем утечки и программы */
+/** Frame time is meaningful only on a real GPU (PERF_GPU=1, see playwright.config.ts); in SwiftShader we check leaks and programs */
 const GPU = !!process.env.PERF_GPU;
-/** В SwiftShader кадр рисуется секунды — рисуем каждый четвёртый, утечкам и программам этого хватает */
+/** In SwiftShader a frame takes seconds to draw — draw every fourth, that is enough for leaks and programs */
 const RENDER_EVERY = GPU ? 1 : 4;
 
 test.setTimeout(600_000);
@@ -26,14 +26,14 @@ async function open(page: Page): Promise<string[]> {
   await page.goto(URL);
   await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
   await page.evaluate(() => (window as any).__malina.script(true));
-  // прогрев шейдеров и текстур (src/fx-zoo.ts) — до замеров
+  // shader and texture warm-up (src/fx-zoo.ts) — before the measurements
   const t0 = Date.now();
   const programs = await page.evaluate(() => (window as any).__malina.ready);
-  console.log(`[perf] прогрев: ${programs} программ, ${Date.now() - t0} мс после старта страницы`);
+  console.log(`[perf] warm-up: ${programs} programs, ${Date.now() - t0} ms after the page start`);
   return errors;
 }
 
-/** Сводка: медиана, максимум, число длинных кадров (дольше порога и втрое дольше медианы) */
+/** Summary: median, max, number of long frames (longer than the threshold and three times longer than the median) */
 function summarize(frames: Frame[]) {
   const ms = frames.map((f) => f.ms).sort((a, b) => a - b);
   const median = ms[Math.floor(ms.length / 2)] ?? 0;
@@ -44,13 +44,13 @@ function summarize(frames: Frame[]) {
 
 function log(name: string, r: Report): ReturnType<typeof summarize> {
   const s = summarize(r.frames);
-  const worst = s.long.slice().sort((a, b) => b.ms - a.ms).slice(0, 5).map((f) => `${f.ms.toFixed(0)}мс (сим ${f.tick.toFixed(0)}, рендер ${f.render.toFixed(0)}${f.marks.length ? `, ${f.marks.join('+')}` : ''})`);
-  console.log(`[perf] ${name}: кадров ${r.frames.length}, медиана ${s.median.toFixed(1)} мс, p95 ${s.p95.toFixed(1)}, макс ${s.max.toFixed(1)}, длинных ${s.long.length} (порог ${s.limit.toFixed(0)});`
-    + ` программ ${r.programs0}→${r.programs1}, геометрий ${r.geo0}→${r.geo1}, текстур ${r.tex0}→${r.tex1}${worst.length ? `; худшие: ${worst.join('; ')}` : ''}`);
+  const worst = s.long.slice().sort((a, b) => b.ms - a.ms).slice(0, 5).map((f) => `${f.ms.toFixed(0)}ms (sim ${f.tick.toFixed(0)}, render ${f.render.toFixed(0)}${f.marks.length ? `, ${f.marks.join('+')}` : ''})`);
+  console.log(`[perf] ${name}: frames ${r.frames.length}, median ${s.median.toFixed(1)} ms, p95 ${s.p95.toFixed(1)}, max ${s.max.toFixed(1)}, long ${s.long.length} (threshold ${s.limit.toFixed(0)});`
+    + ` programs ${r.programs0}→${r.programs1}, geometries ${r.geo0}→${r.geo1}, textures ${r.tex0}→${r.tex1}${worst.length ? `; worst: ${worst.join('; ')}` : ''}`);
   return s;
 }
 
-/** Код в странице: прогнать n кадров симуляции с рендером, замеряя стенное время каждого */
+/** Code in the page: run n simulation frames with rendering, measuring the wall time of each */
 const RUN = `
   const RENDER_EVERY = ${RENDER_EVERY};
   const run = (n, between) => {
@@ -67,7 +67,7 @@ const RUN = `
   const counts = () => ({ programs: m.renderer.info.programs.length, geo: m.renderer.info.memory.geometries, tex: m.renderer.info.memory.textures });
 `;
 
-test('перф: смерть финального стража на 30 уровне × 4 игрока — без подлагиваний и утечек', async ({ page }) => {
+test('perf: the death of the final warden at level 30 × 4 players — no hitches and no leaks', async ({ page }) => {
   const errors = await open(page);
   const r = await page.evaluate<Report>(`(() => {
     const m = window.__malina; let lastLong = -1;
@@ -79,14 +79,14 @@ test('перф: смерть финального стража на 30 уров�
     m.toBoss(id);
     const t = arena.spec.trigger;
     m.hero.place((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2);
-    run(30); // прогрев: арена закрылась, страж проснулся
+    run(30); // warm-up: the arena closed, the warden woke up
     const c0 = counts();
     const V = m.hero.pos.constructor;
     const frames = [];
-    // добить: удар до смерти, затем 4 с — фонтан, гримуары, подбор ягод
+    // finish it: hit until death, then 4 s — the fountain, grimoires, berry pickup
     for (let j = 0; j < 240 && !boss.dead; j++) { boss.hit(99999, new V(0, 0, 1), boss.pos.clone(), 0); if (!boss.dead) m.step(1 / 60); }
     frames.push(...run(120));
-    // герой ходит по ягодам — подбор с эффектами
+    // the hero walks over the berries — pickup with effects
     frames.push(...run(180, (i) => {
       if (i % 20 !== 0) return;
       const ps = m.props.pickups.filter((p) => p.kind === 'berry');
@@ -98,13 +98,13 @@ test('перф: смерть финального стража на 30 уров�
     return { frames, programs0: c0.programs, programs1: c1.programs, geo0: c0.geo, geo1: c1.geo, tex0: c0.tex, tex1: c1.tex, left, berries: boss.berries };
   })()`);
   expect(errors).toEqual([]);
-  const s = log(`смерть стража (ягод ${(r as any).berries}, осталось на полу ${(r as any).left})`, r);
-  if (GPU) expect(s.long.length, `длинные кадры: ${s.long.map((f) => f.ms.toFixed(0)).join(', ')}`).toBe(0);
-  // гримуары и оставшиеся ягоды держат геометрии; утечка — когда геометрий стало больше, чем объектов на полу
+  const s = log(`warden death (berries ${(r as any).berries}, left on the floor ${(r as any).left})`, r);
+  if (GPU) expect(s.long.length, `long frames: ${s.long.map((f) => f.ms.toFixed(0)).join(', ')}`).toBe(0);
+  // grimoires and the remaining berries hold geometries; a leak is when there are more geometries than objects on the floor
   expect(r.geo1 - r.geo0).toBeLessThanOrEqual((r as any).left * 4 + 40);
 });
 
-test('перф: шквал заклинаний всех школ — программы не растут, кадры ровные', async ({ page }) => {
+test('perf: a barrage of spells of every school — programs do not grow, frames are even', async ({ page }) => {
   const errors = await open(page);
   const r = await page.evaluate<Report & { casts: number }>(`(() => {
     const m = window.__malina; let lastLong = -1;
@@ -113,7 +113,7 @@ test('перф: шквал заклинаний всех школ — прогр
       'stormcloud', 'starfall', 'starbeam', 'judgement', 'deadchoir', 'gravitywell', 'skullscythe', 'fallenguards', 'rift', 'raspberrybush', 'titanform', 'bladephalanx'];
     const p = m.profile;
     m.hero.god = true;
-    const d = m.dummies.find((x) => x.name === 'одиночное');
+    const d = m.dummies.find((x) => x.name === 'lone');
     m.hero.place(d.pos.x + 3.5, d.pos.z, -Math.PI / 2);
     run(30);
     const c0 = counts();
@@ -129,22 +129,22 @@ test('перф: шквал заклинаний всех школ — прогр
         if (measure) frames.push(...fs);
       }
       if (measure) frames.push(...run(120));
-      // долгие заклинания (туча, руки, купол) живут до 10 с — ждём, пока всё растает
+      // long spells (the cloud, the hands, the dome) live up to 10 s — wait until everything melts away
       m.step(12); m.render();
       return counts();
     };
     const c1 = round(true);
-    // второй круг: общие геометрии и текстуры уже созданы — любой рост теперь утечка
+    // second round: the shared geometries and textures already exist — any growth now is a leak
     const c2 = round(false);
     return { frames, casts, programs0: c0.programs, programs1: c2.programs, geo0: c1.geo, geo1: c2.geo, tex0: c0.tex, tex1: c2.tex, firstRound: c1.geo - c0.geo };
   })()`);
   expect(errors).toEqual([]);
-  const s = log(`шквал заклинаний (кастов ${r.casts})`, r);
+  const s = log(`spell barrage (casts ${r.casts})`, r);
   expect(r.casts).toBeGreaterThanOrEqual(20);
-  if (GPU) expect(s.long.length, `длинные кадры: ${s.long.map((f) => f.ms.toFixed(0)).join(', ')}`).toBe(0);
-  // после прогрева при загрузке новые шейдерные программы в бою не должны появляться
+  if (GPU) expect(s.long.length, `long frames: ${s.long.map((f) => f.ms.toFixed(0)).join(', ')}`).toBe(0);
+  // after the warm-up at load no new shader programs should appear in battle
   expect(r.programs1 - r.programs0).toBeLessThanOrEqual(0);
-  // второй круг заклинаний не должен добавлять геометрий (первый создаёт общие — это не утечка)
-  console.log(`[perf] общих геометрий после первого круга: +${(r as any).firstRound}`);
+  // the second round of spells must not add geometries (the first creates the shared ones — that is not a leak)
+  console.log(`[perf] shared geometries after the first round: +${(r as any).firstRound}`);
   expect(r.geo1 - r.geo0).toBeLessThanOrEqual(4);
 });

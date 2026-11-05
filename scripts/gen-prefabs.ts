@@ -1,7 +1,7 @@
 /**
- * Библиотека пресетов (wiki/design-prefab-library.md): запекает строители src/level/prefab-lib/builders.ts
- * в assets/prefabs/<id>.json и собирает витрину assets/maps/prefabs.json (`?map=prefabs`).
- * Node ≥ 22.18 выполняет TypeScript сам:  node scripts/gen-prefabs.ts
+ * Preset library (wiki/design-prefab-library.md): bakes the builders from src/level/prefab-lib/builders.ts
+ * into assets/prefabs/<id>.json and assembles the showcase assets/maps/prefabs.json (`?map=prefabs`).
+ * Node ≥ 22.18 runs TypeScript directly:  node scripts/gen-prefabs.ts
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -18,10 +18,10 @@ for (const f of readdirSync(DIR)) if (f.endsWith('.json')) rmSync(join(DIR, f));
 const all = BUILDERS.flatMap(bakeAll);
 for (const p of all) {
   writeFileSync(join(DIR, `${p.id}.json`), JSON.stringify(p));
-  console.log(`${p.id}: ${p.cells.length} блоков, ${p.decor.length} декора, ${p.entities.length} света, ${p.size.join(' × ')}`);
+  console.log(`${p.id}: ${p.cells.length} blocks, ${p.decor.length} decor, ${p.entities.length} lights, ${p.size.join(' × ')}`);
 }
 const map = buildPrefabsMap(all);
 const file = join(ROOT, 'assets', 'maps', 'prefabs.json');
 writeFileSync(file, JSON.stringify(map.toJSON()));
 let n = 0; map.forEach(() => n++);
-console.log(`${file}: ${all.length} пресетов, ${n} блоков`);
+console.log(`${file}: ${all.length} presets, ${n} blocks`);

@@ -5,7 +5,7 @@ import { Profile } from '../../src/items.ts';
 import { PROTOCOL, type AuthReply, type ClientMsg, type ServerMsg } from '../../src/net/protocol.ts';
 import { createApp, type App } from '../app.ts';
 
-/** Сервер на свободном порту и игроки-клиенты на глобальном WebSocket Node */
+/** Server on a free port and client players on Node's global WebSocket */
 export const MAPS = join(import.meta.dirname, '..', '..', 'assets', 'maps');
 
 export interface TestServer { app: App; base: string; ws: string; clock: { t: number }; dir: string; stop(): Promise<void> }
@@ -35,7 +35,7 @@ export async function register(s: TestServer, name: string): Promise<AuthReply> 
   return r.body as AuthReply;
 }
 
-/** Стартовый профиль, как у нового героя в браузере */
+/** Starter profile, like a new hero's in the browser */
 export const starter = (): unknown => JSON.parse(JSON.stringify(Profile.starter()));
 
 export class Player {
@@ -64,18 +64,18 @@ export class Player {
 
   send(m: ClientMsg | Record<string, unknown>): void { this.ws.send(JSON.stringify(m)); }
 
-  /** Ждать сообщение типа t (уже пришедшее раньше — тоже), с условием */
+  /** Wait for a message of type t (one that already arrived counts too), with a condition */
   next<T extends ServerMsg['t']>(t: T, f: (m: Extract<ServerMsg, { t: T }>) => boolean = () => true, ms = 2000): Promise<Extract<ServerMsg, { t: T }>> {
     const match = (m: ServerMsg): boolean => m.t === t && f(m as Extract<ServerMsg, { t: T }>);
     const i = this.inbox.findIndex(match);
     if (i >= 0) return Promise.resolve(this.inbox.splice(i, 1)[0] as Extract<ServerMsg, { t: T }>);
     return new Promise((ok, fail) => {
-      const timer = setTimeout(() => fail(new Error(`нет ${t} за ${ms} мс; пришло: ${this.inbox.map((x) => x.t).join(', ')}`)), ms);
+      const timer = setTimeout(() => fail(new Error(`no ${t} within ${ms} ms; received: ${this.inbox.map((x) => x.t).join(', ')}`)), ms);
       this.waiters.push({ f: match, ok: (m) => { clearTimeout(timer); const j = this.inbox.indexOf(m); if (j >= 0) this.inbox.splice(j, 1); ok(m as Extract<ServerMsg, { t: T }>); } });
     });
   }
 
-  /** Последний room.state, пришедший к этому моменту (и дождаться хотя бы одного) */
+  /** Latest room.state received so far (and wait for at least one) */
   async state(f: (m: Extract<ServerMsg, { t: 'room.state' }>) => boolean = () => true): Promise<Extract<ServerMsg, { t: 'room.state' }>> {
     return this.next('room.state', f);
   }
@@ -83,7 +83,7 @@ export class Player {
   waitClose(ms = 2000): Promise<{ code: number }> {
     if (this.closed) return Promise.resolve(this.closed);
     return new Promise((ok, fail) => {
-      const timer = setTimeout(() => fail(new Error('не закрылось')), ms);
+      const timer = setTimeout(() => fail(new Error('did not close')), ms);
       this.ws.addEventListener('close', (e) => { clearTimeout(timer); ok({ code: e.code }); });
     });
   }

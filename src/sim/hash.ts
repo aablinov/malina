@@ -1,6 +1,6 @@
 import type { EntityState } from '../net/snapshot.ts';
 
-/** Хэш FNV-1a по записям сущностей — сверка детерминизма: один сид и те же команды — один хэш на каждом тике */
+/** FNV-1a hash over entity records — determinism check: same seed and same commands — same hash on every tick */
 export function hashEntities(ents: readonly EntityState[]): number {
   let h = 0x811c9dc5;
   const mix = (s: string): void => { for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } };

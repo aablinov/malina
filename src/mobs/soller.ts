@@ -6,30 +6,31 @@ import { boom, hiss, voice } from '../spell-audio.ts';
 import { C, glowMat, rand } from '../bosses/kit.ts';
 import { groundGlow, lightBeam } from '../loot-look.ts';
 import { Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * 31. Соллер, Рыцарь Солнца (wiki/design-mobs.md, раздел 2G) — редкий одиночка, не из Ордена: славит солнце, которое
- * растит малину. Доспех — калька по рефам: шлем-ведро с Т-образным забралом, красное перо, зелёные лохматые наплечники,
- * туника с солнцем, кольчуга, поножи. В покое стоит, воздев руки, под столбом солнечного света; в бою — серия мечом,
- * солнечное копьё издали, раз за бой — молитва, лечит (удар её срывает). Герой ушёл — возвращается на место и снова славит.
+ * 31. Soller Knight of the Sun (wiki/design-mobs.md, section 2G) — a rare loner, not of the Order: praises the sun that
+ * grows raspberries. The armour is traced from the refs: a bucket helm with a T-shaped visor, a red feather, shaggy green pauldrons,
+ * a tunic with a sun, chainmail, greaves. At rest stands with arms raised under a pillar of sunlight; in combat — a sword combo,
+ * a sun spear from afar, once per fight — a prayer that heals (a hit interrupts it). The hero left — returns to his spot and praises again.
  */
 
-/** Тёплый солнечный свет: луч, копьё, искры */
+/** Warm sunlight: beam, spear, sparks */
 const SUN = C(3.2, 2.5, 1.1);
 const SPEAR = C(4, 3.2, 1.2);
-/** Столб света мягче искр: рыцарь в нём должен читаться, а не тонуть в засветке */
+/** The pillar of light is softer than the sparks: the knight must read inside it, not drown in the glare */
 const BEAM = C(0.5, 0.4, 0.18);
 
 const sfx = {
   swing() { hiss({ dur: 0.2, vol: 0.13, f: 2200, f1: 800, q: 1.2, type: 'bandpass' }); },
-  /** Копьё в руке: звон нарастает */
+  /** Spear in hand: the ringing grows */
   charge() { voice({ type: 'sine', f: 440, f1: 880, dur: 0.7, vol: 0.05, verb: 0.5 }); },
   throw() { boom(700, 200, 0.25, 0.3); hiss({ dur: 0.35, vol: 0.12, f: 3800, f1: 1200, q: 1, type: 'bandpass', verb: 0.4 }); },
-  /** Молитва: светлый аккорд */
+  /** Prayer: a bright chord */
   praise() { for (const f of [392, 494, 587]) voice({ type: 'sine', f, dur: 1.6, vol: 0.035, verb: 0.7 }); },
 };
 
-/** Холст в пикселях: рисуем по точкам, без сглаживания */
+/** Canvas in pixels: drawn point by point, no smoothing */
 function canvas(w: number, h: number, paint: (px: (x: number, y: number, c: string) => void) => void): THREE.CanvasTexture {
   const c = makeCanvas(w, h);
   const g = c.getContext('2d')!;
@@ -40,7 +41,7 @@ function canvas(w: number, h: number, paint: (px: (x: number, y: number, c: stri
   return t;
 }
 
-/** Шум от координат 0..1 (детерминированный) */
+/** Noise from coordinates 0..1 (deterministic) */
 const hash = (x: number, y: number): number => { let v = Math.imul(x + 31, 374761393) + Math.imul(y + 17, 668265263); v = Math.imul(v ^ (v >>> 13), 1274126177); return ((v ^ (v >>> 16)) >>> 0) / 4294967296; };
 const shade = (hex: string, d: number): string => {
   const n = parseInt(hex.slice(1), 16), f = (v: number) => Math.max(0, Math.min(255, Math.round(v + d)));
@@ -48,19 +49,19 @@ const shade = (hex: string, d: number): string => {
 };
 
 /**
- * Солнце на тунике, 32 × 32: грязно-белое полотно, 9 красных волнистых лучей, жёлтый диск с лицом
- * (брови, глаза, нос, рот) и красными крапинками — как на рефе
+ * The sun on the tunic, 32 × 32: dirty white cloth, 9 red wavy rays, a yellow disc with a face
+ * (brows, eyes, nose, mouth) and red specks — as on the ref
  */
 let sunTex: THREE.CanvasTexture | null = null;
 const sunEmblem = (): THREE.CanvasTexture => sunTex ??= canvas(32, 32, (px) => {
   const cx = 15.5, cy = 15, RAYS = 9;
   for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
     const n = hash(x, y);
-    // полотно с грязью: пятна темнее к низу
+    // cloth with dirt: stains darker toward the bottom
     let col = shade('#d6cfbf', (n - 0.5) * 14 - (y / 32) * 10 - (hash(x >> 2, y >> 2) > 0.8 ? 14 : 0));
     const dx = x - cx, dy = y - cy, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
     if (r > 5.6 && r < 14.8) {
-      // луч: ближайший по углу, волна поперёк, к концу тоньше
+      // ray: the nearest by angle, a wave across, thinner toward the end
       const step = (Math.PI * 2) / RAYS, k = Math.round((a + Math.PI / 2) / step);
       const off = (a + Math.PI / 2 - k * step) * r;
       const wave = Math.sin(r * 1.15) * 0.9, half = 2.1 * (1 - (r - 5.6) / 10) + 0.45;
@@ -68,18 +69,18 @@ const sunEmblem = (): THREE.CanvasTexture => sunTex ??= canvas(32, 32, (px) => {
     }
     if (r <= 6.1) {
       col = r > 5.4 ? '#e8a030' : shade('#f5d93a', (n - 0.5) * 10);
-      // красные крапинки по краю диска
+      // red specks along the edge of the disc
       if (r > 3.8 && r < 5.4 && n > 0.86) col = '#d8602c';
     }
     px(x, y, col);
   }
-  // лицо: брови домиком, глаза, нос, губы — тёмно-коричневым
+  // face: peaked brows, eyes, nose, lips — in dark brown
   const ink = '#6a3a1c', X = Math.round(cx - 0.5), Y = Math.round(cy);
   for (const [x, y] of [[-3, -3], [-2, -3], [-1, -2], [2, -3], [3, -3], [1, -2], [-2, -1], [2, -1], [0, 0], [0, 1], [1, 1], [-1, 3], [0, 3], [1, 3]]) px(X + x, Y + y, ink);
   px(X - 2, Y - 1, '#3a2010'); px(X + 2, Y - 1, '#3a2010');
 });
 
-/** Кольчуга: ряды колечек, светлые и тёмные вперемешку */
+/** Chainmail: rows of rings, light and dark mixed */
 let mailTex: THREE.CanvasTexture | null = null;
 const chainmail = (): THREE.CanvasTexture => mailTex ??= canvas(16, 16, (px) => {
   for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
@@ -88,7 +89,7 @@ const chainmail = (): THREE.CanvasTexture => mailTex ??= canvas(16, 16, (px) => 
   }
 });
 
-/** Части Соллера: всё, что качается */
+/** Soller's parts: everything that sways */
 interface Rig { legs: THREE.Group[]; torso: THREE.Group; head: THREE.Group; arms: THREE.Group[]; plume: THREE.Group; sword: THREE.Group; sheathed: THREE.Group; spear: THREE.Mesh }
 
 function buildSoller(m: Mob, body: THREE.Group): Rig {
@@ -102,7 +103,7 @@ function buildSoller(m: Mob, body: THREE.Group): Rig {
   const plumeMat = m.lam('#a82a24'), plumeDark = m.lam('#7a1a18');
   const B = m.box.bind(m);
 
-  // ноги: кольчужные штаны, стальные поножи до колена с ободком, кольчужные сапоги
+  // legs: chainmail trousers, steel greaves to the knee with a rim, chainmail boots
   const legs = [-1, 1].map((s) => {
     const g = new THREE.Group();
     g.position.set(s * 0.17, 0.8, 0);
@@ -117,11 +118,11 @@ function buildSoller(m: Mob, body: THREE.Group): Rig {
   const torso = new THREE.Group();
   torso.position.y = 0.8;
   body.add(torso);
-  // туника: полотно на корпусе, спереди и сзади — солнце
+  // tunic: cloth on the torso, a sun front and back
   B(torso, cloth, 0.68, 0.84, 0.42, 0, 0.42, 0);
   B(torso, sun, 0.64, 0.64, 0.02, 0, 0.5, 0.215);
   B(torso, sun, 0.64, 0.64, 0.02, 0, 0.5, -0.215);
-  // бахромчатый подол ниже пояса: спереди и сзади пластина, по низу — зубцы разной длины
+  // fringed hem below the belt: a plate front and back, tabs of varying length along the bottom
   for (const z of [0.19, -0.19]) {
     B(torso, cloth, 0.68, 0.22, 0.05, 0, -0.06, z);
     for (let i = 0; i < 7; i++) {
@@ -129,15 +130,15 @@ function buildSoller(m: Mob, body: THREE.Group): Rig {
       B(torso, cloth, 0.09, l, 0.05, -0.29 + i * 0.097, -0.17 - l / 2, z);
     }
   }
-  // широкий ремень с ромбовидными бляхами и пряжкой; второй ремень наискось — для меча
+  // a wide belt with diamond-shaped studs and a buckle; a second belt diagonally — for the sword
   B(torso, leather, 0.71, 0.11, 0.45, 0, 0.06, 0);
   for (let i = 0; i < 5; i++) if (i !== 2) B(torso, stud, 0.045, 0.045, 0.02, -0.26 + i * 0.13, 0.06, 0.232, 0, 0, Math.PI / 4);
   B(torso, steelDark, 0.1, 0.09, 0.02, 0, 0.06, 0.235);
   B(torso, leather, 0.62, 0.06, 0.03, -0.02, -0.06, 0.23, 0, 0, -0.32);
-  // капюшон: две «баранки» складками вокруг шеи
+  // hood: two "rings" of folds around the neck
   B(torso, cowl, 0.52, 0.13, 0.46, 0, 0.88, 0);
   B(torso, cowl, 0.44, 0.11, 0.4, 0.01, 0.98, 0.01, 0, 0.2, 0);
-  // наплечники: бледно-зелёный мех слоями, рваный край свисает
+  // pauldrons: pale green fur in layers, a ragged edge hangs down
   for (const s of [-1, 1]) {
     B(torso, fur[0], 0.36, 0.14, 0.5, s * 0.42, 0.78, 0);
     B(torso, fur[1], 0.3, 0.1, 0.44, s * 0.46, 0.68, 0);
@@ -147,7 +148,7 @@ function buildSoller(m: Mob, body: THREE.Group): Rig {
     }
     for (const z of [-0.26, 0.26]) B(torso, fur[2], 0.3, 0.1, 0.06, s * 0.44, 0.66, z);
   }
-  // ножны у левого бедра (лицом к +Z левый бок — +X), рукоять над ними; в бою меч в руке — ножны пусты
+  // scabbard at the left hip (facing +Z the left side is +X), the grip above it; in combat the sword is in hand — the scabbard is empty
   const sheathed = new THREE.Group();
   sheathed.position.set(0.4, 0, 0.02);
   sheathed.rotation.x = 0.5;
@@ -156,7 +157,7 @@ function buildSoller(m: Mob, body: THREE.Group): Rig {
   B(sheathed, steelDark, 0.24, 0.05, 0.07, 0, 0.1, 0);
   B(sheathed, leather, 0.06, 0.2, 0.06, 0, 0.22, 0);
 
-  // голова: горжет с рёбрами, шлем-ведро, Т-образное забрало с заклёпками, перо сзади слева
+  // head: a ribbed gorget, a bucket helm, a T-shaped visor with rivets, a feather at the back left
   const head = new THREE.Group();
   head.position.y = 1.72;
   body.add(head);
@@ -187,7 +188,7 @@ function buildSoller(m: Mob, body: THREE.Group): Rig {
     seg = next;
   }
 
-  // руки: кольчужный рукав, кожаный наруч, стальная манжета, перчатка
+  // arms: chainmail sleeve, leather bracer, steel cuff, glove
   const arms = [-1, 1].map((s) => {
     const g = new THREE.Group();
     g.position.set(s * 0.47, 1.5, 0);
@@ -199,7 +200,7 @@ function buildSoller(m: Mob, body: THREE.Group): Rig {
     return g;
   });
 
-  // прямой меч в правой руке (−X): рукоять, перекрестье, клинок
+  // a straight sword in the right hand (−X): grip, crossguard, blade
   const sword = new THREE.Group();
   sword.position.set(0, -0.68, 0);
   arms[0].add(sword);
@@ -208,7 +209,7 @@ function buildSoller(m: Mob, body: THREE.Group): Rig {
   B(sword, steelDark, 0.3, 0.05, 0.07, 0, 0, 0.14);
   B(sword, blade, 0.08, 0.035, 0.92, 0, 0, 0.62);
   B(sword, steelDark, 0.07, 0.07, 0.06, 0, 0, -0.12);
-  // солнечное копьё: светится в поднятой руке перед броском
+  // sun spear: glows in the raised hand before the throw
   const spear = B(arms[0], glowMat(SPEAR), 0.08, 1.5, 0.08, 0, -0.7, 0);
   spear.visible = false;
   return { legs, torso, head, arms, plume, sword, sheathed, spear };
@@ -218,22 +219,22 @@ const lerpTo = (v: number, to: number, k: number): number => v + (to - v) * k;
 
 export class SunKnight extends Mob {
   readonly kind = 'soller';
-  readonly title = 'Соллер, Рыцарь Солнца';
-  override readonly subtitle: string = 'воин Солнца';
+  readonly title = t('Soller Knight of the Sun');
+  override readonly subtitle: string = t('warrior of the Sun');
   readonly cost = 14;
   readonly radius = 0.5;
   override readonly topY = 2.5;
   private readonly rig: Rig;
-  /** Столб солнечного света и пятно на полу */
+  /** Pillar of sunlight and a spot on the floor */
   private readonly beam: { group: THREE.Group; mats: THREE.MeshBasicMaterial[] };
   private readonly spot: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly beamBase: THREE.Color[];
-  /** Яркость луча 0..1 и вспышка на смерти */
+  /** Beam brightness 0..1 and a flash on death */
   shine = 1;
   private flash = 0;
-  /** Молился в этом бою (лечится раз) */
+  /** Prayed in this fight (heals once) */
   prayed = false;
-  /** Возвращается на пост */
+  /** Returning to his post */
   homing = false;
   private postYaw: number | null = null;
   private spearCd = 2;
@@ -257,12 +258,12 @@ export class SunKnight extends Mob {
     this.place();
   }
 
-  /** Славит солнце: стоит на посту, руки вверх (или молится в бою) */
+  /** Praising the sun: standing at his post, arms up (or praying in combat) */
   get praising(): boolean {
     if (this.dead) return false;
     return (this.state === 'attack' && this.attack === 'praise') || (!this.alerted && !this.homing);
   }
-  /** Меч в руке */
+  /** Sword in hand */
   get drawn(): boolean { return this.alerted || this.homing; }
 
   override dispose(): void {
@@ -278,7 +279,7 @@ export class SunKnight extends Mob {
     super.die();
     this.rig.spear.visible = false;
     this.flash = 1;
-    this.h.fx.text(this.pos.clone().setY(this.topY + 0.5), 'Восславь солнце!', 'heal');
+    this.h.fx.text(this.pos.clone().setY(this.topY + 0.5), t('Praise the sun!'), 'heal');
   }
 
   protected choose(dist: number, rel: number): string | null {
@@ -292,7 +293,7 @@ export class SunKnight extends Mob {
   override update(dt: number): void {
     this.postYaw ??= this.yaw;
     this.spearCd -= dt;
-    // герой ушёл далеко или пал — бой окончен: назад на пост
+    // the hero went far away or fell — the fight is over: back to the post
     const hero = this.h.hero.pos;
     if (this.alerted && !this.dead && this.state !== 'attack' && this.state !== 'daze' && (this.h.hero.down || Math.hypot(hero.x - this.pos.x, hero.z - this.pos.z) > 18)) {
       this.alerted = false;
@@ -300,7 +301,7 @@ export class SunKnight extends Mob {
     }
     super.update(dt);
     if (this.homing && !this.dead) this.goHome(dt);
-    // луч: светит, пока славит солнце; на смерти — вспышка
+    // beam: shines while he praises the sun; a flash on death
     this.flash = Math.max(0, this.flash - dt * 1.2);
     this.shine = lerpTo(this.shine, this.praising ? 1 : 0, Math.min(1, dt * (this.praising ? 1.5 : 2.5)));
     const k = Math.max(this.shine, this.flash);
@@ -314,7 +315,7 @@ export class SunKnight extends Mob {
     }
   }
 
-  /** Шагает на пост; дошёл — здоровье полное, лицом как стоял, руки вверх */
+  /** Walks to his post; arrived — full health, facing as he stood, arms up */
   private goHome(dt: number): void {
     const dx = this.home.x - this.pos.x, dz = this.home.z - this.pos.z, d = Math.hypot(dx, dz);
     if (d > 0.3) {
@@ -332,12 +333,12 @@ export class SunKnight extends Mob {
     if (!this.quiet) sfx.praise();
   }
 
-  protected act(name: string, t: number, dt: number): boolean {
+  protected act(name: string, tm: number, dt: number): boolean {
     switch (name) {
       case 'combo':
-        // три взмаха: полоса перед ним, удар по её концу, шаг вперёд; после третьего — открыт
+        // three swings: a strip in front of him, a hit at its end, a step forward; after the third — open
         for (const at of [0, 0.6, 1.2]) {
-          if (t >= at && t - dt < at) {
+          if (tm >= at && tm - dt < at) {
             const from = this.pos.clone(), dir = this.fwd();
             this.field.markLine(from, dir, 2.6, 1.6, 0.4, () => {
               if (this.dead) return;
@@ -347,11 +348,11 @@ export class SunKnight extends Mob {
             });
           }
         }
-        if (t % 0.6 < 0.35 && t < 1.5) this.face(dt, 0.6);
-        return t > 2.5;
+        if (tm % 0.6 < 0.35 && tm < 1.5) this.face(dt, 0.6);
+        return tm > 2.5;
       case 'spear':
-        // копьё над головой, полоса-метка 14 м; бросок — и секунду он без защиты
-        if (t - dt <= 0) {
+        // the spear over the head, a 14 m strip mark; the throw — and for a second he is defenceless
+        if (tm - dt <= 0) {
           const from = this.pos.clone();
           this.dir.copy(this.fwd());
           this.rig.spear.visible = true;
@@ -366,14 +367,14 @@ export class SunKnight extends Mob {
           }, SPEAR.clone().multiplyScalar(0.25));
           this.spearCd = 5;
         }
-        return t > 1.7;
+        return tm > 1.7;
       default: {
-        // молитва: руки вверх, луч вернулся, за 2 с лечит четверть здоровья; удар её срывает
-        if (t - dt <= 0) { this.prayed = true; this.castHp = this.hp; if (!this.quiet) sfx.praise(); }
-        if (this.hp < this.castHp - 0.01) { this.h.fx.text(this.pos.clone().setY(this.topY + 0.4), 'сорвано!', 'crit'); this.daze(1.5); return false; }
-        if (t > 0.3) this.heal(this.maxHp * 0.125 * dt);
+        // prayer: arms up, the beam is back, heals a quarter of health over 2 s; a hit interrupts it
+        if (tm - dt <= 0) { this.prayed = true; this.castHp = this.hp; if (!this.quiet) sfx.praise(); }
+        if (this.hp < this.castHp - 0.01) { this.h.fx.text(this.pos.clone().setY(this.topY + 0.4), t('interrupted!'), 'crit'); this.daze(1.5); return false; }
+        if (tm > 0.3) this.heal(this.maxHp * 0.125 * dt);
         this.castHp = this.hp;
-        return t > 2.3;
+        return tm > 2.3;
       }
     }
   }
@@ -384,7 +385,7 @@ export class SunKnight extends Mob {
     const s = walk ? this.stride(8) : 0;
     r.legs[0].rotation.x = lerpTo(r.legs[0].rotation.x, s * 0.55, k);
     r.legs[1].rotation.x = lerpTo(r.legs[1].rotation.x, -s * 0.55, k);
-    // руки: славит — вверх буквой V; бой — меч, копьё над головой
+    // arms: praising — up in a V; combat — the sword, the spear over the head
     let right = walk ? -0.4 + s * 0.3 : -0.5, left = walk ? -s * 0.4 : 0, snap = false;
     if (this.state === 'attack' && this.attack === 'combo') { const u = this.st % 0.6; right = u < 0.4 ? -0.4 - (u / 0.4) * 2.2 : -2.6 + ((u - 0.4) / 0.2) * 2.4; snap = true; }
     if (this.state === 'attack' && this.attack === 'spear') { right = this.st < 0.7 ? -2.9 : -0.9; snap = this.st >= 0.7 && this.st < 0.8; }
@@ -396,7 +397,7 @@ export class SunKnight extends Mob {
     r.sword.visible = this.drawn && !this.dead;
     r.sheathed.children.forEach((c, i) => { if (i > 0) c.visible = !r.sword.visible; });
     r.head.rotation.x = lerpTo(r.head.rotation.x, pray ? -0.28 : this.state === 'daze' ? 0.3 : 0, k);
-    // дышит, перо колышется
+    // breathes, the feather sways
     r.torso.position.y = 0.8 + (pray ? Math.sin(this.time * 1.6) * 0.012 : 0);
     r.plume.rotation.x = Math.sin(this.time * 2) * 0.06 + (walk ? Math.sin(this.time * 9) * 0.1 : 0);
     r.plume.rotation.z = Math.sin(this.time * 1.3) * 0.05;

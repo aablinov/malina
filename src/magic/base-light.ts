@@ -6,12 +6,13 @@ import { bell, boom, deg, hiss, voice } from '../spell-audio.ts';
 import type { Spells } from '../spells.ts';
 import type { Target } from '../target.ts';
 import { rand, type Spell } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
-/** Базовые заклинания (wiki/design-spells.md, раздел «Базовые заклинания»). Свет: ослепляющая вспышка */
+/** Base spells (wiki/design-spells.md, section "Base spells"). Light: blinding flash */
 
 const ROOT = 523.25;
 
-/** Яркий колокол, «дзынь» стекла, мягкий низ */
+/** Bright bell, a glass "ting", soft low end */
 function flashSound(k: number): void {
   boom(130 - k * 30, 50, 0.5, 0.35 + k * 0.15, 0, 0.3);
   [0, 2, 4, 7].forEach((d, i) => bell(deg(ROOT * 2, d), 1.2 + k * 0.4, 0.06, i * 0.03, 0.6));
@@ -23,7 +24,7 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
   const fx = kit.h.fx, s = kit.color('star'), hero = kit.h.hero;
   const R = a.radius ?? 4, stun = a.duration ?? 1.5, tele = 0.25;
   kit.windup('star', k);
-  // замах: круг света раскрывается под ногами, свет стягивается к герою
+  // windup: a circle of light opens underfoot, light gathers toward the hero
   kit.groundSigil('star', hero.pos, R * 0.75, tele, 0.1, 0.3);
   hiss({ dur: tele + 0.05, vol: 0.1, f: 1500, f1: 7000, q: 0.7, attack: tele * 0.8, verb: 0.3 });
   voice({ type: 'sine', f: ROOT, f1: ROOT * 2, dur: tele, vol: 0.04, attack: tele * 0.8, verb: 0.4 });
@@ -42,7 +43,7 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
     fx.shock(c.clone().setY(c.y + 0.06), R, s.a, 0.4, 0.2);
     fx.shock(c.clone().setY(c.y + 0.06), R * 0.6, s.b, 0.3, 0.12);
     fx.burst(mid, [s.a, s.b], 30 + Math.round(k * 20), { speed: R * 2, up: 2, size: 0.07, life: 0.5, glow: true, gravity: 2 });
-    // лучи-звезда: вертикальная звезда над героем и плоская на полу, раскрываются и тают
+    // star rays: a vertical star above the hero and a flat one on the floor, open up and fade
     const g = new THREE.Group();
     const up = new THREE.Sprite(additiveSprite(raysTex(), s.b.clone().multiplyScalar(0.35)));
     up.position.copy(mid);
@@ -56,11 +57,11 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
       flat.scale.setScalar(R * 2.2 * (0.3 + e)); flat.rotation.z = -t * 0.5;
       for (const m of mats) m.opacity = (1 - t) ** 1.5;
     }, () => { flat.geometry.dispose(); mats.forEach((m) => m.dispose()); });
-    // урон, лёгкий отброс, оглушение рядовых
+    // damage, light knockback, stun for rank-and-file
     kit.h.aoe(c, R, Math.round(power), 1.2, false);
     const stunned: Target[] = [];
     for (const t of kit.within(c, R)) if (!t.prop && t.stun) { t.stun(stun); stunned.push(t); }
-    // над оглушёнными кружат звёздочки
+    // little stars circle above the stunned
     let st = 0;
     kit.proc((dt) => {
       st += dt;
@@ -74,7 +75,7 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
       }
       return st < stun;
     });
-    // послевкусие: светлый круг на полу и искры, медленно поднимающиеся вверх
+    // aftertaste: a light circle on the floor and sparks slowly rising
     fx.decal(c, kit.tex.glow(), s.a.clone().multiplyScalar(0.3), R * 2, 2, true);
     let left = 1.2;
     kit.proc((dt) => {
@@ -89,5 +90,5 @@ function blindflash(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
 }
 
 export const BASE_LIGHT = {
-  blindflash: { school: 'star', tier: 'common', title: 'Ослепляющая вспышка', cast: blindflash },
+  blindflash: { school: 'star', tier: 'common', title: t('Blinding flash'), cast: blindflash },
 } satisfies Partial<Record<BossSpellKind, Spell>>;

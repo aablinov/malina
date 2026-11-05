@@ -6,9 +6,9 @@ import type { BoltEnt } from '../../sim/entities.ts';
 import { ARCANE, ICE, STAR, TAR } from './colors.ts';
 
 /**
- * Снаряд башни (`b<n>`): место — по доле полёта `k` из записи: lerp(from, to, k) + sin(k·π)·h по высоте (дуга).
- * Вид по роду: болт и ледяной сгусток — светящаяся черта носом к цели; камень и ковш смолы — кувыркаются;
- * метеорит — звёздный ком (шлейф и предупреждающее кольцо — у события `tower.fire`); сфера обелиска — светящийся шар с искрами
+ * Tower projectile (`b<n>`): position from the flight fraction `k` in the record: lerp(from, to, k) + sin(k·π)·h in height (arc).
+ * Look per kind: bolt and ice clot — a glowing streak nose towards the target; rock and tar ladle — tumble;
+ * meteor — a star lump (the trail and warning ring belong to the `tower.fire` event); the obelisk orb — a glowing ball with sparks
  */
 export class BoltView {
   private readonly mesh: THREE.Mesh;
@@ -54,7 +54,7 @@ export class BoltView {
     switch (this.kind) {
       case 'splash': case 'oil': this.mesh.rotation.x += dt * 6; this.mesh.rotation.z += dt * 4; break;
       case 'magic':
-        // шлейф сферы: искры за головой
+        // orb trail: sparks behind the head
         if (Math.random() < 0.4) this.fx.particle({ pos: this.tmp.copy(this.mesh.position), vel: new THREE.Vector3(0, 0.3, 0), life: 0.3, size: 0.07, color: ARCANE, gravity: 0 });
         break;
       case 'meteor': this.mesh.rotation.x += dt * 4; this.mesh.rotation.y += dt * 3; break;

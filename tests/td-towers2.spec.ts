@@ -3,9 +3,9 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Дорогие башни по площади (wiki/design-tower-defence.md, раздел 14): звездочёт — метеорит в самую плотную толпу;
- * грозовой шпиль — молния цепью по 6 врагам (больше с уровнем); сердце зимы — вьюга: урон и замедление всем рядом,
- * каждый пятый удар — ледяная волна с оглушением (мини-босса — нет). Меню: клавиши по месту — на лаве 1–8, на замке 1–9 и 0.
+ * Expensive area towers (wiki/design-tower-defence.md, section 14): the stargazer — a meteor into the densest crowd;
+ * the storm spire — chain lightning over 6 enemies (more with level); the heart of winter — a blizzard: damage and slow to everyone nearby,
+ * every fifth hit — an ice wave with a stun (not on a mini-boss). Menu: keys by place — on the lava 1–8, on the castle 1–9 and 0.
  */
 
 const url = (map: string): string => pathToFileURL(resolve('dist/index.html')).href + `?dev=playground&map=${map}`;
@@ -26,11 +26,11 @@ async function open(page: Page, map = 'td'): Promise<void> {
   expect(errors).toEqual([]);
 }
 
-test('оборона: звездочёт бьёт в самую толпу — все в ней ранены; грозовой шпиль — цепью по шестерым', async ({ page }) => {
+test('defence: the stargazer hits the thickest crowd — everyone in it is wounded; the storm spire — a chain over six', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
-    // вдали от куста: враги стоят
+    // far from the bush: the enemies stand still
     const pad = td.pads[0], at = (dx: number, dz: number) => new V(pad.pos.x + dx, 0, pad.pos.z + dz);
     const t = td.build(pad, 'meteor');
     const lone = td.spawn('ram', at(-8, 0));
@@ -42,22 +42,22 @@ test('оборона: звездочёт бьёт в самую толпу — �
     td.pack.clear();
     const line = [4, 6, 8, 10, 12, 14, 16].map((dx) => td.spawn('ram', at(dx, 0)));
     for (const x of line) x.hp = x.maxHp = 1e5;
-    m.step(0.6); // вылезли из земли
+    m.step(0.6); // they have climbed out of the ground
     const s = td.build(pad, 'storm');
     m.step(1);
     return { meteor, storm: { title: s.title, shots: s.shots, hit: line.filter((x: any) => x.hp < 1e5).length } };
   });
-  expect(r.meteor.title).toBe('Звездочёт I');
+  expect(r.meteor.title).toBe('Stargazer I');
   expect(r.meteor.shots).toBe(1);
   expect(r.meteor.crowdHit).toBe(5);
   expect(r.meteor.loneHit).toBe(false);
   expect(r.meteor.burning).toBeGreaterThanOrEqual(5);
-  expect(r.storm.title).toBe('Грозовой шпиль I');
+  expect(r.storm.title).toBe('Storm spire I');
   expect(r.storm.shots).toBe(1);
   expect(r.storm.hit).toBe(6);
 });
 
-test('оборона: сердце зимы — урон и замедление всем рядом, пятый удар оглушает, кроме мини-босса', async ({ page }) => {
+test('defence: the heart of winter — damage and slow to everyone nearby, the fifth hit stuns, except the mini-boss', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
@@ -72,14 +72,14 @@ test('оборона: сердце зимы — урон и замедление
     states = [s1, s2, ch].map((x: any) => x.state);
     return { title: w.title, first, shots: w.shots, states };
   });
-  expect(r.title).toBe('Сердце зимы I');
+  expect(r.title).toBe('Heart of winter I');
   expect(r.first).toEqual({ hurt: true, chilled: true });
   expect(r.shots).toBe(5);
   expect(r.states.slice(0, 2)).toEqual(['daze', 'daze']);
   expect(r.states[2]).not.toBe('daze');
 });
 
-test('оборона: меню площадки — клавиши по месту: на лаве восемь башен 1–8, на замке десять 1–9 и 0', async ({ page }) => {
+test('defence: pad menu — keys by place: on the lava eight towers 1–8, on the castle ten 1–9 and 0', async ({ page }) => {
   await open(page);
   const lava = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, pad = td.pads[16];

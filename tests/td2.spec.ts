@@ -3,8 +3,8 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Кристальная поляна — оборона куста 2 (wiki/design-tower-defence.md, раздел 8): вторая карта `td2` с порталами-логовами,
- * двенадцатью волнами и стаей с уровня 7; новые враги — панцирник, споровик, скакун (src/mobs/td-foes.ts).
+ * Crystal Glade — Bush Defence 2 (wiki/design-tower-defence.md, section 8): the second map `td2` with portal lairs,
+ * twelve waves and a pack from level 7; new enemies — shellback, sporeling, hopper (src/mobs/td-foes.ts).
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=td2';
@@ -18,12 +18,12 @@ async function open(page: Page): Promise<void> {
   expect(errors).toEqual([]);
 }
 
-test('поляна: панцирь гасит шесть ударов, споровик лечит соседей и лопается облаком, скакун прыгает по дороге', async ({ page }) => {
+test('glade: the shell absorbs six hits, the sporeling heals neighbours and bursts into a cloud, the hopper hops along the road', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
     m.hero.place(0, 30, Math.PI); m.hero.god = true;
-    // панцирник: шесть ударов в панцирь — урона нет, седьмой — полный
+    // shellback: six hits into the shell — no damage, the seventh — full
     const sb = td.spawnOn('shellback', 'west');
     m.step(0.6);
     for (let i = 0; i < 6; i++) sb.hit(10, new V(1, 0, 0), sb.pos.clone(), 0);
@@ -31,7 +31,7 @@ test('поляна: панцирь гасит шесть ударов, спор�
     sb.hit(10, new V(1, 0, 0), sb.pos.clone(), 0);
     const cracked = { taken: sb.taken, shell: sb.shell };
     sb.vanish();
-    // споровик рядом с раненым малинёнышем: лечит понемногу, лопнул — на 30 %
+    // a sporeling next to a wounded berryling: heals bit by bit, burst — by 30 %
     const sp = td.spawnOn('sporeling', 'north'), bl = td.spawnOn('berryling', 'north');
     m.step(0.6);
     bl.hp = Math.round(bl.maxHp * 0.3);
@@ -43,7 +43,7 @@ test('поляна: панцирь гасит шесть ударов, спор�
     const burst = bl.hp - hp0 - trickle;
     const given2 = sp.given;
     bl.vanish();
-    // скакун: без героя рядом прыгает каждые 3 с на 5 м вперёд по дороге
+    // hopper: with no hero nearby it hops every 3 s 5 m forward along the road
     const hp = td.spawnOn('hopper', 'east');
     const x0 = hp.pos.x;
     m.step(0.6);
@@ -66,17 +66,17 @@ test('поляна: панцирь гасит шесть ударов, спор�
   expect(r.hops).toBeGreaterThanOrEqual(2);
   expect(r.moved).toBeGreaterThan(10);
   expect(r.progress).toBeGreaterThan(0.1);
-  expect(r.titles).toEqual(['Кристальный панцирник', 'Споровик', 'Радужный скакун']);
+  expect(r.titles).toEqual(['Crystal Shellback', 'Sporeling', 'Rainbow Hopper']);
 });
 
-test('поляна: карта td2 — три портала, двенадцать волн со стаей с уровня 7, дороги проходимы и обнесены стенками, грибы светят', async ({ page }) => {
+test('glade: map td2 — three portals, twelve waves with a pack from level 7, the roads are walkable and walled, the mushrooms glow', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, L = m.level;
     const spec = td.spec;
     const names = new Set<string>();
     L.forEach((_x: number, _y: number, _z: number, id: number) => names.add(L.palette[id]));
-    // дорога: каждая точка — проходимый пол и воздух над ним; по бокам стенки
+    // road: every point is a walkable floor with air above it; walls on the sides
     const floor = new Set(['path', 'tiles', 'tiles_broken', 'cobble', 'portal_floor']);
     let bad = 0, walls = 0, portals = 0;
     for (const l of spec.lanes) {
@@ -86,7 +86,7 @@ test('поляна: карта td2 — три портала, двенадцат
       const [px, pz] = l.points[0];
       for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) if (L.nameAt(px + dx, 1, pz + dz) === 'portal_blue') portals++;
     }
-    // первая волна: уровень стаи 7
+    // the first wave: pack level 7
     td.callWave();
     for (let i = 0; i < 20; i++) m.step(0.1);
     const levels = td.pack.mobs.map((x: any) => x.scale.level);
@@ -99,7 +99,7 @@ test('поляна: карта td2 — три портала, двенадцат
       bad, walls, portals, levels, lairs, weather: world.weather.kind, lairCount: td.lairs.length,
     };
   });
-  expect(r.name).toBe('Кристальная поляна');
+  expect(r.name).toBe('Crystal Glade');
   expect(r.pads).toBe(17);
   expect(r.lanes).toBe(3);
   expect(r.waves).toBe(12);

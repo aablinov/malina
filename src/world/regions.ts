@@ -2,21 +2,21 @@ import type { Level } from '../level/level.ts';
 import { REGION, type RegionData, type RegionEntity, type RegionSource } from './gen.ts';
 
 /**
- * Менеджер регионов (wiki/dev-performance.md, «Регионы»): мир — сетка колонок 32 × 32 м с ключом «rx,rz»;
- * дерево не нужно, регион точки — это floor(x / 32). Якоря — позиции героев (для кооператива объединение):
- * вокруг каждого держится квадрат радиуса radius регионов, всё дальше radius + 1 выгружается через unloadDelay секунд
- * (гистерезис, чтобы на границе не мигало). Загрузка — не больше одного региона за вызов update, чтобы кадр не вставал.
+ * Region manager (wiki/dev-performance.md, "Regions"): the world is a grid of 32 × 32 m columns keyed "rx,rz";
+ * no tree needed, a point's region is floor(x / 32). Anchors are hero positions (the union for co-op):
+ * a square of radius regions is kept around each, everything beyond radius + 1 is unloaded after unloadDelay seconds
+ * (hysteresis so the border does not flicker). Loading is at most one region per update call so the frame does not stall.
  *
- * Состояние региона (что убито, открыто, разбито — по стабильным id сущностей; разведка карты) переживает выгрузку
- * и перезагрузку страницы: это дельта в localStorage (сервер потом возьмёт тот же формат).
+ * Region state (what is killed, opened, broken — by stable entity ids; map exploration) survives unloading
+ * and page reloads: it is a delta in localStorage (the server will later take the same format).
  */
 
 export interface RegionHooks {
-  /** Регион загружен: поставить сущности (уже без «мёртвых») */
+  /** Region loaded: place the entities (the "dead" ones already removed) */
   spawn(key: string, rx: number, rz: number, entities: RegionEntity[]): void;
-  /** Регион выгружается: убрать его сущности */
+  /** Region unloading: remove its entities */
   despawn(key: string, rx: number, rz: number): void;
-  /** Разведка карты региона на выгрузке (base64), чтобы сохранить */
+  /** The region's map exploration at unload (base64), to be saved */
   seenOf?(key: string, rx: number, rz: number): string | undefined;
 }
 
@@ -31,13 +31,13 @@ export const regionOf = (x: number, z: number): [number, number] => [Math.floor(
 export class RegionManager {
   readonly loaded = new Map<string, Region>();
   private readonly states = new Map<string, RegionState>();
-  /** Радиус в регионах вокруг якоря; выгрузка — за radius + 1 */
+  /** Radius in regions around an anchor; unloading beyond radius + 1 */
   radius = 2;
   unloadDelay = 5;
   private time = 0;
   private saveDue = false;
   private lastSave = 0;
-  /** Сколько регионов загружено и выгружено за всё время (для тестов и F8) */
+  /** How many regions were loaded and unloaded in total (for tests and F8) */
   readonly stats = { loads: 0, unloads: 0 };
 
   private readonly level: Level;
@@ -48,15 +48,15 @@ export class RegionManager {
     this.restore();
   }
 
-  /** Ключи загруженных регионов */
+  /** Keys of the loaded regions */
   get keys(): string[] { return [...this.loaded.keys()]; }
 
   has(x: number, z: number): boolean { return this.loaded.has(regionKey(...regionOf(x, z))); }
 
-  /** Сущность с таким id уже убита, открыта или разбита */
+  /** The entity with this id is already killed, opened or broken */
   isDead(id: string): boolean { return this.states.get(id.split(':')[0])?.dead.includes(id) ?? false; }
 
-  /** Запомнить: сущность больше не появится */
+  /** Remember: the entity will not appear again */
   kill(id: string): void {
     const key = id.split(':')[0];
     const st = this.state(key);
@@ -69,10 +69,10 @@ export class RegionManager {
     return st;
   }
 
-  /** Разведка региона, сохранённая ранее */
+  /** The region's exploration saved earlier */
   seenOf(key: string): string | undefined { return this.states.get(key)?.seen; }
 
-  /** Загрузить всё вокруг якорей сразу (старт) */
+  /** Load everything around the anchors at once (start) */
   warm(anchors: { x: number; z: number }[]): void {
     for (const key of this.wanted(anchors)) if (!this.loaded.has(key)) this.load(key);
   }
@@ -86,11 +86,11 @@ export class RegionManager {
     return out;
   }
 
-  /** Раз в кадр: подгрузить ближайший недостающий регион, наметить и выполнить выгрузки */
+  /** Once per frame: load the nearest missing region, schedule and perform unloads */
   update(dt: number, anchors: { x: number; z: number }[]): void {
     this.time += dt;
     const want = this.wanted(anchors), keep = this.wanted(anchors, this.radius + 1);
-    // ближайший недостающий — один за вызов
+    // the nearest missing one — one per call
     let best: string | null = null, bd = Infinity;
     for (const key of want) {
       if (this.loaded.has(key)) continue;
@@ -130,7 +130,7 @@ export class RegionManager {
     this.stats.unloads++;
   }
 
-  /** Выгрузить всё (смена мира) */
+  /** Unload everything (world change) */
   dispose(): void { for (const key of [...this.loaded.keys()]) this.unload(key); this.save(); }
 
   save(): void {
@@ -140,7 +140,7 @@ export class RegionManager {
     const regions: Record<string, RegionState> = {};
     for (const [k, st] of this.states) if (st.dead.length || st.seen) regions[k] = st;
     const j: WorldSave = { version: 1, regions };
-    try { localStorage.setItem(this.saveKey, JSON.stringify(j)); } catch { /* закрытое хранилище */ }
+    try { localStorage.setItem(this.saveKey, JSON.stringify(j)); } catch { /* storage unavailable */ }
   }
 
   private restore(): void {
@@ -151,6 +151,6 @@ export class RegionManager {
       const j = JSON.parse(raw) as WorldSave;
       if (j.version !== 1) return;
       for (const [k, st] of Object.entries(j.regions)) this.states.set(k, { dead: [...(st.dead ?? [])], seen: st.seen });
-    } catch { /* битое сохранение — начинаем заново */ }
+    } catch { /* corrupt save — start over */ }
   }
 }

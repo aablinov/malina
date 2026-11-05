@@ -1,9 +1,10 @@
 import { h, icon } from './ui.ts';
+import { t } from '../../i18n/i18n.ts';
 
 /**
- * Аутлайнер — дерево объектов карты, как World Outliner в Unreal: глаз (видимость), имя, тип.
- * Дерево ленивое (дети строятся при раскрытии), список виртуальный — рисуются только видимые строки,
- * поэтому тысячи блоков не тормозят. Поиск фильтрует по имени и типу (кроме «тяжёлых» узлов — списков клеток).
+ * Outliner — the tree of map objects, like World Outliner in Unreal: eye (visibility), name, type.
+ * The tree is lazy (children are built on expand), the list is virtual — only visible rows are drawn,
+ * so thousands of blocks do not slow it down. Search filters by name and type (except "heavy" nodes — cell lists).
  */
 
 export interface TreeNode {
@@ -12,10 +13,10 @@ export interface TreeNode {
   icon: string;
   type: string;
   kids?: () => TreeNode[];
-  /** Число в скобках у групп */
+  /** Number in brackets next to groups */
   count?: number;
   eye?: { get(): boolean; set(v: boolean): void };
-  /** Детей не обходить при поиске (длинные списки клеток) */
+  /** Do not walk the children when searching (long cell lists) */
   heavy?: boolean;
 }
 
@@ -45,20 +46,20 @@ export class Outliner {
 
   private readonly o: OutlinerOpts;
   constructor(o: OutlinerOpts) { this.o = o;
-    this.search = h('input.ue-search', { type: 'search', placeholder: 'Поиск…', spellcheck: 'false' });
+    this.search = h('input.ue-search', { type: 'search', placeholder: t('Search…'), spellcheck: 'false' });
     this.search.addEventListener('input', () => { this.filter = this.search.value.trim().toLowerCase(); this.invalidate(); });
     this.search.addEventListener('keydown', (e) => e.stopPropagation());
-    const head = h('div.ue-outl-head', { html: `<span class="ue-outl-c-eye">${icon('eye')}</span><span class="ue-outl-c-l">Имя</span><span class="ue-outl-c-t">Тип</span>` });
+    const head = h('div.ue-outl-head', { html: `<span class="ue-outl-c-eye">${icon('eye')}</span><span class="ue-outl-c-l">${t('Name')}</span><span class="ue-outl-c-t">${t('Type')}</span>` });
     this.scroller.append(this.spacer, this.rowsEl);
     this.el.append(h('div.ue-outl-bar', {}, h('span.ue-search-ic', { html: icon('search') }), this.search), head, this.scroller, this.countEl);
     this.scroller.addEventListener('scroll', () => this.draw());
     new ResizeObserver(() => this.draw()).observe(this.scroller);
   }
 
-  /** Карта изменилась — пересобрать дерево в следующем кадре */
+  /** The map changed — rebuild the tree in the next frame */
   invalidate(): void { this.dirty = true; }
 
-  /** Вызывать из кадра: пересобирает дерево, только если что-то менялось */
+  /** Call from the frame: rebuilds the tree only if something changed */
   update(): void {
     if (!this.dirty) return;
     this.dirty = false;
@@ -69,7 +70,7 @@ export class Outliner {
       for (const n of nodes) {
         if (f) {
           const kids = n.kids && !n.heavy ? n.kids() : [];
-          // при поиске: узел виден, если совпал сам или кто-то из потомков (тяжёлые узлы — только сами)
+          // when searching: a node is visible if it matched itself or one of its descendants did (heavy nodes — only themselves)
           const sub: Row[] = [];
           const before = this.rows.length;
           if (kids.length) { const save = this.rows; this.rows = sub; walk(kids, depth + 1); this.rows = save; }
@@ -88,10 +89,10 @@ export class Outliner {
     this.draw();
   }
 
-  /** Обновить подсветку выделения без пересборки */
+  /** Refresh the selection highlight without rebuilding */
   redraw(): void { this.draw(); }
 
-  /** Раскрыть путь и прокрутить к узлу (выбор в вьюпорте) */
+  /** Expand the path and scroll to the node (selection in the viewport) */
   reveal(path: string[], id: string): void {
     let changed = false;
     for (const p of path) if (!this.expanded.has(p)) { this.expanded.add(p); changed = true; }
@@ -129,7 +130,7 @@ export class Outliner {
       this.rowsEl.append(row);
     }
     for (const r of this.rows) if (this.o.isSelected(r.node.id)) nSel++;
-    this.countEl.textContent = `${this.rows.length} строк${nSel ? ` · ${nSel} выбрано` : ''}`;
+    this.countEl.textContent = nSel ? t('{n} rows · {s} selected', { n: this.rows.length, s: nSel }) : t('{n} rows', { n: this.rows.length });
   }
 
   toggle(id: string): void {

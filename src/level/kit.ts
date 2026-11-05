@@ -1,9 +1,10 @@
+import { t } from '../i18n/i18n.ts';
 import type { Level } from './level.ts';
 
 /**
- * Готовые сборки уровня в духе Minecraft Dungeons (wiki/style-world.md): ступенчатые ограды, стога, скалы, реки,
- * мосты, холмы, порталы. Каждая — функция «поставь в эту точку», детерминированная от координат, их можно сочетать.
- * Ими собрана зона «мир» плейграунда (src/level/world-zone.ts); комнатам и генератору этажа они тоже подходят.
+ * Ready-made level kits in the spirit of Minecraft Dungeons (wiki/style-world.md): stepped fences, hay stacks, cliffs, rivers,
+ * bridges, hills, portals. Each is a "put it at this point" function, deterministic from the coordinates; they can be combined.
+ * The playground "world" zone is assembled from them (src/level/world-zone.ts); they suit rooms and the floor generator too.
  */
 
 export function hash2(x: number, z: number, s = 0): number {
@@ -12,7 +13,7 @@ export function hash2(x: number, z: number, s = 0): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-/** Плавный шум 0..1 с шагом cell (для рваных краёв и высот) */
+/** Smooth noise 0..1 with step cell (for ragged edges and heights) */
 export function noise2(x: number, z: number, cell: number, seed = 0): number {
   const gx = Math.floor(x / cell), gz = Math.floor(z / cell), fx = x / cell - gx, fz = z / cell - gz;
   const sm = (t: number) => t * t * (3 - 2 * t), u = sm(fx), v = sm(fz);
@@ -21,8 +22,8 @@ export function noise2(x: number, z: number, cell: number, seed = 0): number {
 }
 
 /**
- * Ступенчатая ограда, как каменные стены двора на скриншоте 10: высота гуляет блоками от hMin до hMax,
- * перепады сглажены полублоками сверху. Линия от (x0, z0) до (x1, z1) — вдоль X или Z. y — низ (верх пола под ней).
+ * Stepped fence, like the stone yard walls on screenshot 10: the height wanders by blocks from hMin to hMax,
+ * the steps are smoothed with half-blocks on top. A line from (x0, z0) to (x1, z1) — along X or Z. y — bottom (top of the floor under it).
  */
 export function steppedWall(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, hMin: number, hMax: number, block = 'wall_stone'): void {
   const n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
@@ -35,19 +36,19 @@ export function steppedWall(L: Level, x0: number, z0: number, x1: number, z1: nu
   }
 }
 
-/** Пол площадки из блока floor в прямоугольнике (включительно) на уровне y */
+/** Floor of a plot from block floor in a rectangle (inclusive) at level y */
 export function floorRect(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, floor: string): void {
   L.fill(x0, y, z0, x1, y, z1, floor);
 }
 
-/** Стог: пирамидка тюков сена по маске рядов снизу вверх ('#' — тюк), как в углу двора на скриншоте 10 */
+/** Hay stack: a pyramid of hay bales by a row mask from bottom to top ('#' — bale), like in the yard corner on screenshot 10 */
 export function hayStack(L: Level, x: number, y: number, z: number, layers: string[][]): void {
   layers.forEach((rows, k) => rows.forEach((row, dz) => [...row].forEach((c, dx) => { if (c === '#') L.set(x + dx, y + k, z + dz, 'hay'); })));
 }
 
 /**
- * Скальный массив (скриншоты 11, 12): прямоугольник x0..x1 × z0..z1, низ на y, высота гуляет по шуму от hMin до hMax.
- * Столбцы целиком светлые или тёмные — читаются вертикальные пласты; верх — скала с травой (бахрома свисает с края).
+ * Cliff mass (screenshots 11, 12): rectangle x0..x1 × z0..z1, bottom at y, the height wanders by noise from hMin to hMax.
+ * Columns are entirely light or dark — vertical strata read; the top is a grassy cliff (the fringe hangs from the edge).
  */
 export function cliffMass(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, hMin: number, hMax: number, seed = 0, dark = 0.25): void {
   for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) for (let z = Math.min(z0, z1); z <= Math.max(z0, z1); z++) {
@@ -58,7 +59,7 @@ export function cliffMass(L: Level, x0: number, z0: number, x1: number, z1: numb
   }
 }
 
-/** Скальные ступени к реке (скриншот 11, справа): высота падает от hFar к 1 по направлению (dx, dz), шаг ступени — step клеток */
+/** Cliff steps down to the river (screenshot 11, right): the height drops from hFar to 1 along (dx, dz), one step every step cells */
 export function cliffSteps(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, hFar: number, dirX: number, step = 2, seed = 0): void {
   for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) for (let z = Math.min(z0, z1); z <= Math.max(z0, z1); z++) {
     const along = dirX > 0 ? Math.max(x0, x1) - x : x - Math.min(x0, x1);
@@ -69,8 +70,8 @@ export function cliffSteps(L: Level, x0: number, z0: number, x1: number, z1: num
 }
 
 /**
- * Русло реки: в прямоугольнике убирает землю от yGround вниз до воды, ставит реку с течением rot на yWater и песок под ней.
- * Берега — то, что вокруг (трава с бахромой свешивается к воде).
+ * River bed: in the rectangle removes the ground from yGround down to the water, puts a river with flow rot at yWater and sand under it.
+ * The banks are whatever is around (grass with a fringe hangs down to the water).
  */
 export function riverBed(L: Level, x0: number, z0: number, x1: number, z1: number, yGround: number, yWater: number, rot: number): void {
   for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) for (let z = Math.min(z0, z1); z <= Math.max(z0, z1); z++) {
@@ -80,14 +81,14 @@ export function riverBed(L: Level, x0: number, z0: number, x1: number, z1: numbe
   }
 }
 
-/** Водопад: стена струй x0..x1 на линии z от yBottom до yTop (включительно) */
+/** Waterfall: a wall of streams x0..x1 on line z from yBottom to yTop (inclusive) */
 export function waterfall(L: Level, x0: number, x1: number, z: number, yBottom: number, yTop: number): void {
   for (let x = x0; x <= x1; x++) for (let y = yBottom; y <= yTop; y++) L.set(x, y, z, 'waterfall');
 }
 
 /**
- * Мост вдоль X (скриншот 11): настил x0..x1 × z0..z1 на уровне y (верх — y + 1), брусья по бокам на z0 − 1 и z1 + 1,
- * столбы на брусьях по концам
+ * Bridge along X (screenshot 11): deck x0..x1 × z0..z1 at level y (top — y + 1), beams on the sides at z0 − 1 and z1 + 1,
+ * posts on the beams at the ends
  */
 export function bridgeX(L: Level, x0: number, x1: number, z0: number, z1: number, y: number): void {
   for (let x = x0; x <= x1; x++) {
@@ -98,9 +99,9 @@ export function bridgeX(L: Level, x0: number, x1: number, z0: number, z1: number
   for (const x of [x0, x1]) for (const z of [z0 - 1, z1 + 1]) L.set(x, y + 1, z, 'bridge_post');
 }
 
-/** Лестница из ступеней block_stairs: поднимается по направлению (dx, dz) от (x, y, z) на steps блоков, ширина width по перпендикуляру; под ступенями — block */
+/** Stairway of block_stairs steps: climbs along (dx, dz) from (x, y, z) by steps blocks, width width across; block under the steps */
 export function stairway(L: Level, x: number, y: number, z: number, dx: number, dz: number, steps: number, width: number, block: string): void {
-  // ступени поднимаются к +X при rot 0, rot 1 — к +Z, 2 — к −X, 3 — к −Z
+  // stairs climb towards +X at rot 0, rot 1 — towards +Z, 2 — towards −X, 3 — towards −Z
   const rot = dx > 0 ? 0 : dz > 0 ? 1 : dx < 0 ? 2 : 3;
   for (let k = 0; k < steps; k++) for (let w = 0; w < width; w++) {
     const cx = x + dx * k + (dz ? w : 0), cz = z + dz * k + (dx ? w : 0);
@@ -110,30 +111,30 @@ export function stairway(L: Level, x: number, y: number, z: number, dx: number, 
 }
 
 /**
- * Рельеф карты — две разные сущности (скриншоты 13–17):
- *  1. Ландшафт (`landscape`, `hill`) — проходим везде и с любой стороны. Огромные плиты в несколько слоёв, но каждый слой —
- *     полметра (полный блок + полублок травы), перепад между соседними клетками не больше слоя: шаг героя 0,5 м, поэтому
- *     на любую площадку поднимаются откуда угодно, без лестниц. Мобы стоят на любых уровнях.
- *  2. Скала (`rockOutcrop`, `cliffMass`) — непроходимый каменный массив с травой сверху и отвесными боками; в неё
- *     встраивают то, к чему ведёт один вход (портал, пещера). Скалы ставят поверх ландшафта — по краям, у дороги, у реки.
+ * Map relief is two different things (screenshots 13–17):
+ *  1. Landscape (`landscape`, `hill`) — walkable everywhere and from any side. Huge slabs in several layers, but each layer is
+ *     half a metre (a full block + a grass half-block), the difference between neighbouring cells is at most a layer: the hero's
+ *     step is 0.5 m, so any plateau can be climbed from anywhere, without stairs. Mobs stand on any level.
+ *  2. Cliff (`rockOutcrop`, `cliffMass`) — an impassable rock mass with grass on top and sheer sides; things reached by a single
+ *     entrance (portal, cave) are built into it. Cliffs are put on top of the landscape — along the edges, by the road, by the river.
  */
 export interface HillOpts {
-  /** Доля верхушек с сухой травой и с ромашками */
+  /** Share of tops with dry grass and with daisies */
   dry?: number; daisies?: number;
   seed?: number;
 }
 
-/** Поверхность в колонке: y верха самого высокого блока (куда ставить дерево, декор) */
+/** Surface in a column: y of the top of the highest block (where to put a tree, decor) */
 export function surfaceAt(L: Level, x: number, z: number): number {
   const t = L.topAt(x, z);
   return t === null ? 0 : t + 1;
 }
 
-/** Сгладить сетку уровней: одиночные выступы опускаются, ямки засыпаются — площадки широкие, края длинные */
+/** Smooth the level grid: lone bumps are lowered, pits are filled — plateaus are wide, edges are long */
 function settle(heights: Int8Array, w: number, d: number, passes = 3): void {
   const H = (x: number, z: number) => (x < 0 || z < 0 || x >= w || z >= d ? 0 : heights[z * w + x]);
-  // каждый уровень отдельно: маска «высота ≥ t» сглаживается большинством в окне 5 × 5 — контур плиты плавный,
-  // заливы и зубцы в 2–3 клетки исчезают; высота собирается заново из сглаженных масок (уровни не перекрещиваются)
+  // each level separately: the "height ≥ t" mask is smoothed by majority in a 5 × 5 window — the slab outline is smooth,
+  // bays and teeth of 2–3 cells vanish; the height is reassembled from the smoothed masks (levels do not cross)
   let maxH = 0;
   for (const v of heights) maxH = Math.max(maxH, v);
   const out = new Int8Array(w * d);
@@ -149,7 +150,7 @@ function settle(heights: Int8Array, w: number, d: number, passes = 3): void {
     }
   }
   heights.set(out);
-  // большинство в окне 3 × 3: ямки и выступы в 1–2 клетки исчезают, контур плиты сглаживается, крупная форма остаётся
+  // majority in a 3 × 3 window: pits and bumps of 1–2 cells vanish, the slab outline is smoothed, the large shape stays
   for (let p = 0; p < 3; p++) {
     const src = heights.slice();
     for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
@@ -158,7 +159,7 @@ function settle(heights: Int8Array, w: number, d: number, passes = 3): void {
         const ni = i + di, nj = j + dj, v = ni < 0 || nj < 0 || ni >= w || nj >= d ? 0 : src[nj * w + ni];
         cnt.set(v, (cnt.get(v) ?? 0) + 1);
       }
-      // своё значение встречается в окне 3 раза и реже — клетка узкая (ямка, выступ, зубец), берём самое частое
+      // its own value occurs in the window 3 times or fewer — the cell is narrow (pit, bump, tooth), take the most frequent
       const own = src[j * w + i];
       if ((cnt.get(own) ?? 0) > 3) continue;
       let best = own, bc = 0;
@@ -166,7 +167,7 @@ function settle(heights: Int8Array, w: number, d: number, passes = 3): void {
       heights[j * w + i] = best;
     }
   }
-  // мелкие области одной высоты (впадинки, островки меньше minArea клеток) заливаем самой частой высотой вокруг
+  // small areas of one height (dips, islets smaller than minArea cells) are filled with the most frequent height around
   const minArea = 14;
   for (let p = 0; p < 2; p++) {
     const label = new Int32Array(w * d).fill(-1);
@@ -197,20 +198,20 @@ function settle(heights: Int8Array, w: number, d: number, passes = 3): void {
   }
 }
 
-/** Подъём ландшафта в точке: эллипс полуосей rx × rz, высота h слоёв, к краю спадает плавно */
+/** Landscape rise at a point: an ellipse with semi-axes rx × rz, height h layers, falls off smoothly towards the edge */
 export interface Bump { x: number; z: number; rx: number; rz: number; h: number }
 
-/** Земля ландшафта: верх, полублок, бок (земля под верхом), скала с этим верхом; flora — расти ли сухой траве и ромашкам */
+/** Landscape ground: top, half-block, side (ground under the top), cliff with this top; flora — whether dry grass and daisies grow */
 export interface Ground { top: string; slab: string; side: string; rockTop: string; flora?: boolean }
 export const GROUNDS: Record<string, Ground> = {
   grass: { top: 'grass', slab: 'grass_slab', side: 'dirt', rockTop: 'cliff_grass', flora: true },
   snow: { top: 'snow', slab: 'snow_slab', side: 'dirt', rockTop: 'cliff_snow', flora: false },
   jungle: { top: 'jungle_floor', slab: 'jungle_floor_slab', side: 'dirt', rockTop: 'cliff_jungle', flora: false },
 };
-export const GROUND_TITLES: Record<string, string> = { grass: 'Трава', snow: 'Снег', jungle: 'Джунгли' };
+export const GROUND_TITLES: Record<string, string> = { grass: t('Grass'), snow: t('Snow'), jungle: t('Jungle') };
 /**
- * Земля джунглей — мозаика ровных блоков пятнами по шуму (референс 16): оранжевая земля, крупные пятна бирюзового мха,
- * тёмно-красная земля, редкие островки зелёного мха. Общая для пресетов (builders-jungle.ts) и витрины (prefabs-map.ts).
+ * Jungle ground — a mosaic of flat blocks in noise patches (reference 16): orange ground, large patches of teal moss,
+ * dark red ground, rare islets of green moss. Shared by presets (builders-jungle.ts) and the showcase (prefabs-map.ts).
  */
 export function jungleGroundAt(x: number, z: number, seed = 0): string {
   const a = noise2(x, z, 5, seed + 1), b = noise2(x, z, 3, seed + 2);
@@ -221,31 +222,31 @@ export function jungleGroundAt(x: number, z: number, seed = 0): string {
 }
 
 export interface LandscapeOpts extends HillOpts {
-  /** Земля: трава по умолчанию (GROUNDS) */
+  /** Ground: grass by default (GROUNDS) */
   ground?: Ground;
-  /** Сколько слоёв по 0,5 м даёт шум (3–4 — холмистая местность MCD) */
+  /** How many 0.5 m layers the noise gives (3–4 — MCD hilly terrain) */
   layers?: number;
-  /** Масштаб шума, клеток: чем больше, тем шире плиты (24–32) */
+  /** Noise scale, cells: the larger, the wider the slabs (24–32) */
   scale?: number;
-  /** Клетки, где ландшафт ровный (дорога, двор, русло): к ним высота плавно спадает за fade клеток */
+  /** Cells where the landscape is flat (road, yard, river bed): the height falls off smoothly to them over fade cells */
   flat?: (x: number, z: number) => boolean;
   fade?: number;
   bumps?: Bump[];
-  /** Доля площади, где бока слоёв — камень (вперемешку с землёй, как на скриншотах) */
+  /** Share of the area where layer sides are stone (mixed with ground, as on the screenshots) */
   stone?: number;
-  /** Потолок: не выше стольких слоёв (по умолчанию без ограничения) */
+  /** Ceiling: no higher than this many layers (no limit by default) */
   max?: number;
 }
 
 /**
- * Ландшафт: плавная поверхность нарезана на плиты-слои по 0,5 м. S-кривая делает площадки широкими, контуры —
- * извилистыми (шум с искажением координат), сглаживание убирает мелочь, а ограничение крутизны — перепады больше
- * одного слоя: по ландшафту можно пройти везде. Слой — полный блок травы (чётный) или полублок травы сверху (нечётный).
+ * Landscape: a smooth surface cut into 0.5 m slab layers. An S-curve makes the plateaus wide and the outlines
+ * winding (noise with coordinate warping), smoothing removes small stuff, and the slope limit removes differences larger than
+ * one layer: the landscape can be walked everywhere. A layer is a full grass block (even) or a grass half-block on top (odd).
  */
 export function landscape(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, o: LandscapeOpts = {}): void {
   const seed = o.seed ?? 0, scale = o.scale ?? 28, layers = o.layers ?? 4, fade = o.fade ?? 6, stoneK = o.stone ?? 0.3, G = o.ground ?? GROUNDS.grass;
   const w = x1 - x0 + 1, d = z1 - z0 + 1;
-  // расстояние до ровных клеток (поиск в ширину, 8 соседей)
+  // distance to flat cells (breadth-first search, 8 neighbours)
   const dist = new Float32Array(w * d).fill(1e9);
   const queue: number[] = [];
   if (o.flat) for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) if (o.flat(x0 + i, z0 + j)) { dist[j * w + i] = 0; queue.push(j * w + i); }
@@ -262,10 +263,10 @@ export function landscape(L: Level, x0: number, z0: number, x1: number, z1: numb
   for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
     const x = x0 + i, z = z0 + j;
     if (dist[j * w + i] === 0) continue;
-    // искажение координат — контуры извилистые, как береговая линия
+    // coordinate warping — the outlines are winding, like a coastline
     const wx = x + (noise2(x, z, 20, seed + 3) - 0.5) * 9, wz = z + (noise2(x, z, 20, seed + 4) - 0.5) * 9;
     const n = noise2(wx, wz, scale, seed) * 0.72 + noise2(wx, wz, scale * 0.45, seed + 1) * 0.28;
-    // S-кривая: широкие ровные площадки, перепады собраны в короткие склоны
+    // S-curve: wide flat plateaus, the differences are gathered into short slopes
     const k = Math.max(0, Math.min(1, (n - 0.2) / 0.6));
     let hf = (k * 0.35 + (Math.round(k * layers) / layers) * 0.65) * layers;
     for (const b of o.bumps ?? []) {
@@ -277,7 +278,7 @@ export function landscape(L: Level, x0: number, z0: number, x1: number, z1: numb
   }
   settle(heights, w, d, 2);
   for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) if (dist[j * w + i] === 0) heights[j * w + i] = 0;
-  // проходимость: соседние клетки отличаются не больше чем на слой (0,5 м) — понижаем, пока не станет так
+  // walkability: neighbouring cells differ by at most a layer (0.5 m) — lower until it holds
   for (let changed = true, guard = 0; changed && guard < 64; guard++) {
     changed = false;
     for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
@@ -290,7 +291,7 @@ export function landscape(L: Level, x0: number, z0: number, x1: number, z1: numb
       if (h > lo + 1) { heights[j * w + i] = lo + 1; changed = true; }
     }
   }
-  // постройка: n слоёв = n/2 полных блоков и полублок сверху, если n нечётно; в «каменных» местах бока — скала
+  // build: n layers = n/2 full blocks and a half-block on top if n is odd; in "stony" places the sides are cliff
   const stoneAt = (x: number, z: number) => noise2(x + 40, z - 17, 11, seed + 5) > 1 - stoneK;
   for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
     const n = heights[j * w + i];
@@ -305,19 +306,19 @@ export function landscape(L: Level, x0: number, z0: number, x1: number, z1: numb
       L.set(x, y + full, z, G.slab);
     }
   }
-  // флора по верхушкам
+  // flora on the tops
   if ((o.dry || o.daisies) && G.flora !== false) for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
     const n = heights[j * w + i];
     if (n <= 0) continue;
     const x = x0 + i, z = z0 + j, yy = y + (n >> 1) + (n & 1);
-    if (n & 1 || !L.isAir(x, yy, z)) continue; // на полублоке трава из креста висела бы
+    if (n & 1 || !L.isAir(x, yy, z)) continue; // on a half-block the cross grass would hang in the air
     const r = hash2(x, z, seed + 50), nn = noise2(x, z, 4, seed + 51);
     if (r < (o.dry ?? 0) * 2 * nn) L.set(x, yy, z, 'dry_grass');
     else if (r > 1 - (o.daisies ?? 0)) L.set(x, yy, z, 'daisies');
   }
 }
 
-/** Холм — подъём ландшафта в точке: те же проходимые слои по 0,5 м, извилистый контур */
+/** Hill — a landscape rise at a point: the same walkable 0.5 m layers, winding outline */
 export function hill(L: Level, cx: number, cz: number, rx: number, rz: number, h: number, y: number, o: LandscapeOpts = {}): void {
   const m = 6;
   landscape(L, Math.floor(cx - rx - m), Math.floor(cz - rz - m), Math.ceil(cx + rx + m), Math.ceil(cz + rz + m), y, {
@@ -327,8 +328,8 @@ export function hill(L: Level, cx: number, cz: number, rx: number, rz: number, h
 }
 
 /**
- * Скала (скриншоты 11, 12, 14, 17): непроходимый каменный массив с извилистым контуром, отвесными боками из светлых и
- * тёмных пластов и травой сверху. Высота гуляет на блок. Ставится поверх ландшафта; в неё встраивают портал, пещеру.
+ * Cliff (screenshots 11, 12, 14, 17): an impassable rock mass with a winding outline, sheer sides of light and
+ * dark strata and grass on top. The height wanders by a block. Placed on top of the landscape; a portal or cave is built into it.
  */
 export function rockOutcrop(L: Level, cx: number, cz: number, rx: number, rz: number, h: number, y: number, seed = 0): void {
   for (let x = Math.floor(cx - rx - 2); x <= Math.ceil(cx + rx + 2); x++) for (let z = Math.floor(cz - rz - 2); z <= Math.ceil(cz + rz + 2); z++) {
@@ -342,7 +343,7 @@ export function rockOutcrop(L: Level, cx: number, cz: number, rx: number, rz: nu
   }
 }
 
-/** Дерево (скриншот 13): ствол trunk блоков и пышная крона-эллипсоид из leaves_fluffy */
+/** Tree (screenshot 13): a trunk of trunk blocks and a fluffy ellipsoid crown of leaves_fluffy */
 export function tree(L: Level, x: number, y: number, z: number, trunk = 3, r = 2): void {
   for (let k = 0; k < trunk; k++) L.set(x, y + k, z, 'log');
   const cy = y + trunk + r * 0.5;
@@ -352,7 +353,7 @@ export function tree(L: Level, x: number, y: number, z: number, trunk = 3, r = 2
   }
 }
 
-/** Крепостная стена с зубцами-ступенями (скриншот 13): вдоль X или Z, высота h, через блок зубец, наверху место под свечи */
+/** Fortress wall with stepped merlons (screenshot 13): along X or Z, height h, a merlon every other block, room for candles on top */
 export function rampart(L: Level, x0: number, z0: number, x1: number, z1: number, y: number, h: number): void {
   const n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0)), dx = Math.sign(x1 - x0), dz = Math.sign(z1 - z0);
   for (let i = 0; i <= n; i++) {
@@ -363,9 +364,9 @@ export function rampart(L: Level, x0: number, z0: number, x1: number, z1: number
 }
 
 /**
- * Портал в холме (скриншот 14), лицом к +Z: проём ширины w и высоты h с нижним краем на y, рама из тёмного камня,
- * перемычка с инкрустацией, сияние в глубине (2 блока внутрь), боковые стенки проёма, перед ним светлый пол —
- * трава на него заходит рваным краем. (x, z) — левый нижний угол проёма снаружи.
+ * Portal in a hill (screenshot 14), facing +Z: an opening of width w and height h with its bottom edge at y, a frame of dark stone,
+ * a lintel with inlay, the glow deep inside (2 blocks in), side walls of the opening, a light floor in front —
+ * grass spills onto it with a ragged edge. (x, z) — the bottom-left corner of the opening from outside.
  */
 export function portal(L: Level, x: number, y: number, z: number, w = 2, h = 3): void {
   const depth = 1;
@@ -375,11 +376,11 @@ export function portal(L: Level, x: number, y: number, z: number, w = 2, h = 3):
       const cell = side || back ? 'portal_frame' : top ? (dz === 0 ? 'portal_trim' : 'portal_frame') : 'air';
       L.set(x + dx, y + k, z + dz, cell);
     }
-    // сверху рамы — дёрн, как на холме вокруг
+    // turf on top of the frame, like the hill around
     L.set(x + dx, y + h + 1, z + dz, 'grass');
   }
   for (let dx = 0; dx < w; dx++) for (let k = 0; k < h; k++) L.set(x + dx, y + k, z - depth, 'portal', 0);
-  // перед порталом — площадка с полом из плит, дальше проход вперёд прорубается до уровня земли (выход не перекрыт)
+  // in front of the portal — a plot with a slab floor, further on a passage forward is cut down to ground level (the exit is not blocked)
   for (let dz = -depth; dz <= 16; dz++) {
     let blocked = false;
     for (let dx = -2; dx <= w + 1; dx++) for (let k = 0; k <= h + 6; k++) if (dz > 0 && !L.isAir(x + dx, y + k, z + dz)) blocked = true;

@@ -2,19 +2,19 @@ import { CH, Level, type DecorItem } from '../level/level.ts';
 import { REGION, type RegionEntity, type RegionSource } from './gen.ts';
 
 /**
- * Фиксированная карта как источник регионов (wiki/dev-performance.md, «Регионы»): вся карта лежит в памяти
- * (`source`), а в живой уровень — и значит в сцену — попадают только регионы вокруг игроков. Чанки копируются
- * как есть (палитры совпадают), декор региона добавляется и убирается вместе с ним, сундуки, бочки и ящики из
- * сущностей карты становятся предметами региона со стабильными id «rx,rz:n» — их состояние переживает выгрузку.
+ * A fixed map as a region source (wiki/dev-performance.md, "Regions"): the whole map sits in memory
+ * (`source`), and only the regions around the players get into the live level — and thus into the scene. Chunks are copied
+ * as is (the palettes match), a region's decor is added and removed with it, chests, barrels and crates from the
+ * map's entities become region items with stable ids "rx,rz:n" — their state survives unloading.
  */
 
 const KINDS: Record<string, RegionEntity['kind']> = { chest: 'chest', barrel: 'barrel', crate: 'crate', terminal: 'terminal' };
 
 export function mapSource(source: Level): RegionSource {
-  /** Декор, поставленный в живой уровень по регионам */
+  /** Decor placed into the live level, per region */
   const placed = new Map<string, DecorItem[]>();
   const keyOf = (x: number, z: number): string => `${Math.floor(x / REGION)},${Math.floor(z / REGION)}`;
-  /** Сущности и декор карты по регионам — один раз */
+  /** The map's entities and decor per region — once */
   const ents = new Map<string, RegionEntity[]>();
   const decor = new Map<string, DecorItem[]>();
   for (const e of source.entities) {
@@ -35,7 +35,7 @@ export function mapSource(source: Level): RegionSource {
       for (const ck of source.chunkKeysOf(rx, rz)) into.putChunk(ck, new Uint16Array(source.chunks.get(ck)!));
       const key = `${rx},${rz}`;
       const entities = ents.get(key) ?? [];
-      // сундук в комнате-заготовке стоит на блоке-ящике (заглушка в ASCII): вместо блока — настоящий сундук
+      // a chest in a template room stands on a crate block (the ASCII placeholder): a real chest replaces the block
       for (const e of entities) if (e.kind === 'chest' && into.nameAt(e.x, 0, e.z) === 'crate') into.set(e.x, 0, e.z, 'air');
       const ds = (decor.get(key) ?? []).map((d) => into.addDecor({ ...d }));
       if (ds.length) placed.set(key, ds);
@@ -49,7 +49,7 @@ export function mapSource(source: Level): RegionSource {
   };
 }
 
-/** Стоит ли стримить карту: больше STREAM_CHUNKS чанков — целиком в сцене она дорога */
+/** Whether to stream the map: with more than STREAM_CHUNKS chunks it is too expensive whole in the scene */
 export const STREAM_CHUNKS = 400;
 export const chunkCount = (L: Level): number => L.chunks.size;
 export { CH };

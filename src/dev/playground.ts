@@ -70,8 +70,9 @@ import type { TdSpec } from '../td/types.ts';
 import { button, Panel, select, toggle } from './panel.ts';
 import '../style.css';
 import './playground.css';
+import { t } from '../i18n/i18n.ts';
 
-/** Общий бой: звуки героев других игроков слышно ближе этого, м */
+/** Shared battle: sounds of other players' heroes are heard closer than this, m */
 const NET_HEAR = 14;
 
 declare global {
@@ -79,8 +80,8 @@ declare global {
 }
 
 /**
- * ?map=editor — автосохранение редактора (кнопка «Играть»), ?map=dungeon&seed=42&floor=2 — этаж подземелья из комнат-заготовок,
- * ?map=<имя> — файл из assets/maps/, иначе playground.json
+ * ?map=editor — the editor's autosave (the "Play" button), ?map=dungeon&seed=42&floor=2 — a dungeon floor made of prefab rooms,
+ * ?map=<name> — a file from assets/maps/, otherwise playground.json
  */
 function pickMap(): LevelJSON {
   const q = new URLSearchParams(window.location.search);
@@ -90,64 +91,64 @@ function pickMap(): LevelJSON {
     try {
       const raw = localStorage.getItem('malina.editor.level');
       if (raw) return JSON.parse(raw) as LevelJSON;
-    } catch { /* нет сохранения — плейграунд */ }
+    } catch { /* no save — the playground */ }
   } else if (name) {
     const j = mapByName(name);
     if (j) return j;
   }
   const j = mapByName('playground');
-  if (!j) throw new Error('Нет карты assets/maps/playground.json — запусти npm run map:playground');
+  if (!j) throw new Error('No map assets/maps/playground.json — run npm run map:playground');
   return j;
 }
 
 export function runPlayground(): void {
   /**
-   * Плейграунд: основная сцена разработки (ADR-004). Арена из блоков, соломенные чучела для меча, склад, пруд,
-   * ступени на площадку, витрина блоков. Механики живут в общих модулях (knight.ts, trail.ts), здесь — сцена и отладка.
+   * Playground: the main development scene (ADR-004). A block arena, straw dummies for the sword, a storage yard, a pond,
+   * stairs onto a platform, a block showcase. Mechanics live in shared modules (knight.ts, trail.ts); here — the scene and debugging.
    */
 
-  // оружие — надетое в инвентаре (src/items.ts); ?weapon=<id> — поверх него, для отладки (src/weapons.ts).
-  // Числа надетого — стартовые для «Сброса» в F1
+  // weapon — the one equipped in the inventory (src/items.ts); ?weapon=<id> — on top of it, for debugging (src/weapons.ts).
+  // The equipped one's numbers are the starting point for "Reset" in F1
   const urlWeapon = new URLSearchParams(window.location.search).has('weapon') ? pickWeapon() : null;
   const profile = new Profile();
-  // настройки из главного меню (src/menu/settings.ts): громкость, качество, постобработка, тени, подсказка
+  // settings from the main menu (src/menu/settings.ts): volume, quality, post-processing, shadows, help
   const settings = loadSettings();
   applyAudio(settings);
-  /** Бой начат из главного меню: пауза по Esc, «В лагерь», без отладочной телеметрии */
+  /** Battle started from the main menu: pause on Esc, "To camp", no debug telemetry */
   const FROM_MENU = fromMenu();
   document.body.classList.add('dev-playground');
   if (FROM_MENU) document.body.classList.add('from-menu');
-  document.title = 'Малина — плейграунд';
+  document.title = t('Malina — playground');
 
   const $ = <E extends HTMLElement = HTMLElement>(id: string): E => {
     const el = document.getElementById(id);
-    if (!el) throw new Error(`Нет элемента #${id}`);
+    if (!el) throw new Error(`No element #${id}`);
     return el as E;
   };
 
-  // ---------- Рендер ----------
+  // ---------- Render ----------
   const canvas = $<HTMLCanvasElement>('c');
-  // без MSAA на канвасе: кадр собирает композер в своих буферах (src/lighting.ts), на канвас ложится готовая картинка;
-  // плотность пикселей канваса — как у композера, иначе финальный проход и bloom масштабировались бы в пустую
+  // no MSAA on the canvas: the composer assembles the frame in its own buffers (src/lighting.ts), the finished picture lands on the canvas;
+  // the canvas pixel density matches the composer's, otherwise the final pass and bloom would scale for nothing
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(pixelRatio(settings));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  // замеры кадра (F8): CPU симуляции и рендера, вызовы, программы, геометрии; длинные кадры с метками причин
+  // frame measurements (F8): CPU of the simulation and render, calls, programs, geometries; long frames with cause marks
   const perf = new Perf(renderer);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 220);
   const CAM_DIR = new THREE.Vector3(1, 1.38, 1).normalize();
   let camDist = 24;
-  /** Для скриншотов и тестов: камера смотрит в заданную точку */
+  /** For screenshots and tests: the camera looks at a given point */
   let camOverride: THREE.Vector3 | null = null;
   const camTarget = new THREE.Vector3();
 
-  // свет и постобработка «как в Unreal» (src/lighting.ts, wiki/style-lighting.md): день — тёплое низкое солнце и голубое небо,
-  // ночь — лунный синий, а светят факелы, вода и светлячки; AO, bloom, цветокоррекция, дымка. U — сравнить без них
+  // lighting and post-processing "like in Unreal" (src/lighting.ts, wiki/style-lighting.md): day — a warm low sun and a blue sky,
+  // night — moon blue, with torches, water and fireflies glowing; AO, bloom, colour grading, haze. U — compare without them
   const look = new Lighting(renderer, scene, camera);
   const sun = look.sun;
   let night = false;
@@ -164,25 +165,25 @@ export function runPlayground(): void {
   window.addEventListener('resize', resize);
   resize();
 
-  // ---------- Сцена ----------
+  // ---------- Scene ----------
   const T = makeTextures();
   const overlayEl = $('overlay');
   const fx = new FX(scene, camera, T, overlayEl);
   const HALF = 24;
-  // Арена и витрина — карта assets/maps/playground.json (генератор src/level/playground-map.ts, `npm run map:playground`,
-  // правка — редактор ?dev=editor).
-  // Регионы 32 × 32 м (src/world/): в сцену попадают только регионы вокруг героя. Источник — карта целиком в памяти
-  // (большая карта стримится сама, любая — с ?stream=1) или процедурный генератор для отладки (?map=world&seed=N)
+  // The arena and the showcase are the map assets/maps/playground.json (generator src/level/playground-map.ts, `npm run map:playground`,
+  // editing — the editor ?dev=editor).
+  // Regions 32 × 32 m (src/world/): only the regions around the hero enter the scene. The source is the whole map in memory
+  // (a large map streams by itself, any map with ?stream=1) or a procedural generator for debugging (?map=world&seed=N)
   const query = new URLSearchParams(window.location.search);
   const WORLD = query.get('map') === 'world';
-  /** Открыта карта (?map=…): чучела, склад и подписи плейграунда не ставятся */
+  /** A map is open (?map=…): the playground's dummies, storage yard and labels are not placed */
   const hasMap = query.has('map');
   const worldSeed = Number(query.get('seed')) || 1;
   const sourceLevel = WORLD ? null : Level.fromJSON(pickMap());
   const STREAM = WORLD || query.has('stream') || (sourceLevel !== null && sourceLevel.chunks.size > STREAM_CHUNKS);
-  const level = STREAM ? new Level(sourceLevel?.name ?? 'мир') : sourceLevel!;
+  const level = STREAM ? new Level(sourceLevel?.name ?? 'world') : sourceLevel!;
   if (STREAM && sourceLevel) { level.adoptPalette(sourceLevel); level.entities.push(...sourceLevel.entities); level.spawn = sourceLevel.spawn; Object.assign(level.meta, sourceLevel.meta); }
-  // настройки мира из редактора (meta.world): солнце, небо, дымка, постобработка, погода; поставленный свет — сущности 'light'
+  // world settings from the editor (meta.world): sun, sky, haze, post-processing, weather; placed lights are 'light' entities
   const weather = new Weather(scene);
   if (level.meta.world) {
     const ws = worldOf(level);
@@ -201,25 +202,25 @@ export function runPlayground(): void {
   }
   const view = new LevelRenderer(scene, level, T);
   if (!settings.shadows) sun.castShadow = false;
-  // лава (src/td/lava-fx.ts): дымка над разломами и искры; есть на карте целиком в сцене — при стриминге клетки меняются
+  // lava (src/td/lava-fx.ts): haze over the rifts and sparks; only on a map wholly in the scene — with streaming the cells change
   const lavaFx = !STREAM && level.palette.includes('lava') ? new LavaFx(scene, fx, level) : null;
-  /** Герой стоит в лаве: ожог раз в 0,4 с */
+  /** The hero stands in lava: a burn every 0.4 s */
   let lavaT = 0;
   const terrain = terrainOf(level);
   const pathfinder = new Pathfinder(level, terrain);
   const bounds = level.getBounds() ?? { minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF, minY: -1, maxY: 0 };
-  // для врагов и пуль: блоки выше шага и декор с коллайдерами (колонны, фонари, ящики); при стриминге — по загруженным регионам
+  // for enemies and bullets: blocks higher than a step and decor with colliders (columns, lanterns, crates); with streaming — per loaded region
   const obstacles: Obstacle[] = STREAM ? [] : [...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)];
   const regionObstacles = new Map<string, Obstacle[]>();
   let obstaclesCache: Obstacle[] | null = null, obstaclesDecorV = -1;
-  /** Препятствия врагов сейчас: статичные или по регионам вокруг героя плюс декор */
+  /** Enemy obstacles now: static ones or per the regions around the hero, plus decor */
   const obstaclesNow = (): Obstacle[] => {
     if (!STREAM) return obstacles;
     if (!obstaclesCache || obstaclesDecorV !== level.decorVersion) { obstaclesCache = [...regionObstacles.values()].flat().concat(decorSolids(level)); obstaclesDecorV = level.decorVersion; }
     return obstaclesCache;
   };
 
-  // ---------- Надписи на полу ----------
+  // ---------- Floor labels ----------
   function floorLabel(text: string, x: number, z: number, size = 1, rot = 0, color = '#1f3a22'): void {
     const c = document.createElement('canvas');
     const g = c.getContext('2d') as CanvasRenderingContext2D;
@@ -240,40 +241,40 @@ export function runPlayground(): void {
     m.position.set(x, 0.012, z);
     scene.add(m);
   }
-  for (const l of (level.meta.labels as PgLabel[] | undefined) ?? []) floorLabel(l.text, l.x, l.z, l.size ?? 0.6);
-  /** Плейграунд как есть: не карта и не мир */
+  for (const l of (level.meta.labels as PgLabel[] | undefined) ?? []) floorLabel(t(l.text), l.x, l.z, l.size ?? 0.6);
+  /** The playground as is: neither a map nor the world */
   const PG = !STREAM && !hasMap;
   if (PG) {
-    floorLabel('укрытия', 6.5, -6.6, 0.9);
-    floorLabel('колонна', 9, -2.3, 0.9);
-    floorLabel('угол', 18, 7, 0.9);
-    floorLabel('коридор 3 м · проём 1 м', 7, 18.8, 0.9);
-    floorLabel('диагональ', 17, -0.4, 0.9);
+    floorLabel(t('cover'), 6.5, -6.6, 0.9);
+    floorLabel(t('column'), 9, -2.3, 0.9);
+    floorLabel(t('corner'), 18, 7, 0.9);
+    floorLabel(t('corridor 3 m · gap 1 m'), 7, 18.8, 0.9);
+    floorLabel(t('diagonal'), 17, -0.4, 0.9);
   }
 
-  // ---------- Чучела ----------
+  // ---------- Dummies ----------
   const dummies: Dummy[] = [];
-  // кучка из четырёх — проверить, что широкий удар задевает нескольких, и одиночное в стороне
-  if (PG) for (const [x, z, name] of [[-6, -3, 'чучело 1'], [-7.4, -3.7, 'чучело 2'], [-4.6, -3.7, 'чучело 3'], [-6, -5.2, 'чучело 4'], [-11, 0, 'одиночное']] as [number, number, string][]) {
+  // a cluster of four — to check that a wide strike catches several, and a lone one aside
+  if (PG) for (const [x, z, name] of [[-6, -3, 'dummy 1'], [-7.4, -3.7, 'dummy 2'], [-4.6, -3.7, 'dummy 3'], [-6, -5.2, 'dummy 4'], [-11, 0, 'lone']] as [number, number, string][]) {
     dummies.push(new Dummy(scene, overlayEl, 'static', x, z, Math.PI / 4, name));
   }
   if (PG) {
-    floorLabel('чучела: ЛКМ — удар, держи — комбо', -6, -1.6, 0.85);
-    const rail = new Dummy(scene, overlayEl, 'rail', 0, -17, 0, 'на рельсе');
+    floorLabel(t('dummies: LMB — strike, hold — combo'), -6, -1.6, 0.85);
+    const rail = new Dummy(scene, overlayEl, 'rail', 0, -17, 0, t('on the rail'));
     rail.railA = -9; rail.railB = 9;
     dummies.push(rail);
     const r = new THREE.Mesh(new THREE.BoxGeometry(18.6, 0.05, 0.16), new THREE.MeshLambertMaterial({ color: '#7a5232' }));
     r.position.set(0, 0.025, -17);
     r.receiveShadow = true;
     scene.add(r);
-    floorLabel('подвижное чучело', -9, -15.8, 0.9);
+    floorLabel(t('moving dummy'), -9, -15.8, 0.9);
   }
 
-  // ---------- Склад: интерактивные предметы ----------
+  // ---------- Storage yard: interactive props ----------
   const props = new Props(scene, fx, rng(99), {
     explode: (at, r, dmg) => explode(at, r, dmg),
     give: (kind, amount, at, data) => giveLoot(kind, amount, at, data),
-    // сундук: ещё связка стрел и случайный предмет снаряжения (луч цвета редкости, как в MCD)
+    // chest: also a bundle of arrows and a random piece of gear (a beam in the rarity colour, as in MCD)
     chestExtra: () => {
       const it = profile.rollLoot();
       return [{ kind: 'arrows', amount: gear.stats.arrowBundle, mesh: arrowsLootMesh() }, { kind: 'item', amount: 1, data: it, mesh: itemLootMesh(it) }];
@@ -286,7 +287,7 @@ export function runPlayground(): void {
         pickup: () => sfx.pickup(), break: () => sfx.crateBreak(), heal: () => sfx.ready(), ignite: () => sfx.flame(),
       } as const)[k]();
     },
-    // предмет региона исчерпан — в сохранение мира, чтобы после выгрузки и перезагрузки он не вернулся
+    // a region's prop is used up — into the world save, so it does not come back after unload and reload
     changed: (id) => regions?.kill(id),
   }, !PG ? { barrels: [], crates: [], supplies: [], terminals: [] } : {
     barrels: [[-11, 11], [-10.25, 11.6], [-10.9, 10.15], [-6, 12.2], [-3.4, 18]],
@@ -294,28 +295,28 @@ export function runPlayground(): void {
     supplies: [[-9.6, 17.6, 145], [-5.4, 19, 160]],
     terminals: [[-2.6, 10.6, 50]],
   });
-  if (PG) floorLabel('склад: бочки, сундуки (F), источник здоровья (F), ящики', -7.5, 21.3, 0.9);
-  // карта целиком в сцене (без регионов): её сундуки, ящики, бочки и источники — из сущностей, как у регионов
+  if (PG) floorLabel(t('storage yard: barrels, chests (F), health fountain (F), crates'), -7.5, 21.3, 0.9);
+  // a map wholly in the scene (no regions): its chests, crates, barrels and fountains come from entities, as with regions
   if (hasMap && !STREAM) {
     const kinds = new Set(['chest', 'barrel', 'crate', 'terminal']);
     props.addGroup('map', level.entities.filter((e) => kinds.has(e.kind)).map((e, i) => ({ id: `map:${i}`, kind: e.kind as 'chest' | 'barrel' | 'crate' | 'terminal', x: e.x, z: e.z, rot: e.rot ?? 0 })));
   }
-  // лавки кузнеца и торговца — на плейграунде, в северо-западном углу (src/merchants.ts)
-  // режим «Оборона куста» (wiki/design-tower-defence.md): на карте с meta.td — мир симуляции (src/sim/world.ts) с правилами
-  // обороны (src/sim/td.ts), вид — модели и искры (src/cgame/views/td-view.ts), меню и HUD (src/cgame/td-ui.ts)
+  // the blacksmith's and merchant's shops are on the playground, in the north-west corner (src/merchants.ts)
+  // the "Bush Defence" mode (wiki/design-tower-defence.md): on a map with meta.td — the simulation world (src/sim/world.ts) with the defence
+  // rules (src/sim/td.ts), the view — models and sparks (src/cgame/views/td-view.ts), menu and HUD (src/cgame/td-ui.ts)
   let world: SimWorld | null = null;
   let sim: SimTd | null = null;
   let tdUi: TdUi | null = null;
   let tdView: TdView | null = null;
-  /** Стая врагов обороны: все, кто идёт к кусту */
+  /** The defence enemy pack: everyone heading for the bush */
   let tdPack: Pack | null = null;
   const tdSpec = level.meta.td as TdSpec | undefined;
-  // туман у лагерей врагов (src/td/mist-fx.ts): точки выхода скрыты
+  // mist at the enemy camps (src/td/mist-fx.ts): the exit points are hidden
   const mistFx = tdSpec?.mist ? new MistFx(scene, tdSpec.lanes, tdSpec.mist) : null;
-  // на карте — из meta.merchants ({ kind, x, z, yaw }), на плейграунде — в северо-западном углу
+  // on a map — from meta.merchants ({ kind, x, z, yaw }), on the playground — in the north-west corner
   const merchantSpecs = hasMap ? ((level.meta.merchants as { kind: 'smith' | 'merchant'; x: number; z: number; yaw: number }[] | undefined) ?? []) : [{ kind: 'smith' as const, x: -17, z: -13, yaw: 0 }, { kind: 'merchant' as const, x: -19, z: -6, yaw: Math.PI / 2 }];
   const merchants: Merchant[] = merchantSpecs.map((m) => new Merchant(scene, overlayEl, T, m.kind, m.x, m.z, m.yaw));
-  /** Плоские препятствия героя и пути: предметы склада, декор и лавки (пересобираются, когда меняется одно из них) */
+  /** Flat obstacles for the hero and paths: storage-yard props, decor and shops (rebuilt when one of them changes) */
   let solidsCache: Obstacle[] = [], solidsKey: [Obstacle[], number] | null = null;
   const solids = (): Obstacle[] => {
     const p = props.solids;
@@ -323,40 +324,40 @@ export function runPlayground(): void {
       solidsCache = [...p, ...decorSolids(level), ...merchants.map((m) => m.solid)];
       solidsKey = [p, level.decorVersion];
     }
-    // решётки арены стража — пока подняты; башни обороны
+    // the warden arena's gates — while raised; defence towers
     const gates = arenas.filter((a) => a.solids.length);
     const towers = world ? world.solids : [];
     if (!gates.length && !towers.length) return solidsCache;
     return solidsCache.concat(...gates.map((a) => a.solids), towers);
   };
-  /** Нажали F — использовать ближайший предмет */
+  /** F pressed — use the nearest prop */
   let interactReq = false;
 
   function giveLoot(kind: LootKind, amount: number, at: THREE.Vector3, data?: unknown): void {
     let text = '';
-    if (kind === 'berry') { profile.addBerries(amount); text = `+${amount} малины`; }
-    else if (kind === 'arrows') { profile.addArrows(amount); text = `+${amount} стрел`; }
+    if (kind === 'berry') { profile.addBerries(amount); text = t('+{n} raspberries', { n: amount }); }
+    else if (kind === 'arrows') { profile.addArrows(amount); text = t('+{n} arrows', { n: amount }); }
     else if (kind === 'item') {
       const d = data as { def: string; power: number };
       profile.add(d.def, d.power);
       profile.save();
       const def = itemDef(d.def);
-      hud.banner(`${def.title}<small>Новый предмет — открой инвентарь (I)</small>`, 2.6);
+      hud.banner(`${def.title}<small>${t('New item — open the inventory (I)')}</small>`, 2.6);
       text = def.title;
-    } else { hero.hp = Math.min(hero.maxHp, hero.hp + amount); text = `+${amount} здоровья`; }
+    } else { hero.hp = Math.min(hero.maxHp, hero.hp + amount); text = t('+{n} health', { n: amount }); }
     fx.text(at.clone().setY(0.4), text, kind === 'berry' ? 'berry' : kind === 'item' ? 'loot' : 'heal');
   }
 
-  // ---------- Герой ----------
+  // ---------- Hero ----------
   const fxRand = rng(7);
   const hero = new Knight(scene, T);
   hero.place(0, 4, Math.PI);
-  // точка появления карты из редактора (?map=…): клетка и взгляд (meta.spawnYaw, ° — 0 к +X, 90 к +Z)
+  // the spawn point of a map from the editor (?map=…): cell and facing (meta.spawnYaw, ° — 0 towards +X, 90 towards +Z)
   if (level.spawn && new URLSearchParams(window.location.search).has('map')) {
     const a = THREE.MathUtils.degToRad((level.meta.spawnYaw as number | undefined) ?? 0);
     hero.place(level.spawn[0], level.spawn[2], Math.atan2(Math.cos(a), Math.sin(a)), level.spawn[1]);
   }
-  // снаряжение: оружие, броня, лук, артефакты, зелье, души и опыт (src/gear.ts)
+  // gear: weapon, armour, bow, artifacts, potion, souls and experience (src/gear.ts)
   const GEAR_SOUND = { shoot: sfx.dash, potion: sfx.ready, level: sfx.harvest, boom: sfx.blast, horn: sfx.shout, zap: sfx.zap, totem: sfx.plant, dash: sfx.dash, souls: sfx.wave, empty: sfx.empty, hit: sfx.hit } as const;
   const gear: Gear = new Gear({
     scene, fx, hero, terrain,
@@ -371,7 +372,7 @@ export function runPlayground(): void {
   snapshotTuning();
   onWeaponChange((w) => gear.refreshWeapon(w));
   hero.onStep = () => { if (!scripted && hero.grounded) sfx.step(); };
-  // свист взмаха и звук попадания — свои у каждого вида оружия (src/weapon-audio.ts)
+  // the swing whoosh and the hit sound are specific to each weapon category (src/weapon-audio.ts)
   hero.onSwing = (step) => { if (!scripted) weaponSwing(gear.arts.category, step); };
   hero.onLand = (v) => {
     if (v > 5) fx.burst(hero.pos.clone().setY(hero.pos.y + 0.05), ['#d8cfa8', '#b9ad88', '#9a8f70'], Math.min(14, Math.round(v)), { speed: 2, up: 1.2, size: 0.1, life: 0.4, gravity: 5 });
@@ -380,10 +381,10 @@ export function runPlayground(): void {
   hero.onRoll = () => { if (!scripted) sfx.roll(); };
   hero.onStrike = (s) => strike(s);
 
-  // ---------- Страж: Багровый дракон на арене за северной стеной (src/bosses/, wiki/design-bosses.md) ----------
+  // ---------- Warden: the Crimson Dragon in the arena behind the north wall (src/bosses/, wiki/design-bosses.md) ----------
   const bossBar = new BossBar(document.body);
-  // зал стражей за северной стеной: восемь арен, на каждой — свой мини-босс (src/bosses/roster.ts)
-  /** Препятствия врагов: уровень, декор и башни обороны (кэш, пока состав тот же) */
+  // the hall of wardens behind the north wall: eight arenas, each with its own mini-boss (src/bosses/roster.ts)
+  /** Enemy obstacles: level, decor and defence towers (cached while the set is the same) */
   let foeObsCache: Obstacle[] = [], foeObsKey: [Obstacle[], Obstacle[]] | null = null;
   const foeObstacles = (): Obstacle[] => {
     const base = obstaclesNow(), towers = world ? world.foeSolids : [];
@@ -391,7 +392,7 @@ export function runPlayground(): void {
     if (!foeObsKey || foeObsKey[0] !== base || foeObsKey[1] !== towers) { foeObsCache = base.concat(towers); foeObsKey = [base, towers]; }
     return foeObsCache;
   };
-  /** Путь в обход для мобов: не больше ROUTE_BUDGET за такт (src/mobs/mob.ts) */
+  /** Detour path for mobs: no more than ROUTE_BUDGET per tick (src/mobs/mob.ts) */
   let routeTick = -1, routeN = 0;
   const bossHooks = {
     scene, fx, hero, terrain,
@@ -407,14 +408,14 @@ export function runPlayground(): void {
   };
   const bosses: MiniBoss[] = [];
   const arenas: Arena[] = [];
-  /** id арены каждого стража (для тестов и кнопок) */
+  /** Arena id of each warden (for tests and buttons) */
   const bossIds: string[] = [];
-  // арены: зал стражей плейграунда или meta.arenas карты (BossArenaSpec с home и gates)
+  // arenas: the playground's hall of wardens or the map's meta.arenas (BossArenaSpec with home and gates)
   const arenaSpecs: BossArenaSpec[] = hasMap ? ((level.meta.arenas as BossArenaSpec[] | undefined) ?? []) : BOSS_ARENAS;
   for (const spec of arenaSpecs) {
     const Ctor = MINI_BOSSES[spec.id];
     if (!Ctor) continue;
-    // страж стоит в глубине арены, мордой к воротам (или где сказано в home)
+    // the warden stands deep in the arena, facing the gate (or where home says)
     const left = spec.x0 < 0;
     const home = spec.home ? new THREE.Vector3(spec.home.x, 0, spec.home.z) : new THREE.Vector3(left ? spec.x0 + 6 : spec.x1 - 6, 0, (spec.z0 + spec.z1) / 2);
     const boss = new Ctor(bossHooks, home, spec.home ? spec.home.yaw : left ? Math.PI / 2 : -Math.PI / 2, spec);
@@ -423,16 +424,16 @@ export function runPlayground(): void {
     arenas.push(arena);
     bossIds.push(spec.id);
   }
-  // рядовые мобы Ордена (src/mobs/, wiki/design-mobs.md): выходят по кнопкам F1, малина с павших — кучкой
+  // the Order's rank-and-file mobs (src/mobs/, wiki/design-mobs.md): come out via the F1 buttons, raspberries from the fallen — in a pile
   const pack = new Pack(bossHooks, (at, n) => props.berries(at, n));
-  /** Отряд в 9 м перед героем */
+  /** A squad 9 m in front of the hero */
   function spawnSquad(kinds: readonly string[]): void {
     const f = new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw));
     pack.squad(kinds, hero.pos.clone().setY(0).addScaledVector(f, 9), kinds.length > 4 ? 3.5 : 2);
   }
-  // комнаты мобов за западной стеной (казарма Ордена, Терновый сад): гарнизон стоит на постах и просыпается, когда
-  // герой рядом (5 м); весь гарнизон пал, а герой вышел — комната снова полна
-  // комнаты мобов: плейграунд — MOB_ROOMS, карта — meta.mobRooms (группы, засады с малым aggro, патрули по route)
+  // mob rooms behind the west wall (the Order's barracks, the Thorn Garden): the garrison stands at its posts and wakes when
+  // the hero is near (5 m); the whole garrison fell and the hero left — the room is full again
+  // mob rooms: playground — MOB_ROOMS, map — meta.mobRooms (groups, ambushes with small aggro, patrols along route)
   const roomSpecs: MobRoomSpec[] = hasMap ? ((level.meta.mobRooms as MobRoomSpec[] | undefined) ?? []) : MOB_ROOMS;
   const garrison = roomSpecs.length > 0;
   const mobRooms = roomSpecs.map((spec) => ({ spec, pack: new Pack(bossHooks, (at, n) => props.berries(at, n)) }));
@@ -443,19 +444,19 @@ export function runPlayground(): void {
     for (const p of room.spec.posts) {
       const m = room.pack.spawn(p.kind, new THREE.Vector3(p.x, 0, p.z));
       if (!m) continue;
-      // смотрят на вход, видят героя вблизи (засада — ещё ближе), патруль ходит по маршруту
+      // they face the entrance, see the hero up close (an ambush — even closer), a patrol walks its route
       m.yaw = Math.atan2(room.spec.enter.x - p.x, room.spec.enter.z - p.z);
       m.aggro = Math.min(m.aggro, p.aggro ?? (hasMap ? 9 : 5));
       if (p.route) m.route = p.route.map(([x, z]) => new THREE.Vector3(x, 0, z));
     }
   }
   for (const r of mobRooms) fillRoom(r);
-  // масштаб стражей (src/bosses/scaling.ts): уровень — по уровню героя или из панели F1, число игроков — из панели
+  // warden scaling (src/bosses/scaling.ts): level — by the hero's level or from the F1 panel, player count — from the panel
   let bossLevelPick: 'hero' | string = 'hero';
   let bossPlayers = 1;
   const bossLevel = (): number => bossLevelPick === 'hero' ? profile.data.level : Number(bossLevelPick);
   let scaleKey = '';
-  /** Пересчитать здоровье и урон всех стражей, если уровень или число игроков сменились */
+  /** Recompute the health and damage of all wardens if the level or the player count changed */
   function rescaleBosses(): void {
     const key = `${bossLevel()}/${bossPlayers}`;
     if (key === scaleKey) return;
@@ -469,18 +470,18 @@ export function runPlayground(): void {
   const grimoires: Grimoire[] = [];
   arenas.forEach((arena, i) => {
     arena.onWin = (at) => {
-      // сердце лопнуло: фонтан малины (чем сильнее страж, тем больше) и гримуар — у боссов этажа пара на выбор
+      // the heart burst: a raspberry fountain (the stronger the warden, the bigger) and a grimoire — floor bosses offer a pair to choose from
       const boss = bosses[i], drops = boss.drops;
       props.fountain(at, boss.berries);
       const side = new THREE.Vector3(Math.cos(boss.yaw), 0, -Math.sin(boss.yaw));
       const pair = drops.map((id, j) => new Grimoire(scene, fx, at.clone().addScaledVector(side, (j - (drops.length - 1) / 2) * 3.2), id, profile.power + 1, () => scripted));
       for (const g of pair) g.siblings = pair.filter((x) => x !== g);
       grimoires.push(...pair);
-      const names = drops.map((id) => `«${itemDef(id).title}»`).join(' или ');
-      hud.banner(`Страж повержен<small>+${boss.berries} малины · ${drops.length > 1 ? `выбери гримуар: ${names}` : `гримуар ${names}`}</small>`, 3.5);
+      const names = drops.map((id) => `«${itemDef(id).title}»`).join(t(' or '));
+      hud.banner(`${t('Warden defeated')}<small>${t('+{n} raspberries', { n: boss.berries })} · ${drops.length > 1 ? t('choose a grimoire: {names}', { names }) : t('grimoire {names}', { names })}</small>`, 3.5);
     };
   });
-  /** Удар по герою от стража: урон, цифра, отброс */
+  /** A warden's hit on the hero: damage, number, knockback */
   function hurtHero(dmg: number, from: THREE.Vector3, knock: number): void {
     const hp0 = hero.hp;
     if (!hero.hurt(dmg)) return;
@@ -495,7 +496,7 @@ export function runPlayground(): void {
     if (!scripted) sfx.hit();
   }
 
-  /** Все цели для удара: чучела, бочки, ящики, страж */
+  /** All targets for a strike: dummies, barrels, crates, warden */
   const targets = (): Target[] => {
     const list: Target[] = [...dummies, ...props.targets];
     for (const b of bosses) if (b.awake) list.push(...b.targets());
@@ -507,9 +508,9 @@ export function runPlayground(): void {
   let lastStrike: { s: Strike; t: number } | null = null;
 
   /**
-   * Удар меча: цели в дуге перед героем (и в волне добивающего), без стены между.
-   * who и g — герой другого игрока и его снаряжение в общем бою (серверный бой — позже): у хоста урон настоящий, у гостя — для вида;
-   * звук и тряска — только от своего
+   * Sword strike: targets in the arc in front of the hero (and in the finisher wave), with no wall in between.
+   * who and g — another player's hero and his gear in a shared battle (server battle — later): the host's damage is real, the guest's is for show;
+   * sound and shake — only from one's own
    */
   function strike(s: Strike, who: Knight = hero, g: Gear = gear): number {
     const mine = who === hero;
@@ -532,18 +533,18 @@ export function runPlayground(): void {
     for (const t of hit) {
       const dir = new THREE.Vector3(t.pos.x - s.from.x, 0, t.pos.z - s.from.z).normalize();
       const point = t.pos.clone().setY(1.1).addScaledVector(dir, -t.radius);
-      // сила оружия и зачарования (src/gear.ts): острота, крит, огонь, отбрасывание
+      // weapon power and enchantments (src/gear.ts): sharpness, crit, fire, knockback
       const d = g.meleeDamage(s.dmg);
       t.hit(d.dmg, dir, point, s.knock * g.stats.knockMult);
       fx.text(point, d.crit ? `${d.dmg}!` : String(d.dmg), finisher || d.crit ? 'crit' : '');
       fx.burst(point, finisher ? [new THREE.Color(3.4, 2.6, 1.1), '#e8c35a'] : [new THREE.Color(1.8, 2.6, 3.4), '#e8c35a'], 10, { speed: 4, up: 2.5, size: 0.09, life: 0.45, glow: true, gravity: 8 });
-      // закалка: вспышка и эффект каждого зачарования (огонь, капли, души, разряд…) — src/weapon-arts.ts
+      // temper: the flash and effect of each enchantment (fire, drops, souls, discharge…) — src/weapon-arts.ts
       g.arts.onHitTarget(t, point, dir, d.crit, finisher);
       g.onHit(d.dmg, true, t.pos, t);
       smite ||= !finisher && g.stats.smiteChance > 0 && Math.random() < g.stats.smiteChance;
     }
     if (smite) {
-      // «Сокрушение»: обычный удар тоже даёт волну
+      // "Smite": an ordinary strike gives a wave too
       const r = who.tune.shockR * 0.7;
       fx.shock(impact.clone().setY(impact.y + 0.05), r, new THREE.Color(2.4, 1.4, 3.4), 0.35, 0.15);
       for (const t of targets()) if (t.alive && !hit.has(t) && Math.hypot(t.pos.x - impact.x, t.pos.z - impact.z) - t.radius <= r) {
@@ -552,10 +553,10 @@ export function runPlayground(): void {
         fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
       }
     }
-    // серп удара, шкала спец-удара, синергии закалки на добивающем
+    // the strike crescent, the weapon-art gauge, temper synergies on the finisher
     g.arts.onStrike(s, [...hit], impact);
     if (finisher) {
-      // ударная волна: кольцо по земле, пыль и тряска
+      // shockwave: a ring along the ground, dust and shake
       fx.shock(impact.clone().setY(impact.y + 0.05), who.tune.shockR * g.stats.waveMult, new THREE.Color(3.2, 2.4, 1.0), 0.4, 0.18);
       fx.burst(impact.clone().setY(impact.y + 0.1), ['#d8cfa8', '#b9ad88', '#9a8f70'], 14, { speed: 3.2, up: 2.2, size: 0.12, life: 0.5, gravity: 6 });
       if (mine) fx.shake = Math.max(fx.shake, 0.55);
@@ -565,7 +566,7 @@ export function runPlayground(): void {
     return hit.size;
   }
 
-  /** Взрыв бочки: бьёт героя, чучела и предметы вокруг */
+  /** Barrel explosion: hits the hero, dummies and props around */
   function explode(at: THREE.Vector3, r: number, dmg: number): void {
     fx.explosion(at.clone().setY(1), r, new THREE.Color(3.4, 1.4, 0.3));
     fx.shake = Math.max(fx.shake, 1);
@@ -579,9 +580,9 @@ export function runPlayground(): void {
     props.blast(at, r, dmg);
   }
 
-  // ---------- Светлячки: медленно плывут вокруг камеры, ночью ярче ----------
-  // Положение каждого светлячка считает вершинный шейдер по сиду и времени (wiki/dev-performance.md): CPU ничего не
-  // пересчитывает и не перезаливает матрицы, с кадра в кадр меняются два uniform-а
+  // ---------- Fireflies: drift slowly around the camera, brighter at night ----------
+  // The position of each firefly is computed by the vertex shader from a seed and time (wiki/dev-performance.md): the CPU recomputes
+  // nothing and re-uploads no matrices; from frame to frame two uniforms change
   const MOTES = 70;
   const moteU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() } };
   const moteMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.7), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -590,14 +591,14 @@ export function runPlayground(): void {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
 attribute vec4 seed; uniform float uTime; uniform vec3 uCam;
-// точка в квадрате 2R вокруг камеры, переносится по кругу, чтобы светлячки не кончались
+// a point in the 2R square around the camera, wrapped around so the fireflies never run out
 float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R; }`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
 {
   float R = 14.0, t = uTime, a = seed.x, b = seed.y, c = seed.z, d = seed.w;
   float x = wrapR(a * 2.0 * R + sin(t * 0.3 + d * 9.0) * 2.0 + t * 0.15, uCam.x, R);
   float z = wrapR(b * 2.0 * R + cos(t * 0.25 + c * 7.0) * 2.0, uCam.z, R);
-  // высота — от земли под камерой, а не от героя: в падении светлячки остаются на месте
+  // height — from the ground under the camera, not from the hero: while falling the fireflies stay in place
   float y = uCam.y + 0.4 + c * 2.6 + sin(t * (0.6 + d) + a * 20.0) * 0.3;
   float s = 0.6 + 0.5 * max(0.0, sin(t * (1.2 + c * 2.0) + b * 30.0));
   transformed = transformed * s + vec3(x, y, z);
@@ -615,13 +616,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     moteU.uCam.value.copy(camTarget);
   }
 
-  // ---------- Ввод (src/cgame/events.ts, input.ts, orders.ts; wiki/arch-layers.md) ----------
-  /** Очередь системных событий: обработчики только кладут, кадр разбирает перед тактами (Com_EventLoop) */
+  // ---------- Input (src/cgame/events.ts, input.ts, orders.ts; wiki/arch-layers.md) ----------
+  /** Queue of system events: handlers only enqueue, the frame drains it before the ticks (Com_EventLoop) */
   const events = new EventQueue();
-  /** Клавиши с защёлками, мышь, действия героя с клавиш — на такт */
+  /** Latched keys, mouse, hero actions from keys — per tick */
   const gi = new GameInput();
   const input = emptyInput();
-  /** Ввод из теста (Playwright): клавиатура и мышь игнорируются */
+  /** Input from a test (Playwright): keyboard and mouse are ignored */
   let scripted = false;
 
   const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -637,30 +638,30 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   let showTelemetry = !FROM_MENU;
   let showFps = false;
 
-  /** Браузерное действие глушится в обработчике — отложить нельзя */
+  /** The browser action is suppressed in the handler — it cannot be deferred */
   const PREVENT = new Set(['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10']);
   bindDom(events, canvas, { prevent: (e) => PREVENT.has(e.code), gesture: initAudio, keyNow: uiKey });
 
   /**
-   * Клавиши интерфейса — сразу в обработчике, по старшинству (пауза → инвентарь → лавка → чат → меню площадки →
-   * переключатели клиента): это не игра, им не нужен такт. true — съедена, в очередь не идёт
+   * Interface keys — right in the handler, by precedence (pause → inventory → shop → chat → pad menu →
+   * client toggles): this is not the game, they need no tick. true — consumed, does not go into the queue
    */
   function uiKey(e: KeyboardEvent): boolean {
     if (e.repeat) return true;
-    // пауза и итог боя из меню: клавиши — им
+    // pause and the battle result from the menu: the keys go to them
     if (battle?.key(e)) return true;
-    // инвентарь открыт: клавиши — ему (Esc, I, Q/E, стрелки, Enter, X)
+    // the inventory is open: the keys go to it (Esc, I, Q/E, arrows, Enter, X)
     if (inventory.open) { inventory.key(e); return true; }
     if (shop.open) { shop.key(e); return true; }
     if (netClient?.typing) return true;
     if (netClient && e.code === 'Enter' && !battle?.open) { gi.clear(); netClient.openChat(); return true; }
-    // меню площадки обороны: цифры — выбор башни, Esc / F — закрыть
+    // the defence pad menu: digits — pick a tower, Esc / F — close
     if (tdUi?.menuOpen && tdUi.key(e)) return true;
     if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return true; }
     return clientKey(e.code);
   }
 
-  /** Разбор очереди перед тактами кадра (Com_EventLoop): сетевые кадры — каналу, колесо — камере, игровой ввод — в состояние такта */
+  /** Draining the queue before the frame's ticks (Com_EventLoop): network frames — to the channel, the wheel — to the camera, game input — into the tick state */
   function drainEvents(): void {
     events.drain((ev) => {
       if (ev.kind === 'net') { ev.deliver(); return; }
@@ -670,7 +671,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     });
   }
 
-  /** Переключатели клиента (не игра): окна, оверлеи, отладка. true — съедено */
+  /** Client toggles (not the game): windows, overlays, debugging. true — consumed */
   function clientKey(code: string): boolean {
     switch (code) {
       case 'KeyI': openInventory(); return true;
@@ -678,25 +679,25 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       case 'Tab': hud.toggleOverlay(); return true;
       case 'Escape': if (hud.mapOpen) hud.toggleMap(); else battle?.pause(); return true;
       case 'KeyH': helpOn = !helpOn; helpT = helpOn ? Infinity : 0; return true;
-      case 'F9': toast(toggleMute() ? 'Звук выключен' : 'Звук включён'); return true;
-      case 'KeyL': night = !night; applyNight(); toast(night ? 'Ночь' : 'День'); refreshControls(); return true;
-      case 'KeyU': look.unreal = !look.unreal; toast(look.unreal ? 'Свет как в Unreal' : 'Простой свет'); refreshControls(); return true;
-      case 'KeyB': postFX = !postFX; toast(postFX ? 'Постобработка включена' : 'Постобработка выключена'); refreshControls(); return true;
+      case 'F9': toast(toggleMute() ? t('Sound off') : t('Sound on')); return true;
+      case 'KeyL': night = !night; applyNight(); toast(night ? t('Night') : t('Day')); refreshControls(); return true;
+      case 'KeyU': look.unreal = !look.unreal; toast(look.unreal ? t('Unreal-style lighting') : t('Plain lighting')); refreshControls(); return true;
+      case 'KeyB': postFX = !postFX; toast(postFX ? t('Post-processing on') : t('Post-processing off')); refreshControls(); return true;
       case 'KeyN': resetTargets(); return true;
       case 'F1': panel.toggle(); return true;
-      case 'F2': overlays.colliders = !overlays.colliders; toast(`Коллайдеры: ${overlays.colliders ? 'вкл' : 'выкл'}`); return true;
-      case 'F3': overlays.aim = !overlays.aim; toast(`Дуга удара: ${overlays.aim ? 'вкл' : 'выкл'}`); return true;
+      case 'F2': overlays.colliders = !overlays.colliders; toast(t('Colliders: {v}', { v: overlays.colliders ? t('on') : t('off') })); return true;
+      case 'F3': overlays.aim = !overlays.aim; toast(t('Strike arc: {v}', { v: overlays.aim ? t('on') : t('off') })); return true;
       case 'F4': showTelemetry = !showTelemetry; return true;
-      case 'F6': hero.god = !hero.god; toast(`Бессмертие: ${hero.god ? 'вкл' : 'выкл'}`); refreshControls(); return true;
-      case 'F7': timeScale = TIME_SCALES[(TIME_SCALES.indexOf(timeScale) + 1) % TIME_SCALES.length]; toast(`Время ×${timeScale}`); return true;
+      case 'F6': hero.god = !hero.god; toast(t('God mode: {v}', { v: hero.god ? t('on') : t('off') })); refreshControls(); return true;
+      case 'F7': timeScale = TIME_SCALES[(TIME_SCALES.indexOf(timeScale) + 1) % TIME_SCALES.length]; toast(t('Time ×{v}', { v: timeScale })); return true;
       case 'F8': showFps = !showFps; return true;
-      case 'KeyP': paused = !paused; toast(paused ? 'Пауза' : 'Продолжаем'); return true;
+      case 'KeyP': paused = !paused; toast(paused ? t('Paused') : t('Resumed')); return true;
       case 'Period': if (paused) stepOnce = true; return true;
       default: return false;
     }
   }
 
-  /** Действие героя с клавиши — в такте, по порядку (кнопки usercmd): зелье, артефакты, аура, спец-удар, предмет, волна */
+  /** A hero action from a key — in the tick, in order (usercmd buttons): potion, artifacts, aura, weapon art, prop, wave */
   function act(a: Action): void {
     switch (a.k) {
       case 'potion': gear.potion(); break;
@@ -709,19 +710,19 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     }
   }
 
-  // экран вверх = мир (−1, −1)
+  // screen up = world (−1, −1)
   const FWD = new THREE.Vector2(-1, -1).normalize();
   const RIGHT = new THREE.Vector2(1, -1).normalize();
 
   function readInput(): void {
     if (scripted) return;
-    // инвентарь или лавка открыты (сетевой бой идёт дальше): клавиши и кнопки им, герой стоит
+    // the inventory or the shop is open (a network battle goes on): keys and buttons go to them, the hero stands still
     if (inventory.open || shop.open) gi.clear();
     gi.move(FWD, RIGHT, input.move);
     pointer.down = gi.mouse.lmbHeld && !panel.el.contains(document.activeElement);
     pointer.shift = gi.shift;
     if (gi.mouse.seen) {
-      // курсор на земле — верх блока под лучом камеры (срезанное над героем пропускаем), цель — по тому же лучу
+      // the cursor on the ground — the top of the block under the camera ray (the cut above the hero is skipped), the target — along the same ray
       raycaster.setFromCamera(gi.mouse.ndc, camera);
       groundAt(raycaster.ray, pointer.ground);
       pointer.hover = pickRay(raycaster.ray);
@@ -732,19 +733,19 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     input.roll = gi.keys.tapped('Space');
   }
 
-  /** Конец такта: защёлки ввода (перекат, тапы, клик) сброшены */
+  /** Tick end: input latches (roll, taps, click) are cleared */
   function clearEdges(): void {
     input.roll = false;
     gi.endTick();
   }
 
-  // ---------- Мышь как в Minecraft Dungeons (src/cgame/orders.ts) ----------
+  // ---------- Mouse as in Minecraft Dungeons (src/cgame/orders.ts) ----------
   const orders = new MouseOrders({ hero, terrain, pathfinder, solids, scripted: () => scripted, approach: (pad) => (sim ? sim.approach(pad, hero.pos) : null) }, scene);
   const pointer = orders.pointer;
-  /** Срез над героем под крышей (всё выше не рисуется и не ловит клик) */
+  /** The cut above the hero under a roof (everything higher is neither drawn nor catches clicks) */
   let cutY = Infinity;
 
-  /** Точка на земле под лучом: верх первого твёрдого блока; мимо уровня — плоскость на высоте героя */
+  /** The ground point under the ray: the top of the first solid block; past the level — the plane at the hero's height */
   function groundAt(ray: THREE.Ray, out: THREE.Vector3): THREE.Vector3 {
     const o = ray.origin, d = ray.direction;
     const h = raycastVoxels(level, o.x, o.y, o.z, d.x, d.y, d.z, 250, Infinity, (x, y, z) => y < cutY && collideTop(level, x, y, z) > -Infinity);
@@ -756,7 +757,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   }
 
 
-  /** Цель под лучом камеры: ближайшая к камере, у которой луч проходит сквозь «столбик» тела */
+  /** The target under the camera ray: the one nearest to the camera whose body "column" the ray passes through */
   const _a = new THREE.Vector3(), _b = new THREE.Vector3();
   function pickRay(ray: THREE.Ray): Target | null {
     let best: Target | null = null, bestD = Infinity;
@@ -771,7 +772,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     }
     return best;
   }
-  /** Цель в точке на земле (для тестов) */
+  /** The target at a ground point (for tests) */
   function pickAt(x: number, z: number): Target | null {
     let best: Target | null = null, bestD = Infinity;
     for (const t of targets()) {
@@ -782,7 +783,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   }
 
 
-  /** Куда целятся артефакты и лук: цель под курсором, иначе точка на земле */
+  /** Where artifacts and the bow aim: the target under the cursor, otherwise the ground point */
   const aimPoint = (): THREE.Vector3 => orders.aimPoint();
 
   function resetTargets(): void {
@@ -793,75 +794,75 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     pack.clear();
     for (const r of mobRooms) fillRoom(r);
     if (sim) { sim.reset(); tdPack?.clear(); syncPurse(); }
-    toast(sim ? 'Оборона заново: башни снесены, казна полная' : 'Чучела и склад на местах');
+    toast(sim ? t('Defence restarted: towers razed, treasury full') : t('Dummies and storage yard back in place'));
   }
 
-  // ---------- Панель: переключатели ----------
+  // ---------- Panel: toggles ----------
   const refreshers: (() => void)[] = [];
   function refreshControls(): void { for (const r of refreshers) r(); }
   {
     const c = panel.controls;
-    refreshers.push(toggle(c, 'Ночь (L)', () => night, (v) => { night = v; applyNight(); }));
-    refreshers.push(toggle(c, 'Бессмертие (F6)', () => hero.god, (v) => { hero.god = v; }));
-    refreshers.push(toggle(c, 'Постобработка, bloom (B)', () => postFX, (v) => { postFX = v; }));
-    refreshers.push(toggle(c, 'Свет как в Unreal: AO, цвет, дымка (U)', () => look.unreal, (v) => { look.unreal = v; }));
-    refreshers.push(toggle(c, 'Тени', () => sun.castShadow, (v) => { sun.castShadow = v; }));
+    refreshers.push(toggle(c, t('Night (L)'), () => night, (v) => { night = v; applyNight(); }));
+    refreshers.push(toggle(c, t('God mode (F6)'), () => hero.god, (v) => { hero.god = v; }));
+    refreshers.push(toggle(c, t('Post-processing, bloom (B)'), () => postFX, (v) => { postFX = v; }));
+    refreshers.push(toggle(c, t('Unreal-style lighting: AO, colour, haze (U)'), () => look.unreal, (v) => { look.unreal = v; }));
+    refreshers.push(toggle(c, t('Shadows'), () => sun.castShadow, (v) => { sun.castShadow = v; }));
     const row = document.createElement('div');
     row.className = 'pg-btnrow';
     c.appendChild(row);
-    button(row, 'Сбросить чучела и склад (N)', resetTargets);
-    button(row, 'Герой в центр', () => hero.place(0, 4, Math.PI));
-    // зал стражей: встать у ворот любого
+    button(row, t('Reset dummies and storage yard (N)'), resetTargets);
+    button(row, t('Hero to the centre'), () => hero.place(0, 4, Math.PI));
+    // the hall of wardens: stand at anyone's gate
     const row2 = document.createElement('div');
     row2.className = 'pg-btnrow';
     c.appendChild(row2);
-    for (const spec of BOSS_ARENAS) button(row2, `Страж: ${spec.title}`, () => hero.place(spec.exit.x, spec.exit.z, spec.exit.yaw));
-    // рядовые мобы: отряд перед героем
+    for (const spec of BOSS_ARENAS) button(row2, t('Warden: {title}', { title: t(spec.title) }), () => hero.place(spec.exit.x, spec.exit.z, spec.exit.yaw));
+    // rank-and-file mobs: a squad in front of the hero
     const row3 = document.createElement('div');
     row3.className = 'pg-btnrow';
     c.appendChild(row3);
-    button(row3, 'Мобы: первая партия', () => spawnSquad(SQUADS.first));
-    button(row3, 'Мобы: вторая партия', () => spawnSquad(SQUADS.second));
-    button(row3, 'Мобы: третья партия', () => spawnSquad(SQUADS.third));
-    button(row3, 'Мобы: четвёртая партия', () => spawnSquad(SQUADS.fourth));
-    for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id) && !TD_FOES.has(id)) button(row3, `Моб: ${def.title}`, () => spawnSquad(SQUADS[id] ?? [id]));
-    button(row3, 'Убрать мобов', () => pack.clear());
-    // оборона куста: враг на каждую дорогу
-    if (tdSpec) for (const l of tdSpec.lanes) button(row3, `На дорогу: ${l.title}`, () => sim?.spawnOn(['berryling', 'gardener', 'wolf', 'runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper', 'sapper', 'ballista'][Math.floor(Math.random() * 11)], l.id));
-    if (tdSpec) button(row3, 'Волна сейчас (G)', () => sim?.callWave(0));
-    for (const r of roomSpecs) button(row3, r.title, () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
-    // масштаб стражей: уровень и число игроков
-    refreshers.push(select(c, 'Уровень стражей', [['hero', 'по герою'], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
-    // закалка для проверки: любое оружие и до трёх зачарований на III (вид, синергии, спец-удар)
+    button(row3, t('Mobs: first batch'), () => spawnSquad(SQUADS.first));
+    button(row3, t('Mobs: second batch'), () => spawnSquad(SQUADS.second));
+    button(row3, t('Mobs: third batch'), () => spawnSquad(SQUADS.third));
+    button(row3, t('Mobs: fourth batch'), () => spawnSquad(SQUADS.fourth));
+    for (const [id, def] of Object.entries(MOBS)) if (!MOB_PARTS.has(id) && !TD_FOES.has(id)) button(row3, t('Mob: {title}', { title: def.title }), () => spawnSquad(SQUADS[id] ?? [id]));
+    button(row3, t('Clear mobs'), () => pack.clear());
+    // bush defence: an enemy onto each lane
+    if (tdSpec) for (const l of tdSpec.lanes) button(row3, t('Onto lane: {title}', { title: t(l.title) }), () => sim?.spawnOn(['berryling', 'gardener', 'wolf', 'runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper', 'sapper', 'ballista'][Math.floor(Math.random() * 11)], l.id));
+    if (tdSpec) button(row3, t('Wave now (G)'), () => sim?.callWave(0));
+    for (const r of roomSpecs) button(row3, t(r.title), () => hero.place(r.enter.x, r.enter.z, r.enter.yaw));
+    // warden scaling: level and player count
+    refreshers.push(select(c, t('Warden level'), [['hero', t('by hero')], ...[1, 3, 5, 10, 15, 20, 30].map((v): [string, string] => [String(v), String(v)])], () => bossLevelPick, (v) => { bossLevelPick = v; rescaleBosses(); }));
+    // temper for testing: any weapon and up to three enchantments at III (look, synergies, weapon art)
     const tempPick: (MeleeEnchant | '')[] = ['', '', ''];
     const applyTemper = (): void => {
       const ids = [...new Set(tempPick.filter((x): x is MeleeEnchant => !!x))];
       gear.temperOverride = ids.length ? ids.map((id) => ({ id, tier: 3 })) : null;
       gear.apply();
     };
-    refreshers.push(select(c, 'Оружие', [['', 'надетое'], ...weapons().map((w): [string, string] => [w.id, `${w.title} (${w.category})`])], () => gear.weaponOverride?.id ?? '', (v) => {
+    refreshers.push(select(c, t('Weapon'), [['', t('equipped')], ...weapons().map((w): [string, string] => [w.id, `${w.title} (${t(w.category)})`])], () => gear.weaponOverride?.id ?? '', (v) => {
       gear.weaponOverride = v ? getWeapon(v) ?? null : null;
       gear.apply();
     }));
-    for (let i = 0; i < 3; i++) refreshers.push(select<MeleeEnchant | ''>(c, `Закалка ${i + 1}`, [['', '—'], ...MELEE_ENCHANTS.map((id): [MeleeEnchant, string] => [id, `${enchantDef(id).title} · ${TEMPER_LOOK[id].name}`])], () => tempPick[i], (v) => { tempPick[i] = v; applyTemper(); }));
-    refreshers.push(select(c, 'Игроков', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']], () => String(bossPlayers), (v) => { bossPlayers = Number(v); rescaleBosses(); }));
+    for (let i = 0; i < 3; i++) refreshers.push(select<MeleeEnchant | ''>(c, t('Temper {n}', { n: i + 1 }), [['', '—'], ...MELEE_ENCHANTS.map((id): [MeleeEnchant, string] => [id, `${enchantDef(id).title} · ${TEMPER_LOOK[id].name}`])], () => tempPick[i], (v) => { tempPick[i] = v; applyTemper(); }));
+    refreshers.push(select(c, t('Players'), [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']], () => String(bossPlayers), (v) => { bossPlayers = Number(v); rescaleBosses(); }));
   }
 
-  // ---------- HUD и инвентарь как в Minecraft Dungeons (src/hud/) ----------
+  // ---------- HUD and inventory as in Minecraft Dungeons (src/hud/) ----------
   const hud = new Hud(document.body, profile);
-  const questGoal = (level.meta.goal as [string, string] | undefined) ?? ['Исследуй плейграунд', 'Плейграунд Малины'];
-  hud.setGoal(questGoal[0], questGoal[1]);
-  // стены замка меняют блоки (пролом, починка): препятствия врагов — заново
+  const questGoal = (level.meta.goal as [string, string] | undefined) ?? ['Explore the playground', 'Malina playground'];
+  hud.setGoal(t(questGoal[0]), t(questGoal[1]));
+  // castle walls change blocks (breach, repair): enemy obstacles are rebuilt
   const levelChanged = (): void => { if (STREAM) return; obstacles.length = 0; obstacles.push(...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)); foeObsKey = null; };
-  // из меню: малина героя откладывается — оборона ставит в профиль свою казну, лагерь вернёт собранное (src/menu/session.ts)
-  // снаряжение откладывается всегда (и с ?map=td без меню — лагерь вернёт), в бой — набор нового героя (Profile.tdKit)
+  // from the menu: the hero's raspberries are stashed — the defence puts its treasury into the profile, the camp returns what was collected (src/menu/session.ts)
+  // gear is always stashed (also with ?map=td without the menu — the camp returns it), into battle — a new hero's kit (Profile.tdKit)
   if (tdSpec && FROM_MENU) stashBerries(profile.data.berries);
   if (tdSpec) { stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); profile.tdKit(); }
-  // число игроков партии: ?players=N
+  // the party's player count: ?players=N
   if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
   /**
-   * Казна обороны живёт в симуляции (`sim.berries(0)`), малина профиля — её зеркало для HUD, лавок и лагеря:
-   * что изменили лавки, инвентарь и тесты, уходит в казну разницей; после — профиль равен казне
+   * The defence treasury lives in the simulation (`sim.berries(0)`), the profile's raspberries mirror it for the HUD, shops and camp:
+   * what shops, inventory and tests changed goes into the treasury as the difference; afterwards the profile equals the treasury
    */
   let purseMirror = 0;
   const syncPurse = (): void => {
@@ -869,9 +870,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (profile.data.berries !== purseMirror) sim.gain(0, profile.data.berries - purseMirror);
     profile.data.berries = purseMirror = sim.berries(0);
   };
-  /** Клиент сетевого боя (src/cgame/net-battle.ts): бой считает сервер; null — бой свой */
+  /** Network battle client (src/cgame/net-battle.ts): the server computes the battle; null — the battle is local */
   let netClient: NetBattleClient | null = null;
-  /** Клиентская копия снимка: в одиночной игре — с собственного мира, тем же путём, что у гостя сетевого боя */
+  /** The client copy of the snapshot: in single player — from its own world, by the same path as a network battle guest */
   const snapView = new SnapshotView<SimEvent>();
   if (tdSpec) {
     const pk = new Pack(bossHooks, (at, n) => { if (sim && world) { sim.fallen++; world.piles.drop(at, n); } });
@@ -886,31 +887,31 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     }, { seed: Number(query.get('seed')) || Date.now() % 2 ** 31, level, td: tdSpec, players: bossPlayers, personal: false });
     sim = world.td!;
     sim.fund(0);
-    // стартовая казна карты заменяет малину профиля (в лагере своя малина вернётся из отложенной — src/menu/session.ts)
+    // the map's starting treasury replaces the profile's raspberries (in the camp one's own raspberries return from the stash — src/menu/session.ts)
     profile.data.berries = purseMirror = sim.berries(0);
     syncPurse();
     tdView = new TdView({ scene, fx, quiet: () => scripted, spec: tdSpec, heroPos: () => hero.pos, seat: () => nb?.seat ?? 0 });
     tdUi = new TdUi(document.body, sim, 0, { toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, heroPos: () => hero.pos, sync: syncPurse, alive: () => pk.mobs.filter((m) => !m.dead).length });
   }
-  /** Шаг мира обороны и вид по его снимку и событиям (src/cgame/) */
+  /** A step of the defence world and the view from its snapshot and events (src/cgame/) */
   function stepTd(dt: number): void {
     if (!world || !sim || !tdView || !tdUi || !tdPack) return;
     if (netClient) {
-      // сетевой бой: мир и куклы — по снимкам сервера (NetBattleClient.update), свой герой предсказан выше
+      // network battle: the world and the puppets follow the server snapshots (NetBattleClient.update), one's own hero is predicted above
       netClient.update(dt);
       tdUi.update(dt);
       tdView.update(dt);
       return;
     }
     syncPurse();
-    // стая — внутри шага мира: под его случайностью и приманками (крючок step)
+    // the pack is inside the world step: under its randomness and decoys (the step hook)
     world.step(dt);
     syncPurse();
     flushTd();
     tdUi.update(dt);
     tdView.update(dt);
   }
-  /** Записи и события мира — во вью, HUD и эффекты (после шага; фасад тестов зовёт и между шагами) */
+  /** World records and events — into the view, HUD and effects (after a step; the test facade also calls it between steps) */
   function flushTd(): void {
     if (!world || !sim || !tdView || !tdUi) return;
     tdView.menuPad = tdUi.menuPad?.index ?? null;
@@ -919,13 +920,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     tdView.apply(snapView);
     tdUi.events(evs);
   }
-  // сетевая игра (src/net/client.ts): страница боя заново входит на сервер — место в комнате держится.
-  // Общий бой (src/cgame/net-battle.ts): бой считает сервер, сюда приходят снимки по /game
+  // network game (src/net/client.ts): the battle page logs into the server again — the seat in the room is kept.
+  // Shared battle (src/cgame/net-battle.ts): the server computes the battle, snapshots arrive here over /game
   const netRoom = FROM_MENU && !!query.get('room');
   const nb = netRoom ? netBattle() : null;
-  // без проверки /api/health: пока строится карта, страница занята и проверка не успевает; соединение само переподключается
+  // without the /api/health check: while the map is being built the page is busy and the check does not make it; the connection reconnects by itself
   if (netRoom) NET.connect();
-  // снаряжение героя другого игрока: те же цели и взрывы, без подсказок и баннеров; звук — когда он рядом со своим
+  // another player's hero gear: the same targets and explosions, no prompts or banners; sound — when he is near one's own
   const hears = (k: Knight): boolean => !scripted && Math.hypot(k.pos.x - hero.pos.x, k.pos.z - hero.pos.z) < NET_HEAR;
   const makeGear = (k: Knight, p: Profile): Gear => new Gear({
     scene, fx, hero: k, terrain, targets: () => targets(), blast: (at, r, dmg) => props.blast(at, r, dmg),
@@ -937,24 +938,24 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       sim, world, pack: tdPack, tdView, tdUi, terrain, solids, makeGear, toast,
       swing: (k, g, step) => { if (hears(k)) weaponSwing(g.arts.category, step); },
       quiet: () => scripted,
-      onOver: (result) => { if (result === 'abandoned') toast('Все вышли — бой прерван'); },
+      onOver: (result) => { if (result === 'abandoned') toast(t('Everyone left — battle abandoned')); },
     });
   }
-  // сетевая комната начала новый бой («Ещё раз» у хоста) — на его страницу
+  // the network room started a new battle ("Play again" at the host) — go to its page
   if (netRoom) NET.on((m) => { if (m.t === 'battle.start' && m.matchId !== nb?.matchId) window.location.href = netBattleUrl(m.map, m.players, NET.room?.room.code ?? query.get('room') ?? ''); });
   const inventory = new Inventory(document.body, profile, T);
   inventory.onClose = () => gi.clear();
   function openInventory(): void { gear.cancelCast(); if (hud.mapOpen) hud.toggleMap(); inventory.show(); }
   hud.onInventory = openInventory;
-  // кнопки HUD — те же действия, в такте
+  // HUD buttons — the same actions, in the tick
   hud.onPotion = () => gi.queue({ k: 'potion' });
   hud.onArtifact = (i) => gi.queue({ k: 'use', i });
   hud.onAura = () => gi.queue({ k: 'aura' });
   hud.onSpecial = () => gi.queue({ k: 'special' });
-  // карта с туманом войны: мини в углу, Tab — поверх игры, M — полная (src/hud/automap.ts)
+  // map with fog of war: mini in the corner, Tab — over the game, M — full (src/hud/automap.ts)
   const automap = new AutoMap(level, !STREAM);
-  hud.setMap(automap, new URLSearchParams(window.location.search).has('map') ? level.name : 'Плейграунд');
-  // открытый мир: регионы вокруг героя, их предметы — в склад, их колонны — в карту; состояние — в localStorage
+  hud.setMap(automap, new URLSearchParams(window.location.search).has('map') ? t(level.name) : t('Playground'));
+  // open world: regions around the hero, their props — into the storage yard, their columns — into the map; state — in localStorage
   const regions: RegionManager | null = STREAM ? new RegionManager(level, sourceLevel ? mapSource(sourceLevel) : worldSource(worldSeed), {
     spawn: (key, rx, rz, entities) => {
       props.addGroup(key, entities);
@@ -967,7 +968,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     seenOf: (_key, rx, rz) => automap.seenOf(rx, rz),
   }, `malina.world.${sourceLevel ? level.name : worldSeed}`) : null;
   if (regions) {
-    // старт — точка появления карты, у процедурного мира — перекрёсток дорог у начала координат (там ровно)
+    // start — the map's spawn point, for the procedural world — the crossroads near the origin (it is flat there)
     const sp = level.spawn ?? [1, 0, 4];
     regions.warm([{ x: sp[0], z: sp[2] }]);
     const a = THREE.MathUtils.degToRad((level.meta.spawnYaw as number | undefined) ?? 0);
@@ -977,19 +978,19 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   hud.onMap = () => hud.toggleMap();
   let revealAt = '';
   let mapT = 0;
-  // торговцы: окно покупок (src/hud/shop.ts)
+  // merchants: the purchase window (src/hud/shop.ts)
   const shop = new Shop(document.body, profile);
-  // бой из главного меню (src/menu/pause.ts): Esc — пауза с настройками, конец обороны — итог и «В лагерь»
+  // a battle from the main menu (src/menu/pause.ts): Esc — pause with settings, the end of the defence — the result and "To camp"
   const mapName = query.get('map') ?? '';
-  if (FROM_MENU) document.title = `Малина — ${tdSpec ? campaignMap(mapName).title : level.name}`;
-  const battle = FROM_MENU ? new BattleMenu(document.body, new SettingsPanel(document.body), tdSpec ? campaignMap(mapName).title : level.name) : null;
+  if (FROM_MENU) document.title = t('Malina — {name}', { name: tdSpec ? campaignMap(mapName).title : t(level.name) });
+  const battle = FROM_MENU ? new BattleMenu(document.body, new SettingsPanel(document.body), tdSpec ? campaignMap(mapName).title : t(level.name)) : null;
   if (battle) {
     battle.onRestart = () => {
-      // сетевой бой: «Ещё раз» после боя — хост начинает новый всей комнате, посреди боя заново нельзя
+      // network battle: "Play again" after the battle — the host starts a new one for the whole room; restarting mid-battle is not allowed
       if (netRoom) {
-        if (sim?.state === 'play') toast('В сетевой игре заново — только после боя');
+        if (sim?.state === 'play') toast(t('In a network game, restart only after the battle'));
         else if (NET.isHost) NET.again();
-        else toast('«Ещё раз» начинает хост');
+        else toast(t('“Play again” is started by the host'));
         return;
       }
       resetTargets(); if (hero.down) hero.revive(); else hero.hp = hero.maxHp;
@@ -999,11 +1000,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       refreshControls();
     };
   }
-  /** Итог обороны уже показан (для этой партии) */
+  /** The defence result is already shown (for this party) */
   let tdEndShown: 'play' | 'won' | 'lost' = 'play';
   shop.onClose = () => gi.clear();
   shop.onSound = (ok) => { if (!scripted) (ok ? sfx.pickup : sfx.empty)(); };
-  /** Подсказка по управлению: первые 15 с, потом — по H */
+  /** Controls help: the first 15 s, afterwards on H */
   let helpOn = settings.help;
   let helpT = 15;
 
@@ -1014,8 +1015,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     <div class="pg-fps" id="pgFps"></div>
     <div class="pg-toast" id="pgToast"></div>
     <div class="pg-prompt" id="pgPrompt"></div>
-    <div class="pg-help" id="pgHelp">ЛКМ по земле — идти · ЛКМ по цели — подойти и бить (держи — комбо) · Shift + ЛКМ — бить на месте · ПКМ — стрелять · WASD — ходьба · Space — перекат · 1/2/3 — заклинания и артефакты (держи — заряд) · G — волна сейчас · Q — спец-удар оружия · R — вспышка ауры · E — зелье · F — использовать, торговать · I — инвентарь · M — карта · Tab — карта поверх игры${FROM_MENU ? ' · Esc — пауза' : `<br>
-    F1 параметры · F2 коллайдеры · F3 дуга удара · F4 телеметрия · F6 бессмертие · F7 время · P пауза · . кадр · F8 FPS · F9 звук · B bloom · U свет · L день/ночь · N сброс · F10 редактор`} · H — скрыть подсказку</div>
+    <div class="pg-help" id="pgHelp">${t('LMB on the ground — walk · LMB on a target — approach and strike (hold — combo) · Shift + LMB — strike in place · RMB — shoot · WASD — walk · Space — dodge roll · 1/2/3 — spells and artifacts (hold — charge) · G — wave now · Q — weapon art · R — aura flare · E — potion · F — use, trade · I — inventory · M — map · Tab — map over the game')}${FROM_MENU ? t(' · Esc — pause') : `<br>
+    ${t('F1 parameters · F2 colliders · F3 strike arc · F4 telemetry · F6 god mode · F7 time · P pause · . frame · F8 FPS · F9 sound · B bloom · U lighting · L day/night · N reset · F10 editor')}`} · ${t('H — hide help')}</div>
     <div class="pg-reticle" id="pgRet"><i></i></div>`;
   document.body.appendChild(dev);
 
@@ -1031,7 +1032,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     const wall = sim && !pad && !hero.down ? sim.nearWall(hero.pos) : null;
     const trader = hero.down || pad || wall ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
     const near = hero.down || trader || pad || wall ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
-    // подошёл к сундуку — он тихо звенит
+    // came up to a chest — it chimes softly
     const nearChest = near?.kind === 'supply' ? near.target : null;
     if (nearChest && nearChest !== lastNearChest && !scripted) sfx.twinkle();
     lastNearChest = nearChest;
@@ -1039,13 +1040,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     promptEl.style.display = (near || trader || pad || wall) && !inventory.open && !shop.open ? '' : 'none';
     if (pad && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.prompt(pad)}`);
     else if (wall && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.wallPrompt(wall)}`);
-    else if (trader) setHTML('pgPrompt', `<kbd>F</kbd>Торговать: ${MERCHANT_TITLE[trader.kind].toLowerCase()}`);
+    else if (trader) setHTML('pgPrompt', `<kbd>F</kbd>${t('Trade: {who}', { who: MERCHANT_TITLE[trader.kind].toLowerCase() })}`);
     else if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
     hud.update(gear.hudState(), dt);
     hud.el.classList.toggle('show-hp', showTelemetry);
     const cell = `${Math.round(hero.pos.x)},${Math.round(hero.pos.z)}`;
     if (cell !== revealAt) { revealAt = cell; automap.reveal(hero.pos.x, hero.pos.z); }
-    // карты — 2D-канвас, перерисовка каждый кадр заметна; 10 раз в секунду хватает
+    // the maps are a 2D canvas, redrawing every frame is noticeable; 10 times a second is enough
     mapT -= dt;
     if (mapT <= 0 || hud.mapOpen) { mapT = 0.1; hud.drawMaps({ x: hero.pos.x, z: hero.pos.z, yaw: hero.yaw }, [
       ...props.supplies.map((c) => ({ x: c.pos.x, z: c.pos.z, icon: 'chest', dim: c.opened })),
@@ -1060,12 +1061,12 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     tele.style.display = showTelemetry ? '' : 'none';
     if (showTelemetry) {
       setHTML('pgTele', [
-        `<b>${hero.state}</b>${hero.touching ? ' · у стены' : ''}`,
-        `скорость <b>${hero.speed.toFixed(2)}</b> м/с`,
-        `высота <b>${hero.pos.y.toFixed(2)}</b> м${hero.grounded ? '' : ` · v<sub>y</sub> ${hero.vy.toFixed(1)}`}`,
-        `ударов <b>${hero.swings}</b>${lastStrike ? ` · последний: ${['слева', 'справа', 'сверху'][lastStrike.s.step]}, ${lastStrike.s.dmg}` : ''}`,
+        `<b>${hero.state}</b>${hero.touching ? t(' · at a wall') : ''}`,
+        t('speed <b>{v}</b> m/s', { v: hero.speed.toFixed(2) }),
+        `${t('height <b>{v}</b> m', { v: hero.pos.y.toFixed(2) })}${hero.grounded ? '' : ` · v<sub>y</sub> ${hero.vy.toFixed(1)}`}`,
+        `${t('strikes <b>{n}</b>', { n: hero.swings })}${lastStrike ? t(' · last: {side}, {dmg}', { side: [t('left'), t('right'), t('overhead')][lastStrike.s.step], dmg: lastStrike.s.dmg }) : ''}`,
         `x ${hero.pos.x.toFixed(2)} · z ${hero.pos.z.toFixed(2)}`,
-        `время ×${timeScale}${paused ? ' · <span class="bad">пауза</span>' : ''}${hero.god ? ' · бессмертие' : ''}`,
+        `${t('time ×{v}', { v: timeScale })}${paused ? ` · <span class="bad">${t('paused')}</span>` : ''}${hero.god ? t(' · god mode') : ''}`,
       ].join('<br>'));
     }
     const f = $('pgFps');
@@ -1086,7 +1087,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     }
   }
 
-  // ---------- Цикл ----------
+  // ---------- Loop ----------
   const STEP = 1 / 60;
   let simTime = 0;
   let downT = 0;
@@ -1094,16 +1095,16 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   function tick(dt: number): void {
     simTime += dt;
     readInput();
-    // действия с клавиш — здесь, по порядку, а не в обработчике DOM
+    // key actions — here, in order, not in the DOM handler
     for (const a of gi.takeActions()) act(a);
     orders.update(dt, input);
     gear.update(dt, gi.mouse.rmb && !scripted, aimPoint());
     orders.updateMarker(dt);
-    // зоны мобов (паутина лозоплёта) замедляют героя
+    // mob zones (the Vine Weaver's web) slow the hero
     const slow = Math.max(pack.heroSlow, ...mobRooms.map((r) => r.pack.heroSlow));
     hero.slow = Math.min(0.8, slow);
     hero.update(dt, input, solids(), terrain);
-    // под крышей: срезать потолок и всё, что выше, — виден этаж, где стоит герой
+    // under a roof: cut the ceiling and everything above — the floor the hero stands on is visible
     cutY = ceilingAt(level, hero.pos.x, hero.pos.z, hero.pos.y);
 
     if (interactReq) {
@@ -1117,9 +1118,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       const it = trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
     }
-    // шёл к площадке по клику: подошёл — меню
+    // walked to a pad on click: arrived — the menu
     if (tdUi) { const pad = orders.reachedPad(input); if (pad) tdUi.openMenu(pad); }
-    // в лаве горит: урон раз в 0,4 с, искры и шипение; перекат не спасает — выходи на берег
+    // burning in lava: damage every 0.4 s, sparks and hissing; a dodge roll does not save you — get to the shore
     if (lavaFx && level.nameAt(Math.round(hero.pos.x), Math.floor(hero.pos.y - 0.01), Math.round(hero.pos.z)) === 'lava') {
       lavaT -= dt;
       if (lavaT <= 0) {
@@ -1137,11 +1138,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const m of merchants) m.update(dt, hero.pos);
     pack.update(dt);
     stepTd(dt);
-    // защёлки ввода (перекат) живут до конца такта: их читает и клиент сетевого боя в stepTd
+    // input latches (roll) live until the end of the tick: the network battle client also reads them in stepTd
     clearEdges();
     lavaFx?.update(dt, hero.pos);
     mistFx?.update(dt);
-    // комната думает, когда герой рядом или гарнизон в бою; пал весь, а герой вышел — гарнизон снова на постах
+    // a room thinks when the hero is near or the garrison is fighting; all fell and the hero left — the garrison is back at its posts
     for (const r of mobRooms) {
       if (inRoom(r.spec, 30) || r.pack.mobs.some((m) => m.alerted)) r.pack.update(dt);
       if (garrison && r.spec.respawn !== false && !inRoom(r.spec, 3) && r.pack.mobs.every((m) => m.dead)) fillRoom(r);
@@ -1149,14 +1150,14 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (arenas.length) {
       rescaleBosses();
       for (const a of arenas) a.update(dt, hero);
-      // спящие стражи дальних арен не думают — только тот, чья арена рядом или в бою
+      // sleeping wardens of distant arenas do not think — only the one whose arena is near or in battle
       for (const b of bosses) if (b.awake || b.dead || Math.hypot(b.pos.x - hero.pos.x, b.pos.z - hero.pos.z) < 30) b.update(dt);
       for (let i = grimoires.length - 1; i >= 0; i--) {
         const g = grimoires[i];
         if (g.update(dt, hero.pos)) {
           profile.add(g.item, g.power);
           profile.save();
-          hud.banner(`${itemDef(g.item).title}<small>Заклинание стража — надень в гнездо 1/2/3 (I)</small>`, 3);
+          hud.banner(`${itemDef(g.item).title}<small>${t('Warden spell — equip it in slot 1/2/3 (I)')}</small>`, 3);
         }
         if (g.done) { g.dispose(); grimoires.splice(i, 1); }
       }
@@ -1164,10 +1165,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     fx.update(dt, window.innerWidth, window.innerHeight);
   }
 
-  // фоновая музыка (src/music.ts): тихая в покое, ещё тише в бою, тревожная при низком здоровье
+  // background music (src/music.ts): quiet at rest, quieter still in battle, anxious at low health
   const music = new Music();
   const near = (p: THREE.Vector3, r: number): boolean => Math.hypot(p.x - hero.pos.x, p.z - hero.pos.z) < r;
-  /** Бой: проснувшийся страж или моб, поднявший тревогу, в 25 м от героя */
+  /** Battle: an awakened warden or an alerted mob within 25 m of the hero */
   const inFight = (): boolean =>
     bosses.some((b) => b.awake && !b.dead) ||
     [pack, ...mobRooms.map((r) => r.pack), ...(tdPack ? [tdPack] : [])].some((p) => p.mobs.some((m) => m.alerted && !m.dead && near(m.pos, 25)));
@@ -1178,7 +1179,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
   function frame(): void {
     requestAnimationFrame(frame);
-    // Com_EventLoop: всё, что накопилось (ввод, сеть), — до тактов
+    // Com_EventLoop: everything accumulated (input, network) — before the ticks
     drainEvents();
     const now = performance.now();
     const real = Math.min(0.1, (now - last) / 1000);
@@ -1186,11 +1187,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     fpsAcc += real; fpsN++;
     if (fpsAcc > 0.5) { fpsVal = fpsN / fpsAcc; frameMs = (fpsAcc / fpsN) * 1000; fpsAcc = 0; fpsN = 0; }
 
-    // стоп-кадр удара заклинания: время почти стоит (src/fx.ts hitstop); в сетевом бою — только вид, такты и команды идут
+    // the spell-hit freeze frame: time almost stops (src/fx.ts hitstop); in a network battle — only the view, ticks and commands go on
     const stop = netRoom ? 1 : fx.hitstop > 0 ? 0.04 : fx.slowmo > 0 ? 0.33 : 1;
     fx.updateReal(real);
-    // инвентарь открыт — игра на паузе, как в одиночной MCD
-    // сетевой бой не встаёт на паузу: остальные играют дальше, свой герой стоит (ввод пуст), команды уходят каждый такт
+    // the inventory is open — the game is paused, as in single-player MCD
+    // a network battle does not pause: the others play on, one's own hero stands still (empty input), commands go out every tick
     if (!paused && (netRoom || (!inventory.open && !shop.open && !battle?.pausing))) acc += real * timeScale * stop;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     perf.begin();
@@ -1203,7 +1204,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (battle && sim && sim.state !== tdEndShown) {
       tdEndShown = sim.state;
       if (sim.state === 'won') markWon(mapName);
-      if (sim.state !== 'play') battle.end(sim.state === 'won', `волн отбито ${sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1)} из ${sim.waves.length}, врагов повержено ${sim.fallen}`);
+      if (sim.state !== 'play') battle.end(sim.state === 'won', t('{n} of {total} waves repelled, {fallen} enemies slain', { n: sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1), total: sim.waves.length, fallen: sim.fallen }));
     }
     perf.renderStart();
     render(real);
@@ -1211,10 +1212,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     perf.end(real);
   }
 
-  /** Уровень: перестроить изменённые чанки, вода и огонь, ближайшие факелы, рентген и срез — раз в кадр, не в каждом тике */
+  /** Level: rebuild changed chunks, water and fire, the nearest torches, x-ray and cut — once per frame, not every tick */
   function syncView(dt: number): void {
     if (regions) regions.update(dt, [hero.pos]);
-    // в мире мешер работает с бюджетом: остальные чанки — в следующих кадрах, ближние к герою первыми
+    // in the world the mesher works on a budget: the remaining chunks in the following frames, those nearest the hero first
     view.sync(regions ? 4 : Infinity, hero.pos);
     view.update(simTime, night ? 1 : 0.4, hero.pos);
     view.setXray(_xray.copy(hero.pos).setY(hero.pos.y + 0.9), camera.position, 2.0);
@@ -1222,10 +1223,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   }
   const _xray = new THREE.Vector3();
 
-  /** Камера, оверлеи, HUD и кадр; real — сколько прошло реального времени */
+  /** Camera, overlays, HUD and the frame; real — how much real time passed */
   function render(real: number): void {
     syncView(real);
-    // камера следит за героем; по высоте — плавно, чтобы падение не дёргало кадр
+    // the camera follows the hero; in height — smoothly, so a fall does not jerk the frame
     const want = hero.pos.clone();
     if (camOverride) camTarget.copy(camOverride); else if (scripted) camTarget.copy(want); else {
       camTarget.x += (want.x - camTarget.x) * Math.min(1, real * 6);
@@ -1247,7 +1248,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       overlays.drawCircles(list);
       overlays.drawPaths(orders.path.length ? [[hero.pos, ...orders.path]] : []);
     } else { overlays.drawCircles([]); overlays.drawPaths([]); }
-    // F3: дуга последнего удара, пока он виден
+    // F3: the arc of the last strike while it is visible
     const ls = lastStrike && simTime - lastStrike.t < 0.4 ? lastStrike.s : null;
     overlays.drawAim(ls ? ls.from.clone().setY(hero.pos.y + 0.1) : hero.pos, ls ? ls.yaw : hero.yaw, ls ? ls.half : 0, ls ? ls.range : 0.01);
 
@@ -1262,14 +1263,14 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (postFX) look.render();
     else look.renderPlain(camera);
   }
-  // прогрев шейдеров и текстур боя (src/fx-zoo.ts): компилируем до первого каста, а не в кадре удара
-  const ready = warmUp(renderer, scene, camera, T, look.composer.renderTarget1).catch((e) => { console.warn('прогрев не удался', e); return 0; });
+  // warming up the battle shaders and textures (src/fx-zoo.ts): compile before the first cast, not in the frame of a hit
+  const ready = warmUp(renderer, scene, camera, T, look.composer.renderTarget1).catch((e) => { console.warn('warm-up failed', e); return 0; });
   frame();
 
-  // ---------- Отладочный хук ----------
+  // ---------- Debug hook ----------
   /**
-   * Оборона для тестов (tests/td*.spec.ts): фасад над симуляцией (src/sim/td.ts) и меню (src/cgame/td-ui.ts) с местом 0;
-   * действия с казной сразу зеркалят малину в профиль
+   * Defence for tests (tests/td*.spec.ts): a facade over the simulation (src/sim/td.ts) and the menu (src/cgame/td-ui.ts) with seat 0;
+   * treasury actions mirror raspberries into the profile at once
    */
   const tdFacade = sim && tdUi && tdPack ? ((s: SimTd, ui: TdUi, pk: Pack) => ({
     spec: s.spec, pads: s.pads, towers: s.towers, bush: s.bush, walls: s.walls, lairs: s.lairs, kinds: s.kinds, waves: s.waves, queue: s.queue, pack: pk,
@@ -1295,59 +1296,59 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     setPlayers(n: number) { s.setPlayers(n); }, reset() { s.reset(); pk.clear(); syncPurse(); },
     prompt: (p: SimPad) => ui.prompt(p), wallPrompt: (w: SimWall) => ui.wallPrompt(w),
     openMenu: (p: SimPad) => ui.openMenu(p), closeMenu: () => ui.closeMenu(), key: (e: KeyboardEvent) => ui.key(e),
-    /** Сетевой бой: команды уходят серверу (src/cgame/net-battle.ts); null — бой свой */
+    /** Network battle: commands go to the server (src/cgame/net-battle.ts); null — the battle is local */
     get remote() { return netClient ? true : null; },
   }))(sim, tdUi, tdPack) : null;
   window.__malina = {
     mode: 'playground',
-    /** Клиент сетевого боя (src/cgame/net-battle.ts); null — бой свой */
+    /** Network battle client (src/cgame/net-battle.ts); null — the battle is local */
     get net() { return netClient; },
     hero, input, dummies, obstacles, camera, HERO, SWORD, props, level, terrain,
-    /** Рендер уровня и декора */
+    /** Level and decor renderer */
     view,
-    /** Препятствия героя: склад и декор */
+    /** Hero obstacles: storage yard and decor */
     get solids() { return solids(); },
     get berries() { return profile.data.berries; },
-    /** Снаряжение и прокачка: профиль (src/items.ts), бой (src/gear.ts), HUD и инвентарь (src/hud/) */
+    /** Gear and progression: profile (src/items.ts), battle (src/gear.ts), HUD and inventory (src/hud/) */
     profile, gear, hud, inventory, shop, merchants, automap,
-    /** Закалка и спец-удар (src/weapon-arts.ts): шкала, синергии, счётчики */
+    /** Temper and weapon art (src/weapon-arts.ts): gauge, synergies, counters */
     arts: gear.arts,
     special(x: number, z: number) { return gear.special(new THREE.Vector3(x, hero.pos.y, z)); },
-    /** Оружие для отладки поверх надетого (id из src/weapons.ts; пусто — надетое) и закалка на III */
+    /** Debug weapon on top of the equipped one (id from src/weapons.ts; empty — the equipped one) and temper at III */
     weapon(id = '') { gear.weaponOverride = id ? getWeapon(id) ?? null : null; gear.apply(); return gear.weaponOverride?.category ?? null; },
     temper(ids: MeleeEnchant[] = []) { gear.temperOverride = ids.length ? ids.map((id) => ({ id, tier: 3 })) : null; gear.apply(); return gear.arts.synergies.map((x) => x.id); },
-    /** Страж и его арена (src/bosses/): boss.state, arena.state, гримуары после победы */
+    /** The warden and its arena (src/bosses/): boss.state, arena.state, grimoires after the victory */
     bosses, arenas, bossIds, grimoires, bossBar,
-    /** Встать у ворот стража (id арены: cauldron, boar, …) */
-    /** Масштаб стражей: уровень (число или 'hero') и число игроков */
+    /** Stand at a warden's gate (arena id: cauldron, boar, …) */
+    /** Warden scaling: level (a number or 'hero') and the player count */
     bossScale(level: number | 'hero', players = bossPlayers) { bossLevelPick = String(level); bossPlayers = players; rescaleBosses(); return { level: bossLevel(), players: bossPlayers }; },
-    /** Рядовые мобы (src/mobs/): pack.mobs; вызвать моба в точку */
+    /** Rank-and-file mobs (src/mobs/): pack.mobs; summon a mob at a point */
     pack,
-    /** Оборона куста: фасад (pads, towers, build(pad, kind), pack врагов, walls); world и sim — мир симуляции (src/sim/); lavaFx — дымка и искры лавы (cells) */
+    /** Bush defence: the facade (pads, towers, build(pad, kind), enemy pack, walls); world and sim — the simulation world (src/sim/); lavaFx — lava haze and sparks (cells) */
     td: tdFacade, world, sim, tdView, tdUi, lavaFx, mistFx,
-    /** Комнаты мобов: spec (посты, вход) и стая гарнизона; fillRoom — заново на постах */
+    /** Mob rooms: spec (posts, entrance) and the garrison pack; fillRoom — back at the posts */
     mobRooms, fillRoom,
     spawnMob(kind: string, x: number, z: number) { return pack.spawn(kind, new THREE.Vector3(x, 0, z)); },
     toBoss(id: string) { const s = BOSS_ARENAS.find((a) => a.id === id); if (s) hero.place(s.exit.x, s.exit.z, s.exit.yaw); return !!s; },
-    /** Эффекты: стоп-кадр, засветка, свет заклинаний */
+    /** Effects: freeze frame, flash, spell light */
     fx,
-    /** Фоновая музыка (src/music.ts): mood, bpm, notes */
+    /** Background music (src/music.ts): mood, bpm, notes */
     music,
-    /** Замеры кадра (src/dev/perf.ts): snapshot() — сводка, длинные кадры с метками; renderer.info */
+    /** Frame measurements (src/dev/perf.ts): snapshot() — summary, long frames with marks; renderer.info */
     perf, renderer,
-    /** Прогрев шейдеров завершён (число программ) */
+    /** Shader warm-up finished (number of programs) */
     ready,
-    /** Погода (src/weather.ts): set(kind, intensity, wind) */
+    /** Weather (src/weather.ts): set(kind, intensity, wind) */
     weather,
-    /** Регионы открытого мира (?map=world): loaded, stats, kill(id), save() */
+    /** Open-world regions (?map=world): loaded, stats, kill(id), save() */
     regions,
-    /** Подойти к торговцу и нажать F */
+    /** Walk up to a merchant and press F */
     trade(kind: 'smith' | 'merchant' | 'sutler') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
-    /** ПКМ: выстрел к точке */
+    /** RMB: a shot towards a point */
     shoot(x: number, z: number) { return gear.shoot(new THREE.Vector3(x, hero.pos.y, z)); },
-    /** Клавиши 1/2/3: артефакт к точке; charge 0..1 — заклинание с зарядом, без удержания */
+    /** Keys 1/2/3: an artifact towards a point; charge 0..1 — a charged spell, without holding */
     artifact(i: number, x: number, z: number, charge = 0) { return gear.useArtifact(i, new THREE.Vector3(x, hero.pos.y, z), charge); },
-    /** Зажать клавишу 1/2/3 и отпустить через sec секунд симуляции */
+    /** Hold key 1/2/3 and release after sec seconds of simulation */
     hold(i: number, x: number, z: number, sec: number) {
       const at = new THREE.Vector3(x, hero.pos.y, z);
       if (!gear.pressArtifact(i, at)) return false;
@@ -1355,21 +1356,21 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       return gear.releaseArtifact(i, at);
     },
     potion() { return gear.potion(); },
-    /** Клавиша R: вспышка ауры */
+    /** Key R: aura flare */
     flare() { return gear.flareAura(); },
-    /** Нажать E */
+    /** Press E */
     interact() { interactReq = true; },
-    /** Ввод из теста: клавиатура и мышь перестают влиять на героя */
+    /** Input from a test: keyboard and mouse stop affecting the hero */
     script(on = true) { scripted = on; if (on) { input.move.set(0, 0); input.attack = false; orders.reset(); } },
-    /** Прогнать симуляцию sec секунд без реального времени */
+    /** Run the simulation for sec seconds without real time */
     step(sec: number) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) tick(STEP); syncView(sec); },
-    /** Нарисовать кадр сейчас (вкладка в фоне не получает requestAnimationFrame) */
+    /** Draw a frame now (a background tab gets no requestAnimationFrame) */
     render() { render(0); },
-    /** Нажатие пробела: перекат */
+    /** Space press: dodge roll */
     press(what: 'roll') { input[what] = true; },
-    /** Нажать ЛКМ в точке на земле (shift — удар на месте); цель в этой точке — подойти и бить */
+    /** Press LMB at a ground point (shift — strike in place); a target at that point — approach and strike */
     click(x: number, z: number, shift = false, y?: number) { pointer.ground.set(x, y ?? terrain.floorAt(x, z, hero.pos.y + 4), z); pointer.hover = pickAt(x, z); pointer.pad = sim && !pointer.hover ? sim.nearPad(new THREE.Vector3(x, y ?? 0, z)) : null; pointer.shift = shift; pointer.down = true; },
-    /** Отпустить ЛКМ */
+    /** Release LMB */
     release() { pointer.down = false; },
     get goal() { return orders.goal; },
     get path() { return orders.path; },
@@ -1380,7 +1381,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     setCamTarget(x?: number, z?: number) { camOverride = x === undefined || z === undefined ? null : new THREE.Vector3(x, 0, z); },
     setCam(dist: number, dir?: [number, number, number]) { camDist = dist; if (dir) CAM_DIR.set(...dir).normalize(); },
     setNight(on: boolean) { night = on; applyNight(); },
-    /** Время воды в шейдере — растёт, значит вода анимирована */
+    /** Water time in the shader — growing means the water is animated */
     get waterTime() { return liquidTime(); },
     trail: hero.trail,
     toggles: { get postFX() { return postFX; }, set postFX(v: boolean) { postFX = v; }, get unreal() { return look.unreal; }, set unreal(v: boolean) { look.unreal = v; } },

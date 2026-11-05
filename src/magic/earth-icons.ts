@@ -1,9 +1,9 @@
 import type { Draw } from '../icons.ts';
 
-/** Пиксельные иконки 16 × 16 для заклинаний земли и природы (src/magic/earth.ts) */
+/** Pixel icons 16 × 16 for earth and nature spells (src/magic/earth.ts) */
 export const ICONS: Record<string, Draw> = {
   rift(p) {
-    // трещина с янтарным светом и каменные шипы по краям
+    // crack with amber light and stone spikes along the edges
     p.l(2, 14, 6, 10, '#5a3a22'); p.l(6, 10, 9, 8, '#5a3a22'); p.l(9, 8, 13, 3, '#5a3a22');
     p.l(3, 14, 7, 10, '#ffb43a'); p.l(7, 10, 10, 8, '#ffd27a'); p.l(10, 8, 13, 4, '#ffb43a');
     p.s(1, 6, ['.a.', 'aba', 'aba', 'abb'], { a: '#7a6a58', b: '#a89880' });
@@ -12,7 +12,7 @@ export const ICONS: Record<string, Draw> = {
     p.p(12, 2, '#ffe27a'); p.p(4, 9, '#ffe27a');
   },
   raspberrybush(p) {
-    // куст: листва, колючки, малина
+    // bush: foliage, thorns, raspberries
     p.s(2, 4, [
       '...aaaaa....',
       '..abbbbbaa..',
@@ -28,7 +28,7 @@ export const ICONS: Record<string, Draw> = {
     p.r(7, 12, 2, 3, '#6a4a2a');
   },
   titanform(p) {
-    // каменная голова великана с янтарными глазами и трещиной
+    // stone giant head with amber eyes and a crack
     p.s(2, 1, [
       '...aaaaaa...',
       '..abbbbbba..',

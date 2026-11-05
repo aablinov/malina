@@ -4,8 +4,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { MIGRATIONS } from './migrations.ts';
 
 /**
- * База сервера — встроенный `node:sqlite`, без нативных зависимостей. Один процесс, синхронные запросы:
- * сервер однопоточный, а WAL даёт читать файл снаружи (sqlite3 malina.db) во время работы.
+ * Server database — built-in `node:sqlite`, no native dependencies. One process, synchronous queries:
+ * the server is single-threaded, and WAL lets the file be read from outside (sqlite3 malina.db) while running.
  */
 export type Db = DatabaseSync;
 
@@ -27,7 +27,7 @@ function migrate(db: Db): void {
   }
 }
 
-/** Транзакция: всё или ничего; вложенные вызовы идут внутри внешней */
+/** Transaction: all or nothing; nested calls run inside the outer one */
 export function tx<T>(db: Db, f: () => T): T {
   if (db.isTransaction) return f();
   db.exec('BEGIN IMMEDIATE');

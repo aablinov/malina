@@ -1,6 +1,6 @@
 import type { Db } from '../db.ts';
 
-/** Друзья: «добавил по имени» — список в одну сторону, как закладки */
+/** Friends: "added by name" — a one-directional list, like bookmarks */
 export class Friends {
   private readonly db: Db;
   constructor(db: Db) { this.db = db; }

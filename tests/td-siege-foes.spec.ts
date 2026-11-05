@@ -3,9 +3,9 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Охотники на башни (wiki/design-tower-defence.md, раздел 10): бобёр-грызун сворачивает с дороги к башне, грызёт её
- * до руин и возвращается на дорогу; руины чинятся за малину с прежним уровнем; обычные враги башни не трогают.
- * Ледяной колдунчик замораживает башню — она не стреляет, два удара по льду его разбивают; морозный шпиль не мёрзнет.
+ * Tower hunters (wiki/design-tower-defence.md, section 10): the gnawer beaver turns off the road to a tower, gnaws it
+ * down to ruins and returns to the road; ruins are repaired for raspberries keeping the old level; ordinary enemies leave towers alone.
+ * The ice warlock freezes a tower — it does not fire, two hits on the ice break it; the frost spire does not freeze.
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=td';
@@ -19,7 +19,7 @@ async function open(page: Page): Promise<void> {
     const m = (window as any).__malina;
     m.script(true);
     await m.ready;
-    // площадка у западной дороги: ближайшая к точкам дороги
+    // the pad by the west road: the one closest to the road's points
     const td = m.td, lane = td.lane('west');
     const near = (p: any): number => Math.min(...lane.points.slice(1, -1).map(([x, z]: number[]) => Math.hypot(p.pos.x - x, p.pos.z - z)));
     (window as any).__pad = [...td.pads].sort((a: any, b: any) => near(a) - near(b))[0];
@@ -27,7 +27,7 @@ async function open(page: Page): Promise<void> {
   expect(errors).toEqual([]);
 }
 
-test('оборона: грызун грызёт башню до руин и уходит на дорогу; руины чинятся; гонец мимо башни не сворачивает', async ({ page }) => {
+test('defence: the gnawer gnaws a tower down to ruins and leaves for the road; ruins are repaired; a courier does not turn off at the tower', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, pad = (window as any).__pad;
@@ -36,13 +36,13 @@ test('оборона: грызун грызёт башню до руин и ух
     const t = td.build(pad, 'arrow');
     td.upgrade(pad);
     const lvl = t.level, maxHp = t.maxHp;
-    // обычный враг идёт мимо
+    // an ordinary enemy walks past
     const run = td.spawnOn('runner', 'west');
     run.hp = 1e5;
     for (let i = 0; i < 150; i++) m.step(0.1);
     const runnerHp = t.hp, runnerProgress = run.progress;
     td.pack.clear();
-    // грызун: бессмертный, чтобы успел догрызть
+    // the gnawer: immortal, so that it manages to finish gnawing
     const g = td.spawnOn('gnawer', 'west');
     g.hp = 1e5;
     let ruinedAt = -1, wasAlerted = false;
@@ -51,7 +51,7 @@ test('оборона: грызун грызёт башню до руин и ух
     for (let i = 0; i < 60; i++) m.step(0.1);
     const after = { alerted: g.alerted, progress: g.progress, shots: t.shots - shots0 };
     td.pack.clear();
-    // починка
+    // repair
     td.openMenu(pad);
     const menu = td.menuEl.textContent;
     const b0 = m.berries, cost = t.repairCost;
@@ -66,11 +66,11 @@ test('оборона: грызун грызёт башню до руин и ух
   expect(r.wasAlerted).toBe(true);
   expect(r.ruinedAt).toBeGreaterThan(0);
   expect(r.bites).toBeGreaterThanOrEqual(10);
-  expect(r.prompt).toContain('Руины');
+  expect(r.prompt).toContain('Ruins');
   expect(r.after.alerted).toBe(false);
   expect(r.after.progress).toBeGreaterThan(r.p0);
   expect(r.after.shots).toBe(0);
-  expect(r.menu).toContain('Починить');
+  expect(r.menu).toContain('Repair');
   expect(r.up).toBe(false);
   expect(r.ok).toBe(true);
   expect(r.paid).toBe(r.cost);
@@ -78,7 +78,7 @@ test('оборона: грызун грызёт башню до руин и ух
   expect([r.level, r.ruined]).toEqual([r.lvl, false]);
 });
 
-test('оборона: колдунчик замораживает башню — не стреляет; два удара по льду его разбивают; шпиль не мёрзнет', async ({ page }) => {
+test('defence: the warlock freezes a tower — it does not fire; two hits on the ice break it; the spire does not freeze', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, pad = (window as any).__pad;
@@ -97,7 +97,7 @@ test('оборона: колдунчик замораживает башню —
     const still = t.frozen > 0;
     t.ice.hit(5, new m.hero.pos.constructor(0, 0, 1), t.pos.clone(), 0);
     const broken = t.frozen <= 0 && !td.targets().includes(t.ice);
-    // тает и сам
+    // it also melts by itself
     t.freeze(1);
     m.step(1.2);
     const melted = t.frozen <= 0;
@@ -115,7 +115,7 @@ test('оборона: колдунчик замораживает башню —
   expect(r.alive).toBe(true);
 });
 
-test('оборона: мини-боссы каждую третью волну; великан топчет башни, королева роняет слизней на дорогу, шаман морозит башни', async ({ page }) => {
+test('defence: mini-bosses every third wave; the giant stomps towers, the queen drops slimes onto the road, the shaman freezes towers', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, pad = (window as any).__pad;
@@ -123,17 +123,17 @@ test('оборона: мини-боссы каждую третью волну; 
     m.profile.data.berries = 5000;
     const chiefs = td.waves.map((w: any, i: number) => w.groups.filter((g: any) => g.kind.startsWith('chief_')).map(() => i + 1)).flat();
     const hunters = td.waves.slice(2).every((w: any) => w.groups.some((g: any) => g.kind === 'gnawer' || g.kind === 'frostling'));
-    // великан
+    // the giant
     const t = td.build(pad, 'splash');
     const b = td.spawnOn('chief_brute', 'west');
     b.hp = b.maxHp = 1e5;
-    const banner = document.body.textContent?.includes('мини-босс');
+    const banner = document.body.textContent?.includes('mini-boss');
     for (let i = 0; i < 400 && !b.casts; i++) m.step(0.1);
     m.step(1);
     const brute = { casts: b.casts, towerHp: t.hp, max: t.maxHp, bar: b.group.children.some((c: any) => c.children?.some((s: any) => s.isSprite)) };
     td.pack.clear();
     t.repair();
-    // королева
+    // the queen
     const q = td.spawnOn('chief_slime', 'north');
     for (let i = 0; i < 100; i++) m.step(0.1);
     const kids = td.pack.mobs.filter((x: any) => x.kind === 'slime_mid' && !x.dead);
@@ -142,7 +142,7 @@ test('оборона: мини-боссы каждую третью волну; 
     m.step(0.5);
     const after = td.pack.mobs.filter((x: any) => x.kind === 'slime_mid' && !x.dead).length;
     td.pack.clear();
-    // шаман
+    // the shaman
     const s = td.spawnOn('chief_frost', 'west');
     s.hp = s.maxHp = 1e5;
     let frozen = false;

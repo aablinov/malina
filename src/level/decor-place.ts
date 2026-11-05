@@ -4,14 +4,14 @@ import type { DecorItem, Level } from './level.ts';
 import { DIRS } from './obj.ts';
 
 /**
- * Куда встанет предмет декора под лучом (редактор): луч по вокселям → клетка и грань → точка на грани с шагом 1/16.
- * floor — только на верх блока (или на плоскость y = 0 в пустоте), wall — на боковую грань (предмет разворачивается
- * спиной к стене), ceiling — на низ блока. Поворот пользователя (extra: [рыск, наклон, крен]) добавляется к повороту от грани.
+ * Where a decor item lands under the ray (editor): ray through voxels → cell and face → a point on the face with a 1/16 step.
+ * floor — only on a block top (or on the plane y = 0 in the void), wall — on a side face (the item turns its back
+ * to the wall), ceiling — on a block bottom. The user's rotation (extra: [yaw, pitch, roll]) is added to the rotation from the face.
  */
 
 const P = 1 / 16;
 const snap = (v: number): number => Math.round(v / P) * P;
-/** Рыск, при котором +Z формы смотрит по нормали грани (0 +X, 1 +Z, 2 −X, 3 −Z) */
+/** Yaw at which the shape's +Z looks along the face normal (0 +X, 1 +Z, 2 −X, 3 −Z) */
 const WALL_YAW = [-90, 0, 90, 180];
 
 export interface DecorPlacement { pos: [number, number, number]; rot: number[]; on?: [number, number, number] }
@@ -33,19 +33,19 @@ export function placeDecor(L: Level, anchor: Anchor, o: { x: number; y: number; 
   const n = DIRS[h.face];
   const cell: [number, number, number] = [h.x, h.y, h.z];
   if (anchor === 'floor' && h.face === 4) {
-    // верх блока: у полублоков и ступеней — по высоте столкновения, у заборов — по клетке
+    // block top: for half-blocks and stairs — by the collision height, for fences — by the cell
     const def = L.defAt(h.x, h.y, h.z);
     const top = def.collide > 0 && def.collide < 1 ? def.collide : 1;
     return { pos: [snap(px), h.y + top, snap(pz)], rot: rot(0), on: cell };
   }
   if (anchor === 'ceiling' && h.face === 5) return { pos: [snap(px), h.y, snap(pz)], rot: rot(0), on: cell };
   if (anchor === 'wall' && h.face < 4) {
-    // плоскость грани — точно, остальные координаты — с шагом 1/16
+    // the face plane — exactly, the other coordinates — with a 1/16 step
     const fx = n[0] ? h.x + n[0] * 0.5 : snap(px), fz = n[2] ? h.z + n[2] * 0.5 : snap(pz);
     return { pos: [fx, snap(py), fz], rot: rot(WALL_YAW[h.face]), on: cell };
   }
   return null;
 }
 
-/** Совпадает ли клетка, к которой прикреплён предмет */
+/** Does the cell the item is attached to match */
 export const attachedTo = (d: DecorItem, x: number, y: number, z: number): boolean => !!d.on && d.on[0] === x && d.on[1] === y && d.on[2] === z;

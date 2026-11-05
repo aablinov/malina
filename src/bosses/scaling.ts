@@ -1,11 +1,11 @@
 /**
- * Масштаб стражей (wiki/design-bosses.md, раздел 7): здоровье, урон и малина растут с уровнем стража и числом игроков —
- * мягко: это доброе приключение, а не Dark Souls. Уровень на плейграунде — уровень героя (или из панели F1), в подземелье —
- * по этажу. Числа — стартовые, подбираются игрой.
+ * Warden scaling (wiki/design-bosses.md, section 7): health, damage and raspberries grow with the warden's level and the number of players —
+ * gently: this is a friendly adventure, not Dark Souls. On the playground the level is the hero's level (or from the F1 panel), in the dungeon —
+ * by floor. The numbers are starting values, tuned by play.
  *
- *   здоровье = база · (1 + 0,06·(ур − 1)) · (1 + 0,5·(игроков − 1))
- *   урон     = база · (1 + 0,03·(ур − 1))                  — от числа игроков не растёт
- *   малина   = база · (1 + 0,05·(ур − 1)) · игроков        — малину делят, поэтому на каждого столько же
+ *   health      = base · (1 + 0.06·(lv − 1)) · (1 + 0.5·(players − 1))
+ *   damage      = base · (1 + 0.03·(lv − 1))                  — does not grow with the number of players
+ *   raspberries = base · (1 + 0.05·(lv − 1)) · players        — raspberries are shared, so each gets the same
  */
 
 export const MAX_LEVEL = 30;
@@ -16,9 +16,9 @@ export interface BossScale { level: number; players: number }
 const lv = (s: BossScale): number => Math.max(1, Math.min(MAX_LEVEL, Math.round(s.level))) - 1;
 const pl = (s: BossScale): number => Math.max(1, Math.min(MAX_PLAYERS, Math.round(s.players))) - 1;
 
-/** Множитель здоровья */
+/** Health multiplier */
 export const hpMult = (s: BossScale): number => (1 + 0.06 * lv(s)) * (1 + 0.5 * pl(s));
-/** Множитель урона по героям */
+/** Multiplier of damage to heroes */
 export const dmgMult = (s: BossScale): number => 1 + 0.03 * lv(s);
-/** Множитель малины из сердца */
+/** Multiplier of raspberries from the heart */
 export const lootMult = (s: BossScale): number => (1 + 0.05 * lv(s)) * (1 + pl(s));

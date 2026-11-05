@@ -12,8 +12,8 @@ import { STARTERS } from './starters.ts';
 
 export type { Spell, Tier } from './kit.ts';
 
-/** Все заклинания по id предмета (src/items.ts): стартовые, базовые у торговца и с боссов */
+/** All spells by item id (src/items.ts): starters, base ones from the merchant, and boss spells */
 export const SPELLS: Record<SpellKind, Spell> = { ...STARTERS, ...FIRE_ICE, ...STORM_LIGHT, ...DARK_ARCANE, ...EARTH, ...BASE_FIRE, ...BASE_SUMMON, ...BASE_BLOOD, ...BASE_LIGHT };
 
-/** Заклинание по виду артефакта; обычный артефакт (огненная стрела, тотем…) — null */
+/** Spell by artifact kind; an ordinary artifact (fire arrow, totem…) — null */
 export const spellOf = (kind: string): Spell | null => (SPELLS as Partial<Record<string, Spell>>)[kind] ?? null;

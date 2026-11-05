@@ -1,28 +1,28 @@
 import type { Transport } from './transport.ts';
 
 /**
- * Канал поверх транспорта — по образцу netchan Quake 3: в одном кадре надёжная полоса (упорядоченная, с подтверждением
- * и повтором: команды комнаты, чат, постройки, действия) и ненадёжная (последний побеждает: ввод и снимки).
- * `seq` — номер кадра, `ack` — последний полученный кадр встречной стороны; `rseq`/`rack` — надёжные сообщения.
- * WebSocket и так не теряет, но семантика нужна дельтам снимков, петле с потерями в тестах и будущему транспорту без TCP
+ * Channel over a transport — modelled on Quake 3's netchan: one frame carries a reliable lane (ordered, acknowledged
+ * and resent: room commands, chat, builds, actions) and an unreliable one (last wins: input and snapshots).
+ * `seq` — frame number, `ack` — last frame received from the other side; `rseq`/`rack` — reliable messages.
+ * WebSocket does not lose anyway, but the semantics are needed by snapshot deltas, the lossy loopback in tests and a future non-TCP transport
  */
 export interface Frame<R = unknown, U = unknown> {
   seq: number;
   ack: number;
-  /** Надёжные сообщения, ещё не подтверждённые встречной стороной: номер и само сообщение */
+  /** Reliable messages not yet acknowledged by the other side: number and the message itself */
   r?: { n: number; m: R }[];
-  /** Сколько надёжных сообщений встречной стороны получено подряд */
+  /** How many of the other side's reliable messages were received in a row */
   rack: number;
-  /** Ненадёжная часть кадра */
+  /** Unreliable part of the frame */
   u?: U;
 }
 
 export interface ChannelOpts {
-  /** Часы, мс — для повтора надёжных */
+  /** Clock, ms — for resending reliables */
   clock: () => number;
-  /** Повторять неподтверждённое надёжное через столько мс */
+  /** Resend an unacknowledged reliable after this many ms */
   resendMs?: number;
-  /** Окно надёжных без подтверждения; больше — sendReliable вернёт false */
+  /** Window of unacknowledged reliables; beyond it sendReliable returns false */
   window?: number;
 }
 
@@ -33,21 +33,21 @@ export class Channel<R = unknown, U = unknown> {
   onUnreliable: ((m: U, seq: number) => void) | null = null;
   onClose: ((code: number) => void) | null = null;
   readonly stats: ChannelStats = { sent: 0, received: 0, stale: 0, resent: 0 };
-  /** Последний кадр, который встречная сторона подтвердила получением (наш seq) */
+  /** Last frame the other side acknowledged receiving (our seq) */
   peerAck = 0;
-  /** Последний принятый кадр встречной стороны */
+  /** Last frame received from the other side */
   lastRecv = 0;
   private seq = 0;
   private readonly t: Transport;
   private readonly o: Required<ChannelOpts>;
-  /** Надёжные в пути: номер, сообщение, когда отправлено */
+  /** Reliables in flight: number, message, when sent */
   private readonly out: { n: number; m: R; at: number }[] = [];
   private rseq = 0;
-  /** Сколько надёжных встречной стороны принято подряд */
+  /** How many of the other side's reliables were received in a row */
   private rack = 0;
-  /** Надёжные, пришедшие раньше своей очереди */
+  /** Reliables that arrived ahead of their turn */
   private readonly early = new Map<number, R>();
-  /** Приняли надёжное — на ближайшем flush уйдёт кадр с подтверждением, даже если сказать нечего */
+  /** A reliable was received — the next flush sends a frame with the ack even if there is nothing to say */
   private ackDue = false;
   closed = false;
 
@@ -58,12 +58,12 @@ export class Channel<R = unknown, U = unknown> {
     transport.onClose = (c) => { this.closed = true; this.onClose?.(c); };
   }
 
-  /** В пути надёжных сообщений */
+  /** Reliable messages in flight */
   get pending(): number { return this.out.length; }
-  /** Транспорт теряет кадры — ненадёжное стоит дублировать (по TCP дубли только тратят полосу) */
+  /** The transport loses frames — unreliables are worth duplicating (over TCP duplicates only waste bandwidth) */
   get lossy(): boolean { return this.t.lossy ?? false; }
 
-  /** Надёжно: уйдёт сейчас и будет повторяться до подтверждения; false — окно полно */
+  /** Reliably: goes out now and is resent until acknowledged; false — the window is full */
   sendReliable(m: R): boolean {
     if (this.out.length >= this.o.window) return false;
     this.out.push({ n: ++this.rseq, m, at: this.o.clock() });
@@ -71,10 +71,10 @@ export class Channel<R = unknown, U = unknown> {
     return true;
   }
 
-  /** Ненадёжно: один кадр, вместе с ним — всё надёжное в пути. Вернёт seq кадра */
+  /** Unreliably: one frame, carrying every reliable in flight with it. Returns the frame's seq */
   sendUnreliable(u: U): number { return this.emit(u); }
 
-  /** Повторить надёжное, которому вышел срок (вызывать с кадром сервера или rAF) */
+  /** Resend reliables that are overdue (call with the server frame or rAF) */
   flush(): void {
     const now = this.o.clock();
     const due = this.out.some((x) => now - x.at >= this.o.resendMs);
@@ -101,10 +101,10 @@ export class Channel<R = unknown, U = unknown> {
     try { f = JSON.parse(raw) as Frame<R, U>; } catch { return; }
     if (typeof f.seq !== 'number' || typeof f.ack !== 'number' || typeof f.rack !== 'number') return;
     this.stats.received++;
-    // подтверждения: наши кадры и наши надёжные
+    // acks: our frames and our reliables
     if (f.ack > this.peerAck) this.peerAck = f.ack;
     while (this.out.length && this.out[0].n <= f.rack) this.out.shift();
-    // надёжные встречной стороны — строго по порядку, дубликаты молча
+    // the other side's reliables — strictly in order, duplicates silently
     if (f.r) {
       this.ackDue = true;
       for (const { n, m } of f.r) if (n > this.rack && !this.early.has(n)) this.early.set(n, m);
@@ -115,7 +115,7 @@ export class Channel<R = unknown, U = unknown> {
         this.onReliable?.(m as R);
       }
     }
-    // ненадёжная часть — только из нового кадра
+    // the unreliable part — only from a new frame
     if (f.seq <= this.lastRecv) { this.stats.stale++; return; }
     this.lastRecv = f.seq;
     if (f.u !== undefined) this.onUnreliable?.(f.u, f.seq);

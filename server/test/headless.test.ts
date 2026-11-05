@@ -3,13 +3,13 @@ import { test } from 'node:test';
 import { hashEntities } from '../../src/sim/hash.ts';
 import { headlessBattle } from './headless-helpers.ts';
 
-test('безголовый бой: герой, снаряжение и настоящая стая живут в Node; волна выходит, башни и меч бьют, мобы ранят', () => {
+test('headless battle: hero, gear and the real pack live in Node; a wave comes out, towers and sword hit, mobs wound', () => {
   const b = headlessBattle('td', 11);
   const s = b.world.td!;
   for (const p of s.pads) { s.gain(0, 1000); s.command(0, { t: 'td', a: 'build:arrow', pad: p.index }); }
   assert.ok(s.towers.length > 0);
   assert.ok(s.command(0, { t: 'td', a: 'wave' }));
-  // герой стоит у куста и машет мечом
+  // the hero stands by the bush and swings the sword
   b.hero.place(s.bush.pos.x + 2, s.bush.pos.z + 2, Math.PI);
   b.input.attack = true;
   let struck = 0, shots = 0;
@@ -20,14 +20,14 @@ test('безголовый бой: герой, снаряжение и наст�
     shots = s.towers.reduce((a, t) => a + t.shots, 0);
     if (!s.waveRunning && i > 60) break;
   }
-  assert.ok(s.spawned > 5, `вышло врагов: ${s.spawned}`);
-  assert.ok(shots > 0, 'башни стреляли');
-  assert.ok(s.fallen > 0, `павших: ${s.fallen}`);
-  assert.ok(struck > 0, 'герой махал мечом');
+  assert.ok(s.spawned > 5, `enemies spawned: ${s.spawned}`);
+  assert.ok(shots > 0, 'towers fired');
+  assert.ok(s.fallen > 0, `fallen: ${s.fallen}`);
+  assert.ok(struck > 0, 'hero swung the sword');
   assert.ok(b.world.piles.list.length >= 0);
 });
 
-test('безголовый бой детерминирован: один сид — те же хэши мира, героя и стаи', () => {
+test('headless battle is deterministic: same seed — same hashes of world, hero and pack', () => {
   const run = (seed: number): number[] => {
     const b = headlessBattle('td', seed);
     const s = b.world.td!;

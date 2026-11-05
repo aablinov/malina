@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Obstacle } from '../collision.ts';
 
 /**
- * Отладочные оверлеи: F2 — коллайдеры и хитбоксы, F3 — луч прицела и конус разброса.
+ * Debug overlays: F2 — colliders and hitboxes, F3 — aim ray and spread cone.
  */
 
 const lineMat = (color: string) => new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9, toneMapped: false });
@@ -18,7 +18,7 @@ export class Overlays {
 
   private readonly scene: THREE.Scene;
   constructor(scene: THREE.Scene, obstacles: readonly Obstacle[]) { this.scene = scene;
-    // рёбра каждого препятствия на его «пулевой» высоте
+    // edges of every obstacle at its "bullet" height
     const pts: number[] = [];
     for (const o of obstacles) {
       const c = Math.cos(o.rot), s = Math.sin(o.rot);
@@ -43,7 +43,7 @@ export class Overlays {
     for (const l of [this.aimLine, this.coneLine]) { l.renderOrder = 10; l.visible = false; l.frustumCulled = false; scene.add(l); }
   }
 
-  /** Круги тел: героя, манекенов, жуков */
+  /** Body circles: hero, dummies, beetles */
   drawCircles(list: { x: number; z: number; r: number; y?: number }[]): void {
     while (this.circles.length < list.length) {
       const pts = Array.from({ length: 32 }, (_, i) => new THREE.Vector3(Math.cos((i / 32) * Math.PI * 2), 0, Math.sin((i / 32) * Math.PI * 2)));
@@ -61,7 +61,7 @@ export class Overlays {
     });
   }
 
-  /** Луч прицела и конус разброса от дула */
+  /** Aim ray and spread cone from the muzzle */
   drawAim(muzzle: THREE.Vector3, yaw: number, spread: number, len: number): void {
     this.aimLine.visible = this.coneLine.visible = this.aim;
     if (!this.aim) return;
@@ -74,9 +74,9 @@ export class Overlays {
   }
 
   private pathLines: THREE.LineSegments | null = null;
-  /** Пути по навигационной сетке (путь героя по клику) */
+  /** Paths over the navigation grid (the hero's path on click) */
   drawPaths(paths: THREE.Vector3[][]): void {
-    // буфер один на всё время: раньше каждый кадр создавалась новая геометрия, даже для пустого пути
+    // one buffer for the whole lifetime: before, every frame created a new geometry, even for an empty path
     let n = 0;
     for (const p of paths) n += Math.max(0, p.length - 1) * 2;
     if (!this.pathLines) {

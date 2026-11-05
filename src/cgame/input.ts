@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import type { SysEvent } from './events.ts';
 
 /**
- * Состояние ввода для такта — `cl_input.c` Quake 3 (`kbutton_t`, `CL_CreateCmd`): клавиши с защёлками «нажато с прошлого
- * такта» (тап короче такта не теряется), мышь с защёлкой клика, и действия героя с клавиш (зелье, артефакты, аура, спец-удар,
- * взаимодействие, волна) — они копятся и исполняются в начале такта по порядку, как кнопки usercmd, а не в `keydown`.
- * Движение из клавиш — `move()`; приказы мыши — `orders.ts`
+ * Input state for a tick — Quake 3's `cl_input.c` (`kbutton_t`, `CL_CreateCmd`): keys with "pressed since the last
+ * tick" latches (a tap shorter than a tick is not lost), the mouse with a click latch, and hero actions from keys (potion, artifacts, aura, weapon art,
+ * interact, wave) — they accumulate and run at the start of the tick in order, like usercmd buttons, not in `keydown`.
+ * Movement from keys — `move()`; mouse orders — `orders.ts`
  */
 export type Action =
   | { k: 'potion' }
@@ -14,26 +14,26 @@ export type Action =
   | { k: 'interact' }
   | { k: 'wave' }
   | { k: 'artifact'; i: number; down: boolean }
-  /** Кнопка HUD: артефакт без удержания */
+  /** HUD button: an artifact without holding */
   | { k: 'use'; i: number };
 
 export class KeyState {
   readonly down = new Set<string>();
-  /** Нажато с прошлого такта (и уже отпущено — тоже) */
+  /** Pressed since the last tick (even if already released) */
   readonly pressed = new Set<string>();
-  /** Зажата или была нажата с прошлого такта */
+  /** Held or was pressed since the last tick */
   has(code: string): boolean { return this.down.has(code) || this.pressed.has(code); }
-  /** Нажата с прошлого такта (фронт) */
+  /** Pressed since the last tick (edge) */
   tapped(code: string): boolean { return this.pressed.has(code); }
   feed(code: string, isDown: boolean): void {
     if (isDown) { if (!this.down.has(code)) this.pressed.add(code); this.down.add(code); } else this.down.delete(code);
   }
-  /** Конец такта: защёлки сброшены */
+  /** End of tick: latches reset */
   endTick(): void { this.pressed.clear(); }
   clear(): void { this.down.clear(); this.pressed.clear(); }
 }
 
-/** Размер окна для перевода курсора в NDC; по умолчанию — окно браузера */
+/** Window size for converting the cursor to NDC; by default the browser window */
 export type ViewSize = () => { w: number; h: number };
 const windowSize: ViewSize = () => ({ w: window.innerWidth, h: window.innerHeight });
 
@@ -43,9 +43,9 @@ export class MouseState {
   seen = false;
   lmb = false;
   rmb = false;
-  /** ЛКМ нажата с прошлого такта */
+  /** LMB pressed since the last tick */
   lmbTap = false;
-  /** Колесо с прошлого разбора (суммарно) */
+  /** Wheel since the last drain (total) */
   wheel = 0;
   private readonly size: ViewSize;
   constructor(size: ViewSize = windowSize) { this.size = size; const { w, h } = size(); this.px.x = w / 2; this.px.y = h / 2; }
@@ -66,13 +66,13 @@ export class MouseState {
       default: break;
     }
   }
-  /** ЛКМ нажата сейчас или была нажата с прошлого такта */
+  /** LMB pressed now or was pressed since the last tick */
   get lmbHeld(): boolean { return this.lmb || this.lmbTap; }
   endTick(): void { this.lmbTap = false; }
   release(): void { this.lmb = false; this.rmb = false; this.lmbTap = false; }
 }
 
-/** Клавиша → действие героя (нажатие; артефакты — и отпускание: заряд заклинания) */
+/** Key → hero action (press; artifacts also release: spell charge) */
 const ACTIONS: Record<string, Action | undefined> = {
   KeyE: { k: 'potion' },
   KeyR: { k: 'aura' },
@@ -88,7 +88,7 @@ export class GameInput {
 
   constructor(size: ViewSize = windowSize) { this.mouse = new MouseState(size); }
 
-  /** Событие дошло до игры (не съедено меню, инвентарём, чатом) */
+  /** The event reached the game (not consumed by the menu, inventory or chat) */
   feed(e: SysEvent): void {
     switch (e.kind) {
       case 'key': {
@@ -104,13 +104,13 @@ export class GameInput {
     }
   }
 
-  /** Действие не с клавиши (кнопка HUD) — в ту же очередь */
+  /** An action not from a key (HUD button) — into the same queue */
   queue(a: Action): void { this.pending.push(a); }
 
-  /** Действия с прошлого такта по порядку; очередь очищается */
+  /** Actions since the last tick in order; the queue is cleared */
   takeActions(): Action[] { const a = this.pending; this.pending = []; return a; }
 
-  /** Движение из WASD и стрелок в мировых осях: fwd — куда ведёт «вверх экрана», right — «вправо» */
+  /** Movement from WASD and arrows in world axes: fwd — where "screen up" leads, right — "screen right" */
   move(fwd: THREE.Vector2, right: THREE.Vector2, out: THREE.Vector2): THREE.Vector2 {
     const k = this.keys;
     out.set(0, 0);
@@ -125,6 +125,6 @@ export class GameInput {
   get shift(): boolean { return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'); }
 
   endTick(): void { this.keys.endTick(); this.mouse.endTick(); }
-  /** Меню, инвентарь, лавка открылись: клавиши и кнопки — им, действия забыть */
+  /** Menu, inventory or shop opened: keys and buttons go to them, forget the actions */
   clear(): void { this.keys.clear(); this.mouse.release(); this.pending = []; }
 }

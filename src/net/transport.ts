@@ -1,9 +1,9 @@
 /**
- * Транспорт сетевого канала (wiki/design-multiplayer.md): текстовые кадры в обе стороны, без разбора.
- * Реализации: WebSocket (браузер и сервер, `ws-transport.ts`) и петля в памяти для тестов и одиночной игры (`loopback.ts`).
+ * Network channel transport (wiki/design-multiplayer.md): text frames both ways, no parsing.
+ * Implementations: WebSocket (browser and server, `ws-transport.ts`) and an in-memory loopback for tests and single player (`loopback.ts`).
  */
 export interface Transport {
-  /** Кадры могут теряться (UDP-подобный транспорт, петля с потерями): клиент дублирует команды, как cl_packetdup */
+  /** Frames may be lost (UDP-like transport, lossy loopback): the client duplicates commands, like cl_packetdup */
   readonly lossy?: boolean;
   send(frame: string): void;
   onMessage: ((frame: string) => void) | null;

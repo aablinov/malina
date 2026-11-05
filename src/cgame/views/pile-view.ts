@@ -6,8 +6,8 @@ import { lootMesh } from '../../props.ts';
 import type { PileEnt } from '../../sim/entities.ts';
 
 /**
- * Кучка малины с павшего врага (`p<n>`): ягода из src/props.ts (`lootMesh('berry')`), место — из записи, вью его догоняет;
- * на земле (y ≤ 0,15) покачивается и крутится, в полёте кувыркается и светит хвостом — как лут в Props
+ * Raspberry pile from a fallen enemy (`p<n>`): the berry from src/props.ts (`lootMesh('berry')`), position from the record, the view catches up with it;
+ * on the ground (y ≤ 0.15) it sways and spins, in flight it tumbles and glows with a tail — like loot in Props
  */
 export class PileView {
   private readonly mesh: THREE.Group;
@@ -41,7 +41,7 @@ export class PileView {
     if (!grounded) this.mesh.rotation.x += dt * 5;
     else this.mesh.rotation.x *= Math.exp(-8 * dt);
     const ud = this.mesh.userData as LootData;
-    // в полёте — светящийся хвост, на земле — искры вокруг
+    // in flight — a glowing tail, on the ground — sparks around
     if (ud.glow) {
       if (!grounded) { if (Math.random() < 0.5) this.fx.particle({ pos: this.pos.clone(), vel: new THREE.Vector3(0, 0.3, 0), life: 0.35, size: 0.07, color: ud.glow, gravity: 0 }); }
       else if (Math.random() < dt * 3) {

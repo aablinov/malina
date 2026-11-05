@@ -7,32 +7,32 @@ import type { TdLane, TdPad, TdSpec } from '../td/types.ts';
 import { TD_GLADE_WAVES } from '../td/waves-glade.ts';
 
 /**
- * Карта «Кристальная поляна» — оборона куста 2 (wiki/design-tower-defence.md, раздел 8; референс — wiki/sources/td-refs.md, № 1):
- * ночная поляна 96 × 96 м, куст малины в центре на площади за каменной оградой, три дороги врагов от **синих порталов**
- * в каменных арках. Дороги — ровные, с прямыми углами, как рвы референса, и по обе стороны **каменные стенки** со мхом;
- * площадки под башни — у поворотов. Светят только **грибы-светильники** (розовые и голубые, блоки на слое glow
- * с запечённым светом), **кристаллы**, порталы и фонари; в воздухе светлячки; по углам статуи в капюшонах.
- * `npm run map:td2` пишет assets/maps/td2.json; открыть — `?map=td2`. Враги на уровень сильнее: `meta.td.level` = 7.
+ * "Crystal Glade" map — Bush Defence 2 (wiki/design-tower-defence.md, section 8; reference — wiki/sources/td-refs.md, no. 1):
+ * a 96 × 96 m night glade, the raspberry bush in the centre on a square behind a stone fence, three enemy roads from **blue portals**
+ * in stone arches. The roads are straight with right angles, like the reference's trenches, with mossy **stone walls** on both sides;
+ * tower pads at the turns. The only light comes from **glow mushrooms** (pink and blue, blocks on the glow layer
+ * with baked light), **crystals**, portals and lanterns; fireflies in the air; hooded statues in the corners.
+ * `npm run map:td2` writes assets/maps/td2.json; open with `?map=td2`. Enemies are a level stronger: `meta.td.level` = 7.
  */
 
 export const GLADE_HALF = 48;
 
-/** Дороги врагов: от портала к кусту (метры), прямые отрезки с прямыми углами */
+/** Enemy roads: from the portal to the bush (metres), straight segments with right angles */
 export const GLADE_LANES: TdLane[] = [
-  { id: 'west', title: 'Западный ров', points: [[-45, 12], [-36, 12], [-36, 4], [-22, 4], [-22, -6], [-12, -6], [-12, -1], [-2, -1]] },
-  { id: 'north', title: 'Северный ров', points: [[-6, -45], [-6, -34], [8, -34], [8, -20], [0, -20], [0, -12], [2, -12], [2, -3]] },
-  { id: 'east', title: 'Восточный ров', points: [[45, -4], [34, -4], [34, 8], [22, 8], [22, 12], [12, 12], [12, 3], [3, 3]] },
+  { id: 'west', title: 'West trench', points: [[-45, 12], [-36, 12], [-36, 4], [-22, 4], [-22, -6], [-12, -6], [-12, -1], [-2, -1]] },
+  { id: 'north', title: 'North trench', points: [[-6, -45], [-6, -34], [8, -34], [8, -20], [0, -20], [0, -12], [2, -12], [2, -3]] },
+  { id: 'east', title: 'East trench', points: [[45, -4], [34, -4], [34, 8], [22, 8], [22, 12], [12, 12], [12, 3], [3, 3]] },
 ];
 
-/** Площадки под башни: у поворотов рвов, снаружи углов, и две у куста */
+/** Tower pads: at the trench turns, outside the corners, and two by the bush */
 export const GLADE_PADS: TdPad[] = [
-  // запад
+  // west
   { x: -40, z: 17 }, { x: -31, z: 9 }, { x: -27, z: -1 }, { x: -17, z: -11 }, { x: -8, z: -6 },
-  // север
+  // north
   { x: -11, z: -39 }, { x: 3, z: -39 }, { x: 13, z: -27 }, { x: 5, z: -16 }, { x: -5, z: -16 },
-  // восток
+  // east
   { x: 40, z: 1 }, { x: 29, z: 1 }, { x: 27, z: 13 }, { x: 17, z: 17 }, { x: 7, z: 8 },
-  // у куста
+  // by the bush
   { x: -5, z: 5 }, { x: 7, z: -5 },
 ];
 
@@ -46,13 +46,13 @@ export const GLADE_SPEC: TdSpec = {
   level: 7,
 };
 
-/** Расстояние от точки до отрезка */
+/** Distance from a point to a segment */
 const segDist = (px: number, pz: number, ax: number, az: number, bx: number, bz: number): number => {
   const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
   const t = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / l2)) : 0;
   return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
 };
-/** Расстояние от точки до ближайшей дороги */
+/** Distance from a point to the nearest road */
 const laneDist = (x: number, z: number): number => {
   let best = Infinity;
   for (const l of GLADE_LANES) for (let i = 0; i + 1 < l.points.length; i++) best = Math.min(best, segDist(x, z, l.points[i][0], l.points[i][1], l.points[i + 1][0], l.points[i + 1][1]));
@@ -60,24 +60,24 @@ const laneDist = (x: number, z: number): number => {
 };
 
 export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
-  // площадки не на дороге и не на площади куста — иначе башня перегородит ров
+  // pads are neither on a road nor on the bush square — otherwise a tower would block the trench
   for (const p of GLADE_PADS) {
-    if (laneDist(p.x, p.z) < 3.2) throw new Error(`Площадка ${p.x},${p.z} слишком близко к дороге (${laneDist(p.x, p.z).toFixed(1)} м)`);
-    if (Math.hypot(p.x, p.z) < 6.5) throw new Error(`Площадка ${p.x},${p.z} на площади куста`);
+    if (laneDist(p.x, p.z) < 3.2) throw new Error(`Pad ${p.x},${p.z} is too close to a road (${laneDist(p.x, p.z).toFixed(1)} m)`);
+    if (Math.hypot(p.x, p.z) < 6.5) throw new Error(`Pad ${p.x},${p.z} is on the bush square`);
   }
-  const L = new Level('Кристальная поляна');
+  const L = new Level('Crystal Glade');
   const H = GLADE_HALF;
   const used = new Set<string>();
   const key = (x: number, z: number): string => `${x},${z}`;
   const mark = (x: number, z: number, r: number): void => { for (let xx = x - r; xx <= x + r; xx++) for (let zz = z - r; zz <= z + r; zz++) used.add(key(xx, zz)); };
   const inMap = (x: number, z: number): boolean => Math.abs(x) <= H && Math.abs(z) <= H;
-  // ---------- земля: трава с пятнами бирюзового мха ----------
+  // ---------- ground: grass with patches of teal moss ----------
   for (let x = -H; x <= H; x++) for (let z = -H; z <= H; z++) {
     const n = noise2(x, z, 7, 1);
     L.set(x, -1, z, n > 0.7 ? 'moss_teal' : n < 0.22 ? 'moss_block' : 'grass');
     L.set(x, -2, z, 'dirt');
   }
-  // ---------- дороги: плиты 3 м с прямыми углами; по бокам — каменные стенки со мхом ----------
+  // ---------- roads: 3 m of tiles with right angles; mossy stone walls on the sides ----------
   const road = new Set<string>();
   const side = new Map<string, number>();
   for (const lane of GLADE_LANES) for (let i = 0; i + 1 < lane.points.length; i++) {
@@ -103,8 +103,8 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
     for (const l of GLADE_LANES) if (Math.hypot(x - l.points[0][0], z - l.points[0][1]) < 6) return true;
     return false;
   };
-  // стенки: с мшистыми и низкими кусками, столбик на каждом пятом; у площадок, у площади и через каждые 9 м — проёмы,
-  // чтобы герой переходил ров где угодно, а не обходил стенку до ближайшей площадки
+  // walls: with mossy and low pieces, a post on every fifth; gaps by the pads, by the square and every 9 m,
+  // so the hero crosses the trench anywhere instead of walking around the wall to the nearest pad
   for (const [k, t] of side) {
     const [x, z] = k.split(',').map(Number);
     if (keep(x, z) || !inMap(x, z) || ((t % 9) + 9) % 9 < 3) continue;
@@ -115,7 +115,7 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
     else L.set(x, 0, z, v < 0.4 ? 'bricks_mossy' : 'wall_stone_wall');
     used.add(k);
   }
-  // ---------- площадь куста: плиты, кольцо ограды с проёмами у дорог, фонари, кристаллы ----------
+  // ---------- bush square: tiles, a fence ring with gaps at the roads, lanterns, crystals ----------
   for (let x = -7; x <= 7; x++) for (let z = -7; z <= 7; z++) {
     const d = Math.hypot(x, z);
     if (d <= 4.6) L.set(x, -1, z, hash2(x, z, 4) < 0.85 ? 'tiles' : 'tiles_broken');
@@ -124,7 +124,7 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
   }
   for (const [x, z] of [[4, 4], [-4, 4], [4, -4], [-4, -4]]) L.addDecor({ name: 'lantern_post', pos: [x, 0, z], rot: [45] });
   for (const [x, z] of [[3, -1], [-3, 1]]) { L.set(x, 0, z, 'crystal'); L.set(x, 1, z, 'crystal_small'); }
-  // ---------- площадки: круг плит, мшистый обод, четыре столбика, кристаллик ----------
+  // ---------- pads: a circle of tiles, a mossy rim, four posts, a small crystal ----------
   for (const p of GLADE_PADS) {
     for (let x = p.x - 3; x <= p.x + 3; x++) for (let z = p.z - 3; z <= p.z + 3; z++) {
       const d = Math.hypot(x - p.x, z - p.z);
@@ -134,11 +134,11 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
     if (L.isAir(p.x + 2, 0, p.z)) L.set(p.x + 2, 0, p.z, 'crystal_small');
     mark(p.x, p.z, 3);
   }
-  // ---------- порталы: каменная арка 3 × 4 с синим сиянием, перед ней плиты; за ней — тёмный камень ----------
+  // ---------- portals: a 3 × 4 stone arch with a blue glow, tiles in front; dark stone behind ----------
   for (const lane of GLADE_LANES) {
     const [x, z] = lane.points[0], [nx, nz] = lane.points[1];
     const dx = Math.sign(nx - x), dz = Math.sign(nz - z);
-    // ниша: за аркой — глухая стена из тёмного камня, перед ней — плиты
+    // niche: a blank dark-stone wall behind the arch, tiles in front
     for (let k = -2; k <= 6; k++) for (let w = -3; w <= 3; w++) {
       const cx = x - dx * k + (dz ? w : 0), cz = z - dz * k + (dx ? w : 0);
       if (!inMap(cx, cz)) continue;
@@ -146,7 +146,7 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
       else if (Math.abs(w) <= 1) { L.set(cx, -1, cz, 'tiles'); for (let y = 0; y < 5; y++) if (L.nameAt(cx, y, cz) !== 'air') L.set(cx, y, cz, 'air'); }
       used.add(key(cx, cz));
     }
-    // арка в стене: рама вокруг проёма 3 × 4, сияние — панели в проёме
+    // arch in the wall: a frame around the 3 × 4 opening, the glow is panels in the opening
     for (let w = -2; w <= 2; w++) for (let y = 0; y < 5; y++) {
       const cx = x - dx * 2 + (dz ? w : 0), cz = z - dz * 2 + (dx ? w : 0);
       if (!inMap(cx, cz)) continue;
@@ -162,7 +162,7 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
       if (inMap(sx, sz) && L.isAir(sx, 0, sz) && !road.has(key(sx, sz))) { L.addDecor({ name: 'statue_hooded', pos: [sx, 0, sz], rot: [Math.atan2(dx, dz) * 180 / Math.PI + 180] }); mark(sx, sz, 1); }
     }
   }
-  // ---------- край карты: тёмная ограда во мху с ёлками ----------
+  // ---------- map edge: a dark mossy fence with firs ----------
   for (let i = -H - 1; i <= H + 1; i++) for (const [x, z] of [[i, -H - 1], [i, H + 1], [-H - 1, i], [H + 1, i]]) {
     const t = L.topAt(x, z);
     if (t !== null && t >= 0) continue;
@@ -170,14 +170,14 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
     for (let y = -1; y < hh; y++) L.set(x, y, z, noise2(x, z, 3, 10) > 0.6 ? 'bricks_mossy' : 'mossy');
     L.set(x, hh, z, 'moss_block');
   }
-  // ---------- декор ----------
+  // ---------- decor ----------
   const free = (x: number, z: number, r: number): boolean => {
     for (let xx = x - r; xx <= x + r; xx++) for (let zz = z - r; zz <= z + r; zz++) if (Math.abs(xx) > H - 1 || Math.abs(zz) > H - 1 || used.has(key(xx, zz)) || road.has(key(xx, zz)) || L.topAt(xx, zz) !== -1) return false;
     return true;
   };
   const stamp = (id: string, x: number, z: number, q = 0): boolean => {
     const p = lib[id];
-    if (!p) throw new Error(`Нет пресета «${id}»`);
+    if (!p) throw new Error(`No prefab "${id}"`);
     const rx = Math.ceil(p.size[0] / 2) + 1, rz = Math.ceil(p.size[2] / 2) + 1;
     if (!free(x, z, Math.max(rx, rz))) return false;
     const r = stampPrefab(L, p, x, 0, z, q);
@@ -187,7 +187,7 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
     return true;
   };
   const dec = (name: string, x: number, z: number, rot = hash2(x, z, 11) * 360): void => { L.addDecor({ name, pos: [x, 0, z], rot: [rot] }); mark(x, z, 1); };
-  /** Гриб-светильник: ножка 1–2 блока, широкая шляпка из полублоков и купол; pink — розовый, иначе голубой */
+  /** Glow mushroom: a stem of 1–2 blocks, a wide cap of slabs and a dome; pink — pink, otherwise blue */
   const shroom = (x: number, z: number, h: number, pink: boolean, wide: boolean): boolean => {
     const r = wide ? 1 : 0;
     if (!free(x, z, r + 1)) return false;
@@ -199,7 +199,7 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
     mark(x, z, r + 1);
     return true;
   };
-  // статуи и алтарь по углам, большие грибы и кристаллы — гроздьями ближе к дорогам
+  // statues and altars in the corners, big mushrooms and crystals in clusters closer to the roads
   for (const [x, z, q] of [[-40, -40, 0], [40, 40, 2], [40, -40, 1], [-40, 40, 3]] as const) if (!stamp('ruin_platform_statues', x, z, q)) stamp('crystal_cluster_big', x, z, q);
   stamp('temple_altar_crystal', 0, 28);
   stamp('temple_altar_crystal', 0, -28, 2);
@@ -210,11 +210,11 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
     else if (v < 0.2 && d < 14) stamp(hash2(x, z, 16) < 0.4 ? 'crystal_cluster_big' : 'crystal_cluster_small', x, z, Math.floor(hash2(x, z, 17) * 4));
     else if (v < 0.28 && d > 7) stamp(['tree_oak', 'tree_oak_2', 'tree_pine_dark', 'tree_pine_dark_2', 'bush_cluster', 'mossy_boulders'][Math.floor(hash2(x, z, 18) * 6)], x, z, Math.floor(hash2(x, z, 19) * 4));
   }
-  // ряд ёлок у края — лес вокруг поляны
+  // a row of firs at the edge — the forest around the glade
   for (let i = -H + 3; i <= H - 3; i += 4) for (const [x, z] of [[i, -H + 3], [i, H - 3], [-H + 3, i], [H - 3, i]]) {
     stamp(hash2(x, z, 20) < 0.7 ? 'tree_pine_dark' : 'tree_oak', x + Math.floor(hash2(x, z, 21) * 3) - 1, z + Math.floor(hash2(x, z, 22) * 3) - 1, Math.floor(hash2(x, z, 23) * 4));
   }
-  // мелочь: грибы-светильники, папоротники, цветы, кристаллики, малые грибы
+  // small stuff: glow mushrooms, ferns, flowers, small crystals, small mushrooms
   for (let z = -H + 2; z <= H - 2; z++) for (let x = -H + 2; x <= H - 2; x++) {
     if (!free(x, z, 0)) continue;
     const v = hash2(x, z, 24), d = laneDist(x, z);
@@ -225,13 +225,13 @@ export function buildTdGladeMap(lib: Record<string, LibraryPrefab>): Level {
     else if (v < 0.13 && free(x, z, 1)) dec('crystal_cluster', x, z);
     else if (v < 0.14 && d > 8 && L.nameAt(x, -1, z) === 'grass') L.set(x, 0, z, 'tall_grass');
   }
-  // ---------- герой, цель, мир: холодная ночь, светлячки, сильный bloom ----------
+  // ---------- hero, goal, world: a cold night, fireflies, strong bloom ----------
   L.spawn = [0, 0, 7];
   L.meta.spawnYaw = 270;
-  L.meta.goal = ['Защити куст малины', 'Кристальная поляна'];
-  // маркитант обороны (раздел 12 вики): у точки появления, не на дороге и не у площадки
+  L.meta.goal = ['Defend the raspberry bush', 'Crystal Glade'];
+  // the defence sutler (wiki section 12): near the spawn point, not on a road and not by a pad
   const sutler = sutlerSpot(L, GLADE_LANES, GLADE_PADS, 4, 10);
-  if (!sutler) throw new Error('Нет места для маркитанта');
+  if (!sutler) throw new Error('No room for the sutler');
   L.meta.merchants = [sutler];
   L.meta.td = GLADE_SPEC;
   L.meta.world = {

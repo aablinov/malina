@@ -4,15 +4,16 @@ import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 
 /**
- * Карта 1 «Остров» (wiki/design-map-island.md, src/level/island-map.ts): грузится регионами без ошибок, герой на старте стоит
- * на земле, из meta встают группы мобов (засады и патрули), страж в храме, торговцы и лут; дороги плана проходимы
- * от старта до храма, деревни, статуи, пещер и за все четыре моста; патруль ходит, засада видит героя только вблизи.
+ * Map 1 "Island" (wiki/design-map-island.md, src/level/island-map.ts): loads by regions without errors, the hero stands
+ * on the ground at the start, mob groups (ambushes and patrols), the warden in the temple, merchants and loot rise from meta;
+ * the plan's roads are walkable from the start to the temple, the village, the statue, the caves and across all four bridges;
+ * a patrol walks, an ambush sees the hero only up close.
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=island';
 const MAP = JSON.parse(readFileSync(resolve('assets/maps/island.json'), 'utf8')) as { entities: { kind: string }[]; meta: { mobRooms: unknown[]; arenas: unknown[]; merchants: unknown[] } };
 
-/** Дороги плана в пикселях картинки (как в island-map.ts): старт → ключи → хутор → форт → деревня; форт → храм → статуя; грот; снег; лагерь; уступ; островок; скала */
+/** The plan's roads in picture pixels (as in island-map.ts): start → keys → farmstead → fort → village; fort → temple → statue; grotto; snow; camp; ledge; islet; rock */
 const ROADS = [
   [740, 1415, 850, 1430, 1000, 1480, 1150, 1535, 1250, 1540, 1320, 1480, 1400, 1360, 1430, 1300, 1430, 1220, 1400, 1160, 1330, 1080, 1270, 1000, 1240, 930, 1270, 830, 1300, 760, 1330, 660, 1370, 560, 1400, 500, 1400, 380, 1500, 330, 1600, 260, 1680, 230],
   [1330, 640, 1250, 600, 1180, 560, 1140, 505, 1090, 560, 1050, 625, 1020, 630, 990, 660, 985, 720, 1000, 800, 960, 830, 880, 900, 780, 1000, 680, 1030, 520, 1030, 430, 1000, 360, 935],
@@ -23,7 +24,7 @@ const ROADS = [
   [545, 620, 455, 585, 380, 560], [690, 1350, 600, 1385, 610, 1450, 570, 1490],
 ];
 
-test('остров: карта из плана — регионы, старт, мобы, страж, торговцы и лут из meta', async ({ page }) => {
+test('island: map from the plan — regions, start, mobs, warden, merchants and loot from meta', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
@@ -39,12 +40,12 @@ test('остров: карта из плана — регионы, старт, �
       kinds: new Set(m.mobRooms.flatMap((r: any) => r.pack.mobs.map((x: any) => x.kind))).size,
       patrols: m.mobRooms.reduce((a: number, r: any) => a + r.pack.mobs.filter((x: any) => x.route).length, 0),
       ambush: m.mobRooms.find((r: any) => r.spec.id === 'ambush1').pack.mobs.map((x: any) => x.aggro),
-      bosses: m.bossIds, merchants: m.merchants.map((x: any) => x.kind), goal: document.body.textContent?.includes('Друзового голема'),
+      bosses: m.bossIds, merchants: m.merchants.map((x: any) => x.kind), goal: document.body.textContent?.includes('Druse Golem'),
       chestsNear: m.props.supplies.length + m.props.crates.length + m.props.barrels.length,
     };
   });
   expect(errors).toEqual([]);
-  expect(r.name).toBe('Остров');
+  expect(r.name).toBe('Island');
   expect(r.stream).toBe(true);
   expect(r.regions).toBeGreaterThan(0);
   expect(r.heroOnFloor).toBe(true);
@@ -61,14 +62,14 @@ test('остров: карта из плана — регионы, старт, �
   expect(MAP.entities.filter((e) => e.kind === 'terminal').length).toBe(1);
 });
 
-test('остров: дороги плана проходимы, посты мобов и лут на свободной земле, патруль ходит, засада спит до 3 м', async ({ page }) => {
+test('island: the plan\'s roads are walkable, mob posts and loot stand on free ground, a patrol walks, an ambush sleeps until 3 m', async ({ page }) => {
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
   const r = await page.evaluate(async (ROADS) => {
     const m = (window as any).__malina; m.script(true); await m.ready; m.hero.god = true;
     const L = m.level, V = m.hero.pos.constructor;
     const SX = 256 / 1932, SZ = 256 / 1916, P = (x: number, y: number) => [Math.round(x * SX - 128), Math.round(y * SZ - 128)];
-    /** Поставить героя (регионы вокруг подгружаются) и опустить решётки арены, если он случайно её разбудил */
+    /** Place the hero (the regions around get loaded) and lower the arena grates if he woke one by accident */
     const load = (x: number, z: number) => { m.hero.place(x, z, 0); m.step(0.2); m.render(); m.step(0.2); m.render(); for (const a of m.arenas) a.reset(); };
     const bad: unknown[] = [];
     for (const line of ROADS) for (let i = 0; i + 3 < line.length; i += 2) {
@@ -83,7 +84,7 @@ test('остров: дороги плана проходимы, посты мо�
     for (const r of m.mobRooms) for (const p of r.spec.posts) { const x = Math.round(p.x), z = Math.round(p.z); load(x + 12, z); if (!floorOk(x, z)) posts.push([r.spec.id, p.kind, x, z]); }
     const items: unknown[] = [];
     for (const e of L.entities) { if (!['chest', 'crate', 'barrel', 'terminal'].includes(e.kind)) continue; load(e.x + 12, e.z); if (!floorOk(e.x, e.z)) items.push([e.kind, e.x, e.z]); }
-    // патруль: герой далеко — садовник идёт по маршруту; засада: жук в 6 м спит, в 2,5 м просыпается
+    // patrol: the hero is far — the gardener walks its route; ambush: the beetle sleeps at 6 m, wakes at 2.5 m
     const pr = m.mobRooms.find((r: any) => r.spec.id === 'patrol1');
     load(pr.spec.posts[0].x + 25, pr.spec.posts[0].z + 20); m.fillRoom(pr);
     const w = pr.pack.mobs[0], p0 = [w.pos.x, w.pos.z]; m.step(3);

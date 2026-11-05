@@ -4,9 +4,9 @@ import type { Target } from './target.ts';
 import { CUBE, glowMat, type ProcCtx, type WeaponArts } from './weapon-arts.ts';
 
 /**
- * Синергии закалки (wiki/design-weapon-arts.md, раздел 3): 28 пар восьми зачарований ближнего боя, у каждой — свой
- * эффект на добивающем и на спец-ударе. Имена и тексты — src/temper.ts (SYNERGIES), примитивы — src/weapon-arts.ts.
- * c.dmg — урон синергии (от добивающего, силы и ступеней пары), c.power 0..1 — размах эффекта.
+  * Temper synergies (wiki/design-weapon-arts.md, section 3): 28 pairs of the eight melee enchantments, each with its own
+  * effect on the finisher and on the weapon art. Names and texts — src/temper.ts (SYNERGIES), primitives — src/weapon-arts.ts.
+  * c.dmg — synergy damage (from the finisher, power and the pair's tiers), c.power 0..1 — scale of the effect.
  */
 
 type SynergyFx = (A: WeaponArts, c: ProcCtx) => void;
@@ -18,7 +18,7 @@ const R = (k = 1): number => (rnd() - 0.5) * k;
 const pct = (A: WeaponArts, k: number): number => Math.max(1, Math.round(A.maxHp * k));
 const part = (v: number): number => Math.max(1, Math.round(v));
 
-/** Цели вдоль лучей из at: длина len, полуширина w */
+/** Targets along rays from at: length len, half-width w */
 function onRays(A: WeaponArts, at: THREE.Vector3, angles: number[], len: number, w: number): Target[] {
   return A.near(at, len).filter((t) => angles.some((a) => {
     const dx = t.pos.x - at.x, dz = t.pos.z - at.z, s = Math.sin(a), co = Math.cos(a);
@@ -27,7 +27,7 @@ function onRays(A: WeaponArts, at: THREE.Vector3, angles: number[], len: number,
   }));
 }
 
-/** Цели в конусе перед героем: радиус r, полуугол half */
+/** Targets in a cone in front of the hero: radius r, half-angle half */
 function inCone(A: WeaponArts, yaw: number, r: number, half: number): Target[] {
   const h = A.hero.pos;
   return A.near(h, r).filter((t) => {
@@ -36,19 +36,19 @@ function inCone(A: WeaponArts, yaw: number, r: number, half: number): Target[] {
   });
 }
 
-/** Урон тиками: n раз с шагом step, fn — вид каждого тика */
+/** Damage in ticks: n times with step step, fn — the look of each tick */
 function dot(A: WeaponArts, t: Target, n: number, step: number, v: number, fn: (t: Target, i: number) => void): void {
   A.repeat(n, step, (i) => { if (!t.alive) return; A.hurt(t, v, t.pos, 0); fn(t, i); });
 }
 
-/** Светящийся кубик-снаряд */
+/** Glowing cube projectile */
 function glowCube(c: THREE.Color, s: number, opacity = 1): THREE.Mesh {
   const m = new THREE.Mesh(CUBE(), glowMat(c, opacity));
   m.scale.setScalar(s);
   return m;
 }
 
-/** Взрыв без дыма: вспышки, кубы огня, искры и два кольца */
+/** Smokeless blast: flashes, fire cubes, sparks and two rings */
 function boom(A: WeaponArts, at: THREE.Vector3, r: number, a: THREE.Color, b: THREE.Color): void {
   const fx = A.fx, c = at1(A, at, 0.7);
   fx.flash(c, a.clone().multiplyScalar(1.3), Math.min(6, r * 1.6), 0.3);
@@ -61,9 +61,9 @@ function boom(A: WeaponArts, at: THREE.Vector3, r: number, a: THREE.Color, b: TH
 }
 
 export const SYNERGY_FX: Record<string, SynergyFx> = {
-  // ---------- острота ----------
+  // ---------- sharpness ----------
   starCross(A, c) {
-    // крест каждый раз повёрнут по-своему, лучи разной длины вылетают лентами по слегка кривой
+    // the cross is rotated differently every time, rays of different length fly out as ribbons along a slightly bent curve
     const turn = R(0.9), at = at1(A, c.at), angles = [0, 1, 2, 3].map((i) => c.yaw + Math.PI / 4 + turn + (i * Math.PI) / 2 + R(0.25));
     angles.forEach((a, i) => A.later(i * (0.02 + rnd() * 0.05), () => {
       const L = 3 + rnd() * 1.4;
@@ -107,7 +107,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     A.body(g, 2, (k, dt) => {
       g.position.copy(at1(A, A.hero.pos, 0.9 + Math.sin(ph + k * 14) * 0.15));
       g.rotation.y += dt * sp * dir;
-      // клинки дышат: радиус и наклон плывут
+      // the blades breathe: radius and tilt drift
       g.rotation.x = Math.sin(ph + k * 9) * 0.18; g.rotation.z = Math.cos(ph + k * 7) * 0.18;
       g.scale.setScalar(0.85 + Math.sin(ph + k * 11) * 0.15);
       for (const m of mats) m.opacity = Math.min(1, k * 8, (1 - k) * 6);
@@ -122,7 +122,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     A.sound('dash');
   },
   fireLine(A, c) {
-    // полоса огня змеится: каждый раз своя кривая, огонь бежит по ней от героя
+    // the fire strip snakes: a new curve every time, the fire runs along it from the hero
     const from = at1(A, A.hero.pos, 0.1), L = 5 + rnd() * 2.5;
     const path = A.curve(from, from.clone().addScaledVector(A.dir(c.yaw + R(0.4)), L), 0.3, 0, 0.06);
     const pts = [0, 0.25, 0.5, 0.75, 1].map((k) => path(k, new THREE.Vector3()));
@@ -143,7 +143,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   phantomEcho(A, c) {
     const g = A.ghost(c.b, 1.7), hero = A.hero;
     const mat = (g.children[0].children[0] as THREE.Mesh | undefined)?.material as THREE.MeshBasicMaterial | undefined;
-    // эхо машет то слева, то справа, с наклоном и разным размахом
+    // the echo swings left or right, with a tilt and a different sweep
     const y0 = c.yaw + R(0.4), sw = (1.1 + rnd() * 0.6) * (rnd() < 0.5 ? -1 : 1), from = y0 - sw, to = y0 + sw, tilt = R(0.7);
     let struck = false;
     A.body(g, 0.6, (k) => {
@@ -164,7 +164,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     const p = (t0 ? t0.pos : c.at).clone().setY(A.ground);
     const g = A.ghost(mix(c.a, c.b, 0.5), 3);
     const len = (g.userData.bladeTip as number) ?? 3;
-    // падает каждый раз под своим углом и с своей стороны
+    // falls at its own angle and from its own side every time
     const tilt = R(0.5), side = A.dir(rnd() * 6.28).multiplyScalar(2 + rnd() * 3);
     g.rotation.set(Math.PI / 2 + tilt, rnd() * 6.28, 0, 'YXZ');
     A.fx.ring(at1(A, p, 0.06), 2.6, c.a, 0.4, 0.06, 0);
@@ -186,7 +186,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     });
   },
 
-  // ---------- крит ----------
+  // ---------- crit ----------
   heartStar(A, c) {
     A.forcedCrits = 3;
     const at = at1(A, A.hero.pos, 1);
@@ -213,7 +213,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
       });
   },
   starSpiral(A, c) {
-    // спираль каждый раз закручена в свою сторону и с разной густотой, у каждой звезды — свой разлёт и хвост
+    // the spiral is wound in its own direction and with a different density every time, each star has its own scatter and tail
     const center = c.at.clone(), dir = rnd() < 0.5 ? -1 : 1, twist = 1.6 + rnd() * 1.8;
     for (let i = 0; i < 8; i++) {
       const a0 = c.yaw + (i / 8) * Math.PI * 2 + R(0.3), reach = 4.5 + rnd() * 2;
@@ -269,7 +269,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     A.chain(c.at, 5, 5, mix(c.a, c.b, 0.3), part(c.dmg * 0.6));
   },
 
-  // ---------- вампиризм ----------
+  // ---------- vampirism ----------
   bloodRam(A, c) {
     const h = A.hero.pos;
     A.fx.arc(h, c.yaw, c.a.clone().multiplyScalar(0.3), 4, 1.2, A.ground + 0.5, 0.65);
@@ -282,7 +282,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   },
   crimsonVortex(A, c) {
     const at = c.at.clone();
-    // кровавые сгустки кружат и затягиваются в центр по своим спиралям
+    // blood clots circle and get pulled into the centre along their own spirals
     for (let i = 0; i < 5; i++) {
       const a0 = rnd() * 6.28, r0 = 2.5 + rnd() * 1.2, dir = rnd() < 0.5 ? -1 : 1, sp = 5 + rnd() * 4;
       A.fx.streak({ path: (k, out) => { const r = r0 * (1 - k * 0.85), a = a0 + k * sp * dir; return out.set(at.x + Math.sin(a) * r, A.ground + 0.5 + Math.sin(k * 8 + i) * 0.3, at.z + Math.cos(a) * r); }, dur: 1.4, color: i % 2 ? c.a : c.b, width: 0.18, tail: 0.35 });
@@ -303,14 +303,14 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.25, r, 48).rotateX(-Math.PI / 2), glowMat(c.b.clone().multiplyScalar(0.5), 0.8));
     let spin = rnd() * 6.28;
     const dir = rnd() < 0.5 ? -1 : 1, ph = rnd() * 6.28;
-    // три языка пламени бегут по кольцу, кольцо дышит
+    // three tongues of flame run along the ring, the ring breathes
     for (let i = 0; i < 3; i++) A.fx.streak({ path: (k, out) => { const a = spin + (i / 3) * Math.PI * 2, rr = r * (1 + Math.sin(ph + k * 12 + i) * 0.06); return out.set(A.hero.pos.x + Math.sin(a) * rr, A.ground + 0.35 + Math.sin(k * 20 + i * 2) * 0.15, A.hero.pos.z + Math.cos(a) * rr); }, dur: 2.4, color: c.b.clone().multiplyScalar(1.1), color2: c.a, width: 0.35, tail: 0.3, halo: 2.4, core: 0.25 });
     A.body(ring, 2.5, (k, dt) => {
       ring.position.copy(at1(A, A.hero.pos, 0.06));
       ring.scale.setScalar(1 + Math.sin(ph + k * 12) * 0.06);
       (ring.material as THREE.MeshBasicMaterial).opacity = Math.min(0.8, k * 8, (1 - k) * 4);
       spin += dt * 3 * dir;
-      // густые языки пламени по всему кольцу
+      // thick tongues of flame all along the ring
       if (rnd() < 0.9) { const a = rnd() * 6.28; A.fx.fireCubes(at1(A, A.hero.pos.clone().add(_v.set(Math.sin(a) * r, 0, Math.cos(a) * r)), 0.3), 0.25, 2, [c.b, new THREE.Color(3.4, 1.6, 0.25), new THREE.Color(3, 0.5, 0.2)], 0.24 + rnd() * 0.12, true, [0.35, 0.6]); }
       for (let i = 0; i < 3; i++) {
         const a = spin + (i / 3) * Math.PI * 2 + rnd() * 0.4;
@@ -350,7 +350,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     if (ts.length) A.sound('zap');
   },
 
-  // ---------- отбрасывание ----------
+  // ---------- knockback ----------
   tornado(A, c) {
     const g = new THREE.Group(), mats: THREE.MeshBasicMaterial[] = [];
     for (let i = 0; i < 5; i++) {
@@ -361,7 +361,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
       m.position.y = i * 0.45;
       g.add(m);
     }
-    // смерч бредёт сам по себе: петляет змейкой со своей частотой и уходом в сторону
+    // the twister wanders on its own: snakes along with its own frequency and drift to the side
     const yaw = c.yaw + R(0.5), fwd = A.dir(yaw), side = new THREE.Vector3(fwd.z, 0, -fwd.x), p0 = A.hero.pos.clone().addScaledVector(fwd, 1);
     const amp = 1 + rnd() * 1.2, fq = 1.5 + rnd() * 2, ph = rnd() * 6.28, far = 7 + rnd() * 4, drift = R(3);
     const cd = new Map<Target, number>();
@@ -386,7 +386,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
   flameRam(A, c) {
     const h = A.hero.pos;
     A.fx.spray(at1(A, h, 0.9), A.dir(c.yaw), [c.b, new THREE.Color(3.4, 2.4, 0.5), c.a], 40, { speed: 9 + rnd() * 3, spread: 0.4 + rnd() * 0.3, life: 0.4, size: 0.1, gravity: -1 });
-    // языки пламени: каждый по своей дуге
+    // tongues of flame: each along its own arc
     for (let i = 0; i < 5; i++) A.fx.streak({ path: A.curve(at1(A, h, 0.9), at1(A, h.clone().addScaledVector(A.dir(c.yaw + R(1)), 3.5 + rnd() * 1.5), 0.6 + rnd() * 0.6), 0.25, 0.2, 0.08), dur: 0.25 + rnd() * 0.1, color: c.b.clone().multiplyScalar(1.2), color2: c.a, width: 0.4, tail: 0.25, halo: 2.2, core: 0.25 });
     for (let i = 1; i <= 4; i++) A.later(i * 0.04, () => A.fx.fireCubes(at1(A, h.clone().addScaledVector(A.dir(c.yaw), i * 1.1), 0.7), 0.3 + i * 0.15, 4, [c.b, new THREE.Color(3.4, 2.4, 0.5)], 0.22));
     for (const t of inCone(A, c.yaw, 4.5, 0.6)) {
@@ -402,7 +402,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     for (let i = 0; i < 4; i++) { const f = glowCube(col, 0.16, 0.9); f.position.set(-0.21 + i * 0.14, 0.12, 0.34); g.add(f); }
     const thumb = glowCube(col, 0.16, 0.9); thumb.position.set(0.32, -0.08, 0.15); g.add(thumb);
     const fwd = A.dir(c.yaw), p0 = A.hero.pos.clone().addScaledVector(fwd, 0.8);
-    // кулак летит по своей дуге — то загибает, то идёт прямее
+    // the fist flies along its own arc — now bending, now going straighter
     const path = A.curve(p0, p0.clone().addScaledVector(fwd, 7), 0.25, 0, 0.04), q = new THREE.Vector3(), q0 = new THREE.Vector3();
     A.fx.streak({ path: (k, out) => path(k, out).setY(A.ground + 1), dur: 0.6, color: col.clone().multiplyScalar(1.3), width: 0.6, tail: 0.3, halo: 2 });
     let done = false;
@@ -436,11 +436,11 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     A.sound('zap');
   },
 
-  // ---------- вихрь ----------
+  // ---------- whirlwind ----------
   fireTornado(A, c) {
     let a = rnd() * 6.28;
     const dir = rnd() < 0.5 ? -1 : 1;
-    // четыре огненных потока кружат вокруг героя на разной высоте и радиусе
+    // four streams of fire circle the hero at different heights and radii
     for (let i = 0; i < 4; i++) {
       const r0 = 1.1 + rnd() * 1, h0 = 0.3 + rnd() * 1.1, sp = (6 + rnd() * 3) * dir, ph = rnd() * 6.28;
       A.fx.streak({ path: (k, out) => { const an = ph + k * 2 * sp; return out.set(A.hero.pos.x + Math.sin(an) * r0, A.ground + h0 + Math.sin(k * 15 + i) * 0.25, A.hero.pos.z + Math.cos(an) * r0); }, dur: 2, color: i % 2 ? c.b.clone().multiplyScalar(1.1) : c.a, color2: c.b, width: 0.3, tail: 0.25, halo: 2.4, core: 0.25 });
@@ -496,7 +496,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     A.sound('zap');
   },
 
-  // ---------- огонь ----------
+  // ---------- fire ----------
   blueFlame(A, c) {
     const blue = [new THREE.Color(0.4, 1.8, 3.4), new THREE.Color(1.2, 2.8, 3.4), c.b];
     const victims = new Set([...c.hits, ...A.near(c.at, 2)]);
@@ -512,11 +512,11 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     const p = (t0 ? t0.pos : c.at).clone().setY(A.ground);
     const m = new THREE.Group();
     m.add(glowCube(c.a, 0.8, 0.95), glowCube(new THREE.Color(3.4, 2.4, 0.6), 0.55));
-    // каждый раз прилетает с другой стороны неба, с толстым огненным хвостом
+    // comes from a different side of the sky every time, with a thick fiery tail
     const from = p.clone().add(A.dir(rnd() * 6.28).multiplyScalar(2 + rnd() * 4)).setY(A.ground + 10 + rnd() * 4);
     m.position.copy(from);
     A.fx.streak({ path: (_k, out) => out.copy(m.position), dur: 0.45, color: new THREE.Color(3.4, 2.2, 0.5), color2: c.a, width: 0.9, tail: 0.35, halo: 2.2, core: 0.25 });
-    // круг на земле: куда упадёт
+    // circle on the ground: where it will land
     A.fx.ring(at1(A, p, 0.06), 3, c.a, 0.45, 0.06);
     A.body(m, 0.45, (k) => {
       m.position.copy(from).lerp(at1(A, p, 0.4), k * k);
@@ -534,7 +534,7 @@ export const SYNERGY_FX: Record<string, SynergyFx> = {
     });
   },
 
-  // ---------- души ----------
+  // ---------- souls ----------
   spiritChain(A, c) {
     A.chain(c.at, 6, 5, mix(c.a, c.b, 0.4), part(c.dmg * 0.45), (t) => { A.souls(1); A.orbs(at1(A, t.pos, 1), c.a, 1); });
   },

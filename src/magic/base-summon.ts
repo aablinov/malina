@@ -6,18 +6,19 @@ import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio.ts';
 import type { Spells } from '../spells.ts';
 import type { Target } from '../target.ts';
 import { C, rand, type Spell } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 import { summon, type Minion } from './minions.ts';
 
 /**
- * Базовые заклинания (wiki/design-spells.md, раздел «Базовые заклинания»). Призыв: стая волков, малый элементаль,
- * каменный голем. Общий ход призванных (портал, подъём, бег к врагу, удар, приманка для мобов, растворение) — src/magic/minions.ts;
- * здесь — модели из кубиков, анимация, удары и звуки.
+ * Base spells (wiki/design-spells.md, section "Base spells"). Summoning: wolf pack, lesser elemental,
+ * stone golem. The shared flow of summons (portal, rise, run to the enemy, hit, bait for mobs, dissolve) — src/magic/minions.ts;
+ * here — cube models, animation, hits and sounds.
  */
 
 const UNIT = new THREE.BoxGeometry(1, 1, 1);
 const ROOT = 293.66;
 
-/** Кубик-деталь: материал, размер, место, родитель */
+/** Cube part: material, size, position, parent */
 function box(m: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, parent: THREE.Object3D): THREE.Mesh {
   const o = new THREE.Mesh(UNIT, m);
   o.scale.set(w, h, d);
@@ -25,7 +26,7 @@ function box(m: THREE.Material, w: number, h: number, d: number, x: number, y: n
   parent.add(o);
   return o;
 }
-/** Шарнир: группа-точка поворота */
+/** Joint: a group acting as a pivot */
 function pivot(x: number, y: number, z: number, parent: THREE.Object3D): THREE.Group {
   const g = new THREE.Group();
   g.position.set(x, y, z);
@@ -37,7 +38,7 @@ const glow = (c: THREE.Color, opacity = 1, add = false): THREE.MeshBasicMaterial
   color: c, toneMapped: false, transparent: true, opacity, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: !add,
 });
 
-/** Каст призыва: разворот, замах, через 0,25 с — миг появления */
+/** Summon cast: turn, windup, after 0.25 s — the moment of appearance */
 function cast(kit: Spells, at: THREE.Vector3, k: number, spawn: () => void): void {
   kit.face(at);
   kit.windup('summon', k);
@@ -47,7 +48,7 @@ function cast(kit: Spells, at: THREE.Vector3, k: number, spawn: () => void): voi
   });
 }
 
-/** Когда призванный уходит (срок или здоровье) — один раз fn: послевкусие */
+/** When the summon leaves (time or health) — fn once: aftertaste */
 function onEnd(kit: Spells, m: Minion, life: number, fn: () => void): void {
   kit.proc(() => {
     if (m.t < life && m.hp > 0) return true;
@@ -56,7 +57,7 @@ function onEnd(kit: Spells, m: Minion, life: number, fn: () => void): void {
   });
 }
 
-/** Растворение: светлый круг на земле и мягкий аккорд вниз */
+/** Dissolve: a light circle on the ground and a soft descending chord */
 function farewell(kit: Spells, m: Minion, size: number): void {
   const s = kit.color('summon');
   kit.h.fx.decal(m.pos, kit.tex.glow(), s.a.clone().multiplyScalar(0.3), size, 1.6, true);
@@ -64,13 +65,13 @@ function farewell(kit: Spells, m: Minion, size: number): void {
   [12, 7, 0].forEach((n, i) => bell(semi(ROOT, n), 0.7, 0.035, i * 0.07, 0.5));
 }
 
-// ---------- стая волков ----------
+// ---------- wolf pack ----------
 
 interface WolfParts { body: THREE.Group; head: THREE.Group; legs: THREE.Group[]; tail: THREE.Group }
 
 function wolfModel(): { g: THREE.Group; mats: THREE.Material[]; parts: WolfParts } {
   const s = { a: C(0.5, 3.4, 2.6), b: C(1.6, 4, 1.8) };
-  // призрачный волк-дух: бирюзово-серая шерсть с лёгким свечением, светящаяся грива и глаза
+  // ghostly spirit wolf: turquoise-grey fur with a light glow, glowing mane and eyes
   const fur = lambert('#7fb2aa', '#0c3632'), dark = lambert('#4f7672', '#072a26');
   const mane = glow(s.a.clone().multiplyScalar(0.28), 0.9), eye = glow(C(3, 4, 3.6));
   const g = new THREE.Group(), body = pivot(0, 0, 0, g);
@@ -94,7 +95,7 @@ function wolfModel(): { g: THREE.Group; mats: THREE.Material[]; parts: WolfParts
   return { g, mats: [fur, dark, mane, eye], parts: { body, head, legs, tail } };
 }
 
-/** Вой: два голоса — вверх и вниз, с квинтой */
+/** Howl: two voices — up and down, with a fifth */
 function howl(delay = 0): void {
   voice({ type: 'triangle', f: 330, f1: 620, dur: 0.6, vol: 0.06, attack: 0.18, delay, lp: 1800, verb: 0.6 });
   voice({ type: 'triangle', f: 620, f1: 410, dur: 0.9, vol: 0.05, attack: 0.05, delay: delay + 0.55, lp: 1600, verb: 0.7 });
@@ -134,7 +135,7 @@ function wolves(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3,
           P.body.position.z = 0;
           P.head.rotation.x = 0;
           P.tail.rotation.y = Math.sin(kit.time * (walking ? 14 : 5)) * 0.4;
-          // прыжок-укус: рывок вперёд и вверх, голова вниз
+          // leap bite: a lunge forward and up, head down
           if (swing >= 0) {
             const e = Math.sin(swing * Math.PI);
             P.body.position.z = e * 0.45;
@@ -151,7 +152,7 @@ function wolves(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3,
   });
 }
 
-// ---------- малый элементаль ----------
+// ---------- lesser elemental ----------
 
 type Elem = 'fire' | 'ice' | 'storm';
 const ELEMS: Elem[] = ['fire', 'ice', 'storm'];
@@ -160,7 +161,7 @@ const ELEM_LOOK: Record<Elem, { a: THREE.Color; b: THREE.Color }> = {
   ice: { a: C(1.4, 2.8, 4), b: C(2.8, 3.6, 4) },
   storm: { a: C(1, 2, 4), b: C(3, 3.4, 4) },
 };
-/** Очередь стихий: каждый каст — следующая */
+/** Element queue: every cast — the next one */
 let elemTurn = 0;
 
 interface ElemParts { float: THREE.Group; core: THREE.Mesh; shell: THREE.Mesh; orbit: THREE.Mesh[] }
@@ -174,7 +175,7 @@ function elemShot(kit: Spells, from: THREE.Vector3, t: Target, power: number, el
   kit.h.scene.add(shot);
   const start = from.clone(), dur = 0.3;
   let tt = 0;
-  // выстрел
+  // shot
   if (el === 'fire') hiss({ dur: 0.25, vol: 0.12, f: 400, f1: 1600, q: 0.6, type: 'lowpass', verb: 0.2 });
   else if (el === 'ice') voice({ type: 'triangle', f: deg(1046.5, 3 + ((rnd() * 4) | 0)), dur: 0.2, vol: 0.05, verb: 0.4 });
   else hiss({ dur: 0.08, vol: 0.14, f: 5000, type: 'highpass', verb: 0.2 });
@@ -192,7 +193,7 @@ function elemShot(kit: Spells, from: THREE.Vector3, t: Target, power: number, el
     fx.burst(end, [L.a, L.b], 10, { speed: 2.5, up: 2, size: 0.06, life: 0.4, glow: true, gravity: el === 'fire' ? -1 : 6 });
     fx.flash(end, L.a.clone().multiplyScalar(0.5), 1.2, 0.18);
     if (el === 'fire') {
-      // жжёт: два слабых тика и угли
+      // burns: two weak ticks and embers
       for (const d of [0.5, 1]) kit.later(d, () => { if (t.alive && !t.prop) { kit.h.damage(t, Math.max(1, Math.round(power * 0.2)), from, 0); fx.burst(t.pos.clone().setY(t.pos.y + 0.8), [L.a, L.b], 5, { speed: 1, up: 1.5, size: 0.05, life: 0.4, glow: true, gravity: -1 }); } });
       boom(110, 50, 0.25, 0.18);
     } else if (el === 'ice') {
@@ -250,7 +251,7 @@ function elemental(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
   });
 }
 
-// ---------- каменный голем ----------
+// ---------- stone golem ----------
 
 interface GolemParts { body: THREE.Group; legs: THREE.Group[]; arms: THREE.Group[]; rune: THREE.MeshBasicMaterial }
 let lastCrumb = 0;
@@ -258,15 +259,15 @@ let lastCrumb = 0;
 function golem(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const hero = kit.h.hero, fx = kit.h.fx, s = kit.color('summon');
   const R = a.radius ?? 2;
-  // заряд продлевает жизнь голема: тап — 80 % срока, полный — весь
+  // charge extends the golem's life: a tap — 80 % of the duration, full — all of it
   const life = a.duration ?? 18;
-  // встаёт между героем и курсором: не дальше 5 м и чуть не доходя до точки
+  // stands between the hero and the cursor: no farther than 5 m and just short of the point
   const dir = new THREE.Vector3(at.x - hero.pos.x, 0, at.z - hero.pos.z);
   const len = dir.length();
   const dist = Math.min(5, Math.max(1.2, len - 1.2));
   const spot = len > 0.01 ? hero.pos.clone().addScaledVector(dir.normalize(), dist) : hero.pos.clone().add(new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw)).multiplyScalar(1.5));
   cast(kit, spot, k, () => {
-    // грохот: камень поднимается из земли
+    // rumble: stone rises from the ground
     boom(70, 30, 1.2, 0.5, 0, 0.4);
     hiss({ dur: 1, vol: 0.14, f: 500, f1: 200, q: 0.5, type: 'lowpass', attack: 0.1, verb: 0.3 });
     fx.shake = Math.max(fx.shake, 0.3);
@@ -294,7 +295,7 @@ function golem(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
         return { g, mats: [stone, dark, moss, rune, eye] };
       },
       strike(mn) {
-        // кулаки уже опускаются — удар чуть позже
+        // the fists are already coming down — the hit a bit later
         kit.later(0.04, () => {
           if (mn.hp <= 0) return;
           const f = new THREE.Vector3(Math.sin(mn.g.rotation.y), 0, Math.cos(mn.g.rotation.y));
@@ -316,13 +317,13 @@ function golem(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
         P.legs.forEach((l, j) => { l.rotation.x = Math.sin(t + j * Math.PI) * 0.4 * w; });
         P.body.rotation.z = Math.sin(t) * 0.05 * w;
         P.body.position.y = w * Math.abs(Math.sin(t)) * 0.05;
-        // тяжёлые шаги — пыль
+        // heavy steps — dust
         if (walking && Math.abs(Math.sin(t)) < 0.08 && rnd() < 0.5) fx.burst(mn.pos.clone().setY(mn.pos.y + 0.1), ['#c8bba0', '#a89c82'], 3, { speed: 1, up: 1, size: 0.08, life: 0.5, gravity: 8 });
         let arm = Math.sin(t + Math.PI) * 0.3 * w;
-        // удар: кулаки над головой — и в землю
+        // hit: fists over the head — and into the ground
         if (swing >= 0) arm = swing < 0.45 ? -2.8 * (swing / 0.45) : swing < 0.55 ? -2.8 + 2.3 * ((swing - 0.45) / 0.1) : -0.5 * (1 - (swing - 0.55) / 0.45);
         P.arms.forEach((a2, j) => { a2.rotation.x = swing >= 0 ? arm : arm * (j ? 1 : -1); });
-        // руна мерцает: зов на себя
+        // the rune flickers: taunt
         P.rune.opacity = 0.75 + Math.sin(kit.time * 4) * 0.25;
         mn.data.ring = ((mn.data.ring as number | undefined) ?? 0) - dt;
         if ((mn.data.ring as number) <= 0) { mn.data.ring = 2.5; fx.shock(mn.pos.clone().setY(mn.pos.y + 0.05), 2.4, s.a, 0.6, 0.06); }
@@ -334,7 +335,7 @@ function golem(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
       },
     });
     onEnd(kit, m, life, () => {
-      // голем осыпается: камни разлетаются
+      // the golem crumbles: stones fly apart
       fx.burst(m.pos.clone().setY(m.pos.y + 1.2), ['#9a9284', '#6f695e', '#5f8a3a'], 24, { speed: 3, up: 3, size: 0.14, life: 0.9, gravity: 10 });
       boom(80, 30, 0.6, 0.3);
       farewell(kit, m, 2.4);
@@ -343,7 +344,7 @@ function golem(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
 }
 
 export const BASE_SUMMON = {
-  wolves: { school: 'summon', tier: 'common', title: 'Стая волков', cast: wolves },
-  elemental: { school: 'summon', tier: 'common', title: 'Малый элементаль', cast: elemental },
-  golem: { school: 'summon', tier: 'common', title: 'Каменный голем', cast: golem },
+  wolves: { school: 'summon', tier: 'common', title: t('Wolf pack'), cast: wolves },
+  elemental: { school: 'summon', tier: 'common', title: t('Lesser elemental'), cast: elemental },
+  golem: { school: 'summon', tier: 'common', title: t('Stone golem'), cast: golem },
 } satisfies Partial<Record<BossSpellKind, Spell>>;

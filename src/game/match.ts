@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { t } from '../i18n/i18n.ts';
 import type { Channel } from '../net/channel.ts';
 import { CMD_BACKLOG, LOOT_DELAY, MOB_FLAG, SNAP_RING, TICK, type Cmd, type CmdBatch, type GameClientMsg, type GameServerMsg } from '../net/game-protocol.ts';
 import { CLOSE } from '../net/protocol.ts';
@@ -12,9 +13,9 @@ import type { TdSpec } from '../td/types.ts';
 import { HeadlessBattle, type BattleHero } from './battle.ts';
 
 /**
- * Матч — серверный бой по образцу sv_client.c Quake 3 (wiki/design-multiplayer.md): мир с героями партии и стаей
- * (src/game/battle.ts), команды ввода от клиентов по одной на такт (пустая очередь — повтор последней), после каждого
- * кадра — снимок в кольцо и дельта каждому от подтверждённого им. Транспорта не знает: каналы даёт сервер (server/game/)
+ * Match — a server battle modelled on Quake 3's sv_client.c (wiki/design-multiplayer.md): a world with the party heroes and the pack
+ * (src/game/battle.ts), input commands from clients one per tick (empty queue — repeat the last), after every
+ * frame — a snapshot into the ring and a delta to each from the one they acknowledged. Knows nothing of transports: the server provides channels (server/game/)
  */
 export interface MatchPlayer { seat: number; playerId: string; name: string; profile: ProfileData }
 export type GameChannel = Channel<GameClientMsg | GameServerMsg, CmdBatch | Delta<SimEvent>>;
@@ -27,12 +28,12 @@ interface Seat {
   queue: Cmd[];
   last: Cmd | null;
   lastSeq: number;
-  /** Последний применённый клиентом снимок — база дельты */
+  /** Last snapshot the client applied — the delta base */
   snapAck: number;
   ping: number;
-  /** Перекат с прошлого снимка — гости увидят его даже между снимками */
+  /** Roll since the last snapshot — guests see it even between snapshots */
   rolled: boolean;
-  /** Действия, ждущие своей команды: исполняются, когда lastSeq дойдёт до их seq (порядок как у клиента) */
+  /** Actions waiting for their command: executed when lastSeq reaches their seq (the same order as on the client) */
   acts: { seq: number; a: GearAction }[];
 }
 
@@ -46,7 +47,7 @@ export class Match {
   private acc = 0;
   private endT = -1;
   ended: MatchEnd | null = null;
-  /** Бой кончился (итог, награды) — комната закроет матч */
+  /** The battle is over (result, rewards) — the room closes the match */
   onEnd: ((e: MatchEnd) => void) | null = null;
 
   constructor(o: { id: string; map: { level: Level; td: TdSpec }; seed: number; players: MatchPlayer[] }) {
@@ -58,7 +59,7 @@ export class Match {
   get tick(): number { return this.battle.world.tick; }
   get td() { return this.battle.world.td!; }
 
-  /** Игрок в матче (старт или вход в идущий бой): герой у точки появления */
+  /** Player in the match (start or joining a running battle): the hero at the spawn point */
   join(p: MatchPlayer): Seat {
     const was = this.seats.get(p.seat);
     if (was) return was;
@@ -70,7 +71,7 @@ export class Match {
     return s;
   }
 
-  /** Игрок вышел из комнаты: герой убирается */
+  /** Player left the room: the hero is removed */
   leave(seat: number): void {
     const s = this.seats.get(seat);
     if (!s) return;
@@ -80,23 +81,23 @@ export class Match {
     if (this.seats.size) this.td.setPlayers(this.seats.size);
   }
 
-  /** Соединение страницы боя: канал — к месту; сразу приветствие и наборы всех */
+  /** Battle page connection: the channel goes to the seat; a greeting and everyone's kits right away */
   attach(seat: number, chan: GameChannel): boolean {
     const s = this.seats.get(seat);
     if (!s) return false;
     if (s.chan && s.chan !== chan) s.chan.close(CLOSE.replaced);
     s.chan = chan;
-    // новое соединение — новая нумерация команд клиента (страница перезагрузилась) и полный снимок
+    // a new connection — new client command numbering (the page reloaded) and a full snapshot
     s.snapAck = 0;
     s.queue.length = 0;
     s.last = null;
     s.lastSeq = 0;
     s.rolled = false;
     s.acts.length = 0;
-    // ошибка в обработке чужого сообщения не должна ронять сервер со всеми матчами: записать и жить дальше
+    // an error handling someone's message must not take down the server with all matches: log it and carry on
     chan.onReliable = (m) => { try { this.onReliable(s, m as GameClientMsg); } catch (e) { this.fail(s, e); } };
     chan.onUnreliable = (u) => { try { if (Array.isArray(u)) for (const c of u) this.onCmd(s, c); } catch (e) { this.fail(s, e); } };
-    // обрыв: герой встаёт (не повторяет последнюю команду вечно) и стоит, пока комната держит место
+    // dropped: the hero stops (does not repeat the last command forever) and stands while the room holds the seat
     chan.onClose = () => { if (s.chan === chan) { s.chan = null; this.halt(s); } };
     this.send(s, { t: 'welcome', seat, tick: this.tick });
     for (const o of this.seats.values()) this.send(s, this.kitOf(o));
@@ -104,7 +105,7 @@ export class Match {
     return true;
   }
 
-  /** Команд больше нет: очередь пуста, последняя забыта, ввод героя пустой */
+  /** No more commands: the queue is empty, the last one forgotten, the hero's input is empty */
   private halt(s: Seat): void {
     s.queue.length = 0;
     s.last = null;
@@ -114,11 +115,11 @@ export class Match {
     s.hero.bow = false;
   }
 
-  /** Надёжно месту; окно переполнено (клиент не подтверждает) — как Q3: соединение закрывается */
+  /** Reliably to a seat; window overflowed (the client is not acknowledging) — as in Q3: the connection closes */
   private send(s: Seat, m: GameServerMsg): void {
     const c = s.chan;
     if (!c) return;
-    if (!c.sendReliable(m)) { console.error(`матч ${this.id}, место ${s.player.seat}: окно надёжных переполнено, соединение закрыто`); c.close(CLOSE.overflow); }
+    if (!c.sendReliable(m)) { console.error(`match ${this.id}, seat ${s.player.seat}: reliable window overflowed, connection closed`); c.close(CLOSE.overflow); }
   }
 
   detach(seat: number): void {
@@ -130,10 +131,10 @@ export class Match {
     this.halt(s);
   }
 
-  /** Что-то упало при разборе сообщения места: в лог, игроку — подсказка */
+  /** Something failed while handling a seat's message: to the log, a hint to the player */
   private fail(s: Seat, e: unknown): void {
-    console.error(`матч ${this.id}, место ${s.player.seat}: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
-    this.send(s, { t: 'toast', text: 'Сервер не смог выполнить действие' });
+    console.error(`match ${this.id}, seat ${s.player.seat}: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+    this.send(s, { t: 'toast', text: t('The server could not perform the action') });
   }
 
   get connected(): number { return [...this.seats.values()].filter((s) => s.chan).length; }
@@ -144,7 +145,7 @@ export class Match {
 
   private onCmd(s: Seat, c: Cmd): void {
     if (!c || !isNum(c.seq) || !Array.isArray(c.move) || !Array.isArray(c.aim) || c.move.length !== 2 || c.aim.length !== 3 || !c.move.every(isNum) || !c.aim.every(isNum)) return;
-    // уже исполнена или уже в очереди (дубли команд в кадре, повторы) — мимо
+    // already executed or already queued (duplicate commands in a frame, resends) — skip
     if (c.seq <= s.lastSeq || c.seq <= (s.queue[s.queue.length - 1]?.seq ?? 0)) return;
     if (isNum(c.snap) && c.snap > s.snapAck) s.snapAck = c.snap;
     if (isNum(c.ping)) s.ping = Math.max(0, Math.min(9999, Math.round(c.ping)));
@@ -165,15 +166,15 @@ export class Match {
         const { t: _t, seq, ...a } = m;
         void _t;
         if (typeof a.k !== 'string') return;
-        // после команды seq (ещё не исполнена) — ждать её; команда уже прошла или номера нет — сразу
+        // after command seq (not yet executed) — wait for it; the command already passed or there is no number — right away
         if (isNum(seq) && seq > s.lastSeq) s.acts.push({ seq, a });
         else this.doAct(s, a);
         break;
       }
       case 'kit': {
         if (!Array.isArray(m.items) || typeof m.equip !== 'object' || !m.equip) return;
-        // плата маркитанту — из казны места; не хватает — набор не меняется, клиенту подсказка (его зеркало поправит снимок)
-        if (isNum(m.cost) && m.cost > 0 && !this.td.spend(seat, Math.round(m.cost))) { this.send(s, { t: 'toast', text: 'Не хватает малины' }); break; }
+        // the sutler's fee comes from the seat's treasury; not enough — the kit does not change, a hint to the client (its mirror is fixed by the snapshot)
+        if (isNum(m.cost) && m.cost > 0 && !this.td.spend(seat, Math.round(m.cost))) { this.send(s, { t: 'toast', text: t('Not enough raspberries') }); break; }
         const d = s.hero.profile.data;
         d.items = JSON.parse(JSON.stringify(m.items)) as Item[];
         d.equip = JSON.parse(JSON.stringify(m.equip)) as Equipment;
@@ -191,7 +192,7 @@ export class Match {
     this.broadcast({ t: 'act', seat: s.player.seat, ...a }, s.player.seat);
   }
 
-  /** Кадр сервера: такты физики по накопленному времени, потом снимок всем */
+  /** Server frame: physics ticks for the accumulated time, then a snapshot to everyone */
   frame(dt: number): void {
     if (this.ended) return;
     this.acc += dt;
@@ -201,8 +202,8 @@ export class Match {
       if (n >= 6) this.acc = 0;
       this.snapshot();
     } catch (e) {
-      // симуляция или снимок упали: матч прерван честно, остальные матчи живут
-      console.error(`матч ${this.id}: кадр упал — ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+      // the simulation or the snapshot failed: the match is aborted cleanly, the other matches live on
+      console.error(`match ${this.id}: frame failed — ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
       this.finish('abandoned');
       return;
     }
@@ -215,7 +216,7 @@ export class Match {
 
   private step(): void {
     for (const s of this.seats.values()) {
-      // действия, чья команда уже исполнена, — до следующей команды (у клиента они идут в начале такта)
+      // actions whose command is already executed — before the next command (on the client they go at the start of the tick)
       while (s.acts.length && s.acts[0].seq <= s.lastSeq) this.doAct(s, s.acts.shift()!.a);
       const c = s.queue.shift() ?? s.last;
       if (!c) continue;
@@ -244,7 +245,7 @@ export class Match {
     }
   }
 
-  /** Записи героев и врагов плюс записи мира (оборона, кучки) */
+  /** Hero and enemy records plus world records (the defence, piles) */
   entities(): EntityState[] {
     const out: EntityState[] = [];
     for (const s of this.seats.values()) {
@@ -263,7 +264,7 @@ export class Match {
     return out;
   }
 
-  /** Все вышли или сервер закрывает матч */
+  /** Everyone left or the server is closing the match */
   abandon(): void { if (!this.ended) this.finish('abandoned'); }
 
   private finish(result: MatchEnd['result']): void {
@@ -274,6 +275,6 @@ export class Match {
     this.onEnd?.(this.ended);
   }
 
-  /** Для тестов и отладки: место героя */
+  /** For tests and debugging: the hero's position */
   heroPos(seat: number): THREE.Vector3 | null { return this.seats.get(seat)?.hero.knight.pos.clone() ?? null; }
 }

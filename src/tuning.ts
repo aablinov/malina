@@ -1,72 +1,72 @@
 /**
- * Все настраиваемые числа героя и оружия ближнего боя.
- * Их читают игра и панель плейграунда (F1). Объекты изменяемые: панель правит их на лету.
- * Единицы: метры, секунды, градусы (где написано «°»).
+ * All tunable numbers of the hero and melee weapons.
+ * Read by the game and the playground panel (F1). The objects are mutable: the panel edits them on the fly.
+ * Units: metres, seconds, degrees (where "°" is written).
  */
 
 export const HERO = {
   hp: 100,
-  /** Радиус тела для коллизий, м */
+  /** Body radius for collisions, m */
   radius: 0.34,
 
-  // ---------- Движение, м/с ----------
+  // ---------- Movement, m/s ----------
   walk: 5,
-  /** Скорость во время удара, доля от ходьбы */
+  /** Speed during a strike, fraction of walking */
   attackMove: 0.3,
-  /** Разгон и торможение, м/с² */
+  /** Acceleration and braking, m/s² */
   accel: 40,
   decel: 46,
-  /** Скорость поворота к цели, 1/с */
+  /** Turn rate towards the target, 1/s */
   turnRate: 16,
 
-  // ---------- Падение с обрыва ----------
+  // ---------- Falling off a cliff ----------
   gravity: 30,
-  /** Управление в воздухе, доля от земли */
+  /** Air control, fraction of ground control */
   airControl: 0.8,
-  /** Клик ближе этого к герою — уже пришёл, м */
+  /** A click closer than this to the hero counts as arrived, m */
   arrive: 0.15,
 
-  // ---------- Перекат-уклонение ----------
+  // ---------- Dodge roll ----------
   rollDist: 4.2,
   rollTime: 0.38,
-  /** Неуязвимость с начала переката, с */
+  /** Invulnerability from the start of the roll, s */
   rollIframes: 0.25,
   rollCd: 0.9,
 
-  // ---------- Анимация ----------
-  /** Длина шага, м */
+  // ---------- Animation ----------
+  /** Stride length, m */
   step: 1.1,
 };
 
-/** Удар комбо: урон, длительность, дальность, ширина дуги, выпад */
+/** Combo hit: damage, duration, reach, arc width, lunge */
 export interface SwingTuning {
   dmg: number;
-  /** Длительность удара, с (замах + удар + возврат) */
+  /** Strike duration, s (wind-up + strike + return) */
   time: number;
-  /** Доля времени на замах; удар проходит с windup до windup + strike */
+  /** Fraction of time for the wind-up; the strike runs from windup to windup + strike */
   windup: number;
   strike: number;
-  /** Дальность от центра героя, м */
+  /** Reach from the hero's centre, m */
   range: number;
-  /** Ширина дуги, ° (полная) */
+  /** Arc width, ° (full) */
   arc: number;
-  /** Выпад вперёд, м */
+  /** Lunge forward, m */
   lunge: number;
-  /** Отбрасывание цели */
+  /** Target knockback */
   knock: number;
 }
 
-/** Стандартный меч: комбо из трёх ударов */
+/** Standard sword: a three-hit combo */
 export const SWORD = {
-  /** Нажатие ещё успевает продолжить комбо после конца удара, с */
+  /** A press still continues the combo this long after the strike ends, s */
   comboWindow: 0.35,
-  /** С какой доли удара можно начать следующий */
+  /** From which fraction of the strike the next one can start */
   chainFrom: 0.62,
-  /** Пауза после добивающего, с */
+  /** Pause after the finisher, s */
   finisherCd: 0.22,
-  /** Заминка при попадании (hit-stop), с */
+  /** Hit-stop on contact, s */
   hitStop: 0.055,
-  /** Добивающий: радиус ударной волны, м */
+  /** Finisher: shockwave radius, m */
   shockR: 2.4,
   swings: [
     { dmg: 10, time: 0.36, windup: 0.22, strike: 0.3, range: 2.1, arc: 160, lunge: 0.35, knock: 0.6 },
@@ -78,7 +78,7 @@ export const SWORD = {
 const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
 let DEFAULTS: { HERO: typeof HERO; SWORD: typeof SWORD } | null = null;
-/** Запомнить стартовые значения (вызывается при запуске) */
+/** Remember the starting values (called at startup) */
 export function snapshotTuning(): void {
   DEFAULTS ??= { HERO: clone(HERO), SWORD: clone(SWORD) };
 }

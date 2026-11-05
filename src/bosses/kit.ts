@@ -7,10 +7,11 @@ import type { Terrain } from '../level/collide.ts';
 import type { Target } from '../target.ts';
 import { HERO } from '../tuning.ts';
 import { dmgMult, hpMult, lootMult, type BossScale } from './scaling.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Общее для стражей Малины (wiki/design-bosses.md): цель для меча и заклинаний, здоровье с множителем на игроков,
- * сердце-ягода (открыто — урон ×2), вспышка от удара, материалы с переливом «стихия ↔ малина».
+ * Shared by the wardens of Malina (wiki/design-bosses.md): a target for sword and spells, health with a multiplier for players,
+ * a berry heart (open — damage ×2), a flash on hit, materials shimmering "element ↔ raspberry".
  */
 
 export interface BossHooks {
@@ -18,28 +19,28 @@ export interface BossHooks {
   fx: FX;
   hero: Knight;
   terrain: Terrain;
-  /** Стены арены и колонны — дракон обходит их телом */
+  /** Arena walls and columns — the dragon steers its body around them */
   obstacles: () => readonly Obstacle[];
-  /** Ударить героя: урон, откуда, сила отброса (м/с) */
+  /** Hit the hero: damage, from where, knockback strength (m/s) */
   hurtHero(dmg: number, from: THREE.Vector3, knock: number): void;
-  /** Звук выключен (тест ведёт ввод сам) */
+  /** Sound is off (the test drives input itself) */
   quiet(): boolean;
 }
 
 export const C = (r: number, g: number, b: number): THREE.Color => new THREE.Color(r, g, b);
 export const rand = (a: number, b: number): number => a + rnd() * (b - a);
-/** Угол из [−π, π] */
+/** Angle in [−π, π] */
 export const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 export const UNIT = new THREE.BoxGeometry(1, 1, 1);
 
-/** Малина: цвет сердца и короны у всех стражей */
+/** Raspberry: colour of the heart and crown of every warden */
 export const RASP = C(3.4, 0.35, 1.1);
 
-/** Светящийся материал (без тонмаппинга, светит в bloom) */
+/** Glowing material (no tone mapping, shines in bloom) */
 export const glowMat = (c: THREE.Color, opacity = 1, additive = false): THREE.MeshBasicMaterial =>
   new THREE.MeshBasicMaterial({ color: c.clone(), toneMapped: false, transparent: opacity < 1 || additive, opacity, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: !additive });
 
-/** Перелив: материал меняет цвет между a и b со своей фазой — у каждой детали своя, свет «бежит» по телу */
+/** Shimmer: the material changes colour between a and b with its own phase — each part has its own, light "runs" along the body */
 export interface Shimmer { mat: THREE.MeshBasicMaterial; a: THREE.Color; b: THREE.Color; phase: number; speed: number }
 
 export abstract class Boss implements Target {
@@ -47,30 +48,30 @@ export abstract class Boss implements Target {
   readonly group = new THREE.Group();
   abstract readonly radius: number;
   abstract readonly title: string;
-  /** Подпись под именем на полосе */
-  readonly subtitle: string = 'страж малины';
+  /** Caption under the name on the bar */
+  readonly subtitle: string = t('raspberry warden');
   readonly topY: number = 3;
   hp = 1;
   maxHp = 1;
-  /** Боец проснулся (арена закрыта) */
+  /** The fighter is awake (arena closed) */
   awake = false;
   dead = false;
-  /** Сердце открыто — урон ×2 */
+  /** Heart open — damage ×2 */
   heartOpen = false;
   yaw = 0;
-  /** Всего получено урона (для тестов) */
+  /** Total damage taken (for tests) */
   taken = 0;
-  /** Ослаблен аурой «Голодная тень»: урон по нему ×(1 + exposeK), осталось exposeT с */
+  /** Weakened by the "Hungry Shadow" aura: damage to it ×(1 + exposeK), exposeT s left */
   exposeK = 0;
   exposeT = 0;
-  /** Вызывается один раз, когда здоровье кончилось: где лопнуло сердце */
+  /** Called once when health runs out: where the heart burst */
   onDeath?: (at: THREE.Vector3) => void;
   protected flashT = 0;
   readonly flashMats: THREE.MeshLambertMaterial[] = [];
   protected readonly shimmers: Shimmer[] = [];
   protected time = 0;
 
-  /** Уровень и число игроков (src/bosses/scaling.ts): здоровье, урон, малина */
+  /** Level and number of players (src/bosses/scaling.ts): health, damage, raspberries */
   readonly scale: BossScale = { level: 1, players: 1 };
   protected readonly h: BossHooks;
 
@@ -78,20 +79,20 @@ export abstract class Boss implements Target {
   readonly home: THREE.Vector3;
   readonly homeYaw: number;
   constructor(hooks: BossHooks, baseHp: number, home: THREE.Vector3, homeYaw: number = 0) { this.baseHp = baseHp; this.home = home; this.homeYaw = homeYaw;
-    // весь урон стража по героям — через hurtHero: здесь он домножается на масштаб (атаки, зоны, подручные)
+    // all warden damage to heroes goes through hurtHero: here it is multiplied by the scale (attacks, zones, minions)
     this.h = { ...hooks, hurtHero: (dmg, from, knock) => hooks.hurtHero(dmg * this.dmgMult, from, knock) };
     hooks.scene.add(this.group);
   }
 
   get alive(): boolean { return !this.dead; }
-  /** Множитель урона по героям от уровня и числа игроков */
+  /** Multiplier of damage to heroes from level and number of players */
   get dmgMult(): number { return dmgMult(this.scale); }
-  /** Множитель малины */
+  /** Raspberry multiplier */
   get lootMult(): number { return lootMult(this.scale); }
 
   /**
-   * Задать уровень и число игроков: здоровье = база × множитель. В бою доля здоровья сохраняется
-   * (зашёл второй игрок — страж крепчает, но не лечится); спящий — с полным здоровьем
+   * Set the level and number of players: health = base × multiplier. In a fight the health fraction is kept
+   * (a second player joined — the warden gets tougher but does not heal); asleep — with full health
    */
   setScale(level: number, players: number): void {
     const k = this.maxHp > 0 ? this.hp / this.maxHp : 1;
@@ -100,13 +101,13 @@ export abstract class Boss implements Target {
     this.maxHp = Math.round(this.baseHp * hpMult(this.scale));
     this.hp = this.awake && !this.dead ? Math.max(1, Math.round(this.maxHp * k)) : this.maxHp;
   }
-  /** Только число игроков (уровень прежний) */
+  /** Only the number of players (level unchanged) */
   setPlayers(n: number): void { this.setScale(this.scale.level, n); }
 
   hit(dmg: number, _dir: THREE.Vector3, point: THREE.Vector3, _knock: number): void {
     if (this.dead || !this.awake) return;
     const v = (this.heartOpen ? dmg * 2 : dmg) * (this.exposeT > 0 ? 1 + this.exposeK : 1);
-    if (this.heartOpen) this.h.fx.text(point.clone().setY(point.y + 0.6), 'сердце! ×2', 'crit');
+    if (this.heartOpen) this.h.fx.text(point.clone().setY(point.y + 0.6), t('heart! ×2'), 'crit');
     this.hp = Math.max(0, this.hp - v);
     this.taken += v;
     this.flashT = 0.1;
@@ -120,22 +121,22 @@ export abstract class Boss implements Target {
     this.exposeT = Math.max(this.exposeT, sec);
   }
 
-  /** Материал тела: вспыхивает белым от удара */
+  /** Body material: flashes white on hit */
   lam(color: THREE.ColorRepresentation, map?: THREE.Texture): THREE.MeshLambertMaterial {
-    // текстура pixelTex уже в цвете — второй раз не красим, иначе цвет темнеет вдвое
+    // the pixelTex texture is already coloured — do not tint it a second time, or the colour darkens twice
     const m = new THREE.MeshLambertMaterial(map ? { map } : { color });
     this.flashMats.push(m);
     return m;
   }
 
-  /** Светящийся материал с переливом между a и b */
+  /** Glowing material shimmering between a and b */
   shimmer(a: THREE.Color, b: THREE.Color, phase = rnd() * 6, speed = 1.6): THREE.MeshBasicMaterial {
     const mat = glowMat(a);
     this.shimmers.push({ mat, a, b, phase, speed });
     return mat;
   }
 
-  /** Кадр: перелив и вспышка; boost — общая яркость свечения (вдох, ярость, гаснет на смерти) */
+  /** Frame: shimmer and flash; boost — overall glow brightness (inhale, rage, fades on death) */
   protected tickLook(dt: number, boost: number): void {
     this.time += dt;
     this.flashT = Math.max(0, this.flashT - dt);
@@ -161,17 +162,17 @@ export abstract class Boss implements Target {
   protected move(dir: THREE.Vector3, d: number): void { this.pos.x += dir.x * d; this.pos.z += dir.z * d; }
   protected heroAt(): THREE.Vector3 { return this.h.hero.pos.clone().setY(0); }
 
-  // ---------- урон герою ----------
-  /** Герой в круге */
+  // ---------- damage to the hero ----------
+  /** Hero in a circle */
   protected inCircle(c: THREE.Vector3, r: number): boolean { const p = this.h.hero.pos; return Math.hypot(p.x - c.x, p.z - c.z) < r + HERO.radius; }
-  /** Герой в полосе от from вдоль dir длиной len, шириной w */
+  /** Hero in a strip from `from` along dir, length len, width w */
   protected inLine(from: THREE.Vector3, dir: THREE.Vector3, len: number, w: number): boolean {
     const p = this.h.hero.pos, dx = p.x - from.x, dz = p.z - from.z;
     const along = dx * dir.x + dz * dir.z, side = Math.abs(dx * dir.z - dz * dir.x);
     return along > -HERO.radius && along < len + HERO.radius && side < w / 2 + HERO.radius;
   }
   protected hurt(dmg: number, from: THREE.Vector3, knock = 4): void { this.h.hurtHero(dmg, from, knock); }
-  /** Герой в конусе перед точкой from: half — полуугол, рад */
+  /** Hero in a cone in front of point `from`: half — half-angle, rad */
   protected inCone(from: THREE.Vector3, yaw: number, range: number, half: number): boolean {
     const p = this.h.hero.pos, dx = p.x - from.x, dz = p.z - from.z, d = Math.hypot(dx, dz);
     if (d > range + 0.4) return false;
@@ -179,10 +180,10 @@ export abstract class Boss implements Target {
   }
 
   abstract update(dt: number): void;
-  /** Проснуться: арена закрылась */
+  /** Wake up: the arena closed */
   abstract wake(): void;
-  /** Вернуть на место, спит, здоровье полное */
+  /** Put back in place, asleep, full health */
   abstract reset(): void;
   protected abstract die(): void;
-  protected onHurt(_v: number): void { /* реакция на удар — у стража своя */ }
+  protected onHurt(_v: number): void { /* reaction to a hit — each warden has its own */ }
 }

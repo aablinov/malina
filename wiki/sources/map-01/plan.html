@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <meta charset="utf-8">
-<title>Карта 1 — план</title>
+<title>Map 1 — plan</title>
 <style>
   html, body { margin: 0; background: #000; }
   #wrap { position: relative; width: 1932px; height: 1916px; }
@@ -35,239 +35,239 @@
 <img src="map.webp" alt="">
 <svg viewBox="0 0 1932 1916" xmlns="http://www.w3.org/2000/svg">
 
-<!-- ================= БИОМЫ ================= -->
-<!-- Снег: горы на северо-западе -->
+<!-- ================= BIOMES ================= -->
+<!-- Snow: mountains in the northwest -->
 <polygon class="biome" fill="#9fd8ff" stroke="#2a7fd4"
   points="430,165 620,110 760,150 930,190 1080,320 1050,440 900,450 760,450 620,400 500,330 420,260"/>
-<text class="biome-label" fill="#1b5fa8" x="520" y="245">СНЕГ · Седые горы</text>
+<text class="biome-label" fill="#1b5fa8" x="520" y="245">SNOW · Grey Mountains</text>
 
-<!-- Джунгли с кристаллами: храм -->
+<!-- Crystal jungle: temple -->
 <polygon class="biome" fill="#3ee0c0" stroke="#0a8f78"
   points="760,460 1000,450 1180,480 1210,560 1150,720 1100,800 930,820 790,720 730,600"/>
-<text class="biome-label" fill="#066b59" x="700" y="840">ДЖУНГЛИ с кристаллами · Храм</text>
+<text class="biome-label" fill="#066b59" x="700" y="840">CRYSTAL JUNGLE · Temple</text>
 
-<!-- Джунгли (пальмы): юго-запад -->
+<!-- Jungle (palms): southwest -->
 <polygon class="biome" fill="#3ee0c0" stroke="#0a8f78"
   points="640,1390 820,1300 1010,1290 1100,1400 1070,1520 900,1570 720,1530"/>
-<text class="biome-label" fill="#066b59" x="750" y="1540">Джунгли (пальмы)</text>
+<text class="biome-label" fill="#066b59" x="750" y="1540">Jungle (palms)</text>
 
-<!-- Джунгли (пальмы): западный холм -->
+<!-- Jungle (palms): west hill -->
 <polygon class="biome" fill="#3ee0c0" stroke="#0a8f78"
   points="340,1020 560,1000 780,1040 860,1140 760,1200 560,1180 360,1120"/>
-<text class="biome-label" fill="#066b59" x="400" y="1215">Пальмовая роща (джунгли)</text>
+<text class="biome-label" fill="#066b59" x="400" y="1215">Palm grove (jungle)</text>
 
-<!-- Скалы и руины: западный холм -->
+<!-- Cliffs and ruins: west hill -->
 <polygon class="biome" fill="#c9b8a6" stroke="#6b4e2e"
   points="160,780 300,700 480,720 640,740 840,800 860,990 720,1010 560,990 380,1000 200,960 130,880"/>
-<text class="biome-label" fill="#5a3b1a" x="330" y="690">СКАЛЫ и РУИНЫ · Западный холм</text>
+<text class="biome-label" fill="#5a3b1a" x="330" y="690">CLIFFS and RUINS · West Hill</text>
 
-<!-- База (трава, луг, роща): восточная равнина -->
+<!-- Base (grass, meadow, grove): eastern plain -->
 <polygon class="biome" fill="#c7f06a" stroke="#4f8a12"
   points="1110,820 1500,780 1700,850 1720,1180 1600,1360 1420,1400 1200,1300 1120,1200 1060,1000"/>
-<text class="biome-label" fill="#2f5c05" x="1180" y="1060">ЛУГ и ЗОЛОТАЯ РОЩА (база)</text>
+<text class="biome-label" fill="#2f5c05" x="1180" y="1060">MEADOW and GOLDEN GROVE (base)</text>
 
-<!-- Горячие ключи: юг -->
+<!-- Hot springs: south -->
 <polygon class="biome" fill="#ffd36b" stroke="#c0760a"
   points="1060,1340 1220,1320 1420,1380 1470,1600 1420,1720 1250,1740 1080,1640"/>
-<text class="biome-label" fill="#8a4f00" x="1070" y="1760">ГОРЯЧИЕ КЛЮЧИ · сухой луг, вулкан</text>
+<text class="biome-label" fill="#8a4f00" x="1070" y="1760">HOT SPRINGS · dry meadow, volcano</text>
 
-<!-- Поселение: форт -->
+<!-- Settlement: fort -->
 <polygon class="biome" fill="#ff9c9c" stroke="#b8201c"
   points="1200,500 1430,500 1560,640 1540,780 1250,770 1200,640"/>
-<text class="biome-label" fill="#8f1210" x="1235" y="755">ФОРТ Ордена (лагерь)</text>
+<text class="biome-label" fill="#8f1210" x="1235" y="755">Order FORT (camp)</text>
 
-<!-- Поселение: деревня на острове -->
+<!-- Settlement: island village -->
 <polygon class="biome" fill="#ffd9a0" stroke="#b87414"
   points="1250,120 1420,60 1700,40 1860,110 1850,330 1680,400 1430,400 1260,330"/>
-<text class="biome-label" fill="#7a4a05" x="1440" y="487">ДЕРЕВНЯ (мирная)</text>
+<text class="biome-label" fill="#7a4a05" x="1440" y="487">VILLAGE (peaceful)</text>
 
 
-<!-- ================= ДОРОГИ ================= -->
+<!-- ================= ROADS ================= -->
 <g>
-  <!-- главная: старт → ключи → вышка → хутор → грядки → форт → Б1 -->
+  <!-- main: start → springs → tower → farmstead → garden beds → fort → B1 -->
   <path class="road" id="r1" d="M740,1415 C 900,1440 1000,1500 1150,1535 C 1250,1555 1300,1500 1320,1480 C 1380,1400 1420,1330 1430,1300 C 1440,1220 1420,1190 1400,1160 C 1300,1060 1250,990 1240,930 C 1250,840 1300,760 1330,660 C 1350,560 1400,510 1400,470"/>
   <use href="#r1" class="road2"/>
-  <!-- форт → храм -->
+  <!-- fort → temple -->
   <path class="road" id="r2" d="M1330,640 C 1250,600 1180,560 1140,500 M1100,470 C 1050,470 1000,540 960,600 C 930,650 960,700 1000,760"/>
   <use href="#r2" class="road2"/>
-  <!-- храм → М1 → западный холм → статуя -->
+  <!-- temple → C1 → west hill → statue -->
   <path class="road" id="r3" d="M1000,760 C 1040,790 1060,800 1090,805 M1020,775 C 960,820 880,900 780,1000 C 680,1030 520,1030 430,1000 C 370,980 330,930 320,890"/>
   <use href="#r3" class="road2"/>
-  <!-- старт → пальмы → грот -->
+  <!-- start → palms → grotto -->
   <path class="road" id="r4" d="M740,1415 C 760,1330 760,1260 720,1230 C 640,1180 520,1130 420,1130 C 350,1130 300,1140 290,1130"/>
   <use href="#r4" class="road2"/>
-  <!-- храм → снежная пещера -->
+  <!-- temple → snow cave -->
   <path class="road" id="r5" d="M900,500 C 860,470 830,420 820,380 C 800,340 790,320 780,305"/>
   <use href="#r5" class="road2"/>
-  <!-- ключи → лагерь 4 -->
+  <!-- springs → camp 4 -->
   <path class="road" id="r6" d="M1150,1535 C 1200,1600 1300,1640 1355,1650"/>
   <use href="#r6" class="road2"/>
-  <!-- Б1 → деревня -->
+  <!-- B1 → village -->
   <path class="road" id="r7" d="M1400,392 C 1500,330 1600,260 1680,230"/>
   <use href="#r7" class="road2"/>
-  <!-- хутор → М3 → Б2 -->
+  <!-- farmstead → C3 → B2 -->
   <path class="road" id="r8" d="M1420,1160 C 1480,1050 1470,950 1465,880 C 1500,860 1600,860 1690,880"/>
   <use href="#r8" class="road2"/>
 </g>
 
-<!-- ================= МАРШРУТ ================= -->
+<!-- ================= ROUTE ================= -->
 
 
-<!-- ================= МОСТЫ МЕЖДУ ОСТРОВАМИ ================= -->
+<!-- ================= BRIDGES BETWEEN ISLANDS ================= -->
 <g>
   <line class="bridge" x1="1395" y1="475" x2="1400" y2="392"/><line class="bridge2" x1="1395" y1="475" x2="1400" y2="392"/>
-  <text class="tag" x="1415" y="445">Б1 · мост к деревне</text>
+  <text class="tag" x="1415" y="445">B1 · bridge to the village</text>
 
   <line class="bridge" x1="1690" y1="880" x2="1770" y2="880"/><line class="bridge2" x1="1690" y1="880" x2="1770" y2="880"/>
-  <text class="tag" x="1620" y="930">Б2 · к катапульте</text>
+  <text class="tag" x="1620" y="930">B2 · to the catapult</text>
 
   <line class="bridge" x1="545" y1="620" x2="455" y2="590"/><line class="bridge2" x1="545" y1="620" x2="455" y2="590"/>
-  <text class="tag" x="440" y="660">Б3 · к островку</text>
+  <text class="tag" x="440" y="660">B3 · to the islet</text>
 
   <line class="bridge" x1="690" y1="1350" x2="600" y2="1385"/><line class="bridge2" x1="690" y1="1350" x2="600" y2="1385"/>
-  <text class="tag" x="560" y="1340">Б4 · на скалу</text>
+  <text class="tag" x="560" y="1340">B4 · onto the cliff</text>
 </g>
 
-<!-- ================= ПЕРЕПРАВЫ ЧЕРЕЗ РЕКИ ================= -->
+<!-- ================= RIVER CROSSINGS ================= -->
 <g>
   <line class="ford" x1="1020" y1="775" x2="1085" y2="800"/><line class="ford2" x1="1020" y1="775" x2="1085" y2="800"/>
-  <text class="tag small" x="1095" y="790">М1 каменный мостик</text>
+  <text class="tag small" x="1095" y="790">C1 stone footbridge</text>
 
   <line class="ford" x1="1140" y1="1235" x2="1200" y2="1255"/><line class="ford2" x1="1140" y1="1235" x2="1200" y2="1255"/>
-  <text class="tag small" x="1210" y="1250">М2 брод</text>
+  <text class="tag small" x="1210" y="1250">C2 ford</text>
 
   <line class="ford" x1="1450" y1="850" x2="1480" y2="900"/><line class="ford2" x1="1450" y1="850" x2="1480" y2="900"/>
-  <text class="tag small" x="1440" y="940">М3 мостик</text>
+  <text class="tag small" x="1440" y="940">C3 footbridge</text>
 
   <line class="ford" x1="1090" y1="470" x2="1150" y2="500"/><line class="ford2" x1="1090" y1="470" x2="1150" y2="500"/>
-  <text class="tag small" x="1160" y="525">М4 мостик</text>
+  <text class="tag small" x="1160" y="525">C4 footbridge</text>
 </g>
 
-<!-- ================= ТОЧКИ ================= -->
-<!-- старт -->
+<!-- ================= POINTS ================= -->
+<!-- start -->
 <g class="pin"><circle cx="735" cy="1415" r="26" fill="#1f9d3a"/><text x="735" y="1415">S</text></g>
-<text class="tag" x="600" y="1465">СТАРТ · лагерь у палатки</text>
+<text class="tag" x="600" y="1465">START · camp by the tent</text>
 
-<!-- безопасные -->
+<!-- safe -->
 <g class="pin"><circle cx="1680" cy="230" r="26" fill="#1f9d3a"/><text x="1680" y="230">$</text></g>
-<text class="tag" x="1270" y="190">кузнец, торговец,</text>
-<text class="tag" x="1270" y="220">источник здоровья</text>
+<text class="tag" x="1270" y="190">blacksmith, merchant,</text>
+<text class="tag" x="1270" y="220">health spring</text>
 <g class="pin"><circle cx="1425" cy="1150" r="26" fill="#1f9d3a"/><text x="1425" y="1150">$</text></g>
-<text class="tag" x="1455" y="1200">Хижина на сваях: торговец</text>
+<text class="tag" x="1455" y="1200">Stilt hut: merchant</text>
 <g class="pin"><circle cx="300" cy="880" r="26" fill="#f2b705"/><text x="300" y="880">☀</text></g>
-<text class="tag" x="120" y="820">Соллер у статуи (одиночка)</text>
+<text class="tag" x="120" y="820">Soller by the statue (loner)</text>
 
-<!-- группы врагов -->
+<!-- enemy groups -->
 <g class="pin"><circle cx="925" cy="1470" r="28" fill="#d8232a"/><text x="925" y="1470">1</text></g>
-<text class="tag" x="960" y="1480">малинёныши ×4, слизни ×2</text>
+<text class="tag" x="960" y="1480">raspberry imps ×4, slimes ×2</text>
 
 <g class="pin"><circle cx="1150" cy="1560" r="28" fill="#d8232a"/><text x="1150" y="1560">2</text></g>
-<text class="tag" x="1185" y="1580">кабанчики ×2, жуки ×2</text>
+<text class="tag" x="1185" y="1580">boarlets ×2, beetles ×2</text>
 
 <g class="pin"><circle cx="1320" cy="1480" r="28" fill="#d8232a"/><text x="1320" y="1480">3</text></g>
-<text class="tag" x="1355" y="1475">вышка: лучники ×2</text>
+<text class="tag" x="1355" y="1475">tower: archers ×2</text>
 
 <g class="pin"><circle cx="1360" cy="1650" r="28" fill="#d8232a"/><text x="1360" y="1650">4</text></g>
-<text class="tag" x="1395" y="1660">лагерь: сборщики ×3, садовники ×3</text>
+<text class="tag" x="1395" y="1660">camp: pickers ×3, gardeners ×3</text>
 
 <g class="pin"><circle cx="1430" cy="1310" r="28" fill="#d8232a"/><text x="1430" y="1310">5</text></g>
-<text class="tag" x="1465" y="1320">волки ×3 (леопард)</text>
+<text class="tag" x="1465" y="1320">wolves ×3 (leopard)</text>
 
 <g class="pin"><circle cx="1060" cy="945" r="28" fill="#d8232a"/><text x="1060" y="945">6</text></g>
-<text class="tag" x="830" y="1000">лозоплёты ×2, улей</text>
+<text class="tag" x="830" y="1000">vineweavers ×2, hive</text>
 
 <g class="pin"><circle cx="1240" cy="930" r="28" fill="#d8232a"/><text x="1240" y="930">7</text></g>
-<text class="tag" x="1180" y="875">Терновый сад: лозы ×3, бутоны ×2,</text>
-<text class="tag" x="1180" y="905">терновое чудище; пугало у грядок</text>
+<text class="tag" x="1180" y="875">Thorn Garden: vines ×3, buds ×2,</text>
+<text class="tag" x="1180" y="905">thorn monster; scarecrow by the beds</text>
 
 <g class="pin"><circle cx="1330" cy="650" r="28" fill="#d8232a"/><text x="1330" y="650">8</text></g>
-<text class="tag" x="1365" y="600">рыцари: щитоносцы ×2, оруженосцы ×3,</text>
-<text class="tag" x="1365" y="630">копейщики ×2, арбалетчики ×2 на вышке,</text>
-<text class="tag" x="1365" y="660">знаменосец; в глубине молотобоец</text>
+<text class="tag" x="1365" y="600">knights: shieldbearers ×2, squires ×3,</text>
+<text class="tag" x="1365" y="630">spearmen ×2, crossbowmen ×2 on the tower,</text>
+<text class="tag" x="1365" y="660">standard-bearer; hammerer deeper in</text>
 
 <g class="pin"><circle cx="960" cy="690" r="28" fill="#d8232a"/><text x="960" y="690">9</text></g>
-<text class="tag" x="800" y="730">маги ×2, целительница, призыватель;</text>
-<text class="tag" x="800" y="760">обелиск + големчики ×2; мимики ×2</text>
+<text class="tag" x="800" y="730">mages ×2, healer, summoner;</text>
+<text class="tag" x="800" y="760">obelisk + golemlings ×2; mimics ×2</text>
 
 <g class="pin"><circle cx="900" cy="520" r="30" fill="#5a1aa8"/><text x="900" y="520">★</text></g>
-<text class="tag" x="935" y="488">БОСС на пирамиде: Друзовый голем</text>
+<text class="tag" x="935" y="488">BOSS on the pyramid: Druse Golem</text>
 
 <g class="pin"><circle cx="690" cy="930" r="28" fill="#d8232a"/><text x="690" y="930">10</text></g>
-<text class="tag" x="560" y="900">пруд: слизни ×3, бутоны ×2</text>
+<text class="tag" x="560" y="900">pond: slimes ×3, buds ×2</text>
 
 <g class="pin"><circle cx="775" cy="305" r="28" fill="#d8232a"/><text x="775" y="305">11</text></g>
-<text class="tag" x="640" y="350">пещера: огоньки ×3, котелки ×2,</text>
-<text class="tag" x="640" y="380">бочонки ×3; сундук (по желанию)</text>
+<text class="tag" x="640" y="350">cave: wisps ×3, pots ×2,</text>
+<text class="tag" x="640" y="380">kegs ×3; chest (optional)</text>
 
 <g class="pin"><circle cx="1790" cy="840" r="28" fill="#d8232a"/><text x="1790" y="840">12</text></g>
-<text class="tag" x="1580" y="800">бочонки ×3, мимик; сундук</text>
+<text class="tag" x="1580" y="800">kegs ×3, mimic; chest</text>
 
 <g class="pin"><circle cx="380" cy="540" r="28" fill="#d8232a"/><text x="380" y="540">13</text></g>
-<text class="tag" x="270" y="500">островок: мимик, сундук</text>
+<text class="tag" x="270" y="500">islet: mimic, chest</text>
 
 <g class="pin"><circle cx="560" cy="1420" r="28" fill="#d8232a"/><text x="560" y="1420">14</text></g>
-<text class="tag" x="440" y="1480">скала: клубки ×2, сундук</text>
+<text class="tag" x="440" y="1480">cliff: tumbleballs ×2, chest</text>
 
 
-<!-- ================= ЗАСАДЫ ================= -->
+<!-- ================= AMBUSHES ================= -->
 <g class="amb"><polygon points="1000,1300 1026,1346 974,1346"/><text x="1000" y="1340">!</text></g>
-<text class="tag small" x="1030" y="1330">З1 жуки ×2 из-под дороги</text>
+<text class="tag small" x="1030" y="1330">A1 beetles ×2 from under the road</text>
 
 <g class="amb"><polygon points="1330,1080 1356,1126 1304,1126"/><text x="1330" y="1120">!</text></g>
-<text class="tag small" x="1040" y="1110">З2 лозоплёт плетёт сеть на дороге,</text>
-<text class="tag small" x="1040" y="1135">с деревьев — малинёныши ×4</text>
+<text class="tag small" x="1040" y="1110">A2 vineweaver weaves a net on the road,</text>
+<text class="tag small" x="1040" y="1135">raspberry imps ×4 from the trees</text>
 
 <g class="amb"><polygon points="1410,525 1436,571 1384,571"/><text x="1410" y="565">!</text></g>
-<text class="tag small" x="1450" y="545">З3 у ворот: клубки ×2 катятся по дороге,</text>
-<text class="tag small" x="1450" y="570">арбалетчики бьют с вышки</text>
+<text class="tag small" x="1450" y="545">A3 at the gate: tumbleballs ×2 roll down the road,</text>
+<text class="tag small" x="1450" y="570">crossbowmen shoot from the tower</text>
 
 <g class="amb"><polygon points="1180,540 1206,586 1154,586"/><text x="1180" y="580">!</text></g>
-<text class="tag small" x="990" y="590">З4 огоньки ×3 сквозь стены руин,</text>
-<text class="tag small" x="990" y="615">бочонки ×2 катятся под горку</text>
+<text class="tag small" x="990" y="590">A4 wisps ×3 through the ruin walls,</text>
+<text class="tag small" x="990" y="615">kegs ×2 roll downhill</text>
 
 <g class="amb"><polygon points="640,1200 666,1246 614,1246"/><text x="640" y="1240">!</text></g>
-<text class="tag small" x="540" y="1270">З5 кабанчик тараном вдоль тропы</text>
+<text class="tag small" x="540" y="1270">A5 boarlet rams along the path</text>
 
 <g class="amb"><polygon points="830,400 856,446 804,446"/><text x="830" y="440">!</text></g>
-<text class="tag small" x="860" y="420">З6 котелок прыгает со скалы</text>
+<text class="tag small" x="860" y="420">A6 pot jumps off the cliff</text>
 
 <g class="amb"><polygon points="1560,870 1586,916 1534,916"/><text x="1560" y="910">!</text></g>
-<text class="tag small" x="1590" y="905">З7 бутоны ×2 с берегов</text>
+<text class="tag small" x="1590" y="905">A7 buds ×2 from the banks</text>
 
-<!-- ================= ПАТРУЛИ ================= -->
-<g class="pat"><circle cx="1230" cy="1545" r="22"/><text x="1230" y="1545">П</text></g>
-<text class="tag small" x="1255" y="1552">П1 садовники ×2 по дороге</text>
+<!-- ================= PATROLS ================= -->
+<g class="pat"><circle cx="1230" cy="1545" r="22"/><text x="1230" y="1545">P</text></g>
+<text class="tag small" x="1255" y="1552">P1 gardeners ×2 along the road</text>
 
-<g class="pat"><circle cx="1395" cy="1020" r="22"/><text x="1395" y="1020">П</text></g>
-<text class="tag small" x="1420" y="1000">П2 копейщик + оруженосцы ×2</text>
-<text class="tag small" x="1420" y="1025">(Орден, хутор ↔ форт)</text>
+<g class="pat"><circle cx="1395" cy="1020" r="22"/><text x="1395" y="1020">P</text></g>
+<text class="tag small" x="1420" y="1000">P2 spearman + squires ×2</text>
+<text class="tag small" x="1420" y="1025">(Order, farmstead ↔ fort)</text>
 
-<g class="pat"><circle cx="1235" cy="655" r="22"/><text x="1235" y="655">П</text></g>
-<text class="tag small" x="980" y="665">П3 щитоносец + арбалетчик</text>
+<g class="pat"><circle cx="1235" cy="655" r="22"/><text x="1235" y="655">P</text></g>
+<text class="tag small" x="980" y="665">P3 shieldbearer + crossbowman</text>
 
-<g class="pat"><circle cx="880" cy="880" r="22"/><text x="880" y="880">П</text></g>
-<text class="tag small" x="900" y="860">П4 слизни ×3</text>
+<g class="pat"><circle cx="880" cy="880" r="22"/><text x="880" y="880">P</text></g>
+<text class="tag small" x="900" y="860">P4 slimes ×3</text>
 
-<g class="pat"><circle cx="520" cy="1125" r="22"/><text x="520" y="1125">П</text></g>
-<text class="tag small" x="420" y="1160">П5 волки ×3 бродят по роще</text>
+<g class="pat"><circle cx="520" cy="1125" r="22"/><text x="520" y="1125">P</text></g>
+<text class="tag small" x="420" y="1160">P5 wolves ×3 roam the grove</text>
 
-<!-- ================= ЛУТ ================= -->
+<!-- ================= LOOT ================= -->
 <g class="chest"><rect x="1115" y="1590" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="1700" y="900" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="420" y="560" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="520" y="1440" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="725" y="275" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="270" y="1095" width="26" height="26" rx="4"/></g>
-<text class="tag small" x="300" y="1095">грот: сундук + мимик</text>
+<text class="tag small" x="300" y="1095">grotto: chest + mimic</text>
 <g class="chest"><rect x="230" y="905" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="860" y="470" width="26" height="26" rx="4"/></g>
-<text class="tag small" x="760" y="500">сундук босса</text>
+<text class="tag small" x="760" y="500">boss chest</text>
 <g class="chest"><rect x="1205" y="712" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="1380" y="1700" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="1240" y="880" width="26" height="26" rx="4"/></g>
 <g class="chest"><rect x="1575" y="230" width="26" height="26" rx="4"/></g>
 
-<!-- ящики и бочки россыпью -->
+<!-- scattered crates and barrels -->
 <g class="crate">
   <rect x="770" y="1430" width="18" height="18"/><rect x="792" y="1438" width="18" height="18"/>
   <rect x="1350" y="1505" width="18" height="18"/>
@@ -284,23 +284,23 @@
   <rect x="1130" y="820" width="18" height="18"/>
 </g>
 
-<!-- ================= ЛЕГЕНДА ================= -->
+<!-- ================= LEGEND ================= -->
 <g class="legend" transform="translate(30, 1560)">
   <rect class="bg" x="0" y="0" width="860" height="330" rx="14"/>
-  <text class="h" x="20" y="40">Карта 1 — план (256 × 256 м)</text>
-  <circle cx="34" cy="78" r="14" fill="#1f9d3a" stroke="#fff" stroke-width="3"/><text x="60" y="85">старт, торговцы, безопасно</text>
-  <circle cx="34" cy="118" r="14" fill="#d8232a" stroke="#fff" stroke-width="3"/><text x="60" y="125">группа врагов (номер — порядок пути)</text>
-  <circle cx="34" cy="158" r="14" fill="#5a1aa8" stroke="#fff" stroke-width="3"/><text x="60" y="165">босс карты</text>
-  <circle cx="34" cy="198" r="14" fill="#f2b705" stroke="#fff" stroke-width="3"/><text x="60" y="205">Соллер, Рыцарь Солнца</text>
-  <line x1="18" y1="238" x2="50" y2="238" stroke="#ff7a00" stroke-width="12" stroke-linecap="round"/><text x="60" y="245">Б — мост между островами</text>
-  <line x1="18" y1="278" x2="50" y2="278" stroke="#1e6fe0" stroke-width="10" stroke-linecap="round"/><text x="60" y="285">М — мостик или брод через реку</text>
-  <line x1="18" y1="312" x2="50" y2="312" stroke="#7a4a1c" stroke-width="8" stroke-linecap="round"/><line x1="18" y1="312" x2="50" y2="312" stroke="#e8c892" stroke-width="3" stroke-dasharray="6 6"/><text x="60" y="319">дорога (земляная / плиты)</text>
-  <polygon points="500,66 516,94 484,94" fill="#ff8c00" stroke="#fff" stroke-width="3"/><text x="530" y="90">З — засада на дороге</text>
-  <circle cx="500" cy="118" r="13" fill="#fff" stroke="#d8232a" stroke-width="5"/><text x="530" y="125">П — патруль, ходит по дороге</text>
-  <rect x="488" y="146" width="24" height="24" rx="4" fill="#f2b705" stroke="#5a3d1e" stroke-width="3"/><text x="530" y="165">сундук (волшебный)</text>
-  <rect x="491" y="188" width="18" height="18" fill="#a86a2c" stroke="#fff" stroke-width="2"/><text x="530" y="205">ящики и бочки (ломать / взрывать)</text>
-  <text x="484" y="245">1 м ≈ 7,5 px картинки</text>
-  <text x="484" y="285">регион стриминга 32 × 32 м</text>
+  <text class="h" x="20" y="40">Map 1 — plan (256 × 256 m)</text>
+  <circle cx="34" cy="78" r="14" fill="#1f9d3a" stroke="#fff" stroke-width="3"/><text x="60" y="85">start, merchants, safe</text>
+  <circle cx="34" cy="118" r="14" fill="#d8232a" stroke="#fff" stroke-width="3"/><text x="60" y="125">enemy group (number = route order)</text>
+  <circle cx="34" cy="158" r="14" fill="#5a1aa8" stroke="#fff" stroke-width="3"/><text x="60" y="165">map boss</text>
+  <circle cx="34" cy="198" r="14" fill="#f2b705" stroke="#fff" stroke-width="3"/><text x="60" y="205">Soller, Knight of the Sun</text>
+  <line x1="18" y1="238" x2="50" y2="238" stroke="#ff7a00" stroke-width="12" stroke-linecap="round"/><text x="60" y="245">B — bridge between islands</text>
+  <line x1="18" y1="278" x2="50" y2="278" stroke="#1e6fe0" stroke-width="10" stroke-linecap="round"/><text x="60" y="285">C — footbridge or ford across a river</text>
+  <line x1="18" y1="312" x2="50" y2="312" stroke="#7a4a1c" stroke-width="8" stroke-linecap="round"/><line x1="18" y1="312" x2="50" y2="312" stroke="#e8c892" stroke-width="3" stroke-dasharray="6 6"/><text x="60" y="319">road (dirt / paving)</text>
+  <polygon points="500,66 516,94 484,94" fill="#ff8c00" stroke="#fff" stroke-width="3"/><text x="530" y="90">A — ambush on the road</text>
+  <circle cx="500" cy="118" r="13" fill="#fff" stroke="#d8232a" stroke-width="5"/><text x="530" y="125">P — patrol, walks the road</text>
+  <rect x="488" y="146" width="24" height="24" rx="4" fill="#f2b705" stroke="#5a3d1e" stroke-width="3"/><text x="530" y="165">chest (magic)</text>
+  <rect x="491" y="188" width="18" height="18" fill="#a86a2c" stroke="#fff" stroke-width="2"/><text x="530" y="205">crates and barrels (break / blow up)</text>
+  <text x="484" y="245">1 m ≈ 7.5 px of the image</text>
+  <text x="484" y="285">streaming region 32 × 32 m</text>
 </g>
 </svg>
 </div>

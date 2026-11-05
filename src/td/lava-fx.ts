@@ -5,16 +5,16 @@ import { glowTex } from '../loot-look.ts';
 import { C, glowMat } from '../bosses/kit.ts';
 
 /**
- * Живая лава (wiki/design-tower-defence.md, раздел 7): над каждым разломом — мягкая оранжевая **дымка** (плоскости с
- * радиальной текстурой, аддитивно, дышат), из лавы у героя поднимаются **искры и пепел**. Сама лава светит запечённым
- * светом на блоки вокруг (bakedLight блока `lava`) и эмиссией под bloom (mesher.ts).
+ * Living lava (wiki/design-tower-defence.md, section 7): over each rift — a soft orange **haze** (planes with a
+ * radial texture, additive, breathing); **sparks and ash** rise from the lava near the hero. The lava itself lights the
+ * blocks around it with baked light (the `lava` block's bakedLight) and with emission under bloom (mesher.ts).
  */
 const HAZE = C(1.6, 0.6, 0.15);
 const EMBER = [C(3.4, 1.4, 0.3), C(3.0, 0.8, 0.15), C(2.4, 2.0, 0.6)];
 
 export class LavaFx {
   readonly group = new THREE.Group();
-  /** Клетки лавы (x, z) */
+  /** Lava cells (x, z) */
   readonly cells: [number, number][] = [];
   private readonly hazes: { mat: THREE.MeshBasicMaterial; mesh: THREE.Mesh; phase: number; base: number }[] = [];
   private time = 0;
@@ -34,7 +34,7 @@ export class LavaFx {
       c.n++; c.sx += x; c.sz += z;
       tiles.set(k, c);
     }
-    // дымка: по одной плоскости на клетку 6 × 6 м, где лавы хотя бы 4 клетки; размер и яркость — от доли лавы
+    // haze: one plane per 6 × 6 m cell with at least 4 lava cells; size and brightness follow the lava share
     const tex = glowTex();
     for (const c of tiles.values()) {
       if (c.n < 4) continue;
@@ -57,7 +57,7 @@ export class LavaFx {
       h.mat.opacity = h.base * (0.8 + 0.2 * Math.sin(this.time * 0.7 + h.phase));
       h.mesh.position.y += Math.sin(this.time * 0.5 + h.phase) * dt * 0.02;
     }
-    // искры: две клетки лавы в 22 м от героя за кадр
+    // sparks: two lava cells within 22 m of the hero per frame
     if (!this.cells.length) return;
     for (let i = 0; i < 2; i++) {
       const [x, z] = this.cells[Math.floor(Math.random() * this.cells.length)];

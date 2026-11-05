@@ -1,11 +1,11 @@
 /**
- * Мелкие детали интерфейса редактора в духе Unreal: элементы, иконки, выпадающие и контекстные меню,
- * сетка свойств (панель «Детали»), разделители панелей. Без фреймворков — DOM и замыкания.
+ * Small pieces of the editor interface in the spirit of Unreal: elements, icons, dropdown and context menus,
+ * property grid (the "Details" panel), panel splitters. No frameworks — DOM and closures.
  */
 
 type Attrs = Record<string, string | number | boolean | ((e: Event) => void) | undefined>;
 
-/** Элемент: h('div.cls#id', { title: '…', onclick: fn }, 'текст', child) */
+/** Element: h('div.cls#id', { title: '…', onclick: fn }, 'text', child) */
 export function h<K extends keyof HTMLElementTagNameMap>(sel: K | `${K}.${string}` | `${K}#${string}`, attrs: Attrs = {}, ...kids: (Node | string | null | undefined | false)[]): HTMLElementTagNameMap[K] {
   const m = /^([a-z0-9]+)((?:[.#][\w-]+)*)$/i.exec(sel)!;
   const el = document.createElement(m[1]) as HTMLElementTagNameMap[K];
@@ -23,7 +23,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(sel: K | `${K}.${string
   return el;
 }
 
-/** Иконки — контурный SVG 16 × 16, цвет — currentColor */
+/** Icons — outline SVG 16 × 16, colour — currentColor */
 const P: Record<string, string> = {
   save: '<path d="M3 2h8l2 2v10H3z M5 2v4h5V2 M5 14v-4h6v4"/>',
   play: '<path d="M5 3l8 5-8 5z" fill="currentColor"/>',
@@ -72,7 +72,7 @@ export function icon(name: keyof typeof P | string, cls = ''): string {
   return `<svg class="ue-ic ${cls}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${P[name] ?? P.dot}</svg>`;
 }
 
-// ---------- меню ----------
+// ---------- menus ----------
 
 export interface MenuItem {
   label?: string;
@@ -83,7 +83,7 @@ export interface MenuItem {
   disabled?: boolean;
   sub?: MenuItem[] | (() => MenuItem[]);
   sep?: boolean;
-  /** Заголовок раздела внутри меню */
+  /** Section heading inside a menu */
   head?: string;
 }
 
@@ -124,7 +124,7 @@ function fitInView(el: HTMLElement): void {
   if (r.bottom > window.innerHeight - 4) el.style.top = `${parseFloat(el.style.top || '0') - (r.bottom - window.innerHeight + 8)}px`;
 }
 
-/** Показать меню в точке экрана (контекстное) */
+/** Show a menu at a screen point (context menu) */
 export function popupMenu(x: number, y: number, items: MenuItem[]): void {
   closeMenus();
   const m = buildMenu(items);
@@ -135,7 +135,7 @@ export function popupMenu(x: number, y: number, items: MenuItem[]): void {
   fitInView(m);
 }
 
-/** Кнопка с выпадающим меню (строка меню, кнопки тулбара) */
+/** Button with a dropdown menu (menu bar, toolbar buttons) */
 export function menuButton(btn: HTMLElement, items: () => MenuItem[]): HTMLElement {
   btn.classList.add('ue-menubtn');
   btn.addEventListener('click', (e) => {
@@ -147,7 +147,7 @@ export function menuButton(btn: HTMLElement, items: () => MenuItem[]): HTMLEleme
     popupMenu(r.left, r.bottom + 2, items());
     btn.classList.add('open');
   });
-  // меню строки: провести мышью по соседней кнопке, пока меню открыто, — открыть её
+  // menu bar: hovering a neighbouring button while a menu is open opens that one
   btn.addEventListener('pointerenter', () => {
     if (!openMenu || btn.classList.contains('open') || !btn.parentElement?.querySelector('.ue-menubtn.open')) return;
     btn.click();
@@ -155,19 +155,19 @@ export function menuButton(btn: HTMLElement, items: () => MenuItem[]): HTMLEleme
   return btn;
 }
 
-// ---------- сетка свойств ----------
+// ---------- property grid ----------
 
-interface NumOpts { min?: number; max?: number; step?: number; /** Ползунок рядом с полем */ slider?: boolean; unit?: string; digits?: number }
+interface NumOpts { min?: number; max?: number; step?: number; /** Slider next to the field */ slider?: boolean; unit?: string; digits?: number }
 
 /**
- * Сетка свойств как в панели Details: разделы со сворачиваемыми заголовками, строки «подпись — значение».
- * Каждая строка помнит, как прочитать значение, — refresh() обновляет поля без пересборки (не сбивает фокус).
+ * Property grid like the Details panel: sections with collapsible headers, "label — value" rows.
+ * Each row remembers how to read its value — refresh() updates the fields without rebuilding (does not break focus).
  */
 export class PropGrid {
   readonly el = h('div.ue-props');
   private readonly refreshers: (() => void)[] = [];
   private body: HTMLElement = this.el;
-  /** Свёрнутые разделы — по заголовку, переживают пересборку */
+  /** Collapsed sections — by title, survive a rebuild */
   static collapsed = new Set<string>();
 
   clear(): void { this.el.textContent = ''; this.refreshers.length = 0; this.body = this.el; }
@@ -221,7 +221,7 @@ export class PropGrid {
     return this;
   }
 
-  /** Три числа X/Y/Z с цветными метками, как Location/Rotation в Unreal */
+  /** Three numbers X/Y/Z with coloured tags, like Location/Rotation in Unreal */
   vec3(label: string, get: () => [number, number, number], set: (v: [number, number, number]) => void, o: NumOpts = {}): this {
     const step = o.step ?? 0.1;
     const digits = o.digits ?? (step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3);
@@ -277,7 +277,7 @@ export class PropGrid {
     return this;
   }
 
-  /** Строка только для чтения (тип, счётчики) */
+  /** Read-only row (type, counters) */
   info(label: string, get: () => string): this {
     const v = h('span.ue-info');
     this.row(label, v);
@@ -292,13 +292,13 @@ export class PropGrid {
     return this;
   }
 
-  /** Произвольный элемент в разделе */
+  /** Arbitrary element inside the section */
   custom(el: HTMLElement): this { this.body.append(el); return this; }
 
   refresh(): void { for (const r of this.refreshers) r(); }
 }
 
-/** Протянуть мышью по полю, как в Unreal: влево-вправо — меньше-больше */
+/** Drag the mouse over a field, like in Unreal: left-right — less-more */
 function dragScrub(el: HTMLElement, onDelta: (dx: number) => void): void {
   el.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
@@ -321,8 +321,8 @@ function dragScrub(el: HTMLElement, onDelta: (dx: number) => void): void {
 }
 
 /**
- * Разделитель между панелями: тянешь — меняется размер соседней панели (CSS-переменная на корне).
- * dir 'x' — вертикальная черта (ширина), 'y' — горизонтальная (высота); sign — в какую сторону растёт панель.
+ * Splitter between panels: dragging changes the size of the neighbouring panel (CSS variable on the root).
+ * dir 'x' — vertical bar (width), 'y' — horizontal (height); sign — which way the panel grows.
  */
 export function splitter(root: HTMLElement, cssVar: string, dir: 'x' | 'y', sign: 1 | -1, min: number, max: number, onChange?: () => void): HTMLElement {
   const el = h('div', { class: `ue-split ue-split-${dir}` });

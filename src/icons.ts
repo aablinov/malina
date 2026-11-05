@@ -1,8 +1,8 @@
 import { makeCanvas } from './headless.ts';
 /**
- * Пиксельные иконки предметов и HUD в духе Minecraft Dungeons: сетка 16 × 16, рисуются кодом,
- * тёмный контур добавляется сам вокруг закрашенных пикселей. Отдаются как data-URL — в CSS их растягивают
- * с image-rendering: pixelated. Внешних картинок нет (как и у текстур).
+ * Pixel icons of items and the HUD in the spirit of Minecraft Dungeons: a 16 × 16 grid, drawn in code,
+ * a dark outline is added automatically around painted pixels. Returned as data URLs — CSS stretches them
+ * with image-rendering: pixelated. No external images (same as textures).
  */
 
 import { ICONS as AURA_ICONS } from './aura-icons.ts';
@@ -22,11 +22,11 @@ const OUTLINE = '#120e18';
 
 export class Pen {
   readonly px = new Map<number, string>();
-  /** Пиксель */
+  /** Pixel */
   p(x: number, y: number, c: string): void { if (x >= 0 && y >= 0 && x < N && y < N) this.px.set(y * N + x, c); }
-  /** Прямоугольник w × h */
+  /** Rectangle w × h */
   r(x: number, y: number, w: number, h: number, c: string): void { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.p(x + i, y + j, c); }
-  /** Отрезок (Брезенхэм) */
+  /** Line segment (Bresenham) */
   l(x0: number, y0: number, x1: number, y1: number, c: string): void {
     const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
     let e = dx + dy;
@@ -38,25 +38,25 @@ export class Pen {
       if (e2 <= dx) { e += dx; y0 += sy; }
     }
   }
-  /** Квадратичная кривая */
+  /** Quadratic curve */
   q(x0: number, y0: number, cx: number, cy: number, x1: number, y1: number, c: string): void {
     for (let i = 0; i <= 24; i++) {
       const t = i / 24, a = (1 - t) ** 2, b = 2 * (1 - t) * t, d = t * t;
       this.p(Math.round(a * x0 + b * cx + d * x1), Math.round(a * y0 + b * cy + d * y1), c);
     }
   }
-  /** Строки-шаблон: символ → цвет из pal, «.» — пусто */
+  /** Template rows: character → colour from pal, "." — empty */
   s(x: number, y: number, rows: string[], pal: Record<string, string>): void {
     rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) { const c = pal[row[i]]; if (c) this.p(x + i, y + j, c); } });
   }
 }
 
-// ---------- палитры ----------
+// ---------- palettes ----------
 const STEEL = ['#f2f6fb', '#c6d0dc', '#8e9aab'];
 const WOOD = ['#a8774a', '#7a5230', '#55361d'];
 const GOLD = ['#ffe27a', '#f2b632', '#b9761c'];
 
-/** Клинок по диагонали снизу-слева вверх-вправо: от (x0, y0) до (x1, y1), шириной 2 */
+/** A blade diagonally from bottom-left to top-right: from (x0, y0) to (x1, y1), 2 wide */
 function blade(p: Pen, x0: number, y0: number, x1: number, y1: number, hi: string, lo: string): void {
   p.l(x0, y0, x1, y1, hi);
   p.l(x0 + 1, y0, x1, y1 + 1, lo);
@@ -64,7 +64,7 @@ function blade(p: Pen, x0: number, y0: number, x1: number, y1: number, hi: strin
 
 const ICONS: Record<string, Draw> = {
   ...FIRE_ICE_ICONS, ...STORM_LIGHT_ICONS, ...DARK_ARCANE_ICONS, ...EARTH_ICONS, ...AURA_ICONS, ...BASE_FIRE_ICONS, ...BASE_SUMMON_ICONS, ...BASE_BLOOD_ICONS, ...BASE_LIGHT_ICONS,
-  // ---------- ближний бой ----------
+  // ---------- melee ----------
   sword(p) {
     blade(p, 7, 8, 14, 1, STEEL[0], STEEL[2]);
     p.l(4, 7, 8, 11, GOLD[1]); p.p(6, 9, GOLD[0]);
@@ -205,7 +205,7 @@ const ICONS: Record<string, Draw> = {
       'b.........',
     ], { a: '#cfc8e8', b: '#b98cff' });
   },
-  // ---------- дальний бой ----------
+  // ---------- ranged ----------
   bow(p) { bowShape(p, WOOD[1], WOOD[2], '#e8e2d0'); },
   longbow(p) { bowShape(p, '#4f7a3a', '#35552a', '#e8e2d0'); p.p(6, 9, GOLD[1]); },
   starbow(p) { bowShape(p, '#5ad8ff', '#2f8fd0', '#ffffff'); p.p(2, 12, '#fff6a8'); p.p(12, 2, '#fff6a8'); p.p(7, 7, '#fff6a8'); },
@@ -215,7 +215,7 @@ const ICONS: Record<string, Draw> = {
     p.l(6, 3, 13, 10, '#e8e2d0');
     p.l(10, 6, 13, 3, STEEL[0]); p.p(14, 2, STEEL[1]);
   },
-  // ---------- броня ----------
+  // ---------- armour ----------
   tunic(p) { torso(p, '#5e8f46', '#44703a', '#7a5230'); p.r(7, 6, 2, 6, '#7a5230'); },
   soulrobe(p) {
     p.s(3, 1, [
@@ -249,9 +249,9 @@ const ICONS: Record<string, Draw> = {
     p.r(4, 4, 8, 1, GOLD[1]); p.r(7, 5, 2, 7, GOLD[1]); p.p(7, 7, '#ff2a5d'); p.p(8, 7, '#ff2a5d');
     p.r(2, 2, 3, 2, GOLD[0]); p.r(11, 2, 3, 2, GOLD[0]);
   },
-  // ---------- артефакты ----------
+  // ---------- artifacts ----------
   firework(p) {
-    // ракета по диагонали: красный корпус в три пикселя, белые полосы, бумажный колпак, искры снизу
+    // a rocket on the diagonal: a three-pixel red body, white stripes, a paper cone, sparks below
     p.l(4, 11, 10, 5, '#ff5a4a'); p.l(5, 11, 11, 5, '#e23a3a'); p.l(5, 12, 11, 6, '#a3202a');
     p.p(6, 9, '#ffffff'); p.p(7, 9, '#ffffff'); p.p(7, 10, '#e8e8e8');
     p.p(8, 7, '#ffffff'); p.p(9, 7, '#ffffff'); p.p(9, 8, '#e8e8e8');
@@ -339,9 +339,9 @@ const ICONS: Record<string, Draw> = {
       '..a..a..',
     ], { a: '#2b2b33', b: '#4a3a5a', c: '#6a4aa8', d: '#3fb8d8', s: '#bff6ff' });
   },
-  // ---------- заклинания (src/spells.ts) ----------
+  // ---------- spells (src/spells.ts) ----------
   spark(p) {
-    // ломаная молния сверху вниз: белое ядро, голубое свечение
+    // a zigzag bolt top to bottom: white core, blue glow
     p.s(3, 0, [
       '......aab.',
       '.....abb..',
@@ -361,7 +361,7 @@ const ICONS: Record<string, Draw> = {
     p.p(12, 9, '#bff6ff'); p.p(13, 12, '#7ad8ff'); p.p(2, 4, '#bff6ff');
   },
   fireball(p) {
-    // шар пламени с хвостом в левый нижний угол
+    // a fireball with a tail into the bottom-left corner
     p.s(5, 2, [
       '...aaaa..',
       '..abbbba.',
@@ -377,7 +377,7 @@ const ICONS: Record<string, Draw> = {
     p.p(3, 9, '#ffb43a'); p.p(7, 13, '#ff6a2a'); p.p(2, 11, '#ffe27a');
   },
   icerain(p) {
-    // облако инея и три сосульки
+    // a cloud of frost and three icicles
     p.s(2, 1, [
       '...aaaaa....',
       '.aabbbbbaa..',
@@ -390,7 +390,7 @@ const ICONS: Record<string, Draw> = {
     }
   },
   heal(p) {
-    // зелёный лист с лепестками малины вокруг
+    // a green leaf with raspberry petals around
     p.s(3, 2, [
       '.......aa.',
       '.....aabba',
@@ -405,9 +405,9 @@ const ICONS: Record<string, Draw> = {
     ], { a: '#2f7a2a', b: '#6ad84a', c: '#d8ffb0' });
     p.p(2, 2, '#ff5a8a'); p.p(3, 1, '#ff8fb0'); p.p(13, 13, '#ff5a8a'); p.p(12, 14, '#ff8fb0'); p.p(14, 11, '#ffe27a'); p.p(1, 6, '#ffe27a');
   },
-  // ---------- ауры (src/auras.ts) ----------
+  // ---------- auras (src/auras.ts) ----------
   'a-pact'(p) {
-    // капля крови в кольце из нитей
+    // a drop of blood in a ring of threads
     p.s(4, 1, [
       '...aa...',
       '...ab...',
@@ -424,7 +424,7 @@ const ICONS: Record<string, Draw> = {
     p.q(1, 12, 1, 15, 5, 14, '#ff4a5a'); p.q(14, 12, 14, 15, 10, 14, '#ff4a5a'); p.p(2, 5, '#ff4a5a'); p.p(13, 5, '#ff4a5a');
   },
   'a-bastion'(p) {
-    // щит с руной
+    // a shield with a rune
     p.s(3, 1, [
       'aaaaaaaaaa',
       'abbbbbbbba',
@@ -441,7 +441,7 @@ const ICONS: Record<string, Draw> = {
     ], { a: '#2a3a6a', b: '#f2b632', c: '#4a7ad8', w: '#bfe6ff' });
   },
   'a-rage'(p) {
-    // пылающий кулак-пламя
+    // a blazing flame fist
     p.s(3, 1, [
       '....a.....',
       '...aba..a.',
@@ -458,7 +458,7 @@ const ICONS: Record<string, Draw> = {
     ], { a: '#8a1a0a', b: '#ff4a1a', c: '#ffa03a', w: '#fff2a0' });
   },
   'a-clarity'(p) {
-    // три голубых огонька вокруг глаза
+    // three blue lights around an eye
     p.s(3, 5, [
       '..aaaaaa..',
       '.abbbbbba.',
@@ -470,7 +470,7 @@ const ICONS: Record<string, Draw> = {
     for (const [x, y] of [[2, 2], [13, 2], [7, 13]] as const) { p.r(x, y, 2, 2, '#7ad8ff'); p.p(x, y, '#ffffff'); }
   },
   'a-thorns'(p) {
-    // венок из колючих лоз
+    // a wreath of thorny vines
     p.q(3, 8, 3, 2, 8, 2, '#2f6a2a'); p.q(8, 2, 13, 2, 13, 8, '#2f6a2a'); p.q(13, 8, 13, 14, 8, 14, '#2f6a2a'); p.q(8, 14, 3, 14, 3, 8, '#2f6a2a');
     p.q(4, 8, 4, 3, 8, 3, '#5aa84a'); p.q(8, 3, 12, 3, 12, 8, '#5aa84a'); p.q(12, 8, 12, 13, 8, 13, '#5aa84a'); p.q(8, 13, 4, 13, 4, 8, '#5aa84a');
     for (const [x, y] of [[1, 8], [14, 8], [8, 0], [8, 15], [3, 3], [12, 3], [3, 12], [12, 12]] as const) p.p(x, y, '#d8e8b0');
@@ -633,7 +633,7 @@ const ICONS: Record<string, Draw> = {
   },
   lock(p) { p.s(4, 2, ['..aaaa..', '.a....a.', '.a....a.', 'bbbbbbbb', 'bbbccbbb', 'bbbccbbb', 'bbbbbbbb'], { a: '#c6d0dc', b: '#f2b632', c: '#5a3a1e' }); },
   mouse(p) { p.s(4, 1, ['.aaaaaa.', 'aaaabbba', 'aaaabbba', 'aaaabbba', 'aaaaaaaa', 'aaaaaaaa', 'aaaaaaaa', 'aaaaaaaa', '.aaaaaa.'], { a: '#e8e8e8', b: '#ffcf3a' }); },
-  // ---------- зачарования (глиф в ромбе) ----------
+  // ---------- enchantments (a glyph in a diamond) ----------
   'e-blade'(p) { blade(p, 4, 11, 11, 4, '#ffffff', '#cfe6ff'); p.l(3, 9, 6, 12, '#ffffff'); },
   'e-star'(p) { p.s(3, 3, ['....a....', '....a....', '...aaa...', 'aaaaaaaaa', '.aaaaaaa.', '..aaaaa..', '..aa.aa..', '.aa...aa.', '.a.....a.'], { a: '#ffffff' }); },
   'e-drop'(p) { p.s(4, 2, ['...aa...', '...aa...', '..aaaa..', '.aaaaaa.', '.aaaaaa.', 'aaaaaaba', 'aaaaaaba', 'aaaaabba', '.aaaaba.', '..aaaa..'], { a: '#ffffff', b: '#ffd0d8' }); },
@@ -656,7 +656,7 @@ function bowShape(p: Pen, wood: string, dark: string, str: string): void {
   p.r(4, 8, 2, 2, '#3d2616');
 }
 
-/** Нагрудник спереди: плечи, корпус, рукава */
+/** Chestplate from the front: shoulders, body, sleeves */
 function torso(p: Pen, a: string, b: string, c: string): void {
   p.s(1, 2, [
     '..aaa....aaa..',
@@ -676,7 +676,7 @@ function torso(p: Pen, a: string, b: string, c: string): void {
 
 const cache = new Map<string, string>();
 
-/** Иконка как data-URL 16 × 16 (с контуром); mono — залить одним цветом (значки вкладок) */
+/** Icon as a 16 × 16 data URL (with outline); mono — fill with one colour (tab badges) */
 export function iconURL(name: string, mono?: string): string {
   const key = `${name}|${mono ?? ''}`;
   const hit = cache.get(key);
@@ -686,7 +686,7 @@ export function iconURL(name: string, mono?: string): string {
   return url;
 }
 
-/** Иконка на холсте 16 × 16 — для текстур в мире (лут на полу) */
+/** Icon on a 16 × 16 canvas — for textures in the world (loot on the floor) */
 export function iconCanvas(name: string, mono?: string): HTMLCanvasElement {
   const draw = ICONS[name] ?? ICONS.grid;
   const pen = new Pen();
@@ -695,7 +695,7 @@ export function iconCanvas(name: string, mono?: string): HTMLCanvasElement {
   const g = c.getContext('2d');
   if (!g) return c;
   if (!mono) {
-    // контур: пустые соседи закрашенных пикселей (по 4 направлениям)
+    // outline: empty neighbours of painted pixels (in 4 directions)
     g.fillStyle = OUTLINE;
     for (const k of pen.px.keys()) {
       const x = k % N, y = (k / N) | 0;
@@ -709,7 +709,7 @@ export function iconCanvas(name: string, mono?: string): HTMLCanvasElement {
   return c;
 }
 
-/** <img> иконки для разметки */
+/** <img> of an icon for markup */
 export const iconImg = (name: string, cls = '', mono?: string): string => `<img class="px ${cls}" src="${iconURL(name, mono)}" alt="" draggable="false">`;
 
 export const ICON_NAMES = Object.keys(ICONS);

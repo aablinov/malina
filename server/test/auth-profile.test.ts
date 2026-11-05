@@ -6,7 +6,7 @@ let s: TestServer;
 before(async () => { s = await startServer(); });
 after(() => s.stop());
 
-test('вход по имени: токен, занятое имя, повторный вход своим токеном', async () => {
+test('sign-in by name: token, taken name, repeated sign-in with own token', async () => {
   const a = await register(s, 'Малинка');
   assert.ok(a.token.length >= 40);
   assert.equal((await api(s, 'POST', '/api/auth', { name: 'малинка' })).status, 409);
@@ -18,16 +18,16 @@ test('вход по имени: токен, занятое имя, повтор�
   assert.equal((await api(s, 'GET', '/api/me', undefined, 'wrong-token-wrong-token-wrong')).status, 401);
 });
 
-test('переименование', async () => {
-  const a = await register(s, 'Старое');
-  await register(s, 'Занято');
-  assert.equal((await api(s, 'POST', '/api/auth/rename', { name: 'Занято' }, a.token)).status, 409);
-  assert.equal((await api(s, 'POST', '/api/auth/rename', { name: 'Новое' }, a.token)).status, 200);
-  assert.equal((await api(s, 'GET', '/api/me', undefined, a.token)).body.name, 'Новое');
+test('rename', async () => {
+  const a = await register(s, 'OldName');
+  await register(s, 'Taken');
+  assert.equal((await api(s, 'POST', '/api/auth/rename', { name: 'Taken' }, a.token)).status, 409);
+  assert.equal((await api(s, 'POST', '/api/auth/rename', { name: 'NewName' }, a.token)).status, 200);
+  assert.equal((await api(s, 'GET', '/api/me', undefined, a.token)).body.name, 'NewName');
 });
 
-test('профиль: первая запись, чтение, конфликт версий', async () => {
-  const a = await register(s, 'Профиль');
+test('profile: first write, read, version conflict', async () => {
+  const a = await register(s, 'Profiler');
   assert.equal((await api(s, 'GET', '/api/profile', undefined, a.token)).status, 404);
   const data = starter() as { berries: number };
   const w1 = await api(s, 'PUT', '/api/profile', { version: 0, data }, a.token);
@@ -35,7 +35,7 @@ test('профиль: первая запись, чтение, конфликт 
   assert.equal(w1.body.version, 1);
   data.berries = 999;
   assert.equal((await api(s, 'PUT', '/api/profile', { version: 1, data }, a.token)).body.version, 2);
-  // запись по старой версии — конфликт и свежий профиль
+  // write against an old version — conflict and the fresh profile
   const stale = await api(s, 'PUT', '/api/profile', { version: 1, data: starter() }, a.token);
   assert.equal(stale.status, 409);
   assert.equal(stale.body.version, 2);
@@ -44,15 +44,15 @@ test('профиль: первая запись, чтение, конфликт 
   assert.equal(r.body.data.berries, 999);
 });
 
-test('профиль: мусор отклонён, неизвестные предметы выброшены', async () => {
-  const a = await register(s, 'Мусор');
+test('profile: junk rejected, unknown items dropped', async () => {
+  const a = await register(s, 'Garbage');
   for (const bad of [null, 5, { version: 2 }, { ...(starter() as object), berries: -1 }, { ...(starter() as object), level: 0.5 }]) {
     assert.equal((await api(s, 'PUT', '/api/profile', { version: 0, data: bad }, a.token)).status, 400, JSON.stringify(bad)?.slice(0, 40));
   }
   const d = starter() as { items: { uid: string; def: string; power: number; enchants: unknown[] }[]; equip: { melee: string | null; aura: string | null } };
-  // надет предмет, которого нет в сумке
-  assert.equal((await api(s, 'PUT', '/api/profile', { version: 0, data: { ...d, equip: { ...d.equip, aura: 'нет' } } }, a.token)).status, 400);
-  d.items.push({ uid: 'z1', def: 'нет-такого', power: 1, enchants: [] });
+  // an item that is not in the bag is equipped
+  assert.equal((await api(s, 'PUT', '/api/profile', { version: 0, data: { ...d, equip: { ...d.equip, aura: 'none' } } }, a.token)).status, 400);
+  d.items.push({ uid: 'z1', def: 'no-such', power: 1, enchants: [] });
   d.equip.melee = 'z1';
   const w = await api(s, 'PUT', '/api/profile', { version: 0, data: d }, a.token);
   assert.equal(w.status, 200);
@@ -60,8 +60,8 @@ test('профиль: мусор отклонён, неизвестные пре
   assert.equal(w.body.data.equip.melee, null);
 });
 
-test('health и карты', async () => {
+test('health and maps', async () => {
   const r = await api(s, 'GET', '/api/health');
   assert.deepEqual(r.body.maps, ['td', 'td2', 'td3']);
-  assert.equal((await api(s, 'GET', '/api/records?map=нет')).status, 400);
+  assert.equal((await api(s, 'GET', '/api/records?map=none')).status, 400);
 });

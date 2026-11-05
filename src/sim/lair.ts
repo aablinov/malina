@@ -4,13 +4,13 @@ import type { TdLane } from '../td/types.ts';
 import { r2 } from './entities.ts';
 import type { SimWorld } from './world.ts';
 
-/** Логово (раздел 6): начало дороги; тревога 0..1 перед волной по этой дороге, вспышка на каждый выход */
+/** Lair (section 6): the start of a lane; alarm 0..1 before a wave along this lane, a flash on every spawn */
 export class SimLair {
   readonly id: string;
   readonly lane: TdLane;
   readonly pos: THREE.Vector3;
   warn = 0;
-  /** Сколько врагов вышло (для тестов) */
+  /** How many enemies came out (for tests) */
   spawned = 0;
   private readonly w: SimWorld;
 

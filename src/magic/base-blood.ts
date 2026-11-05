@@ -5,30 +5,31 @@ import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
 import type { Spells } from '../spells.ts';
 import { bleed, payHp } from './blood-core.ts';
 import { rand, type Spell } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Базовые заклинания (wiki/design-spells.md, раздел «Базовые заклинания»). Малиновая кровь — как магия крови Elden Ring:
- * каст стоит здоровья (payHp), удары копят кровотечение (bleed) — src/magic/blood-core.ts.
- * Когти — три клинка пламени из земли перед героем; рой малинок — поток мушек конусом; малиновый клинок — сок на оружии.
+ * Base spells (wiki/design-spells.md, section "Base spells"). Raspberry blood — like blood magic in Elden Ring:
+ * a cast costs health (payHp), hits build bleed (bleed) — src/magic/blood-core.ts.
+ * Claws — three blades of flame out of the ground in front of the hero; berry swarm — a cone stream of midges; raspberry blade — juice on the weapon.
  */
 
-/** Корень малиновой крови: ре малой октавы, минорные ноты */
+/** Root of raspberry blood: D of the small octave, minor notes */
 const ROOT = 146.83;
 const UNIT = new THREE.BoxGeometry(1, 1, 1);
 
-/** Светящийся малиновый материал (не тёмный — без квадратов AO) */
+/** Glowing raspberry material (not dark — no AO squares) */
 const glow = (c: THREE.Color, opacity = 1): THREE.MeshBasicMaterial =>
   new THREE.MeshBasicMaterial({ color: c, toneMapped: false, transparent: true, opacity, depthWrite: opacity >= 1 });
 
-/** Направление от героя к точке на земле (без высоты); у самых ног — куда смотрит герой */
+/** Direction from the hero to a point on the ground (no height); right at the feet — where the hero looks */
 function dirTo(kit: Spells, at: THREE.Vector3): THREE.Vector3 {
   const hero = kit.h.hero, d = new THREE.Vector3(at.x - hero.pos.x, 0, at.z - hero.pos.z);
   return d.lengthSq() > 0.04 ? d.normalize() : new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw));
 }
 
-// ---------- малиновые когти ----------
+// ---------- raspberry claws ----------
 
-/** Коготь: изогнутый клинок из брусков — вверх и загибается вперёд */
+/** Claw: curved blade of bars — goes up and bends forward */
 function claw(mat: THREE.Material, edge: THREE.Material, h: number): THREE.Group {
   const g = new THREE.Group();
   let y = 0, z = 0, tilt = 0;
@@ -53,7 +54,7 @@ function bloodclaws(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
   const c = kit.ground(hero.pos.clone().addScaledVector(dir, dist), 99);
   kit.face(c);
   kit.windup('blood', k);
-  // замах: под ногами врага земля краснеет, из трещин сочится сок
+  // windup: the ground under the enemy's feet reddens, juice seeps from the cracks
   fx.decal(c, kit.tex.glow(), s.a.clone().multiplyScalar(0.3), 2.4 + k, 0.9, true);
   for (let i = 0; i < 16; i++) fx.particle({ pos: c.clone().add(new THREE.Vector3(rand(-1, 1), 0.08, rand(-1, 1))), vel: new THREE.Vector3(0, rand(0.6, 1.6), 0), life: 0.35, size: 0.06, color: s.a, gravity: -0.5 });
   voice({ type: 'triangle', f: ROOT, f1: ROOT * 2, dur: 0.32, vol: 0.06, lp: 900, lp1: 2400, detune: 10, verb: 0.3 });
@@ -65,7 +66,7 @@ function bloodclaws(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     boom(110 - k * 20, 38, 0.6, 0.5);
     hiss({ dur: 0.18, vol: 0.3, f: 1400, f1: 500, q: 0.7, verb: 0.3 });
     [0, 3, 7].forEach((st, i) => pluck(ROOT * 2 * Math.pow(2, st / 12), 0.08, 0.04 * i));
-    // три когтя: середина впереди, крайние — веером
+    // three claws: the middle one ahead, the outer ones fanned
     const mats: THREE.Material[] = [];
     const body = glow(s.a.clone().multiplyScalar(0.65)), edge = glow(s.b.clone().multiplyScalar(0.9));
     mats.push(body, edge);
@@ -80,22 +81,22 @@ function bloodclaws(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
       const T = 0.95 + i * 0.04;
       fx.custom(g, T, (t) => {
         const tt = t * T;
-        // вырывается с перелётом, держится, уходит в землю
+        // bursts out with overshoot, holds, sinks into the ground
         const up = tt < 0.14 ? (tt / 0.14) * 1.15 : tt < 0.24 ? 1.15 - ((tt - 0.14) / 0.1) * 0.15 : tt < 0.65 ? 1 : Math.max(0.01, 1 - (tt - 0.65) / (T - 0.65));
         g.scale.set(1, up, 1);
         if (rnd() < 0.6) fx.particle({ pos: p.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(0.2, h * up), rand(-0.25, 0.25))), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(1, 2.4), rand(-0.3, 0.3)), life: rand(0.25, 0.45), size: rand(0.05, 0.09), color: rnd() < 0.6 ? s.a : s.b, gravity: -1.5 });
-      }, () => { /* общие материалы освобождаются ниже */ });
+      }, () => { /* shared materials are released below */ });
       fx.burst(p.clone().setY(p.y + 0.2), [s.a, s.b, '#ffb0c8'], 10, { speed: 2.5, up: 4, size: 0.07, life: 0.6, glow: true, gravity: 9 });
     });
     kit.later(1.1, () => mats.forEach((m) => m.dispose()));
     fx.shock(c.clone().setY(c.y + 0.06), R * 0.8, s.a, 0.35, 0.18);
     fx.flash(c.clone().setY(c.y + 1), s.b.clone().multiplyScalar(0.55), 2.4 + k, 0.25);
-    // урон: всё в круге перед героем, каждой цели — кровотечение
+    // damage: everything in the circle in front of the hero, bleed on each target
     for (const t of kit.within(c, Math.min(R, 1.6 + k * 0.6))) {
       kit.h.damage(t, Math.round(power), hero.pos, 1.2);
       bleed(kit, t, 50);
     }
-    // послевкусие: малиновое пятно и капли
+    // aftertaste: a raspberry stain and drops
     fx.decal(c, kit.tex.scorch(), '#ffffff', 2.2 + k, 3, false, 0.5);
     fx.decal(c, kit.tex.glow(), s.a.clone().multiplyScalar(0.3), 2.6 + k, 1.6, true);
     let left = 1.4;
@@ -107,14 +108,14 @@ function bloodclaws(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
   });
 }
 
-// ---------- рой малинок ----------
+// ---------- berry swarm ----------
 
 function bloodswarm(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, s = kit.color('blood'), hero = kit.h.hero;
   payHp(kit, 0.08);
   const R = a.radius ?? 5, dur = (a.duration ?? 1.5) + k * 0.5, half = 0.31;
   let dir = dirTo(kit, at);
-  // конус ведётся за курсором, только если курсор сдвинулся после каста (в тестах прицел стоит)
+  // the cone follows the cursor only if the cursor moved after the cast (in tests the aim stands still)
   const aim0 = kit.aim.clone();
   kit.face(hero.pos.clone().add(dir));
   kit.windup('blood', k);
@@ -128,7 +129,7 @@ function bloodswarm(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     if (kit.aim.distanceTo(aim0) > 0.3) dir = dirTo(kit, kit.aim);
     kit.face(hero.pos.clone().add(dir), 0.2);
     const hand = kit.hand();
-    // мушки: кружат и летят конусом; на излёте разворачиваются обратно — живой рой
+    // midges: circle and fly in a cone; at the end of the flight they turn back — a living swarm
     const live = t < dur;
     for (let i = 0; i < (live ? 9 : 0); i++) {
       const ang = Math.atan2(dir.x, dir.z) + rand(-half, half), sp = rand(5, 8), life = (R / sp) * rand(0.6, 1);
@@ -142,7 +143,7 @@ function bloodswarm(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     tick -= dt;
     if (live && tick <= 0) {
       tick = 0.15; n++;
-      // тёплое жужжание: три расстроенные короткие ноты с лёгким «вибрато» вверх-вниз
+      // warm buzz: three detuned short notes with a light "vibrato" up and down
       const f = ROOT * 2 * (n % 2 ? 1 : 1.03);
       voice({ type: 'triangle', f, f1: f * 1.04, dur: 0.17, vol: 0.022, detune: 18, lp: 1800, verb: 0.15 });
       voice({ type: 'sine', f: f * 1.5, f1: f * 1.46, dur: 0.15, vol: 0.012, verb: 0.15 });
@@ -158,7 +159,7 @@ function bloodswarm(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
         fx.burst(tg.pos.clone().setY(tg.pos.y + 1.1), [s.a, s.b], 4, { speed: 1.5, up: 1, size: 0.04, life: 0.3, glow: true, gravity: 4 });
       }
     }
-    // послевкусие: рой рассыпается каплями, на земле малиновый след конусом
+    // aftertaste: the swarm scatters into drops, a raspberry cone trail on the ground
     if (!live) {
       for (let i = 0; i < 4; i++) fx.decal(kit.ground(hero.pos.clone().addScaledVector(dir, 1 + i * (R / 4)), 99), kit.tex.glow(), s.a.clone().multiplyScalar(0.22), 1.2 + i * 0.5, 1.8, true);
       fx.burst(hand.clone().addScaledVector(dir, R * 0.5), [s.a, s.b], 18, { speed: 2, up: 1.5, size: 0.05, life: 0.6, glow: true, gravity: 8 });
@@ -169,16 +170,16 @@ function bloodswarm(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
   });
 }
 
-// ---------- малиновый клинок ----------
+// ---------- raspberry blade ----------
 
 function bloodblade(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, s = kit.color('blood'), hero = kit.h.hero;
   payHp(kit, 0.1);
   const dur = a.duration ?? 15;
-  // сок ложится на клинок сразу — первый же удар копит кровотечение; замах и вспышка — оформление
+  // juice coats the blade at once — the very first hit builds bleed; windup and flash are decoration
   kit.buff({ id: 'bloodblade', melee: 1 + power / 100, onMelee: (t) => { bleed(kit, t, 25); } }, dur);
   kit.windup('blood', k);
-  // замах: сок стекает от груди к ладони и по клинку
+  // windup: juice runs from the chest to the palm and along the blade
   const hand0 = kit.hand();
   for (let i = 0; i < 18; i++) {
     const from = hero.pos.clone().setY(hero.pos.y + rand(1.2, 1.7)).add(new THREE.Vector3(rand(-0.4, 0.4), 0, rand(-0.4, 0.4))), life = 0.28;
@@ -197,7 +198,7 @@ function bloodblade(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
     boom(120, 45, 0.5, 0.45);
     [0, 3, 7, 10].forEach((st, i) => bell(ROOT * 4 * Math.pow(2, st / 12), 0.9, 0.045, i * 0.05, 0.5));
     hiss({ dur: 0.35, vol: 0.14, f: 900, f1: 2600, q: 0.8, attack: 0.05, verb: 0.3 });
-    // пока идёт: с руки капает сок, по клинку пробегает отблеск
+    // while active: juice drips from the hand, a glint runs along the blade
     let t = 0;
     kit.proc((dt) => {
       t += dt;
@@ -208,7 +209,7 @@ function bloodblade(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
         if (rnd() < 0.15) fx.flash(hand.clone().setY(hand.y + rand(0, 0.6)), s.a.clone().multiplyScalar(0.5), 0.7, 0.2);
         return true;
       }
-      // высыхание: сок темнеет до розовой пыли и осыпается
+      // drying: the juice darkens to pink dust and crumbles
       fx.burst(hand, ['#ff8aa8', '#e0a0b0', s.a], 12, { speed: 1, up: 0.6, size: 0.05, life: 0.6, glow: true, gravity: 3 });
       hiss({ dur: 0.3, vol: 0.06, f: 2500, f1: 1200, q: 0.8, verb: 0.2 });
       bell(deg(ROOT * 4, 0), 0.5, 0.03, 0, 0.4);
@@ -218,7 +219,7 @@ function bloodblade(kit: Spells, a: ArtifactStats, power: number, _at: THREE.Vec
 }
 
 export const BASE_BLOOD = {
-  bloodclaws: { school: 'blood', tier: 'common', title: 'Малиновые когти', cast: bloodclaws },
-  bloodswarm: { school: 'blood', tier: 'common', title: 'Рой малинок', cast: bloodswarm },
-  bloodblade: { school: 'blood', tier: 'common', title: 'Малиновый клинок', cast: bloodblade },
+  bloodclaws: { school: 'blood', tier: 'common', title: t('Raspberry claws'), cast: bloodclaws },
+  bloodswarm: { school: 'blood', tier: 'common', title: t('Berry swarm'), cast: bloodswarm },
+  bloodblade: { school: 'blood', tier: 'common', title: t('Raspberry blade'), cast: bloodblade },
 } satisfies Partial<Record<BossSpellKind, Spell>>;

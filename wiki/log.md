@@ -432,3 +432,7 @@ Pages: [design-multiplayer.md](design-multiplayer.md), [dev-performance.md](dev-
 ## [2026-11-04] code | Network: Safari could not connect to /game — compression without imposed client parameters
 Safari offers bare `permessage-deflate`, and `ws` with a hard `clientMaxWindowBits` rejected all offers and answered 400 — there was no battle connection. Client parameters are no longer imposed (`DEFLATE` in `game-hub.ts`), compression is negotiated with both Chrome and Safari. Test `game-hub.test.ts`: the handshake with three kinds of offers.
 Pages: [design-multiplayer.md](design-multiplayer.md).
+
+## [2026-11-05] code | English code base, bilingual interface, MIT licence
+All comments, identifiers-as-strings, server messages, tests, scripts, Makefile and AGENTS.md are English; the wiki and the commit history were translated earlier. Every user-visible string goes through `t()` (`src/i18n/i18n.ts`), the Russian dictionary `src/i18n/ru.ts` (≈2000 entries) was built from the original Russian text. The main menu asks for the language on the first visit and keeps it in localStorage `malina.lang`; Settings have a Language row. Hero states, weapon categories and rarities, prefab groups and block/decor categories became English ids; maps and the preset library were regenerated with English titles. README in English and Russian, LICENSE — MIT.
+Pages: [project-brief.md](project-brief.md), [design-main-menu.md](design-main-menu.md), [index.md](index.md).

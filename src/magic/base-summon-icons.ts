@@ -1,9 +1,9 @@
 import type { Draw } from '../icons.ts';
 
-/** Пиксельные иконки 16 × 16 для src/magic/base-summon.ts */
+/** Pixel icons 16 × 16 for src/magic/base-summon.ts */
 export const ICONS: Record<string, Draw> = {
   wolves(p) {
-    // голова волка-духа в профиль: бирюзовая шерсть, светящийся глаз, грива
+    // spirit wolf head in profile: turquoise fur, glowing eye, mane
     p.s(1, 2, [
       '...a..a.......',
       '..aba.aba.....',
@@ -21,7 +21,7 @@ export const ICONS: Record<string, Draw> = {
     p.p(13, 13, '#5ad8b8'); p.p(14, 11, '#a8ffe0');
   },
   elemental(p) {
-    // огненное ядро в оболочке и три кубика-спутника стихий
+    // fire core in a shell and three elemental satellite cubes
     p.s(4, 4, [
       '..aaaa..',
       '.abbbba.',
@@ -37,7 +37,7 @@ export const ICONS: Record<string, Draw> = {
     p.r(7, 13, 2, 2, '#ffe24a'); p.p(8, 13, '#ffffff');
   },
   golem(p) {
-    // каменный голем: квадратная голова, бирюзовые глаза и руна, мох на плечах
+    // stone golem: square head, turquoise eyes and a rune, moss on the shoulders
     p.s(2, 1, [
       '....aaaa....',
       '....abba....',

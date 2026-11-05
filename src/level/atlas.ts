@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { textureByName, type Textures } from '../textures.ts';
 
 /**
- * Атлас текстур блоков: все тайлы 16 × 16 из textures.ts складываются в одну картинку,
- * чтобы чанк рисовался одним вызовом. Каждый тайл лежит в слоте 32 × 32 с полями из
- * растянутых краёв — мип-уровни тогда не подмешивают соседей.
+ * Block texture atlas: all 16 × 16 tiles from textures.ts are packed into one image
+ * so a chunk is drawn with a single call. Each tile sits in a 32 × 32 slot with margins of
+ * stretched edges — mip levels then do not blend in neighbours.
  */
 
 export interface TileUV { u0: number; v0: number; u1: number; v1: number }
@@ -21,13 +21,13 @@ export class Atlas {
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const g = c.getContext('2d');
-    if (!g) throw new Error('Canvas 2D недоступен');
+    if (!g) throw new Error('Canvas 2D is unavailable');
     g.imageSmoothingEnabled = false;
     names.forEach((name, i) => {
       const img = textureByName(T, name).image as HTMLCanvasElement;
       const sx = (i % cols) * SLOT + PAD, sy = Math.floor(i / cols) * SLOT + PAD;
       const w = img.width, h = img.height;
-      // поля: края тайла растянуты наружу
+      // margins: the tile edges are stretched outwards
       g.drawImage(img, 0, 0, w, 1, sx - PAD, sy - PAD, TILE + PAD * 2, PAD);
       g.drawImage(img, 0, h - 1, w, 1, sx - PAD, sy + TILE, TILE + PAD * 2, PAD);
       g.drawImage(img, 0, 0, 1, h, sx - PAD, sy - PAD, PAD, TILE + PAD * 2);
@@ -44,7 +44,7 @@ export class Atlas {
 
   uv(name: string): TileUV {
     const t = this.tiles.get(name);
-    if (!t) throw new Error(`Текстуры «${name}» нет в атласе`);
+    if (!t) throw new Error(`Texture "${name}" is not in the atlas`);
     return t;
   }
 }

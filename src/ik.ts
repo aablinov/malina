@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-/** Двухзвенная IK: вернуть локоть (колено) для плеча s, цели t и подсказки направления pole */
+/** Two-bone IK: return the elbow (knee) for shoulder s, target t and the direction hint pole */
 export function solveIK(s: THREE.Vector3, t: THREE.Vector3, a: number, b: number, pole: THREE.Vector3, outElbow: THREE.Vector3): void {
   const dir = new THREE.Vector3().subVectors(t, s);
   let d = dir.length();
@@ -15,7 +15,7 @@ export function solveIK(s: THREE.Vector3, t: THREE.Vector3, a: number, b: number
 }
 
 const DOWN = new THREE.Vector3(0, -1, 0);
-/** Повернуть сегмент (ось −Y) из точки from в точку to */
+/** Rotate a segment (the −Y axis) from point from to point to */
 export function aimSegment(o: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3): void {
   o.position.copy(from);
   const d = new THREE.Vector3().subVectors(to, from);

@@ -1,7 +1,8 @@
 import type { Boss } from './kit.ts';
 import './bosses.css';
+import { t } from '../i18n/i18n.ts';
 
-/** Полоса стража сверху экрана: имя, «страж малины», здоровье и жёлтый след, который догоняет его с задержкой */
+/** Warden bar at the top of the screen: name, "raspberry warden", health and a yellow trail that catches up with a delay */
 export class BossBar {
   readonly el = document.createElement('div');
   private readonly fill: HTMLElement;
@@ -35,11 +36,11 @@ export class BossBar {
   update(dt: number): void {
     const b = this.boss;
     if (!b) return;
-    // подпись: «страж малины · ур. 5 · игроков 2» — меняется, если масштаб сменили посреди боя
+    // caption: "raspberry warden · lv. 5 · 2 players" — changes if the scale was switched mid-fight
     const key = `${b.scale.level}/${b.scale.players}`;
     if (key !== this.scaleKey) {
       this.scaleKey = key;
-      (this.el.querySelector('i') as HTMLElement).textContent = `${b.subtitle} · ур. ${b.scale.level}${b.scale.players > 1 ? ` · игроков ${b.scale.players}` : ''}`;
+      (this.el.querySelector('i') as HTMLElement).textContent = b.scale.players > 1 ? t('{subtitle} · lv. {level} · {players} players', { subtitle: b.subtitle, level: b.scale.level, players: b.scale.players }) : t('{subtitle} · lv. {level}', { subtitle: b.subtitle, level: b.scale.level });
     }
     const k = Math.max(0, b.hp / b.maxHp);
     if (k < this.lastK) this.holdT = 0.6;

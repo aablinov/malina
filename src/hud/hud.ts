@@ -1,33 +1,34 @@
+import { t } from '../i18n/i18n.ts';
 import { iconImg, iconURL } from '../icons.ts';
 import { itemDef, MAX_SOULS, xpToNext, type Profile } from '../items.ts';
 import { AutoMap, type MapMarker, type MapView } from './automap.ts';
 import './hud.css';
 
 /**
- * HUD как в Minecraft Dungeons (wiki/design-inventory.md): снизу по центру тёмная панель —
- * очки зачарования, инвентарь (I), три артефакта (1, 2, 3) с полосой душ под ними, большое сердце здоровья
- * с жизнями, зелье (E), карта (M), перекат (Space), стрелы в шестиугольнике (ПКМ), справа малина; под правой
- * половиной — полоса опыта с уровнем. Слева сверху — действующие эффекты, справа сверху — задание и мини-карта.
- * Карта (src/hud/automap.ts): мини-карта в углу, Tab — прозрачная поверх игры (как в Diablo II), M — полная (как в MCD).
- * Только отображение: числа приходят из профиля (src/items.ts) и из сцены (HudState) каждый кадр.
+ * HUD like in Minecraft Dungeons (wiki/design-inventory.md): a dark bar at the bottom centre —
+ * enchantment points, inventory (I), three artifacts (1, 2, 3) with the souls bar under them, a big health heart
+ * with lives, potion (E), map (M), dodge roll (Space), arrows in a hexagon (RMB), raspberries on the right; under the right
+ * half — the experience bar with the level. Top left — active effects, top right — the goal and the mini-map.
+ * Map (src/hud/automap.ts): mini-map in the corner, Tab — translucent over the game (like Diablo II), M — full (like MCD).
+ * Display only: the numbers come from the profile (src/items.ts) and from the scene (HudState) every frame.
  */
 
-export interface HudBuff { icon: string; name: string; /** Осталось, с */ t?: number; count?: number; color?: string }
+export interface HudBuff { icon: string; name: string; /** Remaining, s */ t?: number; count?: number; color?: string }
 
 export interface HudState {
   hp: number;
   maxHp: number;
   lives: number;
-  /** Перезарядки: осталось, с, и полная длительность */
+  /** Cooldowns: remaining, s, and full duration */
   potion: [number, number];
   roll: [number, number];
   artifacts: [number, number][];
-  /** Артефакт сейчас действует (тотем стоит, сапоги бегут) */
+  /** The artifact is active now (the totem stands, the boots run) */
   active: boolean[];
   buffs: HudBuff[];
-  /** Спец-удар оружия (Q): шкала 0..1, название, цвет закалки, иконка оружия; active — идёт сейчас */
+  /** Weapon art (Q): meter 0..1, title, temper colour, weapon icon; active — running now */
   spec?: { title: string; meter: number; color: string; icon: string; active: boolean };
-  /** Аура: шкала 0..1, осталось вспышки, с; null — гнездо пустое */
+  /** Aura: meter 0..1, flare remaining, s; null — the slot is empty */
   aura?: { icon: string; title: string; meter: number; flare: number; color: string } | null;
 }
 
@@ -38,10 +39,10 @@ export class Hud {
   private readonly cache = new Map<string, string>();
   private mapEl: HTMLDivElement;
   private automap: AutoMap | null = null;
-  /** Карта поверх игры (Tab) */
+  /** Map over the game (Tab) */
   overlay = false;
   private bannerT = 0;
-  /** Сколько малины было на прошлом кадре — чтобы счётчик подпрыгнул, когда прибавилось */
+  /** Raspberries on the previous frame — so the counter bumps when some were added */
   private berriesShown = Infinity;
   onInventory?: () => void;
   onMap?: () => void;
@@ -62,13 +63,13 @@ export class Hud {
       <div class="hud-banner" data-id="banner"></div>
       <div class="hud-bar">
         <div class="hud-plate"></div>
-        <div class="hud-points" title="Очки зачарования">${iconImg('spiral')}<b data-id="points">0</b></div>
-        ${slot('hud-inv', 'I', iconImg('chest')).replace('class="hud-slot', 'data-act="inv" title="Инвентарь (I)" class="hud-slot')}
+        <div class="hud-points" title="${t('Enchantment points')}">${iconImg('spiral')}<b data-id="points">0</b></div>
+        ${slot('hud-inv', 'I', iconImg('chest')).replace('class="hud-slot', `data-act="inv" title="${t('Inventory (I)')}" class="hud-slot`)}
         <div class="hud-arts">
           <div class="hud-artrow">${[0, 1, 2].map((i) => slot(`hud-art`, String(i + 1), '<img class="px hud-ico" alt="" draggable="false"><span class="hud-plus">+</span>').replace('class="hud-slot', `data-act="art${i}" class="hud-slot`)).join('')}${slot('hud-aura', 'R', '<div class="hud-aurafill"></div><img class="px hud-ico" alt="" draggable="false"><span class="hud-plus">+</span>').replace('class="hud-slot', 'data-act="aura" class="hud-slot')}</div>
-          <div class="hud-souls" title="Души">${iconImg('soul')}<div class="hud-track"><div class="hud-fill" data-id="souls"></div></div></div>
+          <div class="hud-souls" title="${t('Souls')}">${iconImg('soul')}<div class="hud-track"><div class="hud-fill" data-id="souls"></div></div></div>
         </div>
-        <div class="hud-heart" title="Здоровье">
+        <div class="hud-heart" title="${t('Health')}">
           <div class="hud-heart-frame"><div class="hud-heart-in">
             <div class="hud-heart-icon"><img class="px hud-heart-bg" src="${iconURL('heart')}" alt="">
             <div class="hud-heart-clip" data-id="hpClip"><img class="px" src="${iconURL('heart')}" alt=""></div></div>
@@ -78,22 +79,22 @@ export class Hud {
         </div>
         <div class="hud-right">
           <div class="hud-row">
-            ${slot('hud-potion', 'E', iconImg('potion')).replace('class="hud-slot', 'data-act="potion" title="Зелье здоровья (E)" class="hud-slot')}
-            ${slot('hud-map', 'M', iconImg('map')).replace('class="hud-slot', 'data-act="map" title="Карта (M)" class="hud-slot')}
-            <div class="hud-slot hud-spec" data-act="spec" title="Спец-удар (Q)"><div class="hud-aurafill"></div><img class="px hud-ico" alt="" draggable="false"><kbd>Q</kbd></div>
-            <div class="hud-roll" title="Перекат (Space)">${iconImg('roll')}<div class="hud-cd"></div><kbd>␣</kbd></div>
-            <div class="hud-ammo" title="Стрелы: ПКМ — выстрел"><b data-id="arrows">0</b><div class="hud-hex"><div class="hud-hex-in">${iconImg('arrows')}</div></div>${iconImg('mouse', 'hud-mouse')}</div>
+            ${slot('hud-potion', 'E', iconImg('potion')).replace('class="hud-slot', `data-act="potion" title="${t('Health potion (E)')}" class="hud-slot`)}
+            ${slot('hud-map', 'M', iconImg('map')).replace('class="hud-slot', `data-act="map" title="${t('Map (M)')}" class="hud-slot`)}
+            <div class="hud-slot hud-spec" data-act="spec" title="${t('Weapon art (Q)')}"><div class="hud-aurafill"></div><img class="px hud-ico" alt="" draggable="false"><kbd>Q</kbd></div>
+            <div class="hud-roll" title="${t('Dodge roll (Space)')}">${iconImg('roll')}<div class="hud-cd"></div><kbd>␣</kbd></div>
+            <div class="hud-ammo" title="${t('Arrows: RMB — shoot')}"><b data-id="arrows">0</b><div class="hud-hex"><div class="hud-hex-in">${iconImg('arrows')}</div></div>${iconImg('mouse', 'hud-mouse')}</div>
           </div>
-          <div class="hud-xp" title="Опыт"><span data-id="lv">LV 1</span><div class="hud-track"><div class="hud-fill" data-id="xp"></div></div></div>
+          <div class="hud-xp" title="${t('Experience')}"><span data-id="lv">LV 1</span><div class="hud-track"><div class="hud-fill" data-id="xp"></div></div></div>
         </div>
-        <div class="hud-berries" title="Малина">${iconImg('berry')}<b data-id="berries">0</b></div>
+        <div class="hud-berries" title="${t('Raspberries')}">${iconImg('berry')}<b data-id="berries">0</b></div>
       </div>
-      <div class="hud-minibox" data-act="map" title="Карта (M) · Tab — поверх игры"><canvas data-id="mini"></canvas></div>
+      <div class="hud-minibox" data-act="map" title="${t('Map (M) · Tab — over the game')}"><canvas data-id="mini"></canvas></div>
       <canvas class="hud-over" data-id="over"></canvas>
       <div class="hud-mapwrap" data-id="map">
         <div class="hud-mapframe">
           <h2 data-id="mapTitle"></h2>
-          <button class="hud-mapx" data-act="map" title="Закрыть (M)">✕</button>
+          <button class="hud-mapx" data-act="map" title="${t('Close (M)')}">✕</button>
           <canvas data-id="full"></canvas>
           <div class="hud-mapstats" data-id="mapStats"></div>
         </div>
@@ -116,7 +117,7 @@ export class Hud {
 
   private q(id: string): HTMLElement {
     const e = this.el.querySelector<HTMLElement>(`[data-id="${id}"]`);
-    if (!e) throw new Error(`HUD: нет ${id}`);
+    if (!e) throw new Error(`HUD: no ${id}`);
     return e;
   }
 
@@ -128,7 +129,7 @@ export class Hud {
 
   setGoal(title: string, sub: string): void { this.set('goal', title); this.set('goalSub', sub); }
 
-  /** Крупная надпись по центру сверху: «Новый уровень», «Найдено: …» */
+  /** Large caption at the top centre: "New level", "Found: …" */
   banner(html: string, sec = 2.2): void {
     const b = this.q('banner');
     b.innerHTML = html;
@@ -140,16 +141,16 @@ export class Hud {
 
   get mapOpen(): boolean { return this.mapEl.classList.contains('open'); }
 
-  /** Подключить карту уровня и её название (заголовок полной карты) */
+  /** Attach the level map and its name (the full map's title) */
   setMap(m: AutoMap, title: string): void { this.automap = m; this.set('mapTitle', title); }
 
-  /** Полная карта (M) */
+  /** Full map (M) */
   toggleMap(): void { if (this.automap) this.mapEl.classList.toggle('open'); }
 
-  /** Карта поверх игры (Tab) */
+  /** Map over the game (Tab) */
   toggleOverlay(): void { this.overlay = !this.overlay; }
 
-  /** Холст под размер на экране (с учётом плотности пикселей); false — не виден */
+  /** Canvas sized to its on-screen size (pixel density included); null — not visible */
   private fitCanvas(id: string): CanvasRenderingContext2D | null {
     const c = this.q(id) as HTMLCanvasElement;
     const w = c.clientWidth, h = c.clientHeight;
@@ -163,7 +164,7 @@ export class Hud {
     return g;
   }
 
-  /** Нарисовать карты: мини, поверх игры, полную; chests — [открыто, всего] */
+  /** Draw the maps: mini, over the game, full; chests — [opened, total] */
   drawMaps(hero: MapView, markers: MapMarker[], chests: [number, number]): void {
     const m = this.automap;
     if (!m) return;
@@ -181,7 +182,7 @@ export class Hud {
         const f = m.fit(g.canvas.width, g.canvas.height);
         m.draw(g, f.ox, f.oz, g.canvas.width / 2, g.canvas.height / 2, f.k, hero, markers);
       }
-      this.set('mapStats', `<div>${iconImg('chest')}Сундуков открыто <b>${chests[0]} / ${chests[1]}</b></div><div>${iconImg('map')}Исследовано <b>${Math.round(m.explored * 100)} %</b></div>`);
+      this.set('mapStats', `<div>${iconImg('chest')}${t('Chests opened <b>{opened} / {total}</b>', { opened: chests[0], total: chests[1] })}</div><div>${iconImg('map')}${t('Explored <b>{pct} %</b>', { pct: Math.round(m.explored * 100) })}</div>`);
     }
   }
 
@@ -189,7 +190,7 @@ export class Hud {
     const p = this.profile.data;
     this.set('points', String(p.points));
     this.set('berries', String(p.berries));
-    // малины прибавилось — счётчик подпрыгивает
+    // raspberries were added — the counter bumps
     if (p.berries > this.berriesShown) {
       const el = this.q('berries').parentElement as HTMLElement;
       el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
@@ -212,46 +213,46 @@ export class Hud {
       const icon = it ? itemDef(it.def).icon : '';
       if (img && img.dataset.icon !== icon) { img.dataset.icon = icon; img.src = icon ? iconURL(icon) : ''; }
       el.classList.toggle('empty', !it);
-      el.title = it ? `${itemDef(it.def).title} (${i + 1})` : `Пустое гнездо артефакта (${i + 1})`;
-      const [t, full] = s.artifacts[i] ?? [0, 1];
-      this.cooldown(el, t, full);
+      el.title = it ? `${itemDef(it.def).title} (${i + 1})` : t('Empty artifact slot ({n})', { n: i + 1 });
+      const [left, full] = s.artifacts[i] ?? [0, 1];
+      this.cooldown(el, left, full);
       el.classList.toggle('active', !!s.active[i]);
       el.classList.toggle('souls', !!it && !!itemDef(it.def).artifact?.souls && p.souls < (itemDef(it.def).artifact?.souls ?? 0));
     });
-    // аура: шкала поднимается снизу цветом ауры; полная — светится и ждёт R; во время вспышки убывает
+    // aura: the meter rises from the bottom in the aura colour; full — glows and waits for R; drains during the flare
     const au = s.aura ?? null, ael = this.el.querySelector<HTMLElement>('.hud-aura');
     if (ael) {
       const img = ael.querySelector<HTMLImageElement>('.hud-ico');
       const icon = au?.icon ?? '';
       if (img && img.dataset.icon !== icon) { img.dataset.icon = icon; img.src = icon ? iconURL(icon) : ''; }
       ael.classList.toggle('empty', !au);
-      ael.title = au ? `${au.title} (R) — шкала ${Math.floor(au.meter * 100)} %` : 'Пустое гнездо ауры (R)';
+      ael.title = au ? t('{title} (R) — meter {pct} %', { title: au.title, pct: Math.floor(au.meter * 100) }) : t('Empty aura slot (R)');
       const fill = ael.querySelector<HTMLElement>('.hud-aurafill');
       const k = au ? (au.flare > 0 ? au.flare / 5 : au.meter) : 0;
       if (fill) { fill.style.height = `${k * 100}%`; fill.style.setProperty('--c', au?.color ?? '#555'); }
       ael.classList.toggle('ready', !!au && au.flare <= 0 && au.meter >= 1);
       ael.classList.toggle('flaring', !!au && au.flare > 0);
     }
-    // спец-удар: шкала цветом закалки, полная — светится и ждёт Q
+    // weapon art: the meter in the temper colour; full — glows and waits for Q
     const sp = s.spec, sel = this.el.querySelector<HTMLElement>('.hud-spec');
     if (sel && sp) {
       const img = sel.querySelector<HTMLImageElement>('.hud-ico');
       if (img && img.dataset.icon !== sp.icon) { img.dataset.icon = sp.icon; img.src = iconURL(sp.icon); }
       const fill = sel.querySelector<HTMLElement>('.hud-aurafill');
       if (fill) { fill.style.height = `${Math.min(1, sp.meter) * 100}%`; fill.style.setProperty('--c', sp.color); }
-      sel.title = `${sp.title} (Q) — шкала ${Math.floor(sp.meter * 100)} %`;
+      sel.title = t('{title} (Q) — meter {pct} %', { title: sp.title, pct: Math.floor(sp.meter * 100) });
       sel.classList.toggle('ready', sp.meter >= 1);
       sel.classList.toggle('flaring', sp.active);
     }
     this.cooldown(this.el.querySelector('.hud-potion') as HTMLElement, s.potion[0], s.potion[1]);
     this.cooldown(this.el.querySelector('.hud-roll') as HTMLElement, s.roll[0], s.roll[1], false);
 
-    this.set('buffs', s.buffs.map((b) => `<div class="hud-buff"><div class="hud-buff-ico" style="--c:${b.color ?? '#7a5cff'}">${iconImg(b.icon)}</div><span>${b.count !== undefined ? `<b>×${b.count}</b> ` : ''}${b.name}${b.t !== undefined ? ` <i>${Math.ceil(b.t)} с</i>` : ''}</span></div>`).join(''));
+    this.set('buffs', s.buffs.map((b) => `<div class="hud-buff"><div class="hud-buff-ico" style="--c:${b.color ?? '#7a5cff'}">${iconImg(b.icon)}</div><span>${b.count !== undefined ? `<b>×${b.count}</b> ` : ''}${b.name}${b.t !== undefined ? ` <i>${t('{n} s', { n: Math.ceil(b.t) })}</i>` : ''}</span></div>`).join(''));
 
     if (this.bannerT > 0) { this.bannerT -= dt; if (this.bannerT <= 0) this.q('banner').classList.remove('show'); }
   }
 
-  /** Тёмная заливка перезарядки (убывает сверху вниз) и секунды */
+  /** Dark cooldown fill (drains from top to bottom) and the seconds */
   private cooldown(el: HTMLElement, t: number, full: number, num = true): void {
     const k = full > 0 ? Math.max(0, Math.min(1, t / full)) : 0;
     const cd = el.querySelector<HTMLElement>('.hud-cd');

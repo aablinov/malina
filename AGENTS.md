@@ -1,18 +1,18 @@
-# Малина — заметки для агентов
+# Malina — notes for agents
 
-Игра и код описаны в `README.md`, знания проекта — в вики `wiki/` (правила ведения — `wiki/CLAUDE.md`, оглавление — `wiki/index.md`).
+The game and the code are described in `README.md`, project knowledge lives in the wiki `wiki/` (editing rules — `wiki/CLAUDE.md`, table of contents — `wiki/index.md`).
 
-## Запуск
+## Running
 
-`make dev` — сервер и клиент Vite вместе, `make play` — сборка и один сервер с игрой, `make check` — типы и `test:net` (цели в `Makefile`).
+`make dev` — server and Vite client together, `make play` — build and one server with the game, `make check` — types and `test:net` (targets in `Makefile`).
 
-## Тесты — всегда так
+## Tests — always like this
 
 ```bash
 mise exec -- npm run build
 PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise exec -- npx playwright test
 ```
 
-- Node — только через `mise exec` (версия в `mise.toml`).
-- Браузер — установленный Google Chrome через `PW_CHROMIUM`. **Не запускать `npx playwright install`**: в песочнице нет сети, загрузка виснет. Подробности и как убрать недокачанное — `wiki/dev-testing.md`.
-- Прогон ≈ 2 минуты — запускать в фоне.
+- Node — only via `mise exec` (version in `mise.toml`).
+- Browser — the installed Google Chrome via `PW_CHROMIUM`. **Do not run `npx playwright install`**: the sandbox has no network, the download hangs. Details and how to remove a partial download — `wiki/dev-testing.md`.
+- A run takes ≈ 2 minutes — run it in the background.

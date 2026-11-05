@@ -4,19 +4,20 @@ import { pixelTex } from '../textures.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
 import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit.ts';
 import { Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Звери Ордена (wiki/design-mobs.md, семья E): ягодный кабанчик, жук-ягодник, лозоплёт, улей со шмелями.
- * Малиновый волк — в critters.ts.
+ * Beasts of the Order (wiki/design-mobs.md, family E): berry boarlet, berry beetle, vine weaver, hive with bumblebees.
+ * The raspberry wolf is in critters.ts.
  */
 
 const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x += (x - o.rotation.x) * k; };
 const WEB = C(1.2, 2.4, 0.8);
 
-/** 22. Ягодный кабанчик — таран: разгон по полосе, сбивает с ног и бежит дальше; врезался в стену — оглушён */
+/** 22. Berry Boarlet — ram: a charge along a strip, knocks the hero down and runs on; hit a wall — stunned */
 export class Boarlet extends Mob {
   readonly kind = 'boarlet';
-  readonly title = 'Ягодный кабанчик';
+  readonly title = t('Berry Boarlet');
   readonly cost = 4;
   readonly radius = 0.55;
   override readonly topY = 1.3;
@@ -36,7 +37,7 @@ export class Boarlet extends Mob {
     const snout = this.lam('#e0a0a0'), tusk = this.lam('#f4ecd8'), hoof = this.lam('#3a2a24'), eye = this.shimmer(C(3.4, 1.4, 2), RASP, 0, 2);
     const B = this.box.bind(this);
     B(this.body, hide, 0.7, 0.62, 1.1, 0, 0.72, 0);
-    // малиновая щетина гребнем и попона-лист с ягодой Ордена
+    // a raspberry bristle crest and a leaf caparison with the Order's berry
     for (let i = 0; i < 4; i++) B(this.body, bristle, 0.18, 0.16, 0.2, 0, 1.08, 0.36 - i * 0.24);
     B(this.body, this.lam('#5aa03a'), 0.74, 0.08, 0.5, 0, 1.04, -0.12);
     B(this.body, bristle, 0.16, 0.16, 0.04, 0.38, 0.8, 0, 0, Math.PI / 2, 0);
@@ -67,7 +68,7 @@ export class Boarlet extends Mob {
       if (!this.quiet) voice({ type: 'sawtooth', f: 120, f1: 180, dur: 0.6, vol: 0.05, lp: 900 });
       this.field.markLine(this.pos.clone(), this.dir, 10, 1.3, 0.8, () => undefined);
     }
-    // роет копытом 0,8 с — и несётся 10 м
+    // paws the ground for 0.8 s — and charges 10 m
     if (t < 0.8) { if (rnd() < 0.3) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#8a6a40', gravity: 6 }); return false; }
     const blocked = this.dash(this.dir, 10, dt);
     this.ran += 10 * dt;
@@ -87,23 +88,23 @@ export class Boarlet extends Mob {
     const s = this.stride(run ? 22 : 12), a = run || walk ? s * 0.7 : 0;
     lerpTo(this.legs[0], a, k); lerpTo(this.legs[3], a, k);
     lerpTo(this.legs[1], -a, k); lerpTo(this.legs[2], -a, k);
-    // роет землю — голова вниз; бежит — голова вперёд-вниз, клыками
+    // paws the ground — head down; running — head forward and down, tusks first
     this.head.rotation.x = this.state === 'attack' ? 0.3 : 0;
     this.body.rotation.x = this.state === 'attack' && !run ? Math.sin(this.time * 18) * 0.05 : 0;
     this.head.rotation.y = this.state === 'daze' ? Math.sin(this.time * 18) * 0.4 : 0;
   }
 }
 
-/** 23. Жук-ягодник — засада: зарывается, бугор ползёт к герою, выныривает по метке; вынырнул — открыт */
+/** 23. Berry Beetle — ambush: burrows, a mound crawls toward the hero, surfaces on a mark; surfaced — open */
 export class BurrowBeetle extends Mob {
   readonly kind = 'beetle';
-  readonly title = 'Жук-ягодник';
+  readonly title = t('Berry Beetle');
   readonly cost = 4;
   readonly radius = 0.5;
   override readonly topY = 1;
   private readonly legs: THREE.Group[];
   private readonly mound: THREE.Mesh;
-  /** Под землёй: не видно, удары мимо */
+  /** Underground: invisible, hits miss */
   burrowed = false;
 
   constructor(h: MobHooks, at: THREE.Vector3) {
@@ -114,7 +115,7 @@ export class BurrowBeetle extends Mob {
     const shell = this.lam('#b8204a', pixelTex('#b8204a', 12, 821)), drupe = this.lam('#e0306a'), dark = this.lam('#2a1a24');
     const leaf = this.lam('#5aa03a'), eye = this.shimmer(C(3.4, 2.6, 1), RASP, 0, 2);
     const B = this.box.bind(this);
-    // панцирь-ягода: купол из костянок, на макушке листики
+    // berry shell: a dome of drupelets, little leaves on top
     B(this.body, shell, 0.84, 0.42, 0.96, 0, 0.5, -0.04);
     for (const [x, z] of [[-0.24, 0.2], [0.24, 0.2], [-0.24, -0.2], [0.24, -0.2], [0, 0], [0, 0.36], [0, -0.38]] as const) B(this.body, drupe, 0.2, 0.12, 0.2, x, 0.74, z);
     B(this.body, leaf, 0.36, 0.05, 0.16, 0, 0.82, -0.3, 0, 0.6, 0);
@@ -142,7 +143,7 @@ export class BurrowBeetle extends Mob {
   protected override rest(): number { return rand(1.2, 2); }
 
   protected act(_name: string, t: number, dt: number): boolean {
-    // 0–0,4: зарывается; до 2,4 с бугор ползёт к герою; метка 0,5 с — выныривает; промах или нет — оглушён 1,2 с
+    // 0–0.4: burrows; until 2.4 s the mound crawls toward the hero; a 0.5 s mark — surfaces; miss or not — stunned 1.2 s
     if (t < 0.4) return false;
     if (t - dt < 0.4) { this.burrowed = true; if (!this.quiet) hiss({ dur: 0.4, vol: 0.12, f: 600, f1: 200, q: 0.5, type: 'lowpass' }); this.h.fx.burst(this.pos.clone().setY(0.2), ['#7a5a3a', '#5a4428'], 10, { speed: 2, up: 2.5, size: 0.1, life: 0.5, gravity: 8 }); }
     const hero = this.h.hero.pos, dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, d = Math.hypot(dx, dz);
@@ -179,10 +180,10 @@ export class BurrowBeetle extends Mob {
   }
 }
 
-/** 24. Лозоплёт — контроль: паук из лоз плетёт на полу сеть, она замедляет; вплотную кусает */
+/** 24. Vine Weaver — control: a spider of vines weaves a web on the floor that slows; bites up close */
 export class VineSpider extends Mob {
   readonly kind = 'spider';
-  readonly title = 'Лозоплёт';
+  readonly title = t('Vine Weaver');
   readonly cost = 4;
   readonly radius = 0.6;
   override readonly topY = 1.1;
@@ -226,7 +227,7 @@ export class VineSpider extends Mob {
       }
       return t > 0.6;
     }
-    // клубок лоз по дуге — на полу сеть 2,4 м на 5 с: замедляет на 45 %
+    // a ball of vines in an arc — a 2.4 m web on the floor for 5 s: slows by 45 %
     if (t >= 0.4 && t - dt < 0.4) {
       const to = this.heroAt();
       const ball = new THREE.Mesh(UNIT, glowMat(WEB));
@@ -246,15 +247,15 @@ export class VineSpider extends Mob {
     const s = this.stride(18);
     this.legs[0].rotation.x = walk ? s * 0.2 : 0;
     this.legs[1].rotation.x = walk ? -s * 0.2 : 0;
-    // плетёт — приподнимается на задних
+    // weaving — rises on its hind legs
     this.body.rotation.x = this.state === 'attack' && this.attack === 'web' && this.st < 0.4 ? -0.3 : 0;
   }
 }
 
-/** Шмель улья: мелкий, летит к герою и жалит; падает с одного удара */
+/** Hive bumblebee: tiny, flies to the hero and stings; falls from one hit */
 export class Bee extends Mob {
   readonly kind = 'bee';
-  readonly title = 'Шмель';
+  readonly title = t('Bumblebee');
   readonly cost = 0;
   readonly radius = 0.25;
   override readonly topY = 1.4;
@@ -297,10 +298,10 @@ export class Bee extends Mob {
   }
 }
 
-/** 25. Улей Ордена — спавнер: стоит на месте и выпускает шмелей, пока цел (не больше 5); пал улей — шмели падают */
+/** 25. Order Hive — spawner: stands in place and releases bumblebees while intact (no more than 5); the hive fell — the bumblebees fall */
 export class Hive extends Mob {
   readonly kind = 'hive';
-  readonly title = 'Улей Ордена';
+  readonly title = t('Order Hive');
   readonly cost = 5;
   readonly radius = 0.6;
   override readonly topY = 1.9;
@@ -316,7 +317,7 @@ export class Hive extends Mob {
     this.aggro = 10;
     const wood = this.lam('#7a5232'), straw = this.lam('#e0b850', pixelTex('#e0b850', 12, 841)), band = this.lam('#b08030'), dark = this.lam('#3a2414');
     const B = this.box.bind(this);
-    // пень-подставка, соломенный улей ступенями, леток, ягода Ордена на крыше
+    // a stump stand, a stepped straw hive, an entrance hole, the Order's berry on the roof
     B(this.body, wood, 0.7, 0.5, 0.7, 0, 0.25, 0);
     this.hive.position.y = 0.5;
     this.body.add(this.hive);
@@ -341,7 +342,7 @@ export class Hive extends Mob {
   protected override rest(): number { return 3.5; }
 
   protected act(_name: string, t: number, dt: number): boolean {
-    // улей гудит и трясётся — из летка вылетают два шмеля
+    // the hive buzzes and shakes — two bumblebees fly out of the entrance
     if (t >= 0.6 && t - dt < 0.6) {
       if (!this.quiet) voice({ type: 'sawtooth', f: 180, f1: 220, dur: 0.6, vol: 0.03, lp: 700 });
       for (let i = 0; i < Math.min(2, 5 - this.bees.length); i++) {

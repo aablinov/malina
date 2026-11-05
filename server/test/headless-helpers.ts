@@ -12,8 +12,8 @@ import type { Target } from '../../src/target.ts';
 import { loadMap } from './sim-helpers.ts';
 
 /**
- * Безголовый бой (wiki/design-multiplayer.md): те же классы героя, снаряжения и стаи, что в браузере, — в Node
- * со сценой без рендера и `nullFx`. Так сервер будет считать бой, а тесты — гонять настоящие волны без браузера
+ * Headless battle (wiki/design-multiplayer.md): the same hero, gear and pack classes as in the browser, in Node
+ * with a scene without rendering and `nullFx`. This is how the server will run the battle and tests will drive real waves without a browser
  */
 export interface HeadlessBattle {
   world: SimWorld;
@@ -23,9 +23,9 @@ export interface HeadlessBattle {
   input: KnightInput;
   terrain: Terrain;
   profile: Profile;
-  /** Шаг всего боя: снаряжение, герой, стая (внутри мира), оборона, кучки, таймеры fx */
+  /** Step of the whole battle: gear, hero, pack (inside the world), defence, piles, fx timers */
   step(dt?: number): void;
-  /** Урон героям от мобов (для проверок) */
+  /** Damage to heroes from mobs (for assertions) */
   heroHurt: number;
 }
 
@@ -80,7 +80,7 @@ export function headlessBattle(mapId: string, seed: number, o: { players?: numbe
   world = new SimWorld(hooks, { seed, level, td, players: o.players ?? 1, personal: false });
   world.td!.fund(0);
   hero.onStrike = (s) => {
-    // удар меча по целям в дуге — как в плейграунде, без эффектов
+    // sword strike on targets in the arc — as in the playground, without effects
     let n = 0;
     for (const t of targets()) {
       if (!t.alive) continue;

@@ -10,9 +10,9 @@ import { pixelTex } from '../../textures.ts';
 import { ARCANE, ARCANE_DEEP, EMBER, FIRE, ICE, ICE_DEEP, IRON, SNOW, STAR, STAR_DEEP, STONE, STONE_DARK, TAR, VOLT, WOOD, WOOD_DARK } from './colors.ts';
 
 /**
- * Башня обороны — вид (`t<площадка>`): модель из кубиков по роду и уровню (src/td/towers.ts), поворотная часть смотрит
- * по `yaw` из записи, лёд при `frozen`, руины при `hp ≤ 0`, полоска здоровья. Отдача — своя, по событию `tower.fire`.
- * Логика (цели, выстрелы, урон) — в src/sim/tower.ts; искры и звук выстрелов и попаданий — src/cgame/effects.ts
+ * Defence tower — view (`t<pad>`): a model of cubes per kind and level (src/td/towers.ts), the turning part looks
+ * along `yaw` from the record, ice when `frozen`, ruins at `hp ≤ 0`, a health bar. Recoil is its own, from the `tower.fire` event.
+ * Logic (targets, shots, damage) is in src/sim/tower.ts; sparks and sound of shots and hits — src/cgame/effects.ts
  */
 export class TowerView {
   readonly pos: THREE.Vector3;
@@ -27,9 +27,9 @@ export class TowerView {
   private readonly bar = new HpBar(1.6, 3.4);
   private time = 0;
   private readonly body = new THREE.Group();
-  /** Поворотная часть (арбалет, рычаг, кристалл) — смотрит на цель */
+  /** Turning part (crossbow, lever, crystal) — looks at the target */
   private readonly turret = new THREE.Group();
-  /** Подвижная деталь внутри поворотной: рычаг катапульты, парящая руна */
+  /** Moving piece inside the turning part: the catapult lever, the floating rune */
   private readonly arm = new THREE.Group();
   private readonly lamps: THREE.MeshLambertMaterial[] = [];
   private readonly glows: THREE.MeshBasicMaterial[] = [];
@@ -70,7 +70,7 @@ export class TowerView {
     this.bar.set(this.maxHp > 0 ? this.hp / this.maxHp : 0, !this.ruined && this.hp < this.maxHp);
   }
 
-  /** Руины: корпус покосился, лампы потухли; починены — всё на месте */
+  /** Ruins: the body leans, the lamps are out; repaired — everything back in place */
   private pose(ruined: boolean): void {
     this.body.rotation.z = ruined ? 0.22 : 0;
     this.turret.rotation.x = ruined ? 0.4 : 0;
@@ -90,7 +90,7 @@ export class TowerView {
     for (const m of this.glows) m.dispose();
   }
 
-  // ---------- модель ----------
+  // ---------- model ----------
   private lam(color: string, tex = true, seed = 0): THREE.MeshLambertMaterial {
     const m = new THREE.MeshLambertMaterial(tex ? { map: pixelTex(color, 10, 900 + seed + this.lamps.length) } : { color });
     this.lamps.push(m);
@@ -108,7 +108,7 @@ export class TowerView {
     return m;
   }
 
-  /** Собрать модель заново (постройка, улучшение) */
+  /** Rebuild the model (build, upgrade) */
   private build(): void {
     const yaw = this.turret.rotation.y;
     this.body.clear();
@@ -120,7 +120,7 @@ export class TowerView {
     for (const m of this.glows.splice(0)) m.dispose();
     const B = this.box.bind(this);
     const stone = this.lam(STONE), dark = this.lam(STONE_DARK);
-    // каменное основание: восьмиугольник из двух повёрнутых плит и бортик
+    // stone base: an octagon of two rotated slabs and a rim
     B(this.body, dark, 2.2, 0.3, 2.2, 0, 0.15, 0);
     B(this.body, dark, 2.2, 0.3, 2.2, 0, 0.15, 0, 0, Math.PI / 4, 0);
     B(this.body, stone, 1.7, 0.2, 1.7, 0, 0.4, 0);
@@ -137,7 +137,7 @@ export class TowerView {
       case 'winter': this.buildWinter(); break;
       default: this.buildArrow(); break;
     }
-    // знак уровня: малиновые ягоды-светильники на углах основания — одна, две
+    // level mark: raspberry lamp berries on the base corners — one, two
     const berry = this.glow(C(3.2, 0.5, 1.2));
     for (let i = 0; i < this.level - 1; i++) {
       const a = Math.PI / 4 + (i * Math.PI) / 2;
@@ -145,7 +145,7 @@ export class TowerView {
     }
   }
 
-  /** Стрелковая вышка: четыре столба, площадка с перилами, навес; на ней — арбалет на вертлюге */
+  /** Archer tower: four posts, a platform with railings, a canopy; on it a crossbow on a swivel */
   private buildArrow(): void {
     const B = this.box.bind(this);
     const wood = this.lam(WOOD), woodD = this.lam(WOOD_DARK), iron = this.lam(IRON, false);
@@ -169,7 +169,7 @@ export class TowerView {
     B(this.turret, this.glow(C(2.2, 2.0, 1.2)), 0.05, 0.05, 0.5, 0, 0.4, 0.3);
   }
 
-  /** Морозный шпиль: каменный постамент, ледяной кристалл из наклонных граней, осколки вокруг; кристалл поворачивается к цели */
+  /** Frost spire: a stone pedestal, an ice crystal of slanted faces, shards around; the crystal turns to the target */
   private buildFrost(): void {
     const B = this.box.bind(this);
     const stone = this.lam('#7f8ea0'), ice = this.glow(ICE), deep = this.glow(ICE_DEEP), rime = this.lam('#dceeff', false);
@@ -177,32 +177,32 @@ export class TowerView {
     B(this.body, stone, 0.7, 0.3, 0.7, 0, 1.15, 0, 0, Math.PI / 4, 0);
     this.turret.position.set(0, 1.3, 0);
     this.body.add(this.turret);
-    // главный кристалл: две призмы крестом, сужаются кверху; наклонён вперёд
+    // main crystal: two prisms crosswise, tapering upward; tilted forward
     const h = 1.6 + this.level * 0.25;
     B(this.turret, deep, 0.5, h, 0.5, 0, h / 2, 0, 0.18, Math.PI / 4, 0);
     B(this.turret, ice, 0.3, h * 1.15, 0.3, 0, h * 0.55, 0.05, 0.22, 0, 0);
     B(this.turret, ice, 0.14, 0.4, 0.14, 0, h * 1.12, 0.2, 0.3, Math.PI / 4, 0);
-    // осколки по кругу: больше с уровнем
+    // shards in a circle: more with the level
     for (let i = 0; i < 3 + this.level * 2; i++) {
       const a = (i / (3 + this.level * 2)) * Math.PI * 2, r = 0.7 + (i % 2) * 0.2;
       B(this.body, i % 3 === 0 ? ice : deep, 0.16, 0.4 + (i % 2) * 0.3, 0.16, Math.cos(a) * r, 0.7, Math.sin(a) * r, Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3);
     }
-    // иней на постаменте
+    // rime on the pedestal
     for (const s of [-1, 1]) B(this.body, rime, 0.5, 0.06, 0.2, s * 0.3, 1.02, 0.4);
   }
 
-  /** Катапульта: рама из брёвен, рычаг с ковшом и противовесом; рычаг отбрасывает камень */
+  /** Catapult: a log frame, a lever with a bucket and a counterweight; the lever flings the rock */
   private buildSplash(): void {
     const B = this.box.bind(this);
     const wood = this.lam(WOOD), woodD = this.lam(WOOD_DARK), iron = this.lam(IRON, false), rock = this.lam('#6a6a70');
     this.turret.position.set(0, 0.5, 0);
     this.body.add(this.turret);
-    // станина с колёсами, две стойки с осью
+    // a carriage with wheels, two uprights with an axle
     B(this.turret, woodD, 1.3, 0.16, 0.5, 0, 0.1, -0.2);
     for (const s of [-1, 1]) { B(this.turret, woodD, 0.2, 0.5, 0.2, s * 0.55, 0.3, -0.5, 0, 0, 0); B(this.turret, woodD, 0.16, 1.0, 0.16, s * 0.4, 0.6, -0.2, 0.3, 0, 0); }
     B(this.turret, iron, 1.0, 0.1, 0.1, 0, 1.05, -0.35);
     for (const s of [-1, 1]) B(this.turret, wood, 0.12, 0.5, 0.5, s * 0.72, 0.25, -0.2, 0, 0, 0);
-    // рычаг на оси: ковш впереди, противовес сзади; в покое ковш опущен назад (взведён)
+    // the lever on the axle: bucket in front, counterweight behind; at rest the bucket is lowered back (cocked)
     this.arm.position.set(0, 1.05, -0.35);
     this.turret.add(this.arm);
     B(this.arm, wood, 0.14, 0.14, 2.0, 0, 0, 0.4);
@@ -212,18 +212,18 @@ export class TowerView {
     if (this.level >= 2) B(this.arm, iron, 0.6, 0.6, 0.3, 0, -0.1, -0.75);
     if (this.level >= 3) B(this.turret, this.lam('#d8285a', false), 0.5, 0.3, 0.03, 0.9, 1.35, -0.4);
     this.arm.rotation.x = 0.7;
-    // запас камней у основания
+    // a stock of rocks at the base
     for (const [x, z] of [[0.75, 0.55], [0.55, 0.75], [0.68, 0.72]]) B(this.body, rock, 0.26, 0.26, 0.26, x, 0.63, z);
   }
 
-  /** Огненная жаровня: железная чаша на каменных ногах, в ней угли и пламя; чаша с носиком поворачивается к цели */
+  /** Fire brazier: an iron bowl on stone legs, embers and flame in it; the bowl with a spout turns to the target */
   private buildFire(): void {
     const B = this.box.bind(this);
     const iron = this.lam(IRON, false), stone = this.lam(STONE_DARK), coal = this.glow(EMBER), flame = this.glow(FIRE);
     for (let i = 0; i < 4; i++) { const a = Math.PI / 4 + (i * Math.PI) / 2; B(this.body, stone, 0.26, 0.7, 0.26, Math.cos(a) * 0.5, 0.85, Math.sin(a) * 0.5, 0, a, 0); }
     this.turret.position.set(0, 1.2, 0);
     this.body.add(this.turret);
-    // чаша: кольцо из четырёх стенок и дно, угли сверху, носик вперёд
+    // bowl: a ring of four walls and a bottom, embers on top, the spout forward
     B(this.turret, iron, 1.1, 0.12, 1.1, 0, 0, 0);
     for (const s of [-1, 1]) { B(this.turret, iron, 1.2, 0.5, 0.1, 0, 0.25, s * 0.55); B(this.turret, iron, 0.1, 0.5, 1.2, s * 0.55, 0.25, 0); }
     B(this.turret, coal, 0.9, 0.3, 0.9, 0, 0.25, 0);
@@ -233,11 +233,11 @@ export class TowerView {
     B(this.turret, iron, 0.5, 0.24, 0.1, 0, 0.3, 1.0);
     if (this.level >= 2) B(this.turret, iron, 1.4, 0.06, 0.06, 0, 0.55, 0, 0, Math.PI / 4, 0);
     if (this.level >= 3) for (const s of [-1, 1]) B(this.turret, flame, 0.2, 0.5, 0.2, s * 0.45, 0.6, -0.45);
-    // кочерга у ног
+    // a poker at the feet
     B(this.body, iron, 0.06, 1.2, 0.06, -0.8, 1.0, 0.6, 0.3, 0, 0.25);
   }
 
-  /** Звездочёт: круглая каменная башня, купол-обсерватория с прорезью, из неё — подзорная труба на цель; над куполом — звезда */
+  /** Stargazer: a round stone tower, an observatory dome with a slit, a spyglass out of it at the target; a star above the dome */
   private buildMeteor(): void {
     const B = this.box.bind(this);
     const stone = this.lam('#6a6278'), stoneD = this.lam('#4a4458'), brass = this.lam('#d8a040'), dome = this.lam('#3a3a6a'), star = this.glow(STAR), deep = this.glow(STAR_DEEP);
@@ -258,7 +258,7 @@ export class TowerView {
     for (let i = 1; i < this.level; i++) B(this.arm, deep, 0.14, 0.14, 0.14, Math.cos(i * 2.1) * 0.5, 0, Math.sin(i * 2.1) * 0.5);
   }
 
-  /** Грозовой шпиль: высокая каменная игла в медных кольцах, наверху — грозовой шар между тремя рогами-разрядниками */
+  /** Storm spire: a tall stone needle in copper rings, on top a storm ball between three discharge horns */
   private buildStorm(): void {
     const B = this.box.bind(this);
     const stone = this.lam('#5c6470'), copper = this.lam('#c87a3a'), iron = this.lam(IRON, false), volt = this.glow(VOLT);
@@ -274,7 +274,7 @@ export class TowerView {
     B(this.arm, volt, 0.4 + this.level * 0.06, 0.4 + this.level * 0.06, 0.4 + this.level * 0.06, 0, 0, 0, Math.PI / 4, 0, Math.PI / 4);
   }
 
-  /** Сердце зимы: ледяная глыба-постамент, над ней парит огромный кристалл, вокруг кружат осколки (их больше с уровнем) */
+  /** Heart of winter: an ice-block pedestal, a huge crystal floats above it, shards circle around (more with the level) */
   private buildWinter(): void {
     const B = this.box.bind(this);
     const rime = this.lam('#dceeff', false), stone = this.lam('#7f8ea0'), ice = this.glow(SNOW), deep = this.glow(ICE_DEEP);
@@ -291,14 +291,14 @@ export class TowerView {
     for (let i = 0; i < 3 + this.level; i++) { const a = (i / (3 + this.level)) * Math.PI * 2; B(this.arm, ice, 0.16, 0.3, 0.16, Math.cos(a) * 1.1, Math.sin(i * 1.7) * 0.3, Math.sin(a) * 1.1, 0.4, a, 0.3); }
   }
 
-  /** Волшебный обелиск: тёмный столб с сужением и резьбой, над ним парит светящаяся руна */
+  /** Arcane obelisk: a dark tapering carved pillar, a glowing rune floats above it */
   private buildMagic(): void {
     const B = this.box.bind(this);
     const obs = this.lam('#2e2440'), trim = this.glow(ARCANE_DEEP), rune = this.glow(ARCANE);
     B(this.body, obs, 0.8, 0.4, 0.8, 0, 0.7, 0);
     B(this.body, obs, 0.6, 1.8, 0.6, 0, 1.8, 0);
     B(this.body, obs, 0.4, 0.5, 0.4, 0, 2.95, 0);
-    // резьба: светящиеся полосы
+    // carving: glowing bands
     for (const y of [1.2, 1.8, 2.4]) for (const s of [-1, 1]) { B(this.body, trim, 0.3, 0.06, 0.02, 0, y, s * 0.31); B(this.body, trim, 0.02, 0.06, 0.3, s * 0.31, y, 0); }
     this.turret.position.set(0, 3.5, 0);
     this.body.add(this.turret);
@@ -306,11 +306,11 @@ export class TowerView {
     B(this.arm, rune, 0.36, 0.36, 0.36, 0, 0, 0, Math.PI / 4, 0, Math.PI / 4);
     B(this.arm, trim, 0.5, 0.08, 0.08, 0, 0, 0, 0, Math.PI / 4, 0);
     for (let i = 1; i < this.level; i++) B(this.arm, rune, 0.14, 0.14, 0.14, Math.cos(i * 2.1) * 0.55, 0.1 * i, Math.sin(i * 2.1) * 0.55);
-    // камни-спутники у основания
+    // satellite stones at the base
     for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.4; B(this.body, obs, 0.2, 0.5 + (i % 2) * 0.3, 0.2, Math.cos(a) * 0.85, 0.7, Math.sin(a) * 0.85, 0.2, a, 0); }
   }
 
-  /** Стенная баллиста: низкая станина с колёсами, на вертлюге — тяжёлый лук с воротом; болт лежит в жёлобе */
+  /** Wall ballista: a low carriage with wheels, on the swivel a heavy bow with a windlass; the bolt lies in the groove */
   private buildBallista(): void {
     const B = this.box.bind(this);
     const wood = this.lam(WOOD), woodD = this.lam(WOOD_DARK), iron = this.lam(IRON, false), rope = this.lam('#c8b890', false);
@@ -318,7 +318,7 @@ export class TowerView {
     for (const s of [-1, 1]) B(this.body, woodD, 0.12, 0.5, 0.5, s * 0.6, 0.55, 0);
     this.turret.position.set(0, 0.8, 0);
     this.body.add(this.turret);
-    // ложе с жёлобом, дуги лука, тетива, ворот сзади
+    // the stock with a groove, bow limbs, bowstring, the windlass behind
     B(this.turret, wood, 0.3, 0.2, 2.0, 0, 0.15, 0.2);
     B(this.turret, iron, 0.18, 0.06, 1.4, 0, 0.28, 0.4);
     for (const s of [-1, 1]) { B(this.turret, woodD, 1.0, 0.1, 0.12, s * 0.65, 0.25, 0.75, 0, 0, s * 0.25); B(this.turret, iron, 0.08, 0.14, 0.14, s * 1.1, 0.25, 0.63); }
@@ -333,7 +333,7 @@ export class TowerView {
     if (this.level >= 3) B(this.turret, this.lam('#d8285a', false), 0.03, 0.3, 0.5, 0, 0.6, -0.5);
   }
 
-  /** Котёл со смолой: треножник над углями, чёрный котёл, из него валит дым; носик к цели */
+  /** Tar cauldron: a tripod over embers, a black cauldron pouring smoke; the spout at the target */
   private buildOil(): void {
     const B = this.box.bind(this);
     const iron = this.lam(IRON, false), coal = this.glow(EMBER), tar = this.lam(TAR, false), wood = this.lam(WOOD_DARK);
@@ -352,16 +352,16 @@ export class TowerView {
     if (this.level >= 3) B(this.turret, this.lam('#d8285a', false), 0.5, 0.3, 0.03, -0.7, 1.5, 0);
   }
 
-  // ---------- кадр ----------
+  // ---------- frame ----------
   update(dt: number): void {
     this.time += dt;
     this.recoil = Math.max(0, this.recoil - dt * (this.kind === 'splash' ? 1.2 : 6));
     if (this.ruined && Math.random() < 0.3) this.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.2, 1 + Math.random() * 1.5, (Math.random() - 0.5) * 1.2)), vel: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.9, (Math.random() - 0.5) * 0.3), life: 1.2, size: 0.18, color: '#3a3634', gravity: -0.2 }, false);
-    // руины и лёд — замерли
+    // ruins and ice — frozen still
     if (!this.ruined && this.frozen <= 0) this.animate(dt);
   }
 
-  /** Живая деталь: отдача арбалета, рычаг катапульты, парящая руна, искры жаровни, покачивание кристалла */
+  /** Live piece: crossbow recoil, catapult lever, floating rune, brazier sparks, crystal sway */
   private animate(dt: number): void {
     switch (this.kind) {
       case 'arrow': this.turret.position.z = -this.recoil * 0.12; break;
@@ -386,7 +386,7 @@ export class TowerView {
       case 'winter': {
         this.arm.rotation.y += dt * 1.2;
         this.turret.position.y = 2.6 + Math.sin(this.time * 1.5) * 0.12;
-        // снег кружит в радиусе вьюги
+        // snow swirls within the blizzard radius
         const a = Math.random() * Math.PI * 2, r = Math.random() * this.range;
         if (Math.random() < 0.6) this.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.3 + Math.random() * 2.5, Math.sin(a) * r)), vel: new THREE.Vector3(-Math.sin(a) * 2, -0.4, Math.cos(a) * 2), life: 0.9, size: 0.06, color: SNOW, gravity: 0 }, false);
         break;

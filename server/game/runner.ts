@@ -2,8 +2,8 @@ import { FRAME_MS } from '../../src/net/game-protocol.ts';
 import type { Match } from '../../src/game/match.ts';
 
 /**
- * Раннер матчей: один таймер на процесс (кадр FRAME_MS, как sv_fps 20) обходит все идущие матчи.
- * Тесты крутят `frame(dt)` сами с фейковыми часами
+ * Match runner: one timer per process (frame FRAME_MS, like sv_fps 20) walks all running matches.
+ * Tests drive `frame(dt)` themselves with a fake clock
  */
 export class MatchRunner {
   private readonly matches = new Map<string, Match>();
@@ -18,7 +18,7 @@ export class MatchRunner {
   add(m: Match): void { this.matches.set(m.id, m); }
   remove(id: string): void { this.matches.delete(id); }
 
-  /** Кадр всех матчей: dt — секунды (по умолчанию — сколько прошло, не больше 0,25 с) */
+  /** Frame of all matches: dt in seconds (default: elapsed time, at most 0.25 s) */
   frame(dt?: number): void {
     const t = this.now();
     const step = dt ?? (this.last ? Math.min(0.25, (t - this.last) / 1000) : FRAME_MS / 1000);

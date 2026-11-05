@@ -16,7 +16,7 @@ body { font-family: 'Rubik', system-ui, sans-serif; color: var(--ink); user-sele
 #overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .hidden { display: none !important; }
 
-/* Пиксельные иконки — картинки задаются из JS */
+/* Pixel icons — the images are set from JS */
 .ic { display: inline-block; width: 24px; height: 24px; background-size: contain; background-repeat: no-repeat; image-rendering: pixelated; vertical-align: middle; flex: none; }
 .ic.big { width: 40px; height: 40px; }
 
@@ -81,10 +81,10 @@ body { font-family: 'Rubik', system-ui, sans-serif; color: var(--ink); user-sele
 #banner.nightb .b1 { color: #9db4ff; text-shadow: 0 4px 0 #0a1430, 0 0 30px rgba(90, 130, 255, 0.6); }
 #banner.good .b1 { color: var(--green); text-shadow: 0 4px 0 #173a0a, 0 0 30px rgba(120, 255, 80, 0.5); }
 
-/* Числа урона */
+/* Damage numbers */
 .dmg {
   position: absolute; left: 0; top: 0; font-family: 'Press Start 2P', monospace; font-size: 16px; color: #fff;
-  /* обводка одним слоем: многослойные тени на десятках цифр за кадр дорого композитятся */
+  /* single-layer outline: multi-layer shadows on dozens of numbers per frame are costly to composite */
   text-shadow: 2px 2px 0 #000; -webkit-text-stroke: 1px #000; paint-order: stroke fill; will-change: transform, opacity;
 }
 .dmg.crit { color: #ff5a3c; font-size: 20px; }
@@ -94,21 +94,21 @@ body { font-family: 'Rubik', system-ui, sans-serif; color: var(--ink); user-sele
 .dmg.heal { color: #ffe066; font-size: 14px; }
 .dmg.spell { color: #fff; font-size: 24px; text-shadow: 0 0 14px #7ad8ff, 2px 2px 0 #10283a; -webkit-text-stroke-color: #10283a; }
 .dmg.healbig { color: #b8ff8a; font-size: 26px; text-shadow: 0 0 16px #4aff6a, 2px 2px 0 #0a3a10; -webkit-text-stroke-color: #0a3a10; }
-/* засветка экрана при ударе заклинания (src/fx.ts screenFlash) */
-/* без mix-blend-mode: режим наложения на весь экран заставляет композитор пересобирать кадр целиком */
+/* screen flash on a spell impact (src/fx.ts screenFlash) */
+/* no mix-blend-mode: a full-screen blend mode makes the compositor rebuild the whole frame */
 .fx-flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 5; }
-/* мифическое заклинание: мир темнеет и выцветает (src/fx.ts darken), название крупно по центру (title) */
+/* mythic spell: the world darkens and desaturates (src/fx.ts darken), the name large in the centre (title) */
 .fx-dark { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 4; background: radial-gradient(ellipse at center, rgba(8, 4, 18, 0.45) 0%, rgba(8, 4, 18, 0.85) 100%); }
-/* backdrop-filter убран: полноэкранный фильтр стоил отдельного прохода композитора каждый кадр, пока держится тьма */
+/* backdrop-filter removed: the full-screen filter cost a separate compositor pass every frame while the darkness held */
 .fx-title { position: fixed; left: 0; right: 0; top: 30%; text-align: center; white-space: nowrap; pointer-events: none; z-index: 6; opacity: 0; font: 400 clamp(18px, 3.4vw, 46px)/1 'Press Start 2P', 'Courier New', monospace; color: #fff; letter-spacing: 0.08em; text-shadow: 0 0 14px var(--c), 3px 3px 0 #000; }
 .fx-title.show { animation: fx-title 1.8s ease-out forwards; }
 @keyframes fx-title { 0% { opacity: 0; transform: scale(1.4); letter-spacing: 0.2em; } 12% { opacity: 1; transform: scale(1); letter-spacing: 0.08em; } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(0.96); } }
 .dmg.bleed { color: #ff2a3a; font-size: 12px; }
-/* название синергии закалки над добивающим (src/weapon-arts.ts) */
+/* temper synergy name above the finisher (src/weapon-arts.ts) */
 .dmg.syn { color: #fff; font-size: 11px; white-space: nowrap; text-shadow: 0 0 10px #ffd27a, 2px 2px 0 #000; }
 .dmg.syn.res { color: #ffe27a; font-size: 14px; text-shadow: 0 0 14px #ff9a3a, 2px 2px 0 #000; }
 
-/* Над грядками */
+/* Above the beds */
 .plot-ui { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; will-change: transform; }
 .plot-ui .hp { width: 46px; height: 7px; background: #000a; border: 1px solid #000; }
 .plot-ui .hp i { display: block; height: 100%; background: linear-gradient(#8fe85a, #4fa82a); }
@@ -127,7 +127,7 @@ body { font-family: 'Rubik', system-ui, sans-serif; color: var(--ink); user-sele
 
 .arrow { position: absolute; left: 0; top: 0; width: 0; height: 0; border-left: 16px solid #ff3b4e; border-top: 10px solid transparent; border-bottom: 10px solid transparent; filter: drop-shadow(0 0 6px rgba(255, 40, 60, 0.9)); }
 
-/* Экраны */
+/* Screens */
 .screen { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(8, 10, 20, 0.35), rgba(5, 6, 12, 0.85)); padding: 16px; }
 .card {
   background: rgba(16, 18, 26, 0.92); border: 4px solid var(--edge); box-shadow: inset 0 0 0 3px var(--bevel), 0 20px 60px rgba(0, 0, 0, 0.6);
@@ -157,13 +157,13 @@ h2 { font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5
 .results b { font-family: 'Press Start 2P', monospace; font-size: 13px; }
 .results .score b { color: var(--gold); }
 
-/* День и ночь */
+/* Day and night */
 .day-row { display: flex; align-items: center; gap: 8px; }
 .day-row .ic { width: 22px; height: 22px; }
 #dayPanel.night .wave-bar i { background: linear-gradient(90deg, #3a5fc4, #8aa8ff); }
 #dayPanel.day .wave-bar i { background: linear-gradient(90deg, #ffb340, #ffe17a); }
 
-/* Здоровье */
+/* Health */
 .hp-orb {
   position: relative; width: 74px; height: 74px; border-radius: 50%; overflow: hidden; align-self: center;
   background: radial-gradient(circle at 50% 35%, #2a0d12, #12070a 70%); border: 3px solid var(--edge);
@@ -181,7 +181,7 @@ h2 { font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5
   font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.8; color: #ff8a8a; text-shadow: 0 3px 0 #000; white-space: pre-line;
 }
 
-/* Слоты оружия и спецудара */
+/* Weapon and weapon art slots */
 :root { --wglow: rgb(200, 220, 255); }
 .slot.weapon, .slot.special { width: 96px; height: 76px; box-shadow: inset 0 0 0 2px var(--bevel), 0 0 16px -4px var(--wglow); border-color: #000; }
 .slot.weapon .ic, .slot.special .ic { width: 34px; height: 34px; margin-top: 4px; filter: drop-shadow(0 0 6px var(--wglow)); }
@@ -202,7 +202,7 @@ h2 { font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5
 .item-btns { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 .buy.up { background: linear-gradient(#e0a93a, #a86a14); border-color: #3a2406; }
 
-/* Стволы и патроны */
+/* Guns and ammo */
 .slot .heat { position: absolute; left: 4px; right: 4px; bottom: 2px; height: 3px; width: 0; background: linear-gradient(90deg, #4ac8ff, #ff7a3a); max-width: calc(100% - 8px); }
 .slot.special.active { box-shadow: inset 0 0 0 2px var(--wglow), 0 0 22px 2px var(--wglow); }
 .berries {
@@ -232,7 +232,7 @@ h2 { font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5
 .perk .am { white-space: nowrap; color: var(--gold); }
 .perk .am .ic { width: 12px; height: 12px; vertical-align: -1px; margin-right: 2px; }
 
-/* Превью стволов */
+/* Gun previews */
 .gunpv { display: block; width: 84px; height: 36px; background: center / contain no-repeat; filter: drop-shadow(0 0 6px var(--wglow)); margin-top: 6px; }
 .shop-list .item { grid-template-columns: minmax(0, 1fr) 118px; align-items: start; }
 .item-btns { width: 118px; }
@@ -249,7 +249,7 @@ h2 { font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5
 .item-pv kbd { position: absolute; right: 6px; top: 6px; font-family: 'Press Start 2P', monospace; font-size: 9px; background: #f4ead2; color: #111; padding: 3px 5px; border-radius: 2px; z-index: 1; }
 .item.equipped .item-pv { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(255, 207, 90, 0.4); }
 
-/* Компактная лавка: всё помещается в экран */
+/* Compact shop: everything fits on screen */
 .shop-card { max-width: 900px; padding: 16px 18px; }
 .shop-card h2 { font-size: 15px; margin-bottom: 6px; }
 .shop-card .shop-sub { font-size: 12px; }
@@ -277,7 +277,7 @@ h2 { font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5
 .shop-list .item-btns .buy .ic { width: 12px; height: 12px; }
 .shop-card .shop-foot .btn { margin-top: 10px; padding: 9px 14px; font-size: 10px; }
 
-/* Прицел */
+/* Crosshair */
 #reticle { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 4; --s: 12px; --c: #fff; }
 #reticle i { position: absolute; background: var(--c); box-shadow: 0 0 0 1px #000a, 0 0 6px var(--wglow); }
 #reticle .t1, #reticle .t3 { width: 2px; height: 8px; left: -1px; }
@@ -304,12 +304,12 @@ h2 { font-family: 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5
 #reticle.hit i, #reticle.hit b { box-shadow: 0 0 0 1px #000a, 0 0 10px #fff, 0 0 4px #fff; }
 #reticle.hit { --c: #fff; }
 
-/* Слот оружия (старый) */
+/* Weapon slot (old) */
 .slot.wide { width: 84px; }
 .slot .wname { position: absolute; top: 3px; left: 0; right: 0; text-align: center; font-size: 9px; font-weight: 700; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; }
 .slot.wide .ic { margin-top: 6px; }
 
-/* Лавка */
+/* Shop */
 #shop { z-index: 5; }
 .shop-card { max-width: 860px; text-align: left; padding: 22px 24px; max-height: calc(100% - 24px); display: flex; flex-direction: column; }
 .shop-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }

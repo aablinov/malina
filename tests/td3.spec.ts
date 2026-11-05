@@ -3,9 +3,9 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Осада замка — оборона куста 3 (wiki/design-tower-defence.md, раздел 9): карта `td3` со стенами и воротами (src/td/wall.ts),
- * площадки на бастионах, лестницы на стены, пролом и починка; новые враги — пнёвый подрывник и лозовая баллиста
- * (src/mobs/td-foes.ts), новые башни — стенная баллиста и котёл со смолой (src/td/tower.ts).
+ * Castle siege — Bush Defence 3 (wiki/design-tower-defence.md, section 9): map `td3` with walls and a gate (src/td/wall.ts),
+ * pads on the bastions, stairs onto the walls, a breach and repair; new enemies — the stump sapper and the vine ballista
+ * (src/mobs/td-foes.ts), new towers — the wall ballista and the tar cauldron (src/td/tower.ts).
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=td3';
@@ -19,25 +19,25 @@ async function open(page: Page): Promise<void> {
   expect(errors).toEqual([]);
 }
 
-test('осада: замок — стены, бастионы с площадками, лестницы; подрывники ломают стену, враги идут в пролом, стена чинится за малину', async ({ page }) => {
+test('siege: the castle — walls, bastions with pads, stairs; sappers break a wall, enemies come through the breach, the wall is repaired for raspberries', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, L = m.level, t = m.terrain, V = m.hero.pos.constructor;
     const spec = td.spec;
     m.hero.place(0, 6, 0, 0); m.hero.god = true;
-    // дорожка по стене на высоте 3 — свободна от угла до угла
+    // the walkway on the wall at height 3 — clear from corner to corner
     let bad = 0;
     for (let i = -16; i <= 16; i++) if (t.floorAt(i, -18, 3.5) !== 3 || t.floorAt(i, 18, 3.5) !== 3 || t.floorAt(18, i, 3.5) !== 3 || t.floorAt(-18, i, 3.5) !== 3) bad++;
-    // луг: пол везде не ниже земли — нет ям, в которые проваливается герой (растения только поверх травы)
+    // the meadow: the floor is nowhere below ground level — no pits the hero falls into (plants only on top of the grass)
     let pits = 0;
     for (let x = -47; x <= 47; x += 1) for (let z = -47; z <= 47; z += 1) { const f = t.floorAt(x, z, 0.4); if (f < -0.5 || (f === -Infinity)) pits++; }
-    // лестница: герой со двора кликом поднимается на стену
+    // stairs: the hero climbs from the yard onto the wall by click
     m.hero.place(-14, -14, 0, 0);
     m.click(-10, -18, false, 3);
     for (let i = 0; i < 100; i++) m.step(0.1);
     const climbed = [Math.round(m.hero.pos.x), Math.round(m.hero.pos.y), Math.round(m.hero.pos.z)];
     const padUp = td.nearPad(new V(-19, 3, -19))?.index ?? null, padDown = td.nearPad(new V(-19, 0, -19));
-    // три подрывника с востока: стена проломлена, блоки — в воздух
+    // three sappers from the east: the wall is breached, the blocks fly into the air
     m.hero.place(0, 6, 0, 0);
     const east = td.wall('east');
     const hp0 = east.hp;
@@ -46,14 +46,14 @@ test('осада: замок — стены, бастионы с площадк�
     for (let i = 0; i < 700; i++) { m.step(0.1); if (east.dead) { breachAt = i / 10; break; } }
     const ignored = s.every((x: any) => x.blasted);
     const hole = [L.nameAt(19, 1, 0), L.nameAt(18, 0, 0), L.nameAt(17, 2, 0)];
-    const banner = document.body.innerText.includes('проломлена');
-    // гонец по восточной дороге идёт в пролом и бьёт куст
+    const banner = document.body.innerText.includes('breached');
+    // a courier along the east road goes through the breach and hits the bush
     const run = td.spawnOn('runner', 'east');
     const marchLen = run.march.length;
     for (let i = 0; i < 300; i++) { m.step(0.1); if (td.bush.taken > 0) break; }
     const bushTaken = td.bush.taken;
     run.vanish();
-    // починка: герой у стены, F — за малину блоки на месте
+    // repair: the hero at the wall, F — for raspberries the blocks are back in place
     m.hero.place(16, 0, 0, 0);
     const nw = td.nearWall(m.hero.pos);
     const cost = nw ? td.repairCost(nw) : 0, prompt = nw ? td.wallPrompt(nw) : '';
@@ -70,7 +70,7 @@ test('осада: замок — стены, бастионы с площадк�
       mist: m.mistFx?.count ?? 0, fogFar: L.meta.world.fog.far,
     };
   });
-  expect(r.name).toBe('Замок на лугу');
+  expect(r.name).toBe('Castle on the Meadow');
   expect(r.pads).toBe(16);
   expect(r.high).toBe(12);
   expect(r.lanes).toEqual(['gate', 'east', 'south', 'west']);
@@ -91,7 +91,7 @@ test('осада: замок — стены, бастионы с площадк�
   expect(r.bushTaken).toBeGreaterThan(0);
   expect(r.nwId).toBe('east');
   expect(r.cost).toBe(80);
-  expect(r.prompt).toContain('Отстроить');
+  expect(r.prompt).toContain('Rebuild');
   expect(r.ok).toBe(true);
   expect(r.spent).toBe(80);
   expect(r.fixed[0]).toBe(400);
@@ -104,12 +104,12 @@ test('осада: замок — стены, бастионы с площадк�
   expect(r.fogFar).toBeLessThanOrEqual(60);
 });
 
-test('осада: ворота расстреливают баллиста и арбалетчик, герой проходит через калитку; броня подрывника и пробивающий болт; смола вяжет и жжёт', async ({ page }) => {
+test('siege: the ballista and the crossbowman shoot the gate down, the hero passes through the wicket; the sapper\'s armour and the piercing bolt; tar binds and burns', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
     m.hero.place(0, 6, 0, 0); m.hero.god = true;
-    // ворота: мобы с севера упираются в створки, баллиста бьёт с 9 м, арбалетчик тоже
+    // the gate: mobs from the north run into the doors, the ballista fires from 9 m, the crossbowman too
     const gate = td.wall('gate');
     const stop = td.spawnOn('runner', 'north');
     for (let i = 0; i < 150; i++) m.step(0.1);
@@ -128,11 +128,11 @@ test('осада: ворота расстреливают баллиста и а
     run.vanish();
     m.hero.place(0, -14, 0, 0); td.repair(gate);
     const gateBack = [gate.hp, gate.dead];
-    // герой выходит из замка через ворота кликом наружу
+    // the hero leaves the castle through the gate by clicking outside
     m.click(0, -24, false, 0);
     for (let i = 0; i < 120; i++) m.step(0.1);
     const heroOut = m.hero.pos.z;
-    // подрывник: меч ×0,3, пробивающий болт стенной баллисты — целиком; пал — взорвался и задел своих
+    // the sapper: sword ×0.3, the wall ballista's piercing bolt — in full; fell — exploded and hit its own
     m.hero.place(0, 6, 0, 0);
     const s = td.spawn('sapper', new V(24, 0, -3)); s.march = null;
     m.step(0.6);
@@ -148,7 +148,7 @@ test('осада: ворота расстреливают баллиста и а
     s.vanish();
     const splash = a0 - ally.hp;
     ally.vanish(); td.sell(pad);
-    // котёл со смолой: лужа, в ней вязнут и горят
+    // the tar cauldron: a puddle, they get stuck and burn in it
     const oil = td.build(pad, 'oil');
     const w = td.spawn('runner', new V(22, 0, -2)); w.march = null;
     for (let i = 0; i < 60; i++) { m.step(0.1); if (oil.pooling > 0) break; }
@@ -175,5 +175,5 @@ test('осада: ворота расстреливают баллиста и а
   expect(r.tar.chill).toBe(true);
   expect(r.tar.taken).toBeGreaterThan(0);
   expect(r.tar.burning).toBe(1);
-  expect(r.titles).toEqual(['Пнёвый подрывник', 'Лозовая баллиста']);
+  expect(r.titles).toEqual(['Stump Sapper', 'Vine Ballista']);
 });

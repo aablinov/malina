@@ -1,45 +1,45 @@
 import * as THREE from 'three';
 
 /**
- * Светящиеся ленты-шлейфы за летящей «головой» (wiki/design-weapon-arts.md, раздел 7): души, капли, звёзды, дуги молний
- * и серпы летят по кривым, а за ними тянется сочный хвост — яркое ядро и широкий мягкий ореол, к концу сужается и гаснет.
- * Голова движется по функции path(k) (k — доля полёта 0..1), лента — история её положений за последние tail секунд;
- * всегда развёрнута к камере. Все ленты — одна сетка с динамическими буферами, один вызов отрисовки; места на 96 лент,
- * самая старая уступает (wiki/dev-performance.md).
+ * Glowing streak ribbons behind a flying "head" (wiki/design-weapon-arts.md, section 7): souls, drops, stars, lightning arcs
+ * and crescents fly along curves with a juicy tail behind them — a bright core and a wide soft halo, narrowing and fading towards the end.
+ * The head moves along the function path(k) (k — flight fraction 0..1), the ribbon is the history of its positions over the last tail seconds;
+ * always faces the camera. All ribbons are one mesh with dynamic buffers, one draw call; room for 96 ribbons,
+ * the oldest gives way (wiki/dev-performance.md).
  */
 
 const MAX = 96;
 const PTS = 28;
-/** Две полосы на ленту: ореол и ядро */
+/** Two strips per ribbon: halo and core */
 const STRIPS = 2;
-const VPS = PTS * 2; // вершин на полосу
+const VPS = PTS * 2; // vertices per strip
 
 export interface StreakOptions {
-  /** Где голова при доле k = 0..1 */
+  /** Where the head is at fraction k = 0..1 */
   path: (k: number, out: THREE.Vector3) => THREE.Vector3;
-  /** Время полёта головы, с */
+  /** Head flight time, s */
   dur: number;
-  /** Цвет головы (HDR) и хвоста */
+  /** Head colour (HDR) and tail colour */
   color: THREE.Color;
   color2?: THREE.Color;
-  /** Ширина ядра у головы, м */
+  /** Core width at the head, m */
   width: number;
-  /** Длина хвоста, с */
+  /** Tail length, s */
   tail?: number;
-  /** Ореол: во сколько раз шире ядра (0 — без) */
+  /** Halo: how many times wider than the core (0 — none) */
   halo?: number;
-  /** Белое ядро у головы: 1 — раскалено добела, 0 — чистый цвет (огонь, кровь) */
+  /** White core at the head: 1 — white hot, 0 — pure colour (fire, blood) */
   core?: number;
-  /** Каждый кадр полёта — где голова (искры, свет) */
+  /** Every frame of the flight — where the head is (sparks, light) */
   onHead?: (p: THREE.Vector3, k: number) => void;
-  /** Голова долетела */
+  /** The head has arrived */
   onEnd?: (p: THREE.Vector3) => void;
 }
 
 interface Streak {
   o: StreakOptions;
   t: number;
-  /** История головы: x, y, z, время */
+  /** Head history: x, y, z, time */
   hist: Float32Array;
   n: number;
   head: number;
@@ -89,7 +89,7 @@ export class Streaks {
 
   get count(): number { return this.list.filter((s) => s.alive).length; }
 
-  /** Запустить ленту */
+  /** Launch a ribbon */
   add(o: StreakOptions): void {
     let s = this.list.find((x) => !x.alive);
     if (!s) { s = this.list[this.next]; this.next = (this.next + 1) % MAX; }
@@ -120,7 +120,7 @@ export class Streaks {
         o.onHead?.(_p, Math.min(1, k));
         if (k >= 1) { s.ended = true; o.onEnd?.(_p.clone()); }
       }
-      // хвост после конца полёта дотекает за tail
+      // after the flight ends the tail drains over tail
       if (s.ended && this.time - this.newest(s) > tail) { s.alive = false; this.blank(base); continue; }
       any = true;
       this.write(s, base, tail);
@@ -135,12 +135,12 @@ export class Streaks {
   private newest(s: Streak): number { return s.hist[((s.head - 1 + PTS) % PTS) * 4 + 3]; }
 
   private blank(base: number): void {
-    // невидимая полоса: нулевой цвет (аддитивно — ничего не рисует)
+    // invisible strip: zero colour (additively draws nothing)
     if (this.col[base * 3] === 0 && this.col[base * 3 + 3] === 0) return;
     this.col.fill(0, base * 3, (base + STRIPS * VPS) * 3);
   }
 
-  /** Полосы ленты: от головы к хвосту, ширина и яркость падают с возрастом точки */
+  /** Ribbon strips: from head to tail, width and brightness fall with the point's age */
   private write(s: Streak, base: number, tail: number): void {
     const o = s.o, cam = this.camera.position, c1 = o.color, c2 = o.color2 ?? o.color;
     const halo = o.halo ?? 2.6;
@@ -152,7 +152,7 @@ export class Streaks {
         const hi = ((s.head - 1 - idx) % PTS + PTS) % PTS;
         _a.set(s.hist[hi * 4], s.hist[hi * 4 + 1], s.hist[hi * 4 + 2]);
         const age = (this.time - s.hist[hi * 4 + 3]) / tail;
-        // направление вдоль ленты — к соседней точке
+        // direction along the ribbon — towards the neighbouring point
         const nj = Math.min(idx + 1, s.n - 1), pj = Math.max(idx - 1, 0);
         const ni = ((s.head - 1 - nj) % PTS + PTS) % PTS, pi = ((s.head - 1 - pj) % PTS + PTS) % PTS;
         _b.set(s.hist[ni * 4], s.hist[ni * 4 + 1], s.hist[ni * 4 + 2]);
@@ -166,7 +166,7 @@ export class Streaks {
         const v = (vb + j * 2) * 3;
         this.pos[v] = _a.x + _s.x; this.pos[v + 1] = _a.y + _s.y; this.pos[v + 2] = _a.z + _s.z;
         this.pos[v + 3] = _a.x - _s.x; this.pos[v + 4] = _a.y - _s.y; this.pos[v + 5] = _a.z - _s.z;
-        // голова горячее (с белым), к хвосту — второй цвет
+        // the head is hotter (with white), towards the tail — the second colour
         const f = life * life * bright, hot = strip === 1 ? life * life * life * 1.2 * (o.core ?? 1) : 0, m = Math.min(1, age * 1.4);
         const r = (c1.r + (c2.r - c1.r) * m) * f + hot, g = (c1.g + (c2.g - c1.g) * m) * f + hot, b = (c1.b + (c2.b - c1.b) * m) * f + hot;
         this.col[v] = r; this.col[v + 1] = g; this.col[v + 2] = b;

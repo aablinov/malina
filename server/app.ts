@@ -14,8 +14,8 @@ import { GameHub } from './game/game-hub.ts';
 import { MatchRunner } from './game/runner.ts';
 
 /**
- * Сборка сервера: SQLite, менеджер комнат, REST и WebSocket на одном порту (`/ws`).
- * main.ts запускает её из env, тесты — с базой `:memory:` и портом 0
+ * Server assembly: SQLite, room manager, REST and WebSocket on one port (`/ws`).
+ * main.ts runs it from env, tests with a `:memory:` database and port 0
  */
 export interface AppConfig {
   dbPath: string;
@@ -29,9 +29,9 @@ export interface App {
   db: Db;
   rooms: RoomManager;
   hub: Hub;
-  /** Идущие матчи (серверный бой) */
+  /** Running matches (server-side battle) */
   games: MatchRunner;
-  /** Запустить на порту (0 — любой свободный), вернуть порт */
+  /** Listen on a port (0 — any free one), return the port */
   listen(port: number, host?: string): Promise<number>;
   close(): Promise<void>;
 }

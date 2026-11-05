@@ -2,22 +2,22 @@ import { Level, type DecorItem, type LevelEntity } from '../level.ts';
 import type { LibraryPrefab, PrefabData } from './types.ts';
 import { rotatePrefab } from './stamp.ts';
 
-/** Что получает строитель: локальная карта с опорой в (0, 0, 0) — y = 0 первый слой воздуха, земля под ним — y = −1 */
+/** What a builder gets: a local map anchored at (0, 0, 0) — y = 0 is the first air layer, the ground beneath it is y = −1 */
 export interface BuildCtx {
   L: Level;
   seed: number;
-  /** Случай 0..1, детерминированный от зерна */
+  /** Random 0..1, deterministic from the seed */
   rnd(): number;
-  /** Декор: rot — рыск в градусах, on — клетка-опора (для настенного) */
+  /** Decor: rot — yaw in degrees, on — the anchor cell (for wall-mounted) */
   dec(name: string, x: number, y: number, z: number, rot?: number, on?: [number, number, number]): void;
-  /** Свет: точечный или прожектор; данные — как у LightData (src/world.ts) */
+  /** Light: point or spot; data as in LightData (src/world.ts) */
   light(type: 'point' | 'spot', x: number, y: number, z: number, data?: Record<string, unknown>): void;
-  /** Готовый предмет декора и сущность как есть (для вложенных пресетов) */
+  /** A ready decor item and an entity as is (for nested prefabs) */
   put(d: DecorItem): void;
   putEntity(e: LevelEntity): void;
 }
 
-/** Вложить запечённый пресет в строитель: клетки, декор и свет со сдвигом (x, z) и поворотом на quarter четвертей — композиции собираются из средних пресетов */
+/** Nest a baked prefab into a builder: cells, decor and light shifted by (x, z) and turned by quarter quarters — compositions are assembled from medium prefabs */
 export function stampInto(c: BuildCtx, p: PrefabData, x: number, z: number, quarter = 0): void {
   const r = rotatePrefab(p, quarter);
   for (const [dx, dy, dz, n, rot] of r.cells) c.L.set(x + dx, dy, z + dz, n, rot);
@@ -30,12 +30,12 @@ export interface Builder {
   title: string;
   category: string;
   hint?: string;
-  /** Сколько вариантов запекать (разные зёрна) */
+  /** How many variants to bake (different seeds) */
   variants?: number;
   build(c: BuildCtx): void;
 }
 
-/** mulberry32 — маленький детерминированный генератор */
+/** mulberry32 — a small deterministic generator */
 function prng(seed: number): () => number {
   let a = seed >>> 0;
   return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -43,7 +43,7 @@ function prng(seed: number): () => number {
 
 const LIGHT_DEFAULTS = { color: '#ffc870', intensity: 6, distance: 8, angle: 35, pitch: -90, shadows: false };
 
-/** Запечь строитель с зерном в пресет: клетки, декор и свет относительно опоры, габариты по всему содержимому */
+/** Bake a builder with a seed into a prefab: cells, decor and light relative to the anchor, size from all the content */
 export function bake(b: Builder, seed: number, id = b.id): LibraryPrefab {
   const L = new Level(b.title);
   const decor: DecorItem[] = [];
@@ -63,7 +63,7 @@ export function bake(b: Builder, seed: number, id = b.id): LibraryPrefab {
   return { id, title: b.title, category: b.category, ...(b.hint ? { hint: b.hint } : {}), size: [span(0), span(1), span(2)], seed, cells, decor, entities };
 }
 
-/** Все варианты строителя: `<id>`, `<id>_2`, … с зёрнами 1, 2, … */
+/** All variants of a builder: `<id>`, `<id>_2`, … with seeds 1, 2, … */
 export function bakeAll(b: Builder): LibraryPrefab[] {
   const n = Math.max(1, b.variants ?? 1);
   return Array.from({ length: n }, (_, i) => bake(b, i + 1, i ? `${b.id}_${i + 1}` : b.id));

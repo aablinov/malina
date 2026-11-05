@@ -1,6 +1,8 @@
+import { t } from '../i18n/i18n.ts';
+
 /**
- * Сетевой бой поверх игры (src/cgame/net-battle.ts): список игроков — имя, здоровье, пинг, хост — и чат комнаты.
- * Enter — написать (ещё раз Enter — отправить, Esc — закрыть), сообщения живут 12 с
+ * Network battle on top of the game (src/cgame/net-battle.ts): the player list — name, health, ping, host — and the room chat.
+ * Enter — write (Enter again — send, Esc — close), messages live 12 s
  */
 export interface RosterRow { seat: number; name: string; hp: number; maxHp: number; ping: number; host: boolean; me: boolean; down: boolean }
 
@@ -12,7 +14,7 @@ export class BattleNetUi {
   private readonly log = document.createElement('div');
   private readonly input = document.createElement('input');
   private rosterHtml = '';
-  /** Отправить сообщение чата */
+  /** Send a chat message */
   onSend?: (text: string) => void;
 
   constructor(parent: HTMLElement) {
@@ -21,7 +23,7 @@ export class BattleNetUi {
     this.log.className = 'net-chat-log';
     this.input.className = 'net-chat-input';
     this.input.maxLength = 200;
-    this.input.placeholder = 'Сообщение — Enter, Esc — закрыть';
+    this.input.placeholder = t('Message — Enter, Esc — close');
     this.chatEl.append(this.log, this.input);
     parent.append(this.roster, this.chatEl);
     this.input.addEventListener('keydown', (e) => {
@@ -29,7 +31,7 @@ export class BattleNetUi {
       if (e.code === 'Enter') { const t = this.input.value.trim(); if (t) this.onSend?.(t); this.closeChat(); }
       else if (e.code === 'Escape') this.closeChat();
     });
-    // клавиши в поле — только для текста: игра их не видит
+    // keys in the field are for the text only: the game does not see them
     this.input.addEventListener('keyup', (e) => e.stopPropagation());
   }
 
@@ -38,7 +40,7 @@ export class BattleNetUi {
   openChat(): void { this.chatEl.classList.add('open'); this.input.value = ''; this.input.focus(); }
   closeChat(): void { this.chatEl.classList.remove('open'); this.input.blur(); }
 
-  /** Сообщение в ленту: имя и текст (системное — без имени) */
+  /** Message into the feed: name and text (system — no name) */
   add(name: string | null, text: string): void {
     const row = document.createElement('div');
     row.className = 'net-chat-row';
@@ -50,12 +52,12 @@ export class BattleNetUi {
     window.setTimeout(() => row.classList.add('old'), LIFE_MS);
   }
 
-  /** Список игроков: по месту, хост — с короной, без сил — бледнее */
+  /** Player list: by seat, the host with a crown, exhausted — paler */
   setRoster(rows: RosterRow[]): void {
     const esc = (v: string): string => v.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
     const html = rows.sort((a, b) => a.seat - b.seat).map((r) => {
       const k = r.maxHp > 0 ? Math.max(0, Math.min(1, r.hp / r.maxHp)) : 0;
-      const ping = r.ping > 0 ? `${Math.round(r.ping)} мс` : '—';
+      const ping = r.ping > 0 ? t('{ms} ms', { ms: Math.round(r.ping) }) : '—';
       return `<div class="net-row${r.me ? ' me' : ''}${r.down ? ' down' : ''}"><b>${r.host ? '♛ ' : ''}${esc(r.name)}</b><i><u style="width:${(k * 100).toFixed(0)}%"></u></i><span class="${r.ping > 200 ? 'bad' : ''}">${ping}</span></div>`;
     }).join('');
     if (html !== this.rosterHtml) { this.rosterHtml = html; this.roster.innerHTML = html; }

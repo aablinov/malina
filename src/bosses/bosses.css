@@ -1,4 +1,4 @@
-/* Полоса стража сверху (wiki/design-bosses.md): имя, подпись, здоровье со «следом» */
+/* Warden bar at the top (wiki/design-bosses.md): name, caption, health with a "trail" */
 .boss-bar {
   position: fixed; left: 50%; top: 1.4em; width: min(46em, 70vw); transform: translate(-50%, -1em); opacity: 0;
   transition: opacity 0.4s, transform 0.4s; pointer-events: none; z-index: 6; text-align: center;

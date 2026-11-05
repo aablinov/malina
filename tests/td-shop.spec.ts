@@ -3,17 +3,19 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Маркитант обороны куста (wiki/design-tower-defence.md, раздел 12): на каждой карте у точки появления героя; продаёт
- * оружие, луки, броню и артефакты за малину боя по ценам по редкости; купленное служит только в этом бою — в лагере
- * снаряжение героя как до боя, а малина своя.
+ * The Bush Defence sutler (wiki/design-tower-defence.md, section 12): on every map at the hero's spawn point; sells
+ * weapons, bows, armour and artifacts for the battle's raspberries at prices by rarity; a purchase serves only in this battle — in the camp
+ * the hero's gear is as before the battle, and the raspberries are their own.
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href;
 
-test('оборона: маркитант на всех картах, цены по редкости, покупка за малину боя, в лагере снаряжение как до боя', async ({ page }) => {
+test('defence: the sutler on every map, prices by rarity, buying with the battle\'s raspberries, in the camp the gear is as before the battle', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  // на каждой карте маркитант есть и до него можно дойти
+  // the language is chosen up front, otherwise "To camp" lands on the language picker instead of the lobby
+  await page.addInitScript(() => { try { localStorage.setItem('malina.lang', 'en'); } catch { /* storage unavailable */ } });
+  // on every map the sutler exists and can be reached
   for (const map of ['td2', 'td3']) {
     await page.goto(`${URL}?dev=playground&map=${map}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
@@ -28,10 +30,10 @@ test('оборона: маркитант на всех картах, цены п
     });
     expect(ok, map).toBe(true);
   }
-  // снаряжение героя до боёв — отложено при первом бою (в бою у героя набор обороны)
+  // the hero's gear before the battles — stashed at the first battle (in battle the hero has the defence kit)
   const camp0 = await page.evaluate(() => { const g = JSON.parse(sessionStorage.getItem('malina.stash.gear') ?? '{}'); return { items: g.items?.length, melee: g.equip?.melee, arrows: g.arrows }; });
   expect(camp0.items).toBeGreaterThan(6);
-  // бой из меню: купить топор, надеть, вернуться в лагерь
+  // battle from the menu: buy an axe, equip it, return to the camp
   await page.goto(`${URL}?map=td&from=menu`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
   const r = await page.evaluate(async () => {
@@ -64,7 +66,7 @@ test('оборона: маркитант на всех картах, цены п
     return { open, title, prices, arrows, bought, paid, before, inBattle, axe: axe.uid, kit, spells, auras, auraBought };
   });
   expect(r.open).toBe(true);
-  expect(r.title).toBe('Маркитант');
+  expect(r.title).toBe('Sutler');
   expect(r.prices.axe).toBe(240);
   expect(r.prices.claymore).toBe(480);
   expect(r.prices.scythe).toBe(780);
@@ -72,9 +74,9 @@ test('оборона: маркитант на всех картах, цены п
   expect(r.bought).toBe(true);
   expect(r.paid).toBe(240);
   expect(r.inBattle).toEqual({ items: r.before.items + 2, melee: r.axe });
-  // в бой — набор нового героя силы 1
+  // into battle — a new hero's kit of power 1
   expect(r.kit).toEqual({ items: 6, melee: 'sword', armor: 'tunic', ranged: 'bow', arts: ['fireball', 'spark', 'heal'], aura: null, power: 1 });
-  // все заклинания и ауры — за малину по редкости
+  // all spells and auras — for raspberries by rarity
   expect(r.spells.fireball).toBe(240);
   expect(r.spells.meteor).toBe(480);
   expect(r.spells.starfall).toBe(780);
@@ -83,7 +85,7 @@ test('оборона: маркитант на всех картах, цены п
   expect(r.auras.rage).toBe(780);
   expect(r.auraBought).toBe(true);
   await expect(page.locator('.pz.open.won')).toBeVisible();
-  await page.getByRole('button', { name: 'В лагерь' }).click();
+  await page.getByRole('button', { name: 'To camp' }).click();
   await page.waitForFunction(() => (window as any).__menu?.screen === 'lobby');
   const camp = await page.evaluate((key) => { const d = JSON.parse(localStorage.getItem(key) ?? '{}'); return { items: d.items?.length, melee: d.equip?.melee, arrows: d.arrows }; }, 'malina.profile');
   expect(camp).toEqual(camp0);

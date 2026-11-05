@@ -6,23 +6,24 @@ import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio.ts';
 import type { Spells } from '../spells.ts';
 import type { Target } from '../target.ts';
 import { C, rand, type Spell } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Молния и свет (wiki/design-spells.md, раздел 3, 7–12): копьё громовержца, громовой прыжок, грозовая туча,
- * звездопад, луч павшей звезды, небесный суд. Каждое — замах, удар (impact + pomp по ступени), послевкусие.
+ * Lightning and light (wiki/design-spells.md, section 3, 7–12): thunderer's spear, thunder leap, storm cloud,
+ * starfall, fallen star beam, heavenly judgement. Each — windup, hit (impact + pomp by tier), aftertaste.
  */
 
 const WHITE = C(3.6, 3.8, 4);
 const GOLD = C(4, 3.2, 1.2);
 
-/** Расстояние от точки (px, pz) до отрезка a–b на плоскости */
+/** Distance from point (px, pz) to segment a–b on the plane */
 function segDist(ax: number, az: number, bx: number, bz: number, px: number, pz: number): number {
   const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
   const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / l2)) : 0;
   return Math.hypot(ax + dx * t - px, az + dz * t - pz);
 }
 
-/** Светящийся брусок (ядро не тонируется — светится через bloom) */
+/** Glowing bar (the core is not tinted — it glows through bloom) */
 const glowBox = (color: THREE.Color, opacity = 1, additive = false): THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial> => new THREE.Mesh(
   new THREE.BoxGeometry(1, 1, 1),
   new THREE.MeshBasicMaterial({ color, toneMapped: false, transparent: true, opacity, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: !additive }),
@@ -34,8 +35,8 @@ const disposeTree = (o: THREE.Object3D): void => {
 };
 
 /**
- * Куда сейчас целится игрок: точка каста, а если курсор с тех пор сдвинулся — сам курсор (kit.aim).
- * В тестах и при клике по слоту курсор может стоять в другом месте — тогда держимся точки каста
+ * Where the player aims now: the cast point, or the cursor itself if it has moved since (kit.aim).
+ * In tests and on a slot click the cursor may be elsewhere — then stick to the cast point
  */
 function aimer(kit: Spells, at: THREE.Vector3): () => THREE.Vector3 {
   const aim0 = kit.aim.clone();
@@ -46,80 +47,80 @@ function aimer(kit: Spells, at: THREE.Vector3): () => THREE.Vector3 {
   };
 }
 
-/** Направление на плоскости от героя к точке (если совпали — куда смотрит герой) */
+/** Direction on the plane from the hero to a point (if they coincide — where the hero looks) */
 function flatDir(kit: Spells, at: THREE.Vector3): THREE.Vector3 {
   const hero = kit.h.hero;
   const d = new THREE.Vector3(at.x - hero.pos.x, 0, at.z - hero.pos.z);
   return d.lengthSq() > 0.01 ? d.normalize() : new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw));
 }
 
-// ---------- звуки группы: пентатоника, низ через boom, реверберация ----------
+// ---------- group sounds: pentatonic, low end via boom, reverb ----------
 const sfx = {
-  /** Копьё растёт в руке: треск и подъём */
+  /** The spear grows in the hand: crackle and rise */
   spearGrow() {
     for (let i = 0; i < 6; i++) hiss({ dur: 0.03, vol: 0.07, f: rand(4000, 8000), q: 2, delay: i * 0.035, verb: 0.15 });
     voice({ type: 'triangle', f: 440, f1: 1760, dur: 0.28, vol: 0.05, lp: 4000, verb: 0.3 });
   },
-  /** Бросок: свист разряда */
+  /** Throw: whistle of a discharge */
   spearThrow(k: number) {
     hiss({ dur: 0.3, vol: 0.25 + k * 0.1, f: 6000, f1: 1200, q: 0.8, verb: 0.3 });
     boom(150, 60, 0.3, 0.3);
     voice({ type: 'triangle', f: 1318.5, f1: 659.25, dur: 0.3, vol: 0.05, verb: 0.4 });
   },
-  /** Копьё прошило цель: щипок выше и выше */
+  /** The spear pierced a target: a pluck higher and higher */
   spearPierce(i: number) {
     pluck(deg(659.25, 2 + i * 2), 0.08);
     hiss({ dur: 0.08, vol: 0.14, f: 4500, q: 1, verb: 0.2 });
   },
-  /** Гром: щелчок, низ, яркий аккорд и раскат */
+  /** Thunder: click, low end, bright chord and rumble */
   thunder(k: number) {
     hiss({ dur: 0.05, vol: 0.45, f: 3000, type: 'highpass', verb: 0.2 });
     boom(100 - k * 30, 30, 0.9 + k * 0.3, 0.6 + k * 0.15, 0, 0.4);
     [0, 7, 12, 16].forEach((s, i) => voice({ type: 'triangle', f: semi(659.25, s), dur: 0.9, vol: 0.045, delay: 0.02 + i * 0.03, verb: 0.6 }));
     hiss({ dur: 1.8 + k, vol: 0.18 + k * 0.08, f: 240, f1: 60, q: 0.5, type: 'lowpass', attack: 0.3, delay: 0.1, verb: 0.5 });
   },
-  /** Прыжок: «вжух» вверх */
+  /** Leap: a "whoosh" upward */
   leapUp() {
     hiss({ dur: 0.35, vol: 0.2, f: 600, f1: 4000, q: 0.6, attack: 0.05, verb: 0.3 });
     voice({ type: 'triangle', f: 330, f1: 990, dur: 0.3, vol: 0.05, verb: 0.3 });
   },
-  /** Туча собралась: мягкий рокот */
+  /** The cloud gathered: soft rumble */
   rumble(v = 0.1) {
     hiss({ dur: 1.2, vol: v, f: 200, f1: 70, q: 0.5, type: 'lowpass', attack: 0.3, verb: 0.5 });
     boom(70, 35, 0.8, v * 1.5, 0.1, 0.4);
   },
-  /** Молния из тучи */
+  /** Lightning from the cloud */
   cloudStrike(i: number) {
     hiss({ dur: 0.04, vol: 0.32, f: 3000, type: 'highpass', verb: 0.2 });
     hiss({ dur: 0.25, vol: 0.2, f: 3200, f1: 500, q: 0.9, verb: 0.3 });
     boom(90, 32, 0.5, 0.35, 0, 0.35);
     pluck(deg(659.25, (i * 2) % 9), 0.05, 0.02);
   },
-  /** Звезда падает: высокий свист вниз */
+  /** A star falls: high whistle downward */
   starWhistle() { voice({ type: 'sine', f: 2637, f1: 880, dur: 0.32, vol: 0.03, verb: 0.4 }); },
-  /** Звезда упала: колокольчик пентатоники и мягкий удар */
+  /** A star landed: a pentatonic bell and a soft thud */
   starLand(i: number) {
     bell(deg(783.99, (i * 3) % 10), 0.7, 0.05, 0, 0.6);
     boom(130, 50, 0.25, 0.18);
     hiss({ dur: 0.1, vol: 0.08, f: 6000, type: 'highpass', verb: 0.2 });
   },
-  /** Луч: долгий аккорд и гул; dur — сколько держится */
+  /** Beam: a long chord and hum; dur — how long it holds */
   beamHold(dur: number) {
     [0, 4, 7, 12, 16].forEach((s) => voice({ type: 'triangle', f: semi(196, s), dur: dur + 0.4, vol: 0.045, attack: 0.25, detune: 10, lp: 3000, verb: 0.6 }));
     voice({ type: 'sine', f: 783.99, dur: dur + 0.4, vol: 0.04, attack: 0.2, verb: 0.7 });
     hiss({ dur: dur + 0.3, vol: 0.14, f: 1800, q: 0.6, attack: 0.15, verb: 0.4 });
     for (let t = 0; t < dur; t += 0.45) boom(80, 40, 0.4, 0.25, t, 0.3);
   },
-  /** Свет собирается в руке: подъём */
+  /** Light gathers in the hand: rise */
   gather(dur: number) {
     voice({ type: 'sine', f: 392, f1: 1568, dur, vol: 0.06, attack: dur * 0.8, verb: 0.6 });
     hiss({ dur, vol: 0.12, f: 800, f1: 7000, q: 0.6, attack: dur * 0.9, verb: 0.5 });
   },
-  /** Небесный суд опускается: хор с медленной атакой */
+  /** Heavenly judgement descends: a choir with a slow attack */
   choir(dur: number) {
     [0, 4, 7, 12].forEach((s, i) => voice({ type: 'triangle', f: semi(261.63, s), dur: dur + 0.6, vol: 0.04, attack: dur * 0.8, detune: 12, lp: 2600, delay: i * 0.03, verb: 0.8 }));
   },
-  /** Удар суда: колокол, аккорд и низ */
+  /** The judgement strike: bell, chord and low end */
   judgement(k: number) {
     boom(110 - k * 30, 30, 1.2, 0.7, 0, 0.5);
     bell(semi(523.25, 0), 2.4, 0.1, 0, 0.8); bell(semi(523.25, 7), 2, 0.07, 0.04, 0.8); bell(semi(523.25, 12), 1.8, 0.06, 0.08, 0.8);
@@ -128,7 +129,7 @@ const sfx = {
   },
 };
 
-// ---------- 7. Копьё громовержца ----------
+// ---------- 7. Thunderer's spear ----------
 
 function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('spark');
@@ -137,7 +138,7 @@ function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
   kit.face(hero.pos.clone().add(dir));
   kit.windup('spark', k);
   sfx.spearGrow();
-  // замах: копьё молнии вырастает в руке, вокруг треск
+  // windup: a lightning spear grows in the hand, crackling around
   const spear = new THREE.Group();
   const core = glowBox(WHITE), halo = glowBox(s.a.clone().multiplyScalar(0.55), 0.55, true);
   spear.add(core, halo);
@@ -157,7 +158,7 @@ function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
   const finish = (p: THREE.Vector3): void => {
     done = true;
     disposeTree(spear);
-    // удар на выходе: гром с неба в конец линии
+    // hit on exit: thunder from the sky at the end of the line
     const g = p.clone();
     const y = kit.h.terrain.floorAt(g.x, g.z, hero.pos.y + 2);
     g.y = Number.isFinite(y) ? y : hero.pos.y;
@@ -171,7 +172,7 @@ function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
     kit.h.aoe(g, 2 + k, Math.round(power * 0.5), 1.4, false);
     fx.decal(g, kit.tex.scorch(), '#ffffff', 2 + k, 3, false, 0.7);
     fx.decal(g, kit.tex.glow(), s.a.clone().multiplyScalar(0.3), 2.4 + k, 1, true);
-    // послевкусие: светящаяся борозда вдоль пути копья
+    // aftertaste: a glowing furrow along the spear's path
     const trail = glowBox(s.a.clone().multiplyScalar(0.45), 0.8, true);
     const tl = start.distanceTo(g.clone().setY(start.y));
     trail.position.copy(start).lerp(g.clone().setY(start.y), 0.5).setY(hero.pos.y + 0.06);
@@ -190,7 +191,7 @@ function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
         thrown = true;
         start.copy(spear.position);
         end = start.clone().addScaledVector(dir, L);
-        // упрётся в стену раньше — там и гром
+        // if it hits a wall earlier — thunder there
         const wall = kit.h.terrain.wallHit(start.x, start.z, end.x, end.z, hero.pos.y + 0.5);
         if (wall) end.set(wall.x, start.y, wall.z);
         sfx.spearThrow(k);
@@ -203,9 +204,9 @@ function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
     travel = Math.min(total, travel + 42 * dt);
     const p = start.clone().addScaledVector(dir, travel);
     place(p, 1);
-    // хвост искр
+    // tail of sparks
     for (let i = 0; i < 4; i++) fx.particle({ pos: p.clone().addScaledVector(dir, -rand(0, len)), vel: new THREE.Vector3(rand(-1, 1), rand(-0.5, 1), rand(-1, 1)), life: 0.25, size: 0.05, color: rnd() < 0.5 ? s.a : s.b, gravity: 2 });
-    // пронзает всех на отрезке, пройденном за кадр
+    // pierces everyone on the segment covered this frame
     const a0 = start.clone().addScaledVector(dir, prev);
     for (const tg of kit.h.targets()) {
       if (!tg.alive || hit.has(tg)) continue;
@@ -223,19 +224,19 @@ function thunderspear(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
   });
 }
 
-// ---------- 8. Громовой прыжок ----------
+// ---------- 8. Thunder leap ----------
 
 function thunderleap(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('spark');
   const R = (a.radius ?? 4.5) + k * 1.5;
-  // куда приземлиться: к курсору, но не дальше 3 м и не сквозь стену
+  // where to land: toward the cursor, but no farther than 3 m and not through a wall
   const dir = flatDir(kit, at);
   const far = Math.min(3, Math.hypot(at.x - hero.pos.x, at.z - hero.pos.z));
   let land = hero.pos.clone().addScaledVector(dir, far);
   if (kit.h.terrain.blocked(hero.pos.x, hero.pos.z, land.x, land.z, hero.pos.y + 0.5)) land = hero.pos.clone();
   kit.face(land.clone().add(dir));
   kit.windup('spark', k);
-  // замах: присел — по ногам бегут искры, круг на месте приземления
+  // windup: crouched — sparks run down the legs, a circle at the landing spot
   kit.groundSigil('spark', land, R * 0.7, 0.4, 0.5, 0.22);
   for (let i = 0; i < 16; i++) {
     const an = rnd() * Math.PI * 2;
@@ -254,7 +255,7 @@ function thunderleap(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
     kit.proc((dt) => {
       if (landed) return false;
       t += dt;
-      // в полёте тянемся к точке приземления; за героем тянется хвост искр
+      // in flight we pull toward the landing point; a tail of sparks trails the hero
       const q = Math.min(1, t / airT);
       const want = from.clone().lerp(land, q);
       hero.pos.x = want.x; hero.pos.z = want.z;
@@ -281,7 +282,7 @@ function slam(kit: Spells, c: THREE.Vector3, R: number, power: number, k: number
   fx.burst(c.clone().setY(c.y + 0.2), ['#d8cfa8', '#b9ad88', '#9a8f70'], 18, { speed: 4, up: 3, size: 0.12, life: 0.6, gravity: 8 });
   fx.burst(c.clone().setY(c.y + 0.4), [s.a, s.b], 40, { speed: 8, up: 3, size: 0.06, life: 0.5, glow: true, gravity: 6 });
   kit.h.aoe(c, R, Math.round(power), 2.5, false);
-  // цепные молнии во все стороны: по земле лучами и в цели вокруг
+  // chain lightning in all directions: rays along the ground and into targets around
   const n = 8 + Math.round(k * 4);
   for (let i = 0; i < n; i++) {
     const an = (i / n) * Math.PI * 2 + rand(-0.2, 0.2), r = R * rand(0.8, 1.15);
@@ -298,7 +299,7 @@ function slam(kit: Spells, c: THREE.Vector3, R: number, power: number, k: number
   }));
   fx.decal(c, kit.tex.scorch(), '#ffffff', R * 1.6, 4, false, 0.7);
   fx.decal(c, kit.tex.glow(), s.a.clone().multiplyScalar(0.3), R * 1.6, 1.2, true);
-  // послевкусие: по кругу ещё секунду ползут искры
+  // aftertaste: sparks crawl around the circle for another second
   let left = 1.2;
   kit.proc((dt) => {
     left -= dt;
@@ -312,7 +313,7 @@ function slam(kit: Spells, c: THREE.Vector3, R: number, power: number, k: number
   });
 }
 
-// ---------- 9. Грозовая туча ----------
+// ---------- 9. Storm cloud ----------
 
 function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('spark');
@@ -321,7 +322,7 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
   kit.face(hero.pos.clone().add(new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw))));
   kit.windup('spark', k);
   sfx.rumble(0.12);
-  // воксельная туча: серо-синие кубы, внутри мерцает свет
+  // voxel cloud: grey-blue cubes, light flickers inside
   const cloud = new THREE.Group();
   const mat = new THREE.MeshLambertMaterial({ color: '#5a6280', transparent: true, opacity: 0.88, emissive: new THREE.Color('#0a1020') });
   const geo = new THREE.BoxGeometry(1, 1, 1);
@@ -329,7 +330,7 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     const m = new THREE.Mesh(geo, mat);
     const sz = rand(0.5, 1.05);
     m.scale.set(sz * rand(1, 1.5), sz * 0.75, sz);
-    // кубы плотнее к середине и выше в центре — «шапка» тучи
+    // cubes denser toward the middle and taller at the centre — the cloud's "cap"
     const an = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 1.6;
     m.position.set(Math.cos(an) * r * 1.2, rand(-0.25, 0.25) + (1.6 - r) * 0.25, Math.sin(an) * r * 0.8);
     cloud.add(m);
@@ -342,7 +343,7 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
   const every = 0.75 - k * 0.25;
   kit.proc((dt) => {
     t += dt;
-    // туча плывёт за героем, появляется и тает
+    // the cloud drifts after the hero, appears and fades
     const want = hero.pos.clone().setY(hero.pos.y + height + Math.sin(t * 1.5) * 0.15);
     cloud.position.lerp(want, Math.min(1, dt * 3));
     cloud.rotation.y += dt * 0.15;
@@ -351,11 +352,11 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
     mat.opacity = 0.9 * vanish;
     flick = Math.max(0, flick - dt * 4);
     mat.emissive.setRGB(0.04 + flick * 0.5, 0.06 + flick * 0.7, 0.12 + flick * 1);
-    // капли дождя
+    // raindrops
     if (rnd() < 0.7 * vanish) fx.particle({ pos: cloud.position.clone().add(new THREE.Vector3(rand(-1.5, 1.5), -0.5, rand(-1.2, 1.2))), vel: new THREE.Vector3(0, -9, 0), life: 0.4, size: 0.04, color: s.b.clone().multiplyScalar(0.5), gravity: 0, shrink: false });
     if (t >= next && t < dur) {
       next = t + every;
-      // бьёт ближайшего к прицелу, если он под тучей (в радиусе от героя), иначе — ближайшего к герою
+      // strikes the one nearest to the aim if it is under the cloud (within radius of the hero), otherwise the one nearest to the hero
       const f = kit.nearest(focus(), 2.5);
       const tg = f && Math.hypot(f.pos.x - hero.pos.x, f.pos.z - hero.pos.z) - f.radius <= R ? f : kit.nearest(hero.pos, R);
       const bottom = cloud.position.clone().add(new THREE.Vector3(rand(-1, 1), -0.4, rand(-0.8, 0.8)));
@@ -372,7 +373,7 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
         sfx.cloudStrike(strikes);
         strikes++;
       } else if (rnd() < 0.4) {
-        // целей нет — молния бьёт внутри тучи, глухой рокот
+        // no targets — lightning strikes inside the cloud, a dull rumble
         kit.bolt(bottom.clone().setY(bottom.y + 0.6), bottom.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(-0.2, 0.3), rand(-1, 1))), s.a, 0.03, 0, 0.12);
         sfx.rumble(0.05);
       }
@@ -384,7 +385,7 @@ function stormcloud(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vect
   });
 }
 
-// ---------- 10. Звездопад ----------
+// ---------- 10. Starfall ----------
 
 function starfall(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('star');
@@ -394,7 +395,7 @@ function starfall(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
   kit.windup('star', k);
   sfx.gather(tele);
   kit.groundSigil('star', c, R, tele, dur, 0.14);
-  // герой парит в столбе света
+  // the hero hovers in a pillar of light
   const beam = lightBeam(GOLD.clone().multiplyScalar(0.4), 8, 1.4);
   kit.h.scene.add(beam.group);
   let bt = 0;
@@ -413,7 +414,7 @@ function starfall(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
     beam.mats.forEach((m) => m.dispose());
     return false;
   });
-  // звёзды: каждая четвёртая метит в цель внутри круга, остальные — куда придётся
+  // stars: every fourth one aims at a target inside the circle, the rest — wherever
   const gap = 0.16 - k * 0.04;
   let i = 0;
   for (let t = tele; t < tele + dur; t += gap, i++) {
@@ -456,24 +457,24 @@ function fallingStar(kit: Spells, p: THREE.Vector3, power: number, n: number, k:
   });
 }
 
-// ---------- 11. Луч павшей звезды ----------
+// ---------- 11. Fallen star beam ----------
 
 function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('star');
   const L = a.radius ?? 16, dur = (a.duration ?? 3) + k, tele = 0.6;
   const focus = aimer(kit, at);
   const width = 0.5 + k * 0.35;
-  // мифическое: мир темнеет на весь замах, крупное название, хор
-  kit.pomp('mythic', hero.pos.clone(), 'star', 'Луч павшей звезды', tele + 0.4);
+  // mythic: the world darkens for the whole windup, big title, choir
+  kit.pomp('mythic', hero.pos.clone(), 'star', t('Fallen star beam'), tele + 0.4);
   kit.windup('star', k);
   sfx.gather(tele);
-  // замах: свет стягивается к руке, в ладони растёт звезда
+  // windup: light gathers toward the hand, a star grows in the palm
   const orb = new THREE.Group();
   const oc = glowBox(WHITE), os = glowBox(GOLD.clone().multiplyScalar(0.6), 0.6, true);
   orb.add(oc, os);
   kit.h.scene.add(orb);
   let yaw = Math.atan2(at.x - hero.pos.x, at.z - hero.pos.z);
-  let t = 0, firing = false, tick = 0, decalT = 0, done = false;
+  let tt = 0, firing = false, tick = 0, decalT = 0, done = false;
   const beam = new THREE.Group();
   const core = glowBox(C(4, 3.7, 2.6)), halo = glowBox(s.a.clone().multiplyScalar(0.5), 0.6, true), outer = glowBox(s.a.clone().multiplyScalar(0.12), 0.3, true);
   beam.add(core, halo, outer);
@@ -485,10 +486,10 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
   let light: THREE.PointLight | null = null;
   kit.proc((dt) => {
     if (done) return false;
-    t += dt;
+    tt += dt;
     const hand = kit.hand();
     if (!firing) {
-      const q = Math.min(1, t / tele);
+      const q = Math.min(1, tt / tele);
       orb.position.copy(hand);
       orb.rotation.x += dt * 6; orb.rotation.y += dt * 4;
       oc.scale.setScalar(0.1 + q * 0.35); os.scale.setScalar(0.2 + q * 0.7);
@@ -500,7 +501,7 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
       }
       kit.face(focus(), 0.2);
       fx.zoom = Math.max(fx.zoom, 0.3 * q);
-      if (t >= tele) {
+      if (tt >= tele) {
         firing = true;
         disposeTree(orb);
         kit.h.scene.add(beam);
@@ -512,7 +513,7 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
       }
       return true;
     }
-    // ведём луч за курсором, медленно — он тяжёлый
+    // steer the beam after the cursor, slowly — it is heavy
     const fa = focus();
     const want = Math.atan2(fa.x - hero.pos.x, fa.z - hero.pos.z);
     let dy = want - yaw;
@@ -526,23 +527,23 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
     const wall = kit.h.terrain.wallHit(from.x, from.z, end.x, end.z, hero.pos.y + 0.6);
     if (wall) end = new THREE.Vector3(wall.x, from.y, wall.z);
     const len = from.distanceTo(end);
-    const ft = t - tele, fade = Math.min(1, ft / 0.12) * Math.min(1, Math.max(0, (dur - ft) / 0.25));
+    const ft = tt - tele, fade = Math.min(1, ft / 0.12) * Math.min(1, Math.max(0, (dur - ft) / 0.25));
     beam.position.copy(from).lerp(end, 0.5);
     beam.lookAt(end);
-    const wob = 1 + Math.sin(t * 40) * 0.08;
+    const wob = 1 + Math.sin(tt * 40) * 0.08;
     core.scale.set(width * 0.45 * fade * wob, width * 0.45 * fade * wob, len);
     halo.scale.set(width * 0.95 * fade, width * 0.95 * fade, len);
     outer.scale.set(width * 1.7 * fade, width * 1.7 * fade, len);
     rings.forEach((r, i) => {
-      const z = ((t * 6 + i / rings.length) % 1 - 0.5) * len;
+      const z = ((tt * 6 + i / rings.length) % 1 - 0.5) * len;
       r.position.set(0, 0, z);
-      r.scale.setScalar(fade * (1 + ((t * 6 + i / rings.length) % 1) * 0.6));
+      r.scale.setScalar(fade * (1 + ((tt * 6 + i / rings.length) % 1) * 0.6));
       r.material.opacity = fade * 0.8;
     });
     fx.zoom = Math.max(fx.zoom, 0.3);
     fx.shake = Math.max(fx.shake, 0.18);
     if (light) { light.position.copy(end).setY(end.y + 0.5); light.intensity = (16 + k * 8) * fade; }
-    // конец луча: искры, выжженная полоса
+    // end of the beam: sparks, a scorched strip
     const g = end.clone();
     const fy = kit.h.terrain.floorAt(g.x, g.z, hero.pos.y + 2);
     g.y = Number.isFinite(fy) ? fy : hero.pos.y;
@@ -550,7 +551,7 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
     decalT -= dt;
     if (decalT <= 0) {
       decalT = 0.06;
-      // полоса вдоль всего луча: следы по линии через равные промежутки
+      // strip along the whole beam: traces along the line at even intervals
       for (let d = 1.5; d < len; d += 2.2) {
         const q = from.clone().addScaledVector(dir, d);
         const y = kit.h.terrain.floorAt(q.x, q.z, hero.pos.y + 2);
@@ -559,7 +560,7 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
       }
       fx.decal(g, kit.tex.glow(), s.a.clone().multiplyScalar(0.25), 1.6, 0.8, true);
     }
-    // урон тиками по линии луча
+    // damage in ticks along the beam line
     tick -= dt;
     if (tick <= 0) {
       tick = 0.2;
@@ -580,7 +581,7 @@ function starbeam(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector
   });
 }
 
-// ---------- 12. Небесный суд ----------
+// ---------- 12. Heavenly judgement ----------
 
 function judgement(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('star');
@@ -590,7 +591,7 @@ function judgement(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
   kit.windup('star', k);
   sfx.choir(tele);
   kit.groundSigil('star', c, R, tele, 0.9, 0.3);
-  // замах: тонкий луч с неба опускается и густеет, перья света сыплются сверху
+  // windup: a thin beam from the sky descends and thickens, feathers of light pour from above
   const pre = lightBeam(GOLD.clone().multiplyScalar(0.35), 14, 0.5);
   pre.group.position.copy(c);
   fx.custom(pre.group, tele, (q) => {
@@ -602,7 +603,7 @@ function judgement(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
     kit.impact('star', c, k, 18, 0.6);
     kit.pomp('legendary', c, 'star');
     sfx.judgement(k);
-    // столп света: широкий, тает за секунду с лишним
+    // pillar of light: wide, fades in a bit over a second
     const pillar = lightBeam(GOLD.clone().lerp(WHITE, 0.3).multiplyScalar(0.4), 16, R * 0.55);
     pillar.group.position.copy(c);
     fx.custom(pillar.group, 1.4 + k * 0.3, (q) => {
@@ -614,14 +615,14 @@ function judgement(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
     fx.shock(c.clone().setY(c.y + 0.05), R * 0.7, s.b, 0.4, 0.12);
     fx.burst(c.clone().setY(c.y + 0.3), [s.a, s.b], 40 + Math.round(k * 20), { speed: 3, up: 7, size: 0.07, life: 1, glow: true, gravity: 3 });
     kit.h.aoe(c, R, Math.round(power), 1.2, false);
-    // герой в столпе — лечится; позже здесь же поднимается павший союзник (кооп)
+    // the hero in the pillar is healed; later a fallen ally rises here too (co-op)
     if (!hero.down && Math.hypot(hero.pos.x - c.x, hero.pos.z - c.z) <= R) {
       const before = hero.hp;
       hero.hp = Math.min(hero.maxHp, hero.hp + power * 0.5);
       if (hero.hp > before) fx.text(hero.pos.clone().setY(hero.pos.y + 0.8), `+${Math.round(hero.hp - before)}`, 'healbig');
     }
     fx.decal(c, kit.tex.glow(), s.a.clone().multiplyScalar(0.16), R * 2, 2.5, true);
-    // послевкусие: перья-искры медленно поднимаются из круга
+    // aftertaste: feather sparks slowly rise from the circle
     let left = 2;
     kit.proc((dt) => {
       left -= dt;
@@ -634,12 +635,12 @@ function judgement(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
   });
 }
 
-/** Молния и свет: копьё громовержца, громовой прыжок, грозовая туча, звездопад, луч павшей звезды, небесный суд */
+/** Lightning and light: thunderer's spear, thunder leap, storm cloud, starfall, fallen star beam, heavenly judgement */
 export const STORM_LIGHT = {
-  thunderspear: { school: 'spark', tier: 'rare', title: 'Копьё громовержца', cast: thunderspear },
-  thunderleap: { school: 'spark', tier: 'legendary', title: 'Громовой прыжок', cast: thunderleap },
-  stormcloud: { school: 'spark', tier: 'common', title: 'Грозовая туча', cast: stormcloud },
-  starfall: { school: 'star', tier: 'legendary', title: 'Звездопад', cast: starfall },
-  starbeam: { school: 'star', tier: 'mythic', title: 'Луч павшей звезды', cast: starbeam },
-  judgement: { school: 'star', tier: 'legendary', title: 'Небесный суд', cast: judgement },
+  thunderspear: { school: 'spark', tier: 'rare', title: t("Thunderer's spear"), cast: thunderspear },
+  thunderleap: { school: 'spark', tier: 'legendary', title: t('Thunder leap'), cast: thunderleap },
+  stormcloud: { school: 'spark', tier: 'common', title: t('Storm cloud'), cast: stormcloud },
+  starfall: { school: 'star', tier: 'legendary', title: t('Starfall'), cast: starfall },
+  starbeam: { school: 'star', tier: 'mythic', title: t('Fallen star beam'), cast: starbeam },
+  judgement: { school: 'star', tier: 'legendary', title: t('Heavenly judgement'), cast: judgement },
 } satisfies Partial<Record<BossSpellKind, Spell>>;

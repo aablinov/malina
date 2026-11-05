@@ -2,10 +2,10 @@ import type { Db } from '../db.ts';
 
 export interface PlayerRow { id: string; name: string; created_at: number; last_seen: number }
 
-/** Ключ имени: «Малинка» и «малинка» — одно имя */
+/** Name key: "Malinka" and "malinka" are the same name */
 export const nameKey = (name: string): string => name.toLocaleLowerCase('ru');
 
-/** Игроки: имя и хеш токена (сам токен знает только браузер) */
+/** Players: name and token hash (only the browser knows the token itself) */
 export class Players {
   private readonly db: Db;
   constructor(db: Db) { this.db = db; }

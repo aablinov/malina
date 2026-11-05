@@ -9,12 +9,13 @@ import { additive, additiveSprite, glowTex } from './loot-look.ts';
 import { Sigil } from './sigils.ts';
 import { spellSfx } from './spell-audio.ts';
 import type { Target } from './target.ts';
+import { t } from './i18n/i18n.ts';
 
 /**
- * Ауры (wiki/design-spells.md, раздел 4): четвёртое гнездо. Действуют всегда и видны вокруг героя — тусклый круг под ногами
- * и свой знак (щиты, огоньки, угли, нити). Урон героя копит шкалу; полная — R: вспышка ×3 на 5 с — большой круг раскрывается
- * весь, удар, аккорд. Эффекты читает снаряжение (src/gear.ts): множители урона, перезарядки, душ, получаемого урона.
- * Наступательные ауры (жжение, стужа, гроза…) сами бьют врагов — src/aura-offense.ts.
+ * Auras (wiki/design-spells.md, section 4): the fourth slot. Always on and visible around the hero — a dim circle underfoot
+ * and an own sign (shields, lights, embers, threads). The hero's damage fills the meter; full — R: a ×3 flare for 5 s — the big circle
+ * unfolds fully, a hit, a chord. The gear reads the effects (src/gear.ts): multipliers of damage, cooldown, souls, damage taken.
+ * Offensive auras (burning, frost, storm…) strike enemies themselves — src/aura-offense.ts.
  */
 
 export const AURA_METER = 250;
@@ -25,27 +26,27 @@ export interface AuraHooks {
   fx: FX;
   hero: Knight;
   targets(): Target[];
-  /** Урон цели от ауры (шипы) */
+  /** Damage to a target from the aura (thorns) */
   damage(t: Target, dmg: number, from: THREE.Vector3, knock: number): void;
-  /** Множители поменялись (вспышка началась или кончилась, надели другую) */
+  /** Multipliers changed (a flare began or ended, another aura equipped) */
   changed(): void;
   banner(html: string): void;
 }
 
 const C = (r: number, g: number, b: number): THREE.Color => new THREE.Color(r, g, b);
 const LOOK: Record<AuraKind, { a: THREE.Color; b: THREE.Color; css: string; name: string }> = {
-  pact: { a: C(4, 0.5, 0.8), b: C(3, 0.3, 0.4), css: '#ff6a80', name: 'Кровавый пакт' },
-  bastion: { a: C(1.2, 2, 4), b: C(4, 3, 1), css: '#9ac4ff', name: 'Бастион' },
-  rage: { a: C(4, 1.2, 0.3), b: C(4, 0.45, 0.2), css: '#ff8a40', name: 'Ярость' },
-  clarity: { a: C(0.8, 2.6, 4), b: C(2.4, 3.4, 4), css: '#8ad8ff', name: 'Ясность' },
-  thorns: { a: C(1, 3, 0.8), b: C(3.6, 1, 1.6), css: '#a8ff8a', name: 'Терновый венец' },
-  inferno: { a: C(4, 1, 0.2), b: C(4, 2.2, 0.4), css: '#ff7a2a', name: 'Горнило' },
-  frost: { a: C(1.2, 2.6, 4), b: C(3, 3.6, 4), css: '#9ae0ff', name: 'Стужа' },
-  storm: { a: C(2.4, 2.4, 4), b: C(3.6, 3.4, 1.6), css: '#c8c0ff', name: 'Грозовой венец' },
-  halo: { a: C(4, 3.2, 1.2), b: C(4, 4, 3), css: '#ffe08a', name: 'Карающий ореол' },
-  shade: { a: C(2, 0.6, 3.6), b: C(0.6, 3, 2.8), css: '#b07aff', name: 'Голодная тень' },
-  quake: { a: C(3.6, 2.2, 0.6), b: C(1.4, 3, 0.8), css: '#e0b060', name: 'Каменная поступь' },
-  blades: { a: C(3.6, 1, 3.4), b: C(4, 2, 3), css: '#ff8ae0', name: 'Вихрь клинков' },
+  pact: { a: C(4, 0.5, 0.8), b: C(3, 0.3, 0.4), css: '#ff6a80', name: t('Blood Pact') },
+  bastion: { a: C(1.2, 2, 4), b: C(4, 3, 1), css: '#9ac4ff', name: t('Bastion') },
+  rage: { a: C(4, 1.2, 0.3), b: C(4, 0.45, 0.2), css: '#ff8a40', name: t('Rage') },
+  clarity: { a: C(0.8, 2.6, 4), b: C(2.4, 3.4, 4), css: '#8ad8ff', name: t('Clarity') },
+  thorns: { a: C(1, 3, 0.8), b: C(3.6, 1, 1.6), css: '#a8ff8a', name: t('Crown of Thorns') },
+  inferno: { a: C(4, 1, 0.2), b: C(4, 2.2, 0.4), css: '#ff7a2a', name: t('Furnace') },
+  frost: { a: C(1.2, 2.6, 4), b: C(3, 3.6, 4), css: '#9ae0ff', name: t('Deep Frost') },
+  storm: { a: C(2.4, 2.4, 4), b: C(3.6, 3.4, 1.6), css: '#c8c0ff', name: t('Storm Crown') },
+  halo: { a: C(4, 3.2, 1.2), b: C(4, 4, 3), css: '#ffe08a', name: t('Punishing Halo') },
+  shade: { a: C(2, 0.6, 3.6), b: C(0.6, 3, 2.8), css: '#b07aff', name: t('Hungry Shade') },
+  quake: { a: C(3.6, 2.2, 0.6), b: C(1.4, 3, 0.8), css: '#e0b060', name: t('Stone Tread') },
+  blades: { a: C(3.6, 1, 3.4), b: C(4, 2, 3), css: '#ff8ae0', name: t('Whirl of Blades') },
 };
 export const AURA_COLOR: Record<AuraKind, string> = {
   pact: '#c8203a', bastion: '#3a6ad8', rage: '#e0602a', clarity: '#2a9ae0', thorns: '#4a9a3a',
@@ -55,7 +56,7 @@ export const AURA_COLOR: Record<AuraKind, string> = {
 const rand = (a: number, b: number): number => a + rnd() * (b - a);
 
 let shieldT: THREE.Texture | null = null;
-/** Щит-руна для «Бастиона»: контур щита и знак внутри */
+/** Rune shield for "Bastion": a shield outline and a sign inside */
 export const shieldTex = (): THREE.Texture => {
   if (shieldT) return shieldT;
   const cv = makeCanvas(128, 128);
@@ -77,14 +78,14 @@ export const shieldTex = (): THREE.Texture => {
 
 export class Auras {
   kind: AuraKind | null = null;
-  /** Сила эффекта, доля (0,2 = 20 %) с учётом силы предмета */
+  /** Effect strength as a fraction (0.2 = 20 %) with item power */
   private value = 0;
   radius = 8;
-  /** Шкала 0..AURA_METER */
+  /** Meter 0..AURA_METER */
   meter = 0;
-  /** Осталось вспышки, с */
+  /** Flare time left, s */
   flareT = 0;
-  /** Вспышки (для тестов) */
+  /** Flares (for tests) */
   flares = 0;
   private uid: string | null = null;
   private sigil: Sigil | null = null;
@@ -95,32 +96,32 @@ export class Auras {
   private time = 0;
   private shieldFlash = 0;
   private readyRung = false;
-  /** Наступательная часть: жжёт, морозит, бьёт молнией… */
+  /** Offensive part: burns, freezes, strikes with lightning… */
   readonly offense: AuraOffense;
 
   private readonly h: AuraHooks;
   constructor(h: AuraHooks) { this.h = h; this.offense = new AuraOffense(h); }
 
-  /** Множитель вспышки */
+  /** Flare multiplier */
   private get m(): number { return this.flareT > 0 ? 3 : 1; }
   private on(k: AuraKind): number { return this.kind === k ? this.value * this.m : 0; }
 
-  // ---------- эффекты (читает снаряжение) ----------
-  /** Доля урона, которая возвращается здоровьем */
+  // ---------- effects (read by the gear) ----------
+  /** Fraction of damage returned as health */
   get leech(): number { return this.on('pact'); }
-  /** Множитель получаемого урона */
+  /** Damage taken multiplier */
   get damageTaken(): number { return Math.max(0.2, 1 - this.on('bastion')); }
-  /** Множитель всего урона героя */
+  /** Multiplier of all hero damage */
   get dmgMult(): number { return 1 + this.on('rage'); }
   get critBonus(): number { return this.kind === 'rage' ? 0.1 * this.m : 0; }
-  /** Множитель перезарядки заклинаний и артефактов */
+  /** Spell and artifact cooldown multiplier */
   get cdMult(): number { return Math.max(0.25, 1 - this.on('clarity')); }
   get soulsMult(): number { return this.kind === 'clarity' ? 1 + 0.5 * this.m : 1; }
-  /** Доля ближнего урона, которая возвращается обидчику */
+  /** Fraction of melee damage returned to the attacker */
   get thorns(): number { return this.on('thorns'); }
   get ready(): boolean { return !!this.kind && this.flareT <= 0 && this.meter >= AURA_METER; }
 
-  /** Надетая аура: перестроить вид, если поменялась */
+  /** Equipped aura: rebuild the look if it changed */
   set(it: Item | null): void {
     const uid = it?.uid ?? null;
     const a = it ? itemDef(it.def).aura : undefined;
@@ -172,19 +173,19 @@ export class Auras {
     this.extras.length = 0; this.mats.length = 0;
   }
 
-  // ---------- события ----------
+  // ---------- events ----------
 
-  /** Герой нанёс урон (at — где цель): шкала, нити пакта */
+  /** The hero dealt damage (at — where the target is): meter, pact threads */
   onDealt(dmg: number, at?: THREE.Vector3): number {
     if (!this.kind) return 0;
-    // урон самой ауры копит шкалу вполовину — иначе вспышка заряжается от стояния в толпе
+    // the aura's own damage fills the meter at half rate — otherwise the flare charges from standing in a crowd
     if (this.flareT <= 0) this.meter = Math.min(AURA_METER, this.meter + dmg * (this.offense.own ? 0.5 : 1));
     this.offense.onDealt(at, this.flareT > 0);
     if (this.kind !== 'pact') return 0;
     const heal = dmg * this.leech;
     const hero = this.h.hero;
     if (heal > 0 && !hero.down && at) {
-      // красные нити: капли летят дугой от раны к герою
+      // red threads: drops fly in an arc from the wound to the hero
       const fx = this.h.fx, L = LOOK.pact, to = hero.pos.clone().setY(hero.pos.y + 1);
       for (let i = 0; i < 6 + (this.flareT > 0 ? 6 : 0); i++) {
         const from = at.clone().setY(at.y + rand(0.6, 1.3)).add(new THREE.Vector3(rand(-0.2, 0.2), 0, rand(-0.2, 0.2)));
@@ -197,7 +198,7 @@ export class Auras {
     return heal;
   }
 
-  /** Героя ударили на dmg (уже после «Бастиона») */
+  /** The hero was hit for dmg (after "Bastion" already) */
   onHurt(dmg: number): void {
     if (!this.kind) return;
     const fx = this.h.fx, hero = this.h.hero, L = LOOK[this.kind];
@@ -208,14 +209,14 @@ export class Auras {
       spellSfx.bastionBlock();
     }
     if (this.kind === 'thorns') {
-      // хлестнуть ближайшего врага рядом: шипы летят к нему
+      // lash the nearest enemy: thorns fly at it
       let best: Target | null = null, bd = 3;
       for (const t of this.h.targets()) {
         if (!t.alive) continue;
         const d = Math.hypot(t.pos.x - hero.pos.x, t.pos.z - hero.pos.z) - t.radius;
         if (d < bd) { bd = d; best = t; }
       }
-      // без обидчика рядом — всё равно видно, что лозы огрызнулись
+      // no attacker nearby — the vines still visibly snap back
       const at = best ? best.pos.clone() : hero.pos.clone().add(new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw)).multiplyScalar(1.5));
       const from = hero.pos.clone().setY(hero.pos.y + 0.4);
       for (let i = 0; i < 10; i++) {
@@ -228,7 +229,7 @@ export class Auras {
     }
   }
 
-  /** R: вспышка ауры, если шкала полна */
+  /** R: aura flare, if the meter is full */
   flare(): boolean {
     if (!this.kind || !this.ready || this.h.hero.down) return false;
     const fx = this.h.fx, hero = this.h.hero, L = LOOK[this.kind];
@@ -251,12 +252,12 @@ export class Auras {
     }
     this.offense.onFlare();
     spellSfx.auraFlare(this.kind);
-    this.h.banner(`${L.name}<small>Вспышка ауры ×3 на ${FLARE_DUR} с</small>`);
+    this.h.banner(t('{name}<small>Aura flare ×3 for {sec} s</small>', { name: L.name, sec: FLARE_DUR }));
     this.h.changed();
     return true;
   }
 
-  // ---------- кадр ----------
+  // ---------- frame ----------
 
   update(dt: number): void {
     if (!this.kind) return;
@@ -282,7 +283,7 @@ export class Auras {
     }
     this.offense.update(dt, this.flareT > 0);
     const busy = flare ? 2.5 : 1;
-    // знак ауры
+    // the aura's sign
     if (this.kind === 'bastion') {
       this.shieldFlash = Math.max(0, this.shieldFlash - dt * 3);
       const mat = this.mats[0] as THREE.MeshBasicMaterial;
@@ -313,7 +314,7 @@ export class Auras {
       const a = rnd() * Math.PI * 2;
       fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * 1.4, 0.1, Math.sin(a) * 1.4)), vel: new THREE.Vector3(Math.cos(a), rand(1, 2), Math.sin(a)), life: 0.5, size: 0.06, color: rnd() < 0.5 ? L.a : L.b, gravity: 3 });
     }
-    // во время вспышки по краю большого круга поднимаются огоньки
+    // during the flare lights rise along the edge of the big circle
     if (flare && rnd() < 0.8) {
       const a = rnd() * Math.PI * 2, r = this.radius * 0.5;
       fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.1, Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.7, size: 0.06, color: rnd() < 0.5 ? L.a : L.b, gravity: -0.5 });

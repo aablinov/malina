@@ -1,7 +1,7 @@
 import type { MapRecord, MatchResult, MatchSummary } from '../../src/net/protocol.ts';
 import type { Db } from '../db.ts';
 
-/** История боёв: матч и строки героев с наградами */
+/** Battle history: the match and hero rows with rewards */
 export class Matches {
   private readonly db: Db;
   constructor(db: Db) { this.db = db; }
@@ -12,12 +12,12 @@ export class Matches {
     for (const s of seats) ins.run(id, s.playerId, s.seat);
   }
 
-  /** Игрок вошёл в идущий бой — его строка (для награды) */
+  /** Player joined a running battle — their row (for the reward) */
   addPlayer(id: string, playerId: string, seat: number): void {
     this.db.prepare('INSERT INTO match_players (match_id, player_id, seat) VALUES (?, ?, ?) ON CONFLICT DO NOTHING').run(id, playerId, seat);
   }
 
-  /** Закрыть матч; false — уже закрыт (повторный итог не засчитывается) */
+  /** Close the match; false — already closed (a repeated result is not counted) */
   finish(id: string, result: MatchResult, wave: number, now: number): boolean {
     return !!this.db.prepare('UPDATE matches SET result = ?, wave = ?, ended_at = ? WHERE id = ? AND ended_at IS NULL').run(result, wave, now, id).changes;
   }
@@ -26,17 +26,17 @@ export class Matches {
     this.db.prepare('UPDATE match_players SET berries = ?, xp = ? WHERE match_id = ? AND player_id = ?').run(berries, xp, id, playerId);
   }
 
-  /** Матч: карта, число игроков, конец (null — идёт) */
+  /** Match: map, player count, end (null — in progress) */
   info(id: string): { map: string; players: number; ended_at: number | null } | null {
     return (this.db.prepare('SELECT map, players, ended_at FROM matches WHERE id = ?').get(id) as { map: string; players: number; ended_at: number | null } | undefined) ?? null;
   }
 
-  /** Награда игрока за бой — один раз; false — уже засчитана или игрока в матче нет */
+  /** Player's battle reward — once; false — already credited or the player is not in the match */
   loot(id: string, playerId: string, berries: number, xp: number): boolean {
     return !!this.db.prepare('UPDATE match_players SET berries = ?, xp = ?, paid = 1 WHERE match_id = ? AND player_id = ? AND paid = 0').run(berries, xp, id, playerId).changes;
   }
 
-  /** Бои, прерванные перезапуском сервера */
+  /** Battles interrupted by a server restart */
   abandonOpen(now: number): number {
     return Number(this.db.prepare("UPDATE matches SET result = 'abandoned', ended_at = ? WHERE ended_at IS NULL").run(now).changes);
   }
@@ -49,7 +49,7 @@ export class Matches {
     return rows.map((r) => ({ id: r.id, map: r.map, players: r.players, startedAt: r.started_at, endedAt: r.ended_at, result: r.result, wave: r.wave, berries: r.berries, xp: r.xp }));
   }
 
-  /** Рекорды карты: лучшая волна, победы, быстрейшая победа */
+  /** Map records: best wave, wins, fastest win */
   record(map: string): MapRecord {
     const r = this.db.prepare(`SELECT MAX(wave) AS best, SUM(result = 'won') AS wins,
       MIN(CASE WHEN result = 'won' THEN ended_at - started_at END) AS fastest FROM matches WHERE map = ? AND ended_at IS NOT NULL`).get(map) as

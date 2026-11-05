@@ -1,10 +1,11 @@
+import { t } from '../i18n/i18n.ts';
 import { menuUrl } from './session.ts';
 import type { SettingsPanel } from './settings-panel.ts';
 
 /**
- * Меню боя, пришедшего из главного меню (`?from=menu`, wiki/design-main-menu.md):
- * Esc — пауза (продолжить, настройки, заново, в лагерь); конец обороны — итог и «Ещё раз» / «В лагерь».
- * Игра сама ставит время на паузу, пока `open`.
+ * Menu of a battle started from the main menu (`?from=menu`, wiki/design-main-menu.md):
+ * Esc — pause (resume, settings, restart, to camp); end of the defence — summary and "Once more" / "To camp".
+ * The game itself pauses time while `open`.
  */
 export class BattleMenu {
   readonly el: HTMLDivElement;
@@ -31,12 +32,12 @@ export class BattleMenu {
   }
 
   get open(): boolean { return this.el.classList.contains('open'); }
-  /** Пауза (не итог боя) — время стоит */
+  /** Pause (not the battle summary) — time stands still */
   get pausing(): boolean { return this.open && this.state === 'pause'; }
 
   pause(): void { this.state = 'pause'; this.render(); this.el.classList.add('open'); }
 
-  /** Итог обороны: сводка и кнопки поверх замершей карты */
+  /** Defence result: summary and buttons over the frozen map */
   end(won: boolean, summary: string): void {
     this.state = won ? 'won' : 'lost';
     this.render(summary);
@@ -50,7 +51,7 @@ export class BattleMenu {
     window.location.href = menuUrl(true);
   }
 
-  /** Клавиши, пока меню открыто; true — съедено */
+  /** Keys while the menu is open; true — consumed */
   key(e: KeyboardEvent): boolean {
     if (this.settings.key(e)) return true;
     if (!this.open) return false;
@@ -64,14 +65,14 @@ export class BattleMenu {
     this.el.classList.toggle('end', p !== 'pause');
     this.el.classList.toggle('won', p === 'won');
     this.el.classList.toggle('lost', p === 'lost');
-    const head = p === 'pause' ? 'Пауза' : p === 'won' ? 'Куст отбит!' : 'Куст засох';
+    const head = p === 'pause' ? t('Paused') : p === 'won' ? t('The bush held!') : t('The bush withered');
     const btns = p === 'pause'
-      ? `<button class="mm-btn primary" data-act="resume">Продолжить <kbd>Esc</kbd></button>
-         <button class="mm-btn" data-act="settings">Настройки</button>
-         <button class="mm-btn" data-act="restart">Начать заново</button>
-         <button class="mm-btn" data-act="leave">Выйти в лагерь</button>`
-      : `<button class="mm-btn primary" data-act="restart">Ещё раз <kbd>Enter</kbd></button>
-         <button class="mm-btn" data-act="leave">В лагерь</button>`;
+      ? `<button class="mm-btn primary" data-act="resume">${t('Resume')} <kbd>Esc</kbd></button>
+         <button class="mm-btn" data-act="settings">${t('Settings')}</button>
+         <button class="mm-btn" data-act="restart">${t('Restart')}</button>
+         <button class="mm-btn" data-act="leave">${t('Leave to camp')}</button>`
+      : `<button class="mm-btn primary" data-act="restart">${t('Once more')} <kbd>Enter</kbd></button>
+         <button class="mm-btn" data-act="leave">${t('To camp')}</button>`;
     this.el.innerHTML = `<div class="pz-win"><h2>${head}</h2><p>${this.mapTitle}${summary ? ` · ${summary}` : ''}</p>${btns}</div>`;
   }
 }

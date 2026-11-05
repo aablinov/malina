@@ -1,4 +1,4 @@
-/** Детерминированный генератор xorshift32 — без DOM и three, его импортирует и сервер (server/) */
+/** Deterministic xorshift32 generator — no DOM or three, the server (server/) imports it too */
 export type Rand = () => number;
 
 export function rng(seed = 1): Rand {
@@ -12,13 +12,13 @@ export function rng(seed = 1): Rand {
 }
 
 /**
- * Игровая случайность (wiki/design-multiplayer.md): в бою все `Math.random` героя, снаряжения и мобов идут через `rnd()`,
- * а на время шага мира (`SimWorld.step`) он переключён на генератор мира с сидом — один сид и те же команды дают тот же бой
- * на сервере и в тестах. Вне шага (меню, вид) — обычная случайность
+ * Game randomness (wiki/design-multiplayer.md): in battle every `Math.random` of the hero, gear and mobs goes through `rnd()`,
+ * and for the duration of a world step (`SimWorld.step`) it is switched to the seeded world generator — one seed and the same commands give the same battle
+ * on the server and in tests. Outside a step (menu, visuals) — ordinary randomness
  */
 let current: Rand = Math.random;
 export const rnd: Rand = () => current();
-/** Переключить игровую случайность на r; вернёт откат */
+/** Switch game randomness to r; returns a revert function */
 export function useRng(r: Rand): () => void {
   const prev = current;
   current = r;

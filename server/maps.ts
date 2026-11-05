@@ -5,12 +5,12 @@ import { crowdMult } from '../src/td/scaling.ts';
 import type { TdSpec } from '../src/td/types.ts';
 
 /**
- * Карты сетевой игры — карты обороны куста из assets/maps (у них есть `meta.td`, src/td/types.ts).
- * Сервер читает их один раз: какие карты можно выбрать в комнате и сколько малины за бой правдоподобно
+ * Multiplayer maps — Bush Defence maps from assets/maps (they have `meta.td`, src/td/types.ts).
+ * The server reads them once: which maps can be chosen in a room and how many raspberries per battle is plausible
  */
 export interface NetMap { id: string; waves: number; bounty: number; berries: number }
 
-/** Опыт за бой больше этого — не верим хосту */
+/** More XP per battle than this — we do not trust the host */
 export const MAX_XP_PER_MATCH = 50_000;
 
 export class MapCatalog {
@@ -26,7 +26,7 @@ export class MapCatalog {
         if (!td?.waves) continue;
         const id = f.slice(0, -5);
         this.maps.set(id, { id, waves: td.waves.length, bounty: td.waves.reduce((a, w) => a + (w.bounty ?? 0), 0), berries: td.berries ?? 0 });
-      } catch { /* битый файл карты — не сетевая */ }
+      } catch { /* broken map file — not a multiplayer map */ }
     }
   }
 
@@ -34,8 +34,8 @@ export class MapCatalog {
   ids(): string[] { return [...this.maps.keys()].sort(); }
 
   /**
-   * Наибольшая малина героя за бой — потолок от вранья, не баланс: стартовая казна и все награды волн с множителем партии,
-   * втрое — с запасом на малину с врагов (её сервер не считает)
+   * Maximum raspberries per hero per battle — a cap against cheating, not balance: starting treasury plus all wave bounties with the party multiplier,
+   * times three — with headroom for raspberries from enemies (the server does not count those)
    */
   maxBerries(id: string, players: number): number {
     const m = this.maps.get(id);
@@ -44,7 +44,7 @@ export class MapCatalog {
 
   waves(id: string): number { return this.maps.get(id)?.waves ?? 0; }
 
-  /** Уровень карты для серверного боя (каждый матч — свой, стены ломают блоки); null — нет такой */
+  /** Map level for a server-side battle (each match gets its own, walls break blocks); null — no such map */
   load(id: string): { level: Level; td: TdSpec } | null {
     if (!this.maps.has(id)) return null;
     const j = JSON.parse(readFileSync(join(this.dir, `${id}.json`), 'utf8')) as LevelJSON;

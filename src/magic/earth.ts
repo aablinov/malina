@@ -5,10 +5,11 @@ import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
 import type { Spells } from '../spells.ts';
 import type { Target } from '../target.ts';
 import { C, rand, type Spell } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
-/** Земля и природа: разлом, малиновый куст, облик титана (wiki/design-spells.md, раздел 3) */
+/** Earth and nature: rift, raspberry bush, titan form (wiki/design-spells.md, section 3) */
 
-// ---------- общие формы и материалы (не освобождаются: их мало и они переиспользуются) ----------
+// ---------- shared shapes and materials (not disposed: few of them and they are reused) ----------
 const UNIT = new THREE.BoxGeometry(1, 1, 1);
 const STONE = ['#8a7a68', '#9a8a74', '#7a6a58', '#a89880'].map((c) => new THREE.MeshLambertMaterial({ color: c }));
 const LEAF = ['#3f8a32', '#4fa83a', '#2f6a2a', '#5aba44'].map((c) => new THREE.MeshLambertMaterial({ color: c }));
@@ -17,7 +18,7 @@ const BERRY_HI = new THREE.MeshBasicMaterial({ color: C(3.2, 1.2, 1.8), toneMapp
 const THORN = new THREE.MeshLambertMaterial({ color: '#d8e8a8' });
 const AMBER = C(3.6, 2.2, 0.7), MOSS = C(1.4, 3.2, 0.8), PINK = C(3.8, 1, 1.8);
 const DUST = ['#c8b898', '#b8a888', '#d8ccb0'];
-const noDispose = (): void => { /* общие формы и материалы */ };
+const noDispose = (): void => { /* shared shapes and materials */ };
 
 const box = (mat: THREE.Material, w: number, h: number, d: number, x = 0, y = 0, z = 0): THREE.Mesh => {
   const m = new THREE.Mesh(UNIT, mat);
@@ -26,7 +27,7 @@ const box = (mat: THREE.Material, w: number, h: number, d: number, x = 0, y = 0,
   return m;
 };
 
-// ---------- звуки: низ через насыщение, камень, листва, ягоды по пентатонике ----------
+// ---------- sounds: low end via saturation, stone, foliage, berries on the pentatonic ----------
 const sound = {
   rumble(dur = 0.6, vol = 0.2) {
     hiss({ dur, vol, f: 220, f1: 60, q: 0.5, type: 'lowpass', attack: dur * 0.4, verb: 0.3 });
@@ -74,17 +75,17 @@ const sound = {
   },
 };
 
-/** Камни и пыль из точки: обломки (непрозрачные кубики) и светлая пыль, без тёмного дыма */
+/** Stones and dust from a point: debris (opaque cubes) and light dust, no dark smoke */
 function debris(kit: Spells, at: THREE.Vector3, n: number, speed: number, up = 4): void {
   const fx = kit.h.fx;
   fx.burst(at, ['#8a7a68', '#a89880', '#6a5a48'], n, { speed, up, size: 0.14, life: 0.9, gravity: 14 });
   fx.burst(at, DUST, Math.round(n * 0.7), { speed: speed * 0.5, up: 1.2, size: 0.22, life: 1, gravity: -0.6, drag: 2.5 });
 }
 
-// ---------- 17. Разлом ----------
+// ---------- 17. Rift ----------
 
 const rift: Spell = {
-  school: 'earth', tier: 'rare', title: 'Разлом',
+  school: 'earth', tier: 'rare', title: t('Rift'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('earth');
     const from = hero.pos.clone();
@@ -95,7 +96,7 @@ const rift: Spell = {
     dir.normalize();
     const side = new THREE.Vector3(-dir.z, 0, dir.x);
     kit.face(end);
-    // замах: герой бьёт ладонью в землю — пыль у ног, гул, земля дрожит
+    // windup: the hero slams a palm into the ground — dust at the feet, rumble, the ground shakes
     kit.windup('earth', k);
     sound.rumble(0.5, 0.15);
     debris(kit, from.clone().setY(from.y + 0.1), 8, 2, 2);
@@ -115,17 +116,17 @@ const rift: Spell = {
           const p = from.clone().addScaledVector(dir, d).addScaledVector(side, rand(-0.25, 0.25));
           const y = kit.h.terrain.floorAt(p.x, p.z, from.y + 2);
           p.y = Number.isFinite(y) ? y : from.y;
-          // трещина: тёмно-коричневое пятно и янтарный отсвет из глубины
+          // crack: a dark brown stain and an amber glow from the depths
           fx.decal(p, kit.tex.scorch(), '#ffffff', 1.1 + rnd() * 0.4, 3.5, false, 0.8);
           fx.decal(p, kit.tex.glow(), AMBER.clone().multiplyScalar(0.25), 0.9, 1.2, true);
-          // каменные шипы: 1–2 бруска вырастают и наклоняются от оси
+          // stone spikes: 1–2 bars grow and lean away from the axis
           for (let j = 0; j < (placed % 2 ? 1 : 2); j++) spike(kit, p.clone().addScaledVector(side, rand(-0.5, 0.5)), (0.8 + k * 0.7) * rand(0.7, 1.2), side.clone().multiplyScalar(rand(-0.4, 0.4)));
           debris(kit, p.clone().setY(p.y + 0.2), 4, 2.5, 4);
           if (placed % 2 === 0) sound.spike(placed);
           if (rnd() < 0.5) fx.particle({ pos: p.clone().setY(p.y + 0.1), vel: new THREE.Vector3(0, rand(1.5, 3), 0), life: 0.5, size: 0.06, color: AMBER, gravity: 2 });
           placed++;
         }
-        // удар по всем, кого догнал фронт трещины, — вверх и в стороны
+        // hit everyone the crack front has reached — up and sideways
         const tip = from.clone().addScaledVector(dir, front);
         for (const t of kit.h.targets()) {
           if (!t.alive || hit.has(t)) continue;
@@ -137,7 +138,7 @@ const rift: Spell = {
         }
         fx.shake = Math.max(fx.shake, 0.25);
         if (front < L) return true;
-        // конец разлома: камни разлетаются, последний большой шип
+        // end of the rift: stones fly apart, the last big spike
         const last = from.clone().addScaledVector(dir, L);
         last.y = end.y;
         spike(kit, last, 1.6 + k, new THREE.Vector3());
@@ -150,7 +151,7 @@ const rift: Spell = {
   },
 };
 
-/** Каменный шип: вырастает из земли за 0,12 с, держится, медленно уходит обратно */
+/** Stone spike: grows out of the ground in 0.12 s, holds, slowly sinks back */
 function spike(kit: Spells, p: THREE.Vector3, h: number, tilt: THREE.Vector3): void {
   const g = new THREE.Group();
   const mat = STONE[(rnd() * STONE.length) | 0];
@@ -174,9 +175,9 @@ function segDist(ax: number, az: number, bx: number, bz: number, px: number, pz:
   return Math.hypot(ax + dx * t - px, az + dz * t - pz);
 }
 
-// ---------- 18. Малиновый куст ----------
+// ---------- 18. Raspberry bush ----------
 
-/** Воксельный куст: холм листвы, колючки и ягоды; ягоды отдельно — им лопаться */
+/** Voxel bush: a mound of foliage, thorns and berries; berries separate — they get to burst */
 function makeBush(R: number): { g: THREE.Group; berries: THREE.Object3D[] } {
   const g = new THREE.Group(), berries: THREE.Object3D[] = [];
   const S = 0.6 + R * 0.12;
@@ -206,12 +207,12 @@ function makeBush(R: number): { g: THREE.Group; berries: THREE.Object3D[] } {
 }
 
 const raspberrybush: Spell = {
-  school: 'earth', tier: 'common', title: 'Малиновый куст',
+  school: 'earth', tier: 'common', title: t('Raspberry bush'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
     const c = kit.ground(at, 12), R = (a.radius ?? 3) + k * 1.2, dur = a.duration ?? 4;
     kit.face(c);
-    // замах: из земли у цели бьют зелёные искры и лепестки, круг природы раскрывается
+    // windup: green sparks and petals shoot from the ground at the target, the nature circle opens
     kit.windup('earth', k);
     kit.groundSigil('earth', c, R, 0.35, dur, 0.22);
     for (let i = 0; i < 14; i++) {
@@ -232,7 +233,7 @@ const raspberrybush: Spell = {
       const tickDmg = Math.max(1, Math.round(power * 0.35));
       kit.proc((dt) => {
         t += dt;
-        // вырастает с перелётом, потом «дышит»; на каждом уколе вздрагивает
+        // grows with overshoot, then "breathes"; twitches on every prick
         const grow = t < 0.35 ? 1 + Math.sin((t / 0.35) * Math.PI * 1.5) * 0.25 * (1 - t / 0.35) : 1;
         const e = Math.min(1, t / 0.2);
         const br = Math.sin(t * 5) * 0.03, bump = Math.max(0, tick - 0.35) * 0.5;
@@ -242,7 +243,7 @@ const raspberrybush: Spell = {
         tick -= dt;
         if (tick <= 0 && t < dur) {
           tick = 0.5;
-          // колючие лозы хватают всех в круге и колют
+          // thorny vines grab everyone in the circle and prick
           for (const tg of kit.within(c, R)) {
             kit.bolt(c.clone().setY(c.y + 0.5), tg.pos.clone().setY(tg.pos.y + rand(0.3, 0.9)), MOSS.clone().multiplyScalar(0.7), 0.035, 1, 0.35);
             fx.burst(tg.pos.clone().setY(tg.pos.y + 0.7), [MOSS, PINK], 5, { speed: 2, up: 2, size: 0.05, life: 0.3, glow: true, gravity: 8 });
@@ -251,7 +252,7 @@ const raspberrybush: Spell = {
           n++;
         }
         if (t < dur) return true;
-        // конец: куст лопается ягодами
+        // end: the bush bursts into berries
         popped = true;
         kit.h.scene.remove(g);
         sound.pop();
@@ -263,7 +264,7 @@ const raspberrybush: Spell = {
         fx.burst(c.clone().setY(c.y + 0.5), ['#4fa83a', '#3f8a32'], 18, { speed: 3, up: 4, size: 0.1, life: 1.3, gravity: 3, drag: 1.5 });
         fx.decal(c, kit.tex.glow(), PINK.clone().multiplyScalar(0.25), R * 1.6, 1.5, true);
         kit.h.aoe(c, R, Math.round(power), 1.2, false);
-        // ягоды лечат героя, если он рядом: летят к нему дугой
+        // berries heal the hero if nearby: they fly to him in an arc
         const near = Math.hypot(hero.pos.x - c.x, hero.pos.z - c.z) <= R + 3;
         if (near && !hero.down) {
           const heal = Math.round(power * 1.5);
@@ -287,16 +288,16 @@ const raspberrybush: Spell = {
   },
 };
 
-// ---------- 19. Облик титана ----------
+// ---------- 19. Titan form ----------
 
 const titanform: Spell = {
-  school: 'earth', tier: 'mythic', title: 'Облик титана',
+  school: 'earth', tier: 'mythic', title: t('Titan form'),
   cast(kit, a, power, _at, k) {
     const fx = kit.h.fx, hero = kit.h.hero, s = kit.color('earth');
     const dur = a.duration ?? 10;
-    // замах: мир темнеет, к герою со всех сторон стягиваются камни, гул растёт
+    // windup: the world darkens, stones gather toward the hero from all sides, the rumble grows
     kit.windup('earth', k);
-    kit.pomp('mythic', hero.pos, 'earth', 'Облик титана', 0.9);
+    kit.pomp('mythic', hero.pos, 'earth', t('Titan form'), 0.9);
     sound.titanRise();
     let rise = 0.6;
     kit.proc((dt) => {
@@ -321,7 +322,7 @@ const titanform: Spell = {
       debris(kit, c.clone().setY(c.y + 0.5), 30, 6, 7);
       fx.decal(c, kit.tex.scorch(), '#ffffff', 5, 4, false, 0.8);
       kit.h.aoe(c, 4, Math.round(power * 0.6), 3, true);
-      // каменная кожа: пластины на теле героя растут вместе с ним, между ними светятся янтарные трещины
+      // stone skin: plates on the hero's body grow with him, amber cracks glow between them
       const skin = new THREE.Group();
       const plates: THREE.Mesh[] = [];
       const spots: [number, number, number, number][] = [
@@ -342,10 +343,10 @@ const titanform: Spell = {
       kit.proc((dt) => {
         t += dt;
         if (ended) return false;
-        // пульс трещин и редкие янтарные искры
+        // pulse of the cracks and sparse amber sparks
         glow.scale.y = 0.5 + Math.sin(t * 6) * 0.08;
         if (rnd() < 0.25) fx.particle({ pos: hero.pos.clone().setY(hero.pos.y + rand(0.8, 2.6)), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(0.6, 1.4), rand(-0.4, 0.4)), life: 0.6, size: 0.06, color: AMBER, gravity: -0.5 });
-        // тяжёлые шаги: пыль и тряска, когда великан идёт
+        // heavy steps: dust and shaking when the giant walks
         const moved = Math.hypot(hero.pos.x - lastPos.x, hero.pos.z - lastPos.z);
         lastPos.copy(hero.pos);
         stepT -= moved;
@@ -357,7 +358,7 @@ const titanform: Spell = {
           sound.step();
         }
         if (t < dur) return true;
-        // конец: оболочка осыпается камнями
+        // end: the shell crumbles into stones
         ended = true;
         crumble(kit, skin, plates);
         (glow.material as THREE.Material).dispose();
@@ -367,7 +368,7 @@ const titanform: Spell = {
   },
 };
 
-/** Каменная кожа слезает с героя: пластины падают в мире и тают */
+/** The stone skin comes off the hero: plates fall in the world and fade */
 function crumble(kit: Spells, skin: THREE.Group, plates: THREE.Mesh[]): void {
   const fx = kit.h.fx;
   skin.updateMatrixWorld(true);

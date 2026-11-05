@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
 /**
- * Полоска здоровья над башней или мини-боссом: два спрайта (всегда лицом к камере, поверх сцены), заливка тает влево.
- * Цвет заливки — от зелёного к красному.
+ * Health bar above a tower or a mini-boss: two sprites (always facing the camera, on top of the scene), the fill melts to the left.
+ * Fill colour goes from green to red.
  */
 export class HpBar {
   readonly group = new THREE.Group();
@@ -26,13 +26,13 @@ export class HpBar {
     this.group.visible = false;
   }
 
-  /** k — доля здоровья 0..1; show — показывать ли вообще */
+  /** k — health fraction 0..1; show — whether to show at all */
   set(k: number, show: boolean): void {
     this.group.visible = show;
     if (!show) return;
     const f = Math.max(0.01, Math.min(1, k));
     this.fill.scale.x = this.width * f;
-    // левый край заливки — у левого края фона, в экранных координатах
+    // the fill's left edge sits at the background's left edge, in screen coordinates
     this.fill.center.set(1 / (2 * f), 0.5);
     if (!this.color) this.fillMat.color.setHSL(0.33 * f, 0.75, 0.5);
   }

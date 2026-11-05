@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Obstacle } from '../collision.ts';
 import type { FX } from '../fx.ts';
+import { t } from '../i18n/i18n.ts';
 import type { Gear } from '../gear.ts';
 import { MAX_ARROWS, MAX_SOULS, Profile, type Equipment, type Item, type ProfileData } from '../items.ts';
 import { emptyInput, Knight, type KnightInput } from '../knight.ts';
@@ -27,16 +28,16 @@ import type { TdUi } from './td-ui.ts';
 import type { TdView } from './views/td-view.ts';
 
 /**
- * Клиент сетевого боя — «cgame» (wiki/design-multiplayer.md, раздел 7): бой считает сервер (src/game/match.ts),
- * сюда приходят дельты снимков по `/game` (src/net/game-protocol.ts). Свой герой предсказывается локально и сверяется
- * с местом сервера по подтверждённому вводу; чужие герои — рыцари по вводу из снимка с буфером интерполяции; враги —
- * куклы (`Mob.puppet`) по записям; оборона — зеркало `SimTd` по записям для меню и HUD, команды уходят серверу
+ * Network battle client — "cgame" (wiki/design-multiplayer.md, section 7): the server runs the battle (src/game/match.ts),
+ * snapshot deltas arrive here over `/game` (src/net/game-protocol.ts). Our own hero is predicted locally and reconciled
+ * with the server position by acknowledged input; other heroes are knights driven by snapshot input with an interpolation buffer; enemies are
+ * puppets (`Mob.puppet`) from records; the defence is a `SimTd` mirror from records for the menu and HUD, commands go to the server
  */
 export interface NetBattleHooks {
   net: NetClient;
   battle: NetBattle;
   token: string;
-  /** Адрес сервера http(s)://… */
+  /** Server address http(s)://… */
   base: string;
   scene: THREE.Scene;
   T: Textures;
@@ -53,39 +54,39 @@ export interface NetBattleHooks {
   tdUi: TdUi;
   terrain: Terrain;
   solids(): Obstacle[];
-  /** Снаряжение для героя другого игрока: те же цели, звук — только вблизи своего героя */
+  /** Gear for another player's hero: the same targets, sound only near our own hero */
   makeGear(k: Knight, p: Profile): Gear;
-  /** Свист взмаха героя другого игрока (вблизи) */
+  /** Swing whoosh of another player's hero (nearby) */
   swing(k: Knight, g: Gear, step: number): void;
   toast(s: string): void;
   quiet(): boolean;
-  /** Очередь событий клиента: кадры сети применяются при её разборе перед тактами */
+  /** Client event queue: network frames are applied when it is drained before the ticks */
   events: EventQueue;
-  /** Бой кончился (итог сервера) */
+  /** The battle is over (the server's result) */
   onOver(result: 'won' | 'lost' | 'abandoned', wave: number): void;
 }
 
-/** Команд ввода в секунду (одна на такт) */
+/** Input commands per second (one per tick) */
 const CMD_HZ = 60;
-/** Чужие герои и куклы показываются с задержкой — между двумя снимками, без рывков при неровной связи, с */
+/** Other heroes and puppets are shown with a delay — between two snapshots, no jerks on an uneven link, s */
 const RENDER_DELAY = 0.1;
-/** Оценка времени сервера (cl.serverTimeDelta Quake 3): сдвиг «время снимка − свои часы»; разошлось сильнее — сброс, с */
+/** Server time estimate (Quake 3's cl.serverTimeDelta): the offset "snapshot time − own clock"; drifted further — reset, s */
 const TIME_RESET = 0.5;
-/** Разошлось меньше сброса, но заметно — на полпути; иначе подползает по чуть-чуть за снимок */
+/** Drifted less than the reset but noticeably — halfway; otherwise creeps a little per snapshot */
 const TIME_JUMP = 0.1;
 const TIME_NUDGE_UP = 0.001;
 const TIME_NUDGE_DOWN = 0.002;
-/** Разошёлся со снимком дальше — свой герой встаёт на место сервера, м; меньше — подтягивается на CORRECT_K за снимок */
+/** Drifted further from the snapshot — our hero snaps to the server position, m; less — pulled by CORRECT_K per snapshot */
 const SNAP_DIST = 2.5;
 const CORRECT_K = 0.2;
 const REVIVE_S = 2;
-/** Набор снаряжения — раз в столько секунд (и сразу, как сменился) */
+/** Gear kit — once per this many seconds (and right away when it changed) */
 const KIT_S = 3;
 
 const r2 = (v: number): number => Math.round(v * 100) / 100;
 const now = (): number => performance.now() / 1000;
 
-/** Буфер мест со снимков по времени сервера: место на момент t между двумя соседними (за последним — не дальше половины шага вперёд) */
+/** Buffer of snapshot positions by server time: the position at time t between two neighbours (past the last one — no further than half a step ahead) */
 export class Track {
   private readonly s: { t: number; x: number; y: number; z: number; yaw: number }[] = [];
   push(t: number, x: number, y: number, z: number, yaw: number): void {
@@ -104,7 +105,7 @@ export class Track {
   }
 }
 
-/** Герой другого игрока: рыцарь, его снаряжение, ввод со снимка, буфер мест */
+/** Another player's hero: a knight, its gear, input from the snapshot, position buffer */
 interface Remote { seat: number; knight: Knight; gear: Gear; profile: Profile; input: KnightInput; bow: boolean; track: Track; to: THREE.Vector3; yawTo: number; hp: number; maxHp: number; ping: number; down: boolean }
 
 type R = GameClientMsg | GameServerMsg;
@@ -124,9 +125,9 @@ export class NetBattleClient {
   private rolled = false;
   private cmdT = 0;
   private readonly sent: { seq: number; x: number; z: number }[] = [];
-  /** Последние команды — уходят пачкой в каждом кадре (cl_packetdup) */
+  /** The latest commands — sent as a batch in every frame (cl_packetdup) */
   private readonly recent: Cmd[] = [];
-  /** Время сервера ≈ свои часы + timeDelta (по снимкам); до первого снимка не знаем */
+  /** Server time ≈ own clock + timeDelta (from snapshots); unknown before the first snapshot */
   private timeDelta = 0;
   private timeKnown = false;
   private readonly names = document.createElement('div');
@@ -136,11 +137,11 @@ export class NetBattleClient {
   private kitDirty = true;
   private purseMirror = 0;
   private readonly off: (() => void)[] = [];
-  /** Снимков применено (для тестов) */
+  /** Snapshots applied (for tests) */
   snaps = 0;
-  /** Итог боя пришёл */
+  /** The battle result arrived */
   over: 'won' | 'lost' | 'abandoned' | null = null;
-  /** Соединение боя открыто и место подтверждено */
+  /** Battle connection open and the seat confirmed */
   joined = false;
 
   constructor(h: NetBattleHooks) {
@@ -169,7 +170,7 @@ export class NetBattleClient {
     this.ui.dispose();
   }
 
-  // ---------- соединение ----------
+  // ---------- connection ----------
 
   private connect(): void {
     if (this.stopped) return;
@@ -191,7 +192,7 @@ export class NetBattleClient {
       chan.sendReliable({ t: 'hello', token: this.h.token, matchId: this.h.battle.matchId, protocol: PROTOCOL });
       this.kitDirty = true;
     };
-    ws.onerror = () => { /* onclose переподключит */ };
+    ws.onerror = () => { /* onclose reconnects */ };
   }
 
   private onReliable(m: GameServerMsg): void {
@@ -199,13 +200,13 @@ export class NetBattleClient {
       case 'welcome': this.joined = true; this.retry = 0; this.sent.length = 0; this.recent.length = 0; this.seq = 0; break;
       case 'kit': if (m.seat !== this.h.battle.seat) this.applyKit(m.seat, m.items, m.equip); break;
       case 'act': { const { t: _t, seat, ...a } = m; void _t; if (seat !== this.h.battle.seat) this.remote(seat).gear.perform(a as GearAction); break; }
-      case 'toast': this.h.toast(m.text); break;
+      case 'toast': this.h.toast(t(m.text)); break;
       case 'over': if (!this.over) { this.over = m.result; this.h.onOver(m.result, m.wave); } break;
-      case 'error': this.h.toast(m.text); break;
+      case 'error': this.h.toast(t(m.text)); break;
     }
   }
 
-  /** Лобби: чат, состав комнаты, конец боя */
+  /** Lobby: chat, room roster, end of battle */
   private onLobby(m: ServerMsg): void {
     if (m.t === 'chat') this.ui.add(m.name, m.text);
     if (m.t === 'room.state' && m.room.state === 'battle') this.seats(m.seats);
@@ -214,32 +215,32 @@ export class NetBattleClient {
 
   private seats(list: SeatInfo[]): void {
     const was = new Set(this.h.battle.seats.map((s) => s.seat));
-    for (const s of list) if (!was.has(s.seat) && s.seat !== this.h.battle.seat) this.ui.add(null, `${s.name} в бою`);
+    for (const s of list) if (!was.has(s.seat) && s.seat !== this.h.battle.seat) this.ui.add(null, t('{name} joined the battle', { name: s.name }));
     const live = new Set(list.map((s) => s.seat));
-    for (const [seat, r] of [...this.heroes]) if (!live.has(seat)) { this.ui.add(null, `${this.nameOf(seat)} вышел`); this.drop(seat, r); }
+    for (const [seat, r] of [...this.heroes]) if (!live.has(seat)) { this.ui.add(null, t('{name} left', { name: this.nameOf(seat) })); this.drop(seat, r); }
     this.h.battle.seats = list;
     for (const [seat, el] of this.labels) el.textContent = this.nameOf(seat);
   }
 
-  private nameOf(seat: number): string { return this.h.battle.seats.find((s) => s.seat === seat)?.name ?? `Игрок ${seat + 1}`; }
+  private nameOf(seat: number): string { return this.h.battle.seats.find((s) => s.seat === seat)?.name ?? t('Player {n}', { n: seat + 1 }); }
 
-  // ---------- отправка ----------
+  // ---------- sending ----------
 
   private sendTd(c: TdCommand): void { this.chan?.sendReliable({ t: 'td', a: c.a, pad: c.pad, wall: c.wall }); }
-  /** Действие — с номером последней команды: сервер исполнит его после неё, перед следующей, как у клиента */
+  /** Action with the number of the last command: the server executes it after that one, before the next, as on the client */
   private sendAct(a: GearAction): void { this.chan?.sendReliable({ t: 'act', seq: this.seq, ...a }); }
 
   private sendKit(): void {
     if (!this.chan || !this.joined) return;
     const d = this.h.profile.data;
-    // маркитант взял малину из профиля — плата уходит серверу вместе с набором
+    // the sutler took raspberries from the profile — the payment goes to the server with the kit
     const cost = Math.max(0, this.purseMirror - d.berries);
     this.chan.sendReliable({ t: 'kit', items: d.items, equip: d.equip, cost: cost > 0 ? cost : undefined });
     this.kitDirty = false;
     this.kitT = KIT_S;
   }
 
-  // ---------- снимки ----------
+  // ---------- snapshots ----------
 
   private onDelta(d: Delta<SimEvent>): void {
     if (!this.view.apply(d)) return;
@@ -254,14 +255,14 @@ export class NetBattleClient {
         else this.remoteFrom(he, t, v.added.includes(e));
       } else if (id[0] === 'm' && /^m\d+$/.test(id)) { seenMobs.add(Number(id.slice(1))); this.puppetFrom(e as MobEnt, t); }
     }
-    for (const r of this.heroes.values()) if (!v.ents.has(`h${r.seat}`)) { /* ушедших убирает состав комнаты */ }
+    for (const r of this.heroes.values()) if (!v.ents.has(`h${r.seat}`)) { /* the room roster removes those who left */ }
     for (const m of this.h.pack.mobs) if (!seenMobs.has(m.net) && !m.dead) { m.vanish(); this.tracks.delete(`m${m.net}`); }
     this.mirrorTd(v);
     this.h.tdView.apply(v);
     this.h.tdUi.events(v.events);
   }
 
-  /** Время снимка — в оценку часов сервера; вернёт время снимка (ось буферов интерполяции) */
+  /** Snapshot time into the server clock estimate; returns the snapshot time (the axis of the interpolation buffers) */
   private serverTime(snapT: number): number {
     const want = snapT - now(), diff = want - this.timeDelta;
     if (!this.timeKnown || Math.abs(diff) > TIME_RESET) { this.timeDelta = want; this.timeKnown = true; }
@@ -270,7 +271,7 @@ export class NetBattleClient {
     return snapT;
   }
 
-  /** Свой герой по снимку: здоровье и «без сил» — сервера; место — сверка по подтверждённому вводу */
+  /** Our hero from the snapshot: health and "exhausted" are the server's; position is reconciled by acknowledged input */
   private reconcile(he: HeroEnt): void {
     const k = this.h.hero;
     if (he.down && !k.down) { k.hp = 0; k.down = true; }
@@ -290,7 +291,7 @@ export class NetBattleClient {
     }
   }
 
-  /** Герой другого игрока: рыцарь рядом, свои числа удара, снаряжение по его набору (пока набора нет — меч) */
+  /** Another player's hero: a knight nearby, its own strike numbers, gear from its kit (a sword until the kit arrives) */
   private remote(seat: number): Remote {
     let r = this.heroes.get(seat);
     if (r) return r;
@@ -341,7 +342,7 @@ export class NetBattleClient {
     this.labels.delete(seat);
   }
 
-  /** Враг — кукла: новый появляется, остальное — место, атака, флаги со снимка */
+  /** Enemy puppet: a new one appears, the rest — position, attack, flags from the snapshot */
   private puppetFrom(e: MobEnt, t: number): void {
     const pack = this.h.pack, id = Number(e.id.slice(1));
     let m: Mob | undefined = pack.mobs.find((x) => x.net === id);
@@ -372,7 +373,7 @@ export class NetBattleClient {
     m.hp = e.hp;
   }
 
-  /** Оборона по записям: состояние, волна, куст, стены, башни и своя малина — в зеркало SimTd (меню, HUD, подсказки) */
+  /** Defence from records: state, wave, bush, walls, towers and own raspberries into the SimTd mirror (menu, HUD, hints) */
   private mirrorTd(v: SnapshotView<SimEvent>): void {
     const sim = this.h.sim, me = this.h.battle.seat;
     const td = v.ents.get('td');
@@ -395,7 +396,7 @@ export class NetBattleClient {
     if (purse) {
       const n = purse.n as number;
       sim.setBerries(me, n);
-      // малина профиля — зеркало казны: маркитант берёт из неё, разница уйдёт серверу с набором
+      // profile raspberries mirror the treasury: the sutler takes from it, the difference goes to the server with the kit
       if (this.h.profile.data.berries === this.purseMirror) this.h.profile.data.berries = n;
       this.purseMirror = n;
     }
@@ -410,12 +411,12 @@ export class NetBattleClient {
     for (const l of sim.lairs) { const e = v.ents.get(l.id); if (e) l.warn = e.warn as number; }
   }
 
-  // ---------- кадр ----------
+  // ---------- frame ----------
 
   update(dt: number): void {
     const h = this.h, t = now() + this.timeDelta - RENDER_DELAY;
     this.rolled ||= h.input.roll;
-    // чужие герои: шаг — по вводу, место — из буфера снимков
+    // other heroes: step by input, position from the snapshot buffer
     for (const o of this.heroes.values()) {
       o.yawTo = o.track.sample(t, o.to);
       const k = o.knight, d = Math.hypot(k.pos.x - o.to.x, k.pos.z - o.to.z);
@@ -426,10 +427,10 @@ export class NetBattleClient {
       o.profile.data.arrows = MAX_ARROWS;
       o.gear.update(dt, o.bow && !k.down, o.input.aim);
     }
-    // куклы — тоже из буфера
+    // puppets also from the buffer
     for (const m of h.pack.mobs) { const tr = this.tracks.get(`m${m.net}`); if (tr && m.puppet) m.pupYaw = tr.sample(t, m.pupTo); }
     h.pack.puppets(dt);
-    // без сил — встаёт по снимку сервера; пока лежит, свой ввод не идёт
+    // exhausted — gets up by the server snapshot; while down, own input is not sent
     void REVIVE_S;
     this.kitT -= dt;
     if (this.kitDirty || this.kitT <= 0) this.sendKit();
@@ -458,11 +459,11 @@ export class NetBattleClient {
     ];
   }
 
-  /** Чат: открыть поле (Enter в бою) */
+  /** Chat: open the field (Enter in battle) */
   openChat(): void { this.ui.openChat(); }
   get typing(): boolean { return this.ui.typing; }
 
-  /** Имена над героями: свой и чужие; за камерой — спрятать */
+  /** Names above heroes: ours and others'; behind the camera — hide */
   drawNames(camera: THREE.Camera): void {
     const w = window.innerWidth, hgt = window.innerHeight, v = new THREE.Vector3();
     camera.updateMatrixWorld();
@@ -484,7 +485,7 @@ export class NetBattleClient {
     }
   }
 
-  /** Для тестов: чужие герои — место, здоровье, оружие */
+  /** For tests: other heroes — position, health, weapon */
   get othersInfo(): { seat: number; x: number; z: number; hp: number; maxHp: number; melee: string | null }[] {
     return [...this.heroes.values()].map((r) => ({ seat: r.seat, x: r.knight.pos.x, z: r.knight.pos.z, hp: r.knight.hp, maxHp: r.knight.maxHp, melee: r.profile.equipped('melee')?.def ?? null }));
   }

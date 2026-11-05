@@ -5,56 +5,57 @@ import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Громовой Зверь — легендарный босс этажа (wiki/design-bosses.md, разделы 1–4; по мотивам Тёмного зверя Паарла): тощий
- * костяной зверь на четырёх ногах-столбах. Туловище — клетка рёбер (кость поверх тёмной плоти), внутри неё светится
- * сердце-ягода; длинный череп с челюстью, на шее и спине — трескучие клочья шерсти «молния ↔ малина», на загривке —
- * малиновый венец из кубиков-костянок, хвост-хлыст. С шерсти всё время сыплются искры. Быстрый (5 м/с).
- * Атаки: прыжок — метка у героя, дуга, удар при приземлении и шесть цепных молний лучами во все стороны; два-три прыжка
- * подряд, потом задыхается (оглушён, сердце открыто — главное окно урона); двойной удар когтями перед собой; гроза —
- * встаёт на дыбы и воет, по арене одна за другой бьют молнии в метки. Ярость (50 %): перегрузка — тело горит ярче,
- * под ним кольцом тлеют молнии (опасная зона следует за ним), быстрее. Роняет «Громовой прыжок», аура — «Ярость».
- * Подвижных частей: туловище, голова, челюсть, четыре ноги, хвост.
+ * Thunder Beast — legendary floor boss (wiki/design-bosses.md, sections 1–4; after the Darkbeast Paarl): a gaunt
+ * bony beast on four pillar legs. The body is a cage of ribs (bone over dark flesh), the berry heart glows
+ * inside it; a long skull with a jaw, crackling tufts of fur "lightning ↔ raspberry" on the neck and back, a raspberry crown
+ * of drupelet cubes on the scruff, a whip tail. Sparks shed from the fur all the time. Fast (5 m/s).
+ * Attacks: a leap — a mark at the hero, an arc, a strike on landing and six chain lightnings as rays in all directions; two or three leaps
+ * in a row, then winded (dazed, heart open — the main damage window); a double claw strike ahead; a storm —
+ * rears up and howls, lightning strikes marks across the arena one after another. Rage (50 %): overload — the body burns brighter,
+ * lightning smoulders in a ring under it (the hazard zone follows it), faster. Drops "Thunder Leap", aura — "Fury".
+ * Moving parts: body, head, jaw, four legs, tail.
  */
 
 const SPARK = C(2.4, 3.4, 4), WHITE = C(3.6, 3.8, 4), PINK = C(4, 1.7, 2.4);
 const BONE = '#d8ccb0', FLESH = '#2a2430', CLAW = '#16121a';
 const DUST = ['#d8ccb0', '#5a5060', '#2a2430'];
-/** Прыжок: присед, полёт, высота, радиус метки; лучи цепной молнии */
+/** Leap: crouch, flight, height, mark radius; chain lightning rays */
 const CROUCH = 0.4, AIR = 0.7, PEAK = 4, LEAP_R = 3, RAYS = 6, RAY_LEN = 7, RAY_W = 1.1;
 
 const sfx = {
-  /** Треск шерсти */
+  /** Crackle of fur */
   crackle() { for (let i = 0; i < 3; i++) hiss({ dur: 0.05, vol: 0.05, f: rand(2500, 6000), q: 3, delay: i * rand(0.03, 0.07) }); },
-  /** Рык перед прыжком */
+  /** Growl before the leap */
   snarl() { voice({ type: 'sawtooth', f: 140, f1: 60, dur: 0.45, vol: 0.07, detune: 25, lp: 1600, lp1: 400, verb: 0.3 }); },
-  /** Приземление: удар лап и треск разряда */
+  /** Landing: paw strike and the crackle of a discharge */
   land() { boom(70, 25, 0.9, 0.8, 0, 0.4); hiss({ dur: 0.3, vol: 0.3, f: 5000, f1: 900, q: 0.5, type: 'highpass' }); },
-  /** Цепная молния по полу */
+  /** Chain lightning along the floor */
   chain() { hiss({ dur: 0.35, vol: 0.22, f: 6000, f1: 1500, q: 0.6, type: 'highpass' }); bell(rand(1800, 2400), 0.3, 0.02); },
-  /** Удар молнии с неба */
+  /** Lightning strike from the sky */
   thunder() {
     hiss({ dur: 0.25, vol: 0.3, f: 5000, f1: 800, q: 0.5, type: 'highpass' });
     boom(90, 25, 1.3, 0.7, 0.05, 0.7);
     hiss({ dur: 1.1, vol: 0.15, f: 600, f1: 120, q: 0.6, type: 'lowpass', delay: 0.1, verb: 0.7 });
   },
-  /** Свист когтей */
+  /** Whistle of claws */
   claw() { hiss({ dur: 0.2, vol: 0.18, f: 700, f1: 2600, q: 0.8 }); },
-  /** Вой на дыбах */
+  /** Howl on hind legs */
   howl() { voice({ type: 'sawtooth', f: 220, f1: 520, dur: 1.1, vol: 0.07, detune: 30, lp: 2200, lp1: 900, verb: 0.7 }); },
-  /** Хрип: задыхается после прыжков */
+  /** Wheeze: winded after the leaps */
   pant() { for (let i = 0; i < 4; i++) hiss({ dur: 0.18, vol: 0.1, f: 900, f1: 500, q: 0.8, delay: i * 0.45 }); },
 };
 
 export class ThunderBeast extends MiniBoss {
   readonly radius = 1.5;
-  readonly title = 'Громовой Зверь';
-  override readonly subtitle = 'легендарный страж малины';
+  readonly title = t('Thunder Beast');
+  override readonly subtitle = t('legendary raspberry warden');
   override readonly topY = 3.4;
   readonly drop = 'thunderleap';
   override readonly tier = 'boss' as const;
-  /** Ауры на выбор после победы, шанс % — молния или ярость зверя */
+  /** Auras to choose from after the victory, chance % — lightning or the beast's fury */
   override readonly auras = [['storm', 50], ['rage', 50]] as const;
   private readonly trunk = new THREE.Group();
   private readonly head = new THREE.Group();
@@ -62,17 +63,17 @@ export class ThunderBeast extends MiniBoss {
   private readonly legs: THREE.Group[] = [];
   private readonly tail = new THREE.Group();
   private readonly heart = new THREE.Group();
-  /** Свечение внутри рёбер: в перегрузке разгорается */
+  /** Glow inside the ribs: flares up in overload */
   private readonly core: THREE.Mesh;
   private readonly coreMat = glowMat(SPARK.clone().multiplyScalar(0.25), 0.55, true);
   private runT = 0;
-  // прыжки
+  // leaps
   private leapsLeft = 0;
   private leapPhase: 'crouch' | 'air' | 'rest' = 'crouch';
   private leapT = 0;
   private readonly jumpFrom = new THREE.Vector3();
   private readonly jumpAt = new THREE.Vector3();
-  // перегрузка
+  // overload
   private ringT = 0;
 
   constructor(h: BossHooks, home: THREE.Vector3, yaw: number, arena: Rect) {
@@ -93,7 +94,7 @@ export class ThunderBeast extends MiniBoss {
     const heartMat = this.shimmer(RASP, PINK, 0, 3);
     const B = this.box.bind(this);
     this.body.add(this.trunk);
-    // туловище: хребет, таз и плечи — тёмная плоть, поверх — четыре пары костяных рёбер; между ними видно сердце
+    // body: spine, pelvis and shoulders — dark flesh, over it four pairs of bony ribs; the heart is visible between them
     B(this.trunk, flesh, 0.55, 0.4, 2.9, 0, 2.55, 0);
     B(this.trunk, flesh, 1.0, 0.7, 0.7, 0, 2.15, -1.15);
     B(this.trunk, flesh, 1.1, 0.8, 0.6, 0, 2.15, 1.15);
@@ -105,22 +106,22 @@ export class ThunderBeast extends MiniBoss {
     this.core.scale.set(0.9, 0.8, 1.6);
     this.core.position.set(0, 2.0, 0.05);
     this.trunk.add(this.core);
-    // сердце-ягода в клетке рёбер
+    // berry heart in the cage of ribs
     this.heart.position.set(0, 2.0, 0.35);
     this.trunk.add(this.heart);
     for (const [x, y, z, k] of [[0, 0, 0, 0.36], [0.2, 0.17, 0, 0.22], [-0.2, 0.17, 0, 0.22], [0.2, -0.17, 0, 0.22], [-0.2, -0.17, 0, 0.22], [0, 0, 0.2, 0.22], [0, 0, -0.2, 0.22]] as const) {
       B(this.heart, heartMat, k, k, k, x, y, z);
     }
-    // трескучая шерсть на шее и спине — клочья «молния ↔ малина», свет бежит от загривка к хвосту
+    // crackling fur on the neck and back — tufts "lightning ↔ raspberry", light runs from the scruff to the tail
     for (const [z, hgt, rx] of [[1.15, 0.7, 0.5], [0.7, 0.6, 0.35], [0.2, 0.5, 0.2], [-0.35, 0.45, 0], [-0.85, 0.4, -0.25]] as const) {
       for (const s of [-1, 1]) B(this.trunk, this.shimmer(SPARK, RASP, z * 3 + s, 4), 0.18, hgt, 0.22, s * 0.16, 2.85 + hgt / 2 - 0.1, z, rx, 0, s * 0.35);
     }
-    // малиновый венец на загривке
+    // raspberry crown on the scruff
     for (let i = 0; i < 7; i++) {
       const a = (i / 7) * Math.PI * 2, k = i % 2 ? 0.15 : 0.2;
       B(this.trunk, this.shimmer(RASP, PINK, i, 2.4), k, k, k, Math.sin(a) * 0.3, 3.05 + (i % 2 ? 0.04 : 0.1), 1.45 + Math.cos(a) * 0.25);
     }
-    // голова: шея, длинный череп, глазницы-искры, рога-обломки; челюсть — отдельно, на шарнире
+    // head: neck, long skull, spark eye sockets, broken horns; the jaw separate, on a hinge
     this.head.position.set(0, 2.45, 1.45);
     this.trunk.add(this.head);
     B(this.head, flesh, 0.5, 0.5, 0.7, 0, 0, 0.25, -0.3, 0, 0);
@@ -134,7 +135,7 @@ export class ThunderBeast extends MiniBoss {
     this.head.add(this.jaw);
     B(this.jaw, bone, 0.5, 0.16, 1.4, 0, 0, 0.75);
     B(this.jaw, glowMat(SPARK.clone().multiplyScalar(0.7)), 0.36, 0.08, 1.0, 0, 0.1, 0.8);
-    // ноги: тощие столбы с тёмными когтистыми лапами, шарнир у плеч и таза
+    // legs: gaunt pillars with dark clawed paws, hinge at the shoulders and pelvis
     for (const [x, z] of [[-0.45, 1.15], [0.45, 1.15], [-0.4, -1.15], [0.4, -1.15]]) {
       const g = new THREE.Group();
       g.position.set(x, 1.9, z);
@@ -143,7 +144,7 @@ export class ThunderBeast extends MiniBoss {
       B(g, claw, 0.42, 0.2, 0.6, 0, -1.8, 0.1);
       this.legs.push(g);
     }
-    // хвост-хлыст: три куба, сужаются
+    // whip tail: three cubes, tapering
     this.tail.position.set(0, 2.5, -1.45);
     this.trunk.add(this.tail);
     B(this.tail, flesh, 0.22, 0.22, 0.8, 0, 0, -0.4, 0.3, 0, 0);
@@ -158,7 +159,7 @@ export class ThunderBeast extends MiniBoss {
     this.ringT = 0;
   }
 
-  /** Перегрузка: свет внутри рёбер разгорается, быстрее, под телом — кольцо молний */
+  /** Overload: the light inside the ribs flares up, faster, a ring of lightning under the body */
   protected override onEnrage(): void {
     this.speed = 6;
     this.coreMat.color.copy(SPARK).lerp(RASP, 0.3).multiplyScalar(0.7);
@@ -175,7 +176,7 @@ export class ThunderBeast extends MiniBoss {
     return rnd() < 0.7 ? 'leap' : 'storm';
   }
 
-  /** Ломаная молния из a в b: тонкие светящиеся бруски с ореолом, гаснут за dur */
+  /** Jagged lightning from a to b: thin glowing bars with a halo, fade over dur */
   private bolt(a: THREE.Vector3, b: THREE.Vector3, segs: number, jag: number, w: number, dur = 0.28): void {
     const g = new THREE.Group();
     const core = glowMat(WHITE, 1, true), halo = glowMat(SPARK.clone().lerp(RASP, rnd() * 0.5), 0.4, true);
@@ -193,11 +194,11 @@ export class ThunderBeast extends MiniBoss {
       }
       prev = p;
     }
-    // геометрия общая (UNIT) — освобождаем только материалы
+    // geometry is shared (UNIT) — free only the materials
     this.h.fx.custom(g, dur, (k) => { const f = (1 - k) * (0.6 + rnd() * 0.4); core.opacity = f; halo.opacity = f * 0.4; }, () => { core.dispose(); halo.dispose(); });
   }
 
-  /** Молния с неба в метку */
+  /** Lightning from the sky into a mark */
   private strike(at: THREE.Vector3, r: number): void {
     if (this.dead) return;
     const fx = this.h.fx, top = at.clone().setY(13);
@@ -212,7 +213,7 @@ export class ThunderBeast extends MiniBoss {
     if (this.inCircle(at, r)) this.hurt(16, at, 4);
   }
 
-  /** Следующий прыжок цепи: присед, метка у героя */
+  /** Next leap of the chain: crouch, a mark at the hero */
   private startLeap(): void {
     this.leapPhase = 'crouch'; this.leapT = 0;
     this.jumpFrom.copy(this.pos).setY(0);
@@ -223,7 +224,7 @@ export class ThunderBeast extends MiniBoss {
 
   private air(): number { return this.enraged ? AIR * 0.8 : AIR; }
 
-  /** Приземлился: удар по кругу, шесть лучей цепной молнии — метка мигает и сразу бьёт */
+  /** Landed: a strike in a circle, six rays of chain lightning — the mark flashes and hits at once */
   private landing(): void {
     const fx = this.h.fx, at = this.jumpAt;
     if (!this.quiet) sfx.land();
@@ -245,13 +246,13 @@ export class ThunderBeast extends MiniBoss {
         this.bolt(at.clone().setY(0.3), end, 5, 0.7, 0.05, 0.2);
         fx.burst(end, [SPARK, RASP], 5, { speed: 3, up: 2, size: 0.07, life: 0.35, glow: true, gravity: 6 });
         if (i === 0 && !this.quiet) sfx.chain();
-        // кого уже ударило приземлением, тот лучом второй раз не получает
+        // whoever was already hit by the landing does not get hit by a ray a second time
         if (!chained && this.inLine(at, dir, RAY_LEN, RAY_W)) { chained = true; this.hurt(12, at, 3); }
       }, SPARK);
     }
   }
 
-  protected act(name: string, t: number, dt: number): boolean {
+  protected act(name: string, ta: number, dt: number): boolean {
     const fx = this.h.fx;
     switch (name) {
       case 'leap': {
@@ -274,19 +275,19 @@ export class ThunderBeast extends MiniBoss {
           this.leapPhase = 'rest'; this.leapT = 0;
           return false;
         }
-        // короткая передышка между прыжками; после цепи — задыхается
+        // a short breather between leaps; after the chain — winded
         if (this.leapT < 0.35) return false;
         if (--this.leapsLeft > 0) { this.startLeap(); return false; }
-        fx.text(this.pos.clone().setY(this.topY + 0.8), 'задыхается!', 'crit');
+        fx.text(this.pos.clone().setY(this.topY + 0.8), t('winded!'), 'crit');
         if (!this.quiet) sfx.pant();
         this.daze(2.2);
         return true;
       }
       case 'claws': {
-        // два взмаха передними лапами, на каждом — рывок вперёд
-        if (t < 0.3) this.face(dt, 2.5);
+        // two swings of the front paws, a lunge forward on each
+        if (ta < 0.3) this.face(dt, 2.5);
         for (const at of [0.35, 0.72]) {
-          if (t >= at && t - dt < at) {
+          if (ta >= at && ta - dt < at) {
             if (!this.quiet) sfx.claw();
             this.move(this.fwd(), 0.5);
             const c = this.pos.clone().addScaledVector(this.fwd(), 1.8).setY(1.2);
@@ -295,13 +296,13 @@ export class ThunderBeast extends MiniBoss {
             if (this.inCone(this.pos, this.yaw, 3.4, 0.95)) this.hurt(14, this.pos.clone(), 4);
           }
         }
-        if (t > 0.5 && t < 0.62) this.face(dt, 3);
-        return t > 1.1;
+        if (ta > 0.5 && ta < 0.62) this.face(dt, 3);
+        return ta > 1.1;
       }
       case 'storm': {
-        // на дыбы, вой — метки по арене, первая у героя; молнии бьют по очереди
+        // rears up, howls — marks across the arena, the first at the hero; lightning strikes in turn
         const n = this.enraged ? 10 : 6, STEP = 0.22;
-        if (t < 0.7) { if (t - dt <= 0 && !this.quiet) sfx.howl(); return false; }
+        if (ta < 0.7) { if (ta - dt <= 0 && !this.quiet) sfx.howl(); return false; }
         if (!this.hitDone) {
           this.hitDone = true;
           fx.shock(this.pos.clone().setY(0.1), 4, SPARK, 0.4, 0.2);
@@ -312,7 +313,7 @@ export class ThunderBeast extends MiniBoss {
           }
         }
         if (rnd() < 0.5) this.bolt(this.pos.clone().setY(3.2), this.pos.clone().add(new THREE.Vector3(rand(-2, 2), 6, rand(-2, 2))), 4, 0.5, 0.05, 0.12);
-        return t > 0.7 + 0.9 + n * STEP + 0.3;
+        return ta > 0.7 + 0.9 + n * STEP + 0.3;
       }
     }
     return true;
@@ -321,7 +322,7 @@ export class ThunderBeast extends MiniBoss {
   override update(dt: number): void {
     super.update(dt);
     if (!this.enraged || this.dead || this.state === 'sleep' || this.flyY > 1) return;
-    // перегрузка: под зверем кольцом тлеют разряды
+    // overload: discharges smoulder in a ring under the beast
     this.ringT -= dt;
     if (this.ringT > 0) return;
     this.ringT = 0.35;
@@ -336,7 +337,7 @@ export class ThunderBeast extends MiniBoss {
   protected animate(dt: number, walk: boolean): void {
     const t = this.time, S = this.st, atk = this.state === 'attack' ? this.attack : '';
     const air = atk === 'leap' && this.leapPhase === 'air', crouch = atk === 'leap' && this.leapPhase === 'crouch';
-    // галоп: передняя пара и задняя пара вразнобой
+    // gallop: the front pair and the hind pair out of step
     let swing = 0;
     if (walk) { this.runT += dt * this.speed * this.speedK * 2.2; swing = Math.sin(this.runT) * 0.7; }
     this.legs.forEach((g, i) => { g.rotation.x = (i < 2 ? 1 : -1) * swing; });
@@ -345,13 +346,13 @@ export class ThunderBeast extends MiniBoss {
     if (this.state === 'sleep') { lean = 0.1; headX = 0.45; sy = 0.92 + Math.sin(t * 1.4) * 0.03; jawX = 0; }
     if (crouch) { sy = 0.82; sx = 1.08; lean = 0.12; headX = 0.25; jawX = 0.35; }
     if (air) {
-      // вытянулся в прыжке: передние вперёд, задние назад
+      // stretched out in the leap: front legs forward, hind legs back
       lean = -0.1; headX = -0.15; jawX = 0.5;
       this.legs.forEach((g, i) => { g.rotation.x = i < 2 ? -0.9 : 0.8; });
     }
     if (atk === 'leap' && this.leapPhase === 'rest') { const k = Math.min(1, this.leapT / 0.2); sy = 0.85 + 0.15 * k; sx = 1.1 - 0.1 * k; headX = 0.2; }
     if (atk === 'claws') {
-      // встаёт на задние и бьёт передними лапами крест-накрест
+      // rises on the hind legs and strikes with the front paws crosswise
       const k = S < 0.35 ? S / 0.35 : S < 0.72 ? 1 - (S - 0.35) / 0.37 * 0.6 : Math.max(0, 0.4 - (S - 0.72) * 1.2);
       lean = -0.25 * k; lift = 0.3 * k; jawX = 0.6 * k;
       const swipe = (at: number) => { const q = (S - at) / 0.15; return q > 0 && q < 1 ? Math.sin(q * Math.PI) : 0; };
@@ -359,13 +360,13 @@ export class ThunderBeast extends MiniBoss {
       this.legs[1].rotation.x = -1.1 * k + swipe(0.72) * 1.6;
     }
     if (atk === 'storm') {
-      // на дыбах, морда к небу, пасть раскрыта — вой
+      // on hind legs, muzzle to the sky, jaws open — howl
       const k = Math.min(1, S / 0.5);
       lean = -0.55 * k; lift = 0.6 * k; headX = -0.7 * k; jawX = 0.8 * k;
       this.legs[0].rotation.x = this.legs[1].rotation.x = -1.0 * k + Math.sin(t * 10) * 0.15 * k;
     }
     if (this.state === 'daze') {
-      // задыхается: голова висит, пасть хлопает, бока ходят ходуном
+      // winded: the head hangs, the jaw flaps, the flanks heave
       lean = 0.15; headX = 0.6; jawX = 0.3 + Math.abs(Math.sin(t * 9)) * 0.35; sy = 0.92 + Math.sin(t * 9) * 0.04;
       this.trunk.rotation.z = Math.sin(t * 4) * 0.08;
     } else this.trunk.rotation.z *= 0.85;
@@ -378,7 +379,7 @@ export class ThunderBeast extends MiniBoss {
     this.jaw.rotation.x += (jawX - this.jaw.rotation.x) * Math.min(1, dt * 20);
     this.tail.rotation.y = Math.sin(t * (walk ? 12 : 5)) * 0.5;
     this.tail.rotation.x = Math.sin(t * 3.3) * 0.15 + (air ? 0.4 : 0);
-    // постоянные искры с шерсти; в перегрузке — гуще, и свет в рёбрах дрожит
+    // constant sparks from the fur; in overload — denser, and the light in the ribs trembles
     const live = this.state !== 'dead' && this.state !== 'sleep';
     if (live && rnd() < (this.enraged ? 0.6 : 0.3)) {
       this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.5, 0.5), this.flyY + lift + rand(2.6, 3.4), rand(-1.2, 1.4))), vel: new THREE.Vector3(rand(-1, 1), rand(0.5, 1.5), rand(-1, 1)), life: rand(0.15, 0.35), size: rand(0.05, 0.1), color: rnd() < 0.7 ? SPARK : RASP, gravity: 0 });

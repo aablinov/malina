@@ -2,7 +2,7 @@ import type { DecorItem, Level, LevelEntity } from '../level.ts';
 import { blockDef } from '../palette.ts';
 import type { PrefabData } from './types.ts';
 
-/** Повернуть пресет на quarter четвертей вокруг вертикали через опорную клетку: (dx, dz) → (−dz, dx), как у блоков 90° переводит +X в +Z */
+/** Turn a prefab by quarter quarters around the vertical through the anchor cell: (dx, dz) → (−dz, dx), like blocks, where 90° takes +X to +Z */
 export function rotatePrefab(u: PrefabData, quarter: number): PrefabData {
   const q = ((quarter % 4) + 4) % 4;
   if (!q) return u;
@@ -21,7 +21,7 @@ export function rotatePrefab(u: PrefabData, quarter: number): PrefabData {
   };
 }
 
-/** Поставить пресет опорой в клетку (x, y, z): клетки через level.set (редактор пишет их в отмену), декор и свет — вернуть со сдвигом */
+/** Place a prefab with its anchor at cell (x, y, z): cells via level.set (the editor records them for undo), decor and light are returned shifted */
 export function stampPrefab(L: Level, u: PrefabData, x: number, y: number, z: number, quarter = 0): { decor: DecorItem[]; entities: LevelEntity[] } {
   const p = rotatePrefab(u, quarter);
   for (const [dx, dy, dz, n, r] of p.cells) L.set(x + dx, y + dy, z + dz, n, r);

@@ -6,27 +6,27 @@ import type { Mob, MobHooks } from './mob.ts';
 import { MOBS } from './roster.ts';
 
 /**
- * Стая рядовых мобов (wiki/design-mobs.md): кто жив, кого призвали, толкотня, масштаб и малина с павших.
- * Уровень и число игроков — как у стражей (src/bosses/scaling.ts).
+ * Pack of rank-and-file mobs (wiki/design-mobs.md): who is alive, who was summoned, jostling, scaling and raspberries from the fallen.
+ * Level and player count as for wardens (src/bosses/scaling.ts).
  */
 export class Pack {
   readonly mobs: Mob[] = [];
   private level = 1;
   private players = 1;
-  /** Стая гостя общего боя: куклы по снимку хоста */
+  /** Pack of a shared-battle guest: puppets by the host snapshot */
   mirror = false;
-  /** Счётчик сетевых id (записи снимка, src/game/match.ts) */
+  /** Network id counter (snapshot records, src/game/match.ts) */
   private seq = 0;
   private readonly hooks: MobHooks;
 
-  /** loot — малина с павшего: где и сколько */
+  /** loot — raspberries from the fallen: where and how many */
   private readonly loot: (at: THREE.Vector3, n: number) => void;
   constructor(h: BossHooks, loot: (at: THREE.Vector3, n: number) => void) { this.loot = loot;
-    // куклы клиента (src/cgame/net-battle.ts) никого не призывают: призванных пришлёт снимок сервера
+    // client puppets (src/cgame/net-battle.ts) summon nobody: the server snapshot will send the summoned
     this.hooks = { ...h, allies: () => this.mobs.filter((m) => m.alive), spawn: (kind, at) => (this.mirror ? null : this.spawn(kind, at)) };
   }
 
-  /** Моб из реестра в точке (null — нет такого) */
+  /** A mob from the registry at a point (null — no such mob) */
   spawn(kind: string, at: THREE.Vector3): Mob | null {
     const def = MOBS[kind];
     if (!def) return null;
@@ -38,7 +38,7 @@ export class Pack {
     return m;
   }
 
-  /** Отряд: kinds вокруг точки, кольцом радиуса spread */
+  /** Squad: kinds around a point, in a ring of radius spread */
   squad(kinds: readonly string[], at: THREE.Vector3, spread = 2.5): Mob[] {
     const out: Mob[] = [];
     kinds.forEach((k, i) => {
@@ -55,18 +55,18 @@ export class Pack {
     for (const m of this.mobs) m.setScale(level, players);
   }
 
-  /** Замедление героя от зон стаи */
+  /** Hero slow from the pack's zones */
   get heroSlow(): number { return this.slowFor(null); }
-  /** Замедление героя от зон тех, кто за ним гонится (общий бой: k — герой гостя, null — свой) */
+  /** Hero slow from the zones of those chasing him (shared battle: k — a guest's hero, null — own) */
   slowFor(k: Knight | null): number { return this.mobs.reduce((a, m) => ((m.target ?? null) === k ? Math.max(a, m.heroSlow) : a), 0); }
 
   targets(): Target[] { return [...this.mobs.filter((m) => m.alive), ...this.mobs.flatMap((m) => m.extras())]; }
 
   update(dt: number): void {
-    // призванные в этом кадре думают со следующего
+    // those summoned this frame think from the next one
     const list = this.mobs.slice();
     for (const m of list) m.update(dt);
-    // толкотня: живые не стоят друг в друге, лёгкий уступает тяжёлому
+    // jostling: the living do not stand inside each other, the light yields to the heavy
     for (let i = 0; i < list.length; i++) {
       const a = list[i];
       if (a.dead) continue;
@@ -83,12 +83,12 @@ export class Pack {
     for (let i = this.mobs.length - 1; i >= 0; i--) if (this.mobs[i].gone) { this.mobs[i].dispose(); this.mobs.splice(i, 1); }
   }
 
-  /** Кукол (гость общего боя) — только шаг и поза по снимку хоста; рассыпавшихся убрать */
+  /** Puppets (shared-battle guest) — only step and pose by the host snapshot; remove the crumbled */
   puppets(dt: number): void {
     for (const m of this.mobs) m.puppetStep(dt);
     for (let i = this.mobs.length - 1; i >= 0; i--) if (this.mobs[i].gone) { this.mobs[i].dispose(); this.mobs.splice(i, 1); }
   }
 
-  /** Убрать всех */
+  /** Remove everyone */
   clear(): void { for (const m of this.mobs.splice(0)) m.dispose(); }
 }

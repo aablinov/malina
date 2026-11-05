@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import type { WeatherKind } from './world.ts';
 
 /**
- * Погода: частицы в коробке вокруг точки интереса (камеры или героя) — дождь штрихами, снег хлопьями, листопад,
- * искры с пеплом; гроза — сильный дождь и вспышки молний (подсветка неба). Без физики и столкновений: частица,
- * упавшая ниже коробки, возвращается наверх — дёшево и не зависит от размера карты.
- * Положение каждой частицы считает вершинный шейдер по сиду и времени (wiki/dev-performance.md): буфер заливается
- * один раз при смене погоды, с кадра в кадр меняются только uniform-ы (время, центр коробки, ветер).
+ * Weather: particles in a box around the point of interest (camera or hero) — rain as strokes, snow as flakes, falling leaves,
+ * embers with ash; a storm is heavy rain and lightning flashes (sky lighting). No physics or collisions: a particle
+ * that falls below the box returns to the top — cheap and independent of the map size.
+ * Each particle's position is computed by the vertex shader from the seed and time (wiki/dev-performance.md): the buffer is filled
+ * once when the weather changes, frame to frame only the uniforms change (time, box centre, wind).
  */
 
 const BOX = 36, H = 22;
@@ -26,7 +26,7 @@ export class Weather {
   kind: WeatherKind = 'clear';
   intensity = 0.6;
   wind = 1.5;
-  /** Вспышка молнии 0..1 — добавь к свету неба (гроза) */
+  /** Lightning flash 0..1 — add to the sky light (storm) */
   flash = 0;
   private obj: THREE.Points | THREE.LineSegments | null = null;
   private look: Look | null = null;
@@ -35,7 +35,7 @@ export class Weather {
   private t = 0;
 
   constructor(scene: THREE.Scene) {
-    this.group.name = 'Погода';
+    this.group.name = 'Weather';
     scene.add(this.group);
   }
 
@@ -53,7 +53,7 @@ export class Weather {
     const L = this.look;
     if (!L) return;
     const n = L.count;
-    // на вершину: сид (4 случайных числа, у штриха — одинаковый на оба конца) и признак конца штриха
+    // per vertex: a seed (4 random numbers, the same for both ends of a stroke) and the stroke-end flag
     const per = L.streak > 0 ? 2 : 1;
     const seed = new Float32Array(n * per * 4), end = new Float32Array(n * per);
     for (let i = 0; i < n; i++) {
@@ -90,7 +90,7 @@ export class Weather {
     this.obj.geometry.setDrawRange(0, this.look.streak > 0 ? n * 2 : n);
   }
 
-  /** Положение частицы в вершинном шейдере — та же формула, что раньше считалась на CPU */
+  /** Particle position in the vertex shader — the same formula that used to be computed on the CPU */
   private gpu(m: THREE.Material): void {
     const u = this.u;
     m.onBeforeCompile = (sh) => {
@@ -103,7 +103,7 @@ uniform float uTime; uniform vec3 uFocus; uniform float uWind; uniform float uFa
 {
   const float BOX = ${BOX.toFixed(1)}, H = ${H.toFixed(1)}, hb = BOX * 0.5;
   float t = uTime, idx = seed.x * 1000.0, sp = 0.7 + seed.w * 0.6;
-  // высота — по кругу сверху вниз (или снизу вверх у искр), скорость у каждой своя
+  // height cycles top to bottom (or bottom to top for embers), each has its own speed
   float h = fract(seed.y - (t * uFall * sp) / H);
   float y = uFocus.y - 4.0 + h * H;
   float sway = sin(t * 1.3 + idx) * uSway;
@@ -117,7 +117,7 @@ uniform float uTime; uniform vec3 uFocus; uniform float uWind; uniform float uFa
     m.customProgramCacheKey = () => 'weather';
   }
 
-  /** Сдвинуть частицы; focus — центр коробки (камера смотрит сюда) */
+  /** Advance the particles; focus — the box centre (the camera looks here) */
   update(dt: number, focus: THREE.Vector3): void {
     this.t += dt;
     this.flash = Math.max(0, this.flash - dt * 3.5);
@@ -138,7 +138,7 @@ uniform float uTime; uniform vec3 uFocus; uniform float uWind; uniform float uFa
   }
 }
 
-/** Мягкая круглая точка (снег, искры) или ромбик листа */
+/** A soft round dot (snow, embers) or a leaf diamond */
 function dotTexture(leaf: boolean): THREE.Texture {
   const c = document.createElement('canvas');
   c.width = c.height = 32;

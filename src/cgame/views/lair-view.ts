@@ -7,12 +7,12 @@ import type { SimEvent } from '../../sim/events.ts';
 import type { TdLane } from '../../td/types.ts';
 
 /**
- * Логово (`lair:<дорога>`): начало дороги врагов — завеса малинового света и рунное кольцо на полу;
- * тревога `warn` из записи (перед волной кольцо разгорается и пульсирует), выход врага — событие `lair.burst` (вспышка поверх)
+ * Lair (`lair:<lane>`): the start of an enemy lane — a curtain of raspberry light and a rune ring on the floor;
+ * the `warn` alarm from the record (before a wave the ring flares up and pulses), an enemy spawn is the `lair.burst` event (a flash on top)
  */
 export class LairView {
   readonly pos: THREE.Vector3;
-  /** Куда выходят: единичный вектор к первой точке дороги */
+  /** Where they come out: unit vector to the first point of the lane */
   readonly dir: THREE.Vector3;
   readonly group = new THREE.Group();
   private warn = 0;
@@ -37,7 +37,7 @@ export class LairView {
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.05;
     this.group.add(ring);
-    // руны: четыре штриха по кольцу
+    // runes: four strokes around the ring
     this.runes = glowMat(C(3.4, 1.2, 2.2), 0.7, true);
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
@@ -46,7 +46,7 @@ export class LairView {
       r.position.set(Math.cos(a) * 1.2, 0.055, Math.sin(a) * 1.2);
       this.group.add(r);
     }
-    // завеса: вертикальная плоскость поперёк выхода, за ней — вглубь пещеры; светится тускло, при выходе вспыхивает
+    // curtain: a vertical plane across the exit, behind it — into the cave; glows dimly, flashes on a spawn
     this.veil = glowMat(RASP, 0.22, true);
     this.veil.side = THREE.DoubleSide;
     this.veilMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.8), this.veil);
@@ -66,7 +66,7 @@ export class LairView {
   update(dt: number): void {
     this.time += dt;
     this.burstT = Math.max(0, this.burstT - dt * 2.5);
-    // тихое дыхание; тревога — чаще и ярче; вспышка выхода — поверх
+    // quiet breathing; alarm — faster and brighter; the spawn flash on top
     const pulse = 0.5 + 0.5 * Math.sin(this.time * (1.5 + this.warn * 6));
     const k = 0.3 + this.warn * 0.5 * pulse + this.burstT * 0.6;
     this.ring.opacity = Math.min(1, k);

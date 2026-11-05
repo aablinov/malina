@@ -5,50 +5,51 @@ import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss, type Minion } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Судия Ордена — легендарный босс этажа (wiki/design-bosses.md, разделы 1–4): паладин-голем Малинового Ордена в бело-
- * золотых латах, малиновый плащ, шлем со светящейся щелью забрала. В правой руке — большой меч, в левой — золотые весы,
- * на одной чаше лежит ягода-сердце (в оглушении бьётся крупно). Атаки: столпы света из меток вокруг героя, «приговор» —
- * меч вверх, полоса вперёд и удар с ударной волной по ней, взмах мечом вкруг себя вблизи, оруженосцы (трое). Павший
- * оруженосец оставляет светящуюся могилу; «воскрешение» — судия поднимает весы и 2 с тянет павших из могил: три удара
- * за это время срывают обряд, он шатается — оглушён, сердце открыто. Ярость: столпы идут спиралью по всей арене,
- * приговор оставляет горящую полосу света. Роняет «Небесный суд» или ауру «Бастион».
- * Подвижных частей: две ноги, торс (с плащом), голова, рука с мечом, рука с весами, коромысло весов, сердце.
+ * Judge of the Order — legendary floor boss (wiki/design-bosses.md, sections 1–4): a paladin golem of the Raspberry Order in white-and-
+ * gold armour, a raspberry cloak, a helmet with a glowing visor slit. A great sword in the right hand, golden scales in the left,
+ * the berry heart lies on one pan (beats hard when dazed). Attacks: pillars of light from marks around the hero, "verdict" —
+ * sword up, a strip forward and a strike with a shockwave along it, a sword sweep all around up close, squires (three). A fallen
+ * squire leaves a glowing grave; "resurrection" — the judge raises the scales and for 2 s pulls the fallen out of the graves: three hits
+ * in that time break the rite, he staggers — dazed, heart open. Rage: the pillars go in a spiral across the whole arena,
+ * the verdict leaves a burning strip of light. Drops "Heavenly Judgement" or the "Bastion" aura.
+ * Moving parts: two legs, torso (with cloak), head, sword arm, scales arm, scales beam, heart.
  */
 
 const HOLY = C(4, 3.6, 2.4), GOLD = C(4, 3.0, 1.2), WHITE = C(4, 4, 3.6), PINK = C(4, 1.7, 2.4);
 const ARMOR = '#e8e2d0', TRIM = '#e8b84a', CLOAK = '#a8204a', STEEL = '#d8dde6', DARK = '#5a5248';
 const DUST = ['#e8e2d0', '#c8c0aa', '#e8b84a'];
-/** Оруженосцы: латы и шлем вперемешку */
+/** Squires: armour and helmet mixed */
 const SQUIRES = [{ body: '#c8ccd4', head: '#e8b84a' }, { body: '#e8e2d0', head: '#a8204a' }, { body: '#9aa0aa', head: '#e8e2d0' }];
 
 const sfx = {
-  /** Хор: высокий чистый тон и звон */
+  /** Choir: a high pure tone and a ring */
   choir() { voice({ type: 'triangle', f: 520, f1: 780, dur: 1.0, vol: 0.05, lp: 3000, verb: 0.7 }); bell(1040, 1.0, 0.04); },
-  /** Столп света: шипение и звон сверху */
+  /** Pillar of light: hiss and a ring from above */
   pillar() { hiss({ dur: 0.4, vol: 0.18, f: 4000, f1: 1200, q: 0.6, type: 'highpass', verb: 0.5 }); bell(rand(1200, 1500), 0.6, 0.03); },
-  /** Удар мечом в пол */
+  /** Sword strike into the floor */
   slam() { boom(65, 22, 1.2, 0.9, 0, 0.6); hiss({ dur: 0.7, vol: 0.22, f: 1200, f1: 150, q: 0.5, type: 'lowpass' }); bell(330, 1.4, 0.05); },
-  /** Свист меча */
+  /** Whistle of the sword */
   swish() { hiss({ dur: 0.35, vol: 0.2, f: 900, f1: 3500, q: 1.2, type: 'bandpass' }); },
-  /** Обряд воскрешения: гул снизу вверх */
+  /** Rite of resurrection: a hum from bottom to top */
   raise() { voice({ type: 'sawtooth', f: 90, f1: 360, dur: 2.0, vol: 0.05, lp: 600, lp1: 2400, verb: 0.7 }); },
-  /** Обряд сорван: звон треснувшего колокола */
+  /** Rite broken: the ring of a cracked bell */
   broken() { bell(220, 1.6, 0.07); hiss({ dur: 0.8, vol: 0.2, f: 2500, f1: 400, q: 0.5, type: 'lowpass' }); },
 };
 
-/** Могила оруженосца: плита и светящийся череп */
+/** Squire's grave: a slab and a glowing skull */
 interface Grave { pos: THREE.Vector3; g: THREE.Group; glow: THREE.MeshBasicMaterial; mats: THREE.Material[] }
 
 export class OrderJudge extends MiniBoss {
   readonly radius = 1.5;
-  readonly title = 'Судия Ордена';
-  override readonly subtitle = 'легендарный страж';
+  readonly title = t('Judge of the Order');
+  override readonly subtitle = t('legendary warden');
   override readonly topY = 4.6;
   readonly drop = 'judgement';
   override readonly tier = 'boss' as const;
-  /** Ауры на выбор после победы, шанс % — щит Ордена или карающий свет */
+  /** Auras to choose from after the victory, chance % — the Order's shield or punishing light */
   override readonly auras = [['bastion', 50], ['halo', 50]] as const;
   private readonly torso = new THREE.Group();
   private readonly head = new THREE.Group();
@@ -58,10 +59,10 @@ export class OrderJudge extends MiniBoss {
   private readonly legs: THREE.Group[] = [];
   private readonly heart = new THREE.Group();
   private stepT = 0;
-  /** Живые оруженосцы — следим, кто пал, чтобы оставить могилу */
+  /** Living squires — we watch who fell, to leave a grave */
   private readonly squires: Minion[] = [];
   private readonly graves: Grave[] = [];
-  /** Удары по судие во время обряда воскрешения */
+  /** Hits on the judge during the rite of resurrection */
   private raiseHits = 0;
   private readonly aim = new THREE.Vector3();
   private readonly at = new THREE.Vector3();
@@ -85,7 +86,7 @@ export class OrderJudge extends MiniBoss {
     const blade = this.shimmer(WHITE, HOLY, 1, 2.4);
     const heartMat = this.shimmer(RASP, PINK, 0, 3);
     const B = this.box.bind(this);
-    // ноги: два блока в латах, золотой поножь
+    // legs: two blocks in armour, a golden greave
     for (const s of [-1, 1]) {
       const g = new THREE.Group();
       g.position.set(s * 0.6, 1.2, 0);
@@ -94,7 +95,7 @@ export class OrderJudge extends MiniBoss {
       B(g, trim, 0.85, 0.16, 0.95, 0, -1.12, 0.05);
       this.legs.push(g);
     }
-    // торс: латы, золотой пояс и наплечники, малиновая котта с малиновым знаком, сзади — плащ до пят
+    // torso: armour, golden belt and pauldrons, a raspberry surcoat with the raspberry sign, a cloak to the heels behind
     this.torso.position.y = 1.2;
     this.body.add(this.torso);
     B(this.torso, armor, 2.2, 1.9, 1.3, 0, 0.95, 0);
@@ -105,7 +106,7 @@ export class OrderJudge extends MiniBoss {
     B(this.torso, cloak, 2.3, 3.0, 0.08, 0, 0.3, -0.72, 0.08);
     B(this.torso, cloak, 0.08, 2.6, 1.0, 1.18, 0.4, -0.25);
     B(this.torso, cloak, 0.08, 2.6, 1.0, -1.18, 0.4, -0.25);
-    // голова: шлем-ведро, щель забрала светится, золотой гребень
+    // head: bucket helmet, the visor slit glows, a golden crest
     this.head.position.set(0, 3.15, 0.05);
     this.body.add(this.head);
     B(this.head, armor, 0.95, 0.95, 0.95, 0, 0.45, 0);
@@ -113,7 +114,7 @@ export class OrderJudge extends MiniBoss {
     B(this.head, glow, 0.6, 0.08, 0.04, 0, 0.5, 0.51);
     B(this.head, glow, 0.08, 0.4, 0.04, 0, 0.28, 0.5);
     B(this.head, trim, 0.16, 0.35, 0.9, 0, 1.05, 0);
-    // правая рука: латная, в кулаке меч — гарда, клинок светится
+    // right arm: armoured, a sword in the fist — guard, the blade glows
     this.swordArm.position.set(1.5, 2.95, 0);
     this.body.add(this.swordArm);
     B(this.swordArm, armor, 0.6, 1.1, 0.6, 0, -0.5, 0);
@@ -121,7 +122,7 @@ export class OrderJudge extends MiniBoss {
     B(this.swordArm, trim, 0.9, 0.14, 0.2, 0, -1.3, 0);
     B(this.swordArm, steel, 0.36, 2.4, 0.12, 0, -2.55, 0);
     B(this.swordArm, blade, 0.12, 2.3, 0.14, 0, -2.55, 0);
-    // левая рука: весы — коромысло на кулаке, две золотые чаши, на правой чаше ягода-сердце
+    // left arm: the scales — a beam on the fist, two golden pans, the berry heart on the right pan
     this.scalesArm.position.set(-1.5, 2.95, 0);
     this.body.add(this.scalesArm);
     B(this.scalesArm, armor, 0.6, 1.1, 0.6, 0, -0.5, 0);
@@ -151,7 +152,7 @@ export class OrderJudge extends MiniBoss {
     this.clearGraves();
   }
 
-  /** Удары во время обряда: три — и обряд сорван, судия оглушён */
+  /** Hits during the rite: three — and the rite is broken, the judge is dazed */
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void {
     super.hit(dmg, dir, point, knock);
     if (this.dead || this.state !== 'attack' || this.attack !== 'raise' || this.st < 0.3) return;
@@ -159,7 +160,7 @@ export class OrderJudge extends MiniBoss {
     this.h.fx.text(this.pos.clone().setY(this.topY + 0.5), `${this.raiseHits}/3`, 'crit');
     if (this.raiseHits >= 3) {
       if (!this.quiet) sfx.broken();
-      this.h.fx.text(this.pos.clone().setY(this.topY + 1.1), 'обряд сорван!', 'crit');
+      this.h.fx.text(this.pos.clone().setY(this.topY + 1.1), t('rite broken!'), 'crit');
       this.h.fx.burst(this.beam.getWorldPosition(new THREE.Vector3()), [HOLY, RASP, WHITE], 22, { speed: 4, up: 3, size: 0.12, life: 0.7, glow: true, gravity: 6 });
       this.h.fx.shake = Math.max(this.h.fx.shake, 0.5);
       this.daze(2.5);
@@ -168,7 +169,7 @@ export class OrderJudge extends MiniBoss {
 
   override update(dt: number): void {
     super.update(dt);
-    // павший оруженосец оставляет могилу со светящимся черепом
+    // a fallen squire leaves a grave with a glowing skull
     for (let i = this.squires.length - 1; i >= 0; i--) if (this.squires[i].dead) { this.addGrave(this.squires[i].pos); this.squires.splice(i, 1); }
     for (const g of this.graves) g.glow.color.copy(HOLY).lerp(RASP, 0.5 + 0.5 * Math.sin(this.time * 3 + g.pos.x)).multiplyScalar(0.7);
   }
@@ -197,7 +198,7 @@ export class OrderJudge extends MiniBoss {
     return rnd() < 0.5 ? 'pillars' : 'verdict';
   }
 
-  /** Столп света в точке: высокий светящийся брусок с ореолом гаснет за полсекунды */
+  /** Pillar of light at a point: a tall glowing bar with a halo fades in half a second */
   private pillar(at: THREE.Vector3, r: number, dmg: number): void {
     const fx = this.h.fx, g = new THREE.Group();
     const core = glowMat(WHITE, 1, true), halo = glowMat(HOLY.clone().lerp(RASP, rnd() * 0.3), 0.45, true);
@@ -214,7 +215,7 @@ export class OrderJudge extends MiniBoss {
     if (dmg > 0 && this.inCircle(at, r)) this.hurt(dmg, at, 3);
   }
 
-  /** Свет на могиле: столб, пока идёт обряд */
+  /** Light on a grave: a pillar while the rite runs */
   private column(at: THREE.Vector3, dur: number): void {
     const m = glowMat(HOLY, 0.4, true), c = new THREE.Mesh(UNIT, m);
     c.scale.set(0.9, 8, 0.9);
@@ -226,11 +227,11 @@ export class OrderJudge extends MiniBoss {
     }, () => m.dispose());
   }
 
-  protected act(name: string, t: number, dt: number): boolean {
+  protected act(name: string, ta: number, dt: number): boolean {
     const fx = this.h.fx;
     switch (name) {
       case 'pillars': {
-        // весы вверх: метки под героем и вокруг; в ярости ещё спираль по всей арене
+        // scales up: marks under the hero and around; in rage also a spiral across the whole arena
         if (!this.hitDone) {
           this.hitDone = true;
           if (!this.quiet) sfx.choir();
@@ -248,14 +249,14 @@ export class OrderJudge extends MiniBoss {
             }
           }
         }
-        if (t < 0.8) this.face(dt, 0.8);
-        return t > (this.enraged ? 2.9 : 1.6);
+        if (ta < 0.8) this.face(dt, 0.8);
+        return ta > (this.enraged ? 2.9 : 1.6);
       }
       case 'verdict': {
-        // меч вверх, полоса вперёд — и удар: волна по полосе; в ярости полоса горит светом
+        // sword up, a strip forward — and a strike: a wave along the strip; in rage the strip burns with light
         const AIM = 0.4, LEN = 12, W = 2.2, FIRE = AIM + 0.8;
-        if (t < AIM) this.face(dt, 1.4);
-        if (!this.hitDone && t >= AIM) {
+        if (ta < AIM) this.face(dt, 1.4);
+        if (!this.hitDone && ta >= AIM) {
           this.hitDone = true;
           this.aim.copy(this.fwd());
           this.at.copy(this.pos).setY(0);
@@ -276,13 +277,13 @@ export class OrderJudge extends MiniBoss {
             if (this.inLine(from, dir, LEN, W)) this.hurt(22, from, 8);
           }, GOLD);
         }
-        if (t < FIRE + 0.6) return false;
-        // меч увяз в камне: изредка шатается (основное окно — сорванный обряд)
-        if (rnd() < 0.2) { fx.text(this.pos.clone().setY(this.topY + 0.8), 'меч увяз!', 'crit'); this.daze(1.5); }
+        if (ta < FIRE + 0.6) return false;
+        // the sword is stuck in the stone: occasionally staggers (the main window is the broken rite)
+        if (rnd() < 0.2) { fx.text(this.pos.clone().setY(this.topY + 0.8), t('sword stuck!'), 'crit'); this.daze(1.5); }
         return true;
       }
       case 'sweep': {
-        // меч вбок — и разворот всем телом: круг вокруг себя
+        // sword to the side — and a turn with the whole body: a circle around itself
         if (!this.hitDone) {
           this.hitDone = true;
           this.at.copy(this.pos).setY(0);
@@ -294,10 +295,10 @@ export class OrderJudge extends MiniBoss {
             if (this.inCircle(c, 3.5)) this.hurt(16, c, 6);
           }, HOLY.clone().lerp(RASP, 0.4));
         }
-        return t > 1.15;
+        return ta > 1.15;
       }
       case 'squires': {
-        // меч к небу: трое оруженосцев встают из света
+        // sword to the sky: three squires rise out of the light
         if (!this.hitDone) {
           this.hitDone = true;
           if (!this.quiet) sfx.choir();
@@ -311,19 +312,19 @@ export class OrderJudge extends MiniBoss {
             }, HOLY);
           });
         }
-        return t > 1.3;
+        return ta > 1.3;
       }
       case 'raise': {
-        // весы вверх, 2 с обряда: свет на могилах; не сорвали — оруженосцы встают снова
+        // scales up, 2 s of the rite: light on the graves; not broken — the squires rise again
         const CH = 2.3;
         if (!this.hitDone) {
           this.hitDone = true;
           if (!this.quiet) sfx.raise();
-          fx.text(this.pos.clone().setY(this.topY + 0.8), 'воскрешение!', 'crit');
+          fx.text(this.pos.clone().setY(this.topY + 0.8), t('resurrection!'), 'crit');
           for (const g of this.graves) this.column(g.pos, CH);
         }
         if (rnd() < 0.5) fx.particle({ pos: this.heart.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(rand(-1, 1), rand(-0.5, 1), rand(-1, 1))), vel: new THREE.Vector3(0, 1.5, 0), life: 0.5, size: 0.09, color: rnd() < 0.6 ? HOLY : RASP, gravity: 0 });
-        if (t < CH) return false;
+        if (ta < CH) return false;
         const room = Math.max(0, 5 - this.squires.length);
         for (const g of this.graves.slice(0, room)) {
           const look = SQUIRES[Math.floor(rand(0, SQUIRES.length))];
@@ -340,7 +341,7 @@ export class OrderJudge extends MiniBoss {
   protected animate(dt: number, walk: boolean): void {
     const t = this.time, S = this.st, st = this.state, atk = st === 'attack' ? this.attack : '';
     if (st === 'dead') return;
-    // шаг: тяжёлый, ноги по очереди, тело качается; на шаге — звон лат и пыль
+    // step: heavy, legs in turn, the body sways; on a step — the clank of armour and dust
     if (walk) {
       const was = this.stepT % 1;
       this.stepT += dt * 1.5 * this.speedK;
@@ -358,7 +359,7 @@ export class OrderJudge extends MiniBoss {
       this.body.rotation.z *= 0.85;
       this.body.position.y *= 0.8;
     }
-    // меч: в покое — наискось вперёд; приговор — вверх и вниз в пол; взмах — вбок и разворот; оруженосцы — к небу
+    // sword: at rest — slanted forward; verdict — up and down into the floor; sweep — sideways and a turn; squires — to the sky
     let sw = -0.9, sz = -0.08, sc = -0.5, lean = 0, spin = 0;
     if (st === 'sleep') { sw = -0.7; lean = 0.15; }
     if (atk === 'verdict') {
@@ -380,15 +381,15 @@ export class OrderJudge extends MiniBoss {
     this.swordArm.rotation.z += (sz - this.swordArm.rotation.z) * Math.min(1, dt * 12);
     this.scalesArm.rotation.x += (sc - this.scalesArm.rotation.x) * Math.min(1, dt * 8);
     this.scalesArm.rotation.z = 0.08;
-    // коромысло всегда ровно (чаши висят), качается; в обряде дрожит
+    // the beam is always level (the pans hang), sways; trembles in the rite
     this.beam.rotation.x = -this.scalesArm.rotation.x;
     this.beam.rotation.z = Math.sin(t * 1.3) * 0.12 + (atk === 'raise' ? Math.sin(t * 20) * 0.08 : 0) - this.scalesArm.rotation.z;
     this.body.rotation.y = spin;
     this.body.rotation.x += (lean - this.body.rotation.x) * Math.min(1, dt * 8);
-    // голова: во сне опущена, в оглушении мотается
+    // head: lowered in sleep, wobbles when dazed
     this.head.rotation.set(st === 'sleep' ? 0.35 : 0, st === 'daze' ? Math.sin(t * 5) * 0.3 : 0, 0);
     if (st !== 'sleep' && rnd() < 0.05) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1.2, 1.2), rand(1, 4), rand(-0.8, 0.8))), vel: new THREE.Vector3(0, 0.6, 0), life: 0.8, size: 0.07, color: HOLY, gravity: 0 });
-    // сердце-ягода на чаше: в оглушении бьётся крупно
+    // berry heart on the pan: beats hard when dazed
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.6 : 1));
   }

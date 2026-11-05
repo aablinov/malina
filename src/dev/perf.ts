@@ -1,27 +1,28 @@
 import * as THREE from 'three';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Замеры кадра (F8, wiki/dev-performance.md): сколько миллисекунд ушло на симуляцию и на рендер, сколько вызовов
- * отрисовки, треугольников, шейдерных программ, геометрий и текстур живёт в рендерере. Длинные кадры (дольше LONG_MS)
- * копятся в журнал с метками причин — код ставит `perf.mark('fountain')` в точках, где рождаются тяжёлые эффекты.
- * GPU-время — через EXT_disjoint_timer_query_webgl2, если браузер даёт (в Chrome на Mac обычно нет → «н/д»).
+ * Frame measurements (F8, wiki/dev-performance.md): how many milliseconds went to the simulation and to the render, how many draw
+ * calls, triangles, shader programs, geometries and textures live in the renderer. Long frames (longer than LONG_MS)
+ * accumulate in a log with cause marks — the code puts `perf.mark('fountain')` where heavy effects are born.
+ * GPU time — via EXT_disjoint_timer_query_webgl2 when the browser provides it (Chrome on Mac usually does not → "n/a").
  */
 
 export interface PerfFrame {
-  /** Стенное время кадра, мс (между двумя requestAnimationFrame) */
+  /** Wall time of the frame, ms (between two requestAnimationFrame) */
   ms: number;
-  /** Симуляция: сумма всех tick за кадр */
+  /** Simulation: the sum of all ticks in the frame */
   tickMs: number;
-  /** Рендер: камера, HUD, композер */
+  /** Render: camera, HUD, composer */
   renderMs: number;
-  /** GPU, мс; -1 — нет данных */
+  /** GPU, ms; -1 — no data */
   gpuMs: number;
   calls: number;
   triangles: number;
   programs: number;
   geometries: number;
   textures: number;
-  /** Метки причин, поставленные в этом кадре */
+  /** Cause marks set in this frame */
   marks: string[];
 }
 
@@ -38,7 +39,7 @@ export interface PerfSnapshot {
   programs: number;
   geometries: number;
   textures: number;
-  /** Длинные кадры с момента reset(): время, мс и метки */
+  /** Long frames since reset(): time, ms and marks */
   long: { t: number; ms: number; tickMs: number; renderMs: number; marks: string[] }[];
 }
 
@@ -64,29 +65,29 @@ export class Perf {
   private t0 = 0;
   private time = 0;
   private readonly gpu: GpuTimer | null;
-  /** Включён ли сбор (иначе ничего не стоит) */
+  /** Whether collection is on (otherwise it costs nothing) */
   enabled = true;
 
   private readonly renderer: THREE.WebGLRenderer;
   constructor(renderer: THREE.WebGLRenderer) { this.renderer = renderer;
-    // info сбрасывается руками: композер делает несколько проходов за кадр, и автосброс считал бы только последний
+    // info is reset by hand: the composer makes several passes per frame, and auto-reset would count only the last one
     renderer.info.autoReset = false;
     this.gpu = initGpuTimer(renderer);
   }
 
-  /** Начало кадра: обнулить счётчики рендерера */
+  /** Frame start: zero the renderer counters */
   begin(): void {
     if (!this.enabled) return;
     this.renderer.info.reset();
     this.tickMs = 0; this.renderMs = 0;
   }
 
-  /** Метка причины тяжёлого кадра: ставится в точках спавна эффектов */
+  /** Cause mark of a heavy frame: set where effects spawn */
   mark(tag: string): void {
     if (this.enabled && this.marks.length < 16) this.marks.push(tag);
   }
 
-  /** Обёртки замеров: измеряют стенное время блока */
+  /** Measurement wrappers: measure the wall time of a block */
   tickStart(): void { this.t0 = performance.now(); }
   tickEnd(): void { this.tickMs += performance.now() - this.t0; }
   renderStart(): void {
@@ -98,7 +99,7 @@ export class Perf {
     if (this.gpu) gpuEnd(this.gpu);
   }
 
-  /** Конец кадра: real — стенное время кадра в секундах */
+  /** Frame end: real — wall time of the frame in seconds */
   end(real: number): PerfFrame | null {
     if (!this.enabled) return null;
     this.time += real;
@@ -118,12 +119,12 @@ export class Perf {
     return f;
   }
 
-  /** Сбросить журнал длинных кадров и окно */
+  /** Reset the long-frame log and the window */
   reset(): void {
     this.ring.length = 0; this.head = 0; this.long.length = 0; this.time = 0;
   }
 
-  /** Сводка по окну последних кадров */
+  /** Summary over the window of recent frames */
   snapshot(): PerfSnapshot {
     const fs = this.ring.filter(Boolean);
     const n = fs.length || 1;
@@ -141,18 +142,18 @@ export class Perf {
     };
   }
 
-  /** Строки для оверлея F8 */
+  /** Lines for the F8 overlay */
   html(): string {
     const s = this.snapshot();
     const fps = s.avgMs > 0 ? 1000 / s.avgMs : 0;
-    const gpu = s.gpuMs >= 0 ? `${s.gpuMs.toFixed(1)}` : 'н/д';
+    const gpu = s.gpuMs >= 0 ? `${s.gpuMs.toFixed(1)}` : t('n/a');
     const lastLong = s.long[s.long.length - 1];
     return [
-      `<b>${fps.toFixed(0)}</b> FPS · кадр ${s.avgMs.toFixed(1)} мс · p95 ${s.p95Ms.toFixed(1)} · макс ${s.maxMs.toFixed(1)}`,
-      `CPU: симуляция ${s.avgTickMs.toFixed(1)} · рендер ${s.avgRenderMs.toFixed(1)} · GPU ${gpu}`,
-      `вызовов ${s.calls} · треугольников ${(s.triangles / 1000).toFixed(0)}k · программ ${s.programs}`,
-      `геометрий ${s.geometries} · текстур ${s.textures} · длинных кадров ${s.long.length}`,
-      lastLong ? `<span class="bad">последний длинный: ${lastLong.ms.toFixed(0)} мс${lastLong.marks.length ? ` (${lastLong.marks.join(', ')})` : ''}</span>` : '',
+      t('<b>{fps}</b> FPS · frame {avg} ms · p95 {p95} · max {max}', { fps: fps.toFixed(0), avg: s.avgMs.toFixed(1), p95: s.p95Ms.toFixed(1), max: s.maxMs.toFixed(1) }),
+      t('CPU: simulation {tick} · render {render} · GPU {gpu}', { tick: s.avgTickMs.toFixed(1), render: s.avgRenderMs.toFixed(1), gpu }),
+      t('calls {calls} · triangles {tris}k · programs {programs}', { calls: s.calls, tris: (s.triangles / 1000).toFixed(0), programs: s.programs }),
+      t('geometries {geometries} · textures {textures} · long frames {long}', { geometries: s.geometries, textures: s.textures, long: s.long.length }),
+      lastLong ? `<span class="bad">${t('last long: {ms} ms', { ms: lastLong.ms.toFixed(0) })}${lastLong.marks.length ? ` (${lastLong.marks.join(', ')})` : ''}</span>` : '',
     ].filter(Boolean).join('<br>');
   }
 }
@@ -180,7 +181,7 @@ function gpuEnd(t: GpuTimer): void {
   t.active = null;
 }
 
-/** Забрать готовые результаты; возвращает последнее известное GPU-время, мс */
+/** Collect finished results; returns the last known GPU time, ms */
 function gpuPoll(t: GpuTimer): number {
   const { gl } = t;
   while (t.pending.length) {

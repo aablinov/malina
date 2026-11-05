@@ -31,7 +31,7 @@ npm install
 make play        # builds the game and starts one server that also serves it
 ```
 
-Open http://localhost:8787 — the main menu lets you play solo or create a network room. For development, `make dev` runs the game server (port 8787) and the Vite dev client (port 5173) together.
+Open http://localhost:8787 — the main menu lets you play solo or create a network room. On the first visit the game asks for the interface language (English or Russian); change it later in Settings — the choice is kept in the browser. For development, `make dev` runs the game server (port 8787) and the Vite dev client (port 5173) together.
 
 Playing over the network: run the server somewhere reachable (`PORT`, `HOST`, `DB_PATH`, `STATIC=dist` to serve the game too), open the game with `?server=http://your-host:8787`, create a room and share the code. The server keeps profiles, rooms and battle history in SQLite.
 
@@ -65,6 +65,10 @@ Useful URLs: `?map=td` / `td2` / `td3` (defence maps), `?map=island`, `?map=pref
 | `wiki/` | The design wiki — start at [wiki/index.md](wiki/index.md) |
 
 Architecture overview: [wiki/arch-layers.md](wiki/arch-layers.md). Project brief and current state: [wiki/project-brief.md](wiki/project-brief.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE). Take it, change it, play it.
 
 ## Tests
 
@@ -110,7 +114,7 @@ npm install
 make play        # собирает игру и поднимает один сервер, который её же и отдаёт
 ```
 
-Откройте http://localhost:8787 — в главном меню можно играть одному или создать сетевую комнату. Для разработки `make dev` поднимает вместе игровой сервер (порт 8787) и клиент Vite (порт 5173).
+Откройте http://localhost:8787 — в главном меню можно играть одному или создать сетевую комнату. При первом входе игра спросит язык интерфейса (русский или английский); потом его можно сменить в настройках — выбор хранится в браузере. Для разработки `make dev` поднимает вместе игровой сервер (порт 8787) и клиент Vite (порт 5173).
 
 Игра по сети: запустите сервер там, куда дотянутся друзья (`PORT`, `HOST`, `DB_PATH`, `STATIC=dist`, чтобы он отдавал и игру), откройте игру с `?server=http://ваш-хост:8787`, создайте комнату и поделитесь кодом. Профили, комнаты и историю боёв сервер хранит в SQLite.
 
@@ -144,6 +148,10 @@ make play        # собирает игру и поднимает один се
 | `wiki/` | Дизайн-вики — начинать с [wiki/index.md](wiki/index.md) |
 
 Обзор архитектуры: [wiki/arch-layers.md](wiki/arch-layers.md). Бриф проекта и текущее состояние: [wiki/project-brief.md](wiki/project-brief.md).
+
+## Лицензия
+
+MIT — см. [LICENSE](LICENSE). Берите, меняйте, играйте.
 
 ## Тесты
 

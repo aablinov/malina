@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { C, RASP } from '../bosses/kit.ts';
 import type { FX } from '../fx.ts';
+import { t } from '../i18n/i18n.ts';
 import { BERRY_GLOW } from '../props.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { TOWERS } from '../td/towers.ts';
@@ -8,35 +9,35 @@ import { boom, hiss, voice } from '../spell-audio.ts';
 import { ARCANE, ARCANE_DEEP, DUST, EMBER, FIRE, ICE, ICE_DEEP, SNOW, STAR, STAR_DEEP, TAR, TAR_SHEEN, VOLT } from './views/colors.ts';
 
 /**
- * События симуляции обороны (src/sim/events.ts) → искры, вспышки, цифры, тряска и звук — всё, что раньше делали
- * старые классы src/td/* прямо в логике. Таблица событий (поля сверх `t id x y z`):
+ * Defence simulation events (src/sim/events.ts) → sparks, flashes, numbers, shake and sound — everything the old
+ * src/td/* classes used to do right inside the logic. Event table (fields beyond `t id x y z`):
  *
- * | событие        | поля                     | что играем                                              |
+ * | event          | fields                   | what we play                                            |
  * |----------------|--------------------------|---------------------------------------------------------|
- * | tower.build    | kind cost seat           | пыль, кольцо цвета башни, тряска, «−cost малины»        |
- * | tower.sell     | n                        | пыль, «+n малины»                                       |
- * | tower.upgrade  | kind level               | вспышка, искры, кольцо цвета башни, нота                |
- * | tower.hurt     | n                        | «−n», щепки                                             |
- * | tower.ruin     |                          | обломки, тряска, гул                                    |
- * | tower.repair   |                          | искры, нота                                             |
- * | tower.freeze / chip / thaw {loud} |         | ледяные искры, шипение                                  |
- * | tower.fire     | kind level + по роду     | шлейф баллисты, струя жаровни, молния, вьюга, метеорит… |
- * | hit.*          | area / r / pts           | попадания: иней, взрыв, лужа, цепь сферы                |
- * | burn           | top                      | язычок огня на горящем враге                            |
- * | dmg            | n cls                    | цифра урона                                             |
- * | berry.spent    | n                        | «−n малины»                                             |
- * | wall.* bush.* lair.burst pile.* wave.* td.* chief | — см. ниже                             |
+ * | tower.build    | kind cost seat           | dust, a ring in the tower colour, shake, "−cost raspberries" |
+ * | tower.sell     | n                        | dust, "+n raspberries"                                  |
+ * | tower.upgrade  | kind level               | flash, sparks, a ring in the tower colour, a note       |
+ * | tower.hurt     | n                        | "−n", splinters                                         |
+ * | tower.ruin     |                          | debris, shake, rumble                                   |
+ * | tower.repair   |                          | sparks, a note                                          |
+ * | tower.freeze / chip / thaw {loud} |         | ice sparks, hiss                                        |
+ * | tower.fire     | kind level + per kind    | ballista trail, brazier jet, lightning, blizzard, meteor… |
+ * | hit.*          | area / r / pts           | hits: rime, blast, pool, orb chain                      |
+ * | burn           | top                      | a tongue of flame on a burning enemy                    |
+ * | dmg            | n cls                    | damage number                                           |
+ * | berry.spent    | n                        | "−n raspberries"                                        |
+ * | wall.* bush.* lair.burst pile.* wave.* td.* chief | — see below                            |
  *
- * Звук (voice/boom/hiss) — только когда `!ctx.quiet()`. Баннеры и подсказки — у HUD (src/cgame/td-ui.ts), не здесь
+ * Sound (voice/boom/hiss) only when `!ctx.quiet()`. Banners and hints belong to the HUD (src/cgame/td-ui.ts), not here
  */
 export interface FxCtx {
   fx: FX;
   quiet: () => boolean;
-  /** Герой местного игрока (цифра подобранной малины) */
+  /** The local player's hero (the picked-up raspberries number) */
   heroPos: () => THREE.Vector3;
-  /** Место местного игрока: чьи подборы показывать цифрой */
+  /** The local player's seat: whose pickups to show as a number */
   seat: () => number;
-  /** Куст: цифра награды за волну */
+  /** The bush: the wave bounty number */
   bushPos: THREE.Vector3;
 }
 
@@ -50,18 +51,18 @@ export function playTdEvents(events: readonly SimEvent[], ctx: FxCtx): void {
   const loud = !ctx.quiet();
   for (const e of events) {
     switch (e.t) {
-      // ---------- постройка ----------
+      // ---------- building ----------
       case 'tower.build': {
         const c = towerColor(str(e.kind), 2);
         fx.burst(at(e, 0.4), ['#d8cfa8', '#9a8f70', c], 20, { speed: 3, up: 3, size: 0.12, life: 0.6, gravity: 8 });
         fx.shock(at(e, 0.06), 2, c, 0.4, 0.14);
         fx.shake = Math.max(fx.shake, 0.25);
-        fx.text(at(e, 1.4), `−${num(e.cost)} малины`, 'berry');
+        fx.text(at(e, 1.4), `−${t('{n} raspberries', { n: num(e.cost) })}`, 'berry');
         break;
       }
       case 'tower.sell':
         fx.burst(at(e, 0.6), ['#d8cfa8', '#9a8f70', '#5e3c22'], 16, { speed: 3, up: 3, size: 0.12, life: 0.6, gravity: 8 });
-        fx.text(at(e, 1.4), `+${num(e.n)} малины`, 'berry');
+        fx.text(at(e, 1.4), `+${t('{n} raspberries', { n: num(e.n) })}`, 'berry');
         break;
       case 'tower.upgrade': {
         const c = towerColor(str(e.kind), 1);
@@ -71,9 +72,9 @@ export function playTdEvents(events: readonly SimEvent[], ctx: FxCtx): void {
         if (loud) voice({ type: 'triangle', f: 520, f1: 1040, dur: 0.3, vol: 0.06 });
         break;
       }
-      case 'berry.spent': fx.text(at(e), `−${num(e.n)} малины`, 'berry'); break;
+      case 'berry.spent': fx.text(at(e), `−${t('{n} raspberries', { n: num(e.n) })}`, 'berry'); break;
 
-      // ---------- прочность башни ----------
+      // ---------- tower durability ----------
       case 'tower.hurt':
         fx.text(at(e, 3), `−${num(e.n)}`, 'bad');
         fx.burst(at(e, 1), ['#9a8f70', '#5e3c22'], 5, { speed: 2, up: 2, size: 0.08, life: 0.4, gravity: 8 });
@@ -100,10 +101,10 @@ export function playTdEvents(events: readonly SimEvent[], ctx: FxCtx): void {
         if (loud) hiss({ dur: 0.2, vol: 0.1, f: 6000, f1: 3000, q: 1 });
         break;
 
-      // ---------- выстрелы ----------
+      // ---------- shots ----------
       case 'tower.fire': fire(e, ctx, loud); break;
 
-      // ---------- попадания ----------
+      // ---------- hits ----------
       case 'hit.arrow': break;
       case 'hit.frost':
         fx.burst(at(e), [ICE, '#ffffff', ICE_DEEP], 12, { speed: 2.5, up: 2, size: 0.08, life: 0.5, glow: true, gravity: 6 });
@@ -145,14 +146,14 @@ export function playTdEvents(events: readonly SimEvent[], ctx: FxCtx): void {
         fx.burst(at(e), ['#ffffff', '#d8c8a0'], 6, { speed: 3, up: 2, size: 0.07, life: 0.3, glow: true, gravity: 8 });
         break;
       case 'burn': {
-        // язычок огня на горящем враге (событие раз в 0,2 с — пара искр за раз)
+        // a tongue of flame on a burning enemy (an event every 0.2 s — a couple of sparks each)
         const top = num(e.top, 1.2);
         for (let i = 0; i < 2; i++) fx.particle({ pos: at(e).add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.3 + Math.random() * top, (Math.random() - 0.5) * 0.6)), vel: new THREE.Vector3(0, 1.5, 0), life: 0.4, size: 0.1, color: Math.random() < 0.5 ? FIRE : EMBER, gravity: 0 });
         break;
       }
       case 'dmg': fx.text(at(e), String(num(e.n)), str(e.cls)); break;
 
-      // ---------- стены, куст, логова ----------
+      // ---------- walls, bush, lairs ----------
       case 'wall.hurt': {
         const v = num(e.n), out = new THREE.Vector3(num(e.ox), 0, num(e.oz));
         const p = at(e).setY(1.2).addScaledVector(out, 0.6);
@@ -198,7 +199,7 @@ export function playTdEvents(events: readonly SimEvent[], ctx: FxCtx): void {
         if (loud) { boom(110, 50, 0.3, 0.2); hiss({ dur: 0.2, vol: 0.06, f: 1800, f1: 600, q: 1 }); }
         break;
 
-      // ---------- малина ----------
+      // ---------- raspberries ----------
       case 'pile.drop': break;
       case 'pile.land': fx.burst(at(e).setY(0.1), [BERRY_GLOW], 5, { speed: 1.2, up: 1, size: 0.05, life: 0.3, glow: true, gravity: 3 }); break;
       case 'pile.pick': {
@@ -207,15 +208,15 @@ export function playTdEvents(events: readonly SimEvent[], ctx: FxCtx): void {
         fx.shock(p.clone().setY(0.1), 1.3, BERRY_GLOW, 0.35, 0.3);
         fx.burst(p, [BERRY_GLOW, C(3.4, 2.4, 2.8), C(3.2, 1.2, 1.8)], 22, { speed: 2.8, up: 3.5, size: 0.08, life: 0.6, glow: true, gravity: 5 });
         fx.burst(p, ['#e8245a', '#ff4a7e', '#a80e3c'], 10, { speed: 2.2, up: 3, size: 0.09, life: 0.6, gravity: 10 });
-        // цифра — только над своим героем
-        if (num(e.seat) === ctx.seat()) { const h = ctx.heroPos(); fx.text(h.clone().setY(h.y + 1.6), `+${num(e.n)} малины`, 'berry'); }
+        // the number only above our own hero
+        if (num(e.seat) === ctx.seat()) { const h = ctx.heroPos(); fx.text(h.clone().setY(h.y + 1.6), `+${t('{n} raspberries', { n: num(e.n) })}`, 'berry'); }
         break;
       }
 
-      // ---------- волны и исход ----------
+      // ---------- waves and the outcome ----------
       case 'wave.start': fx.shake = Math.max(fx.shake, 0.2); break;
-      case 'wave.early': fx.text(ctx.bushPos.clone().setY(3.6), `+${num(e.n)} малины`, 'berry'); break;
-      case 'wave.won': fx.text(ctx.bushPos.clone().setY(3.6), `+${num(e.n)} малины`, 'berry'); break;
+      case 'wave.early': fx.text(ctx.bushPos.clone().setY(3.6), `+${t('{n} raspberries', { n: num(e.n) })}`, 'berry'); break;
+      case 'wave.won': fx.text(ctx.bushPos.clone().setY(3.6), `+${t('{n} raspberries', { n: num(e.n) })}`, 'berry'); break;
       case 'td.won': break;
       case 'td.lost': fx.darken(1.2); break;
       case 'chief': fx.shake = Math.max(fx.shake, 0.4); break;
@@ -224,7 +225,7 @@ export function playTdEvents(events: readonly SimEvent[], ctx: FxCtx): void {
   }
 }
 
-/** Выстрел башни: шлейфы, струи, молнии и звук — по роду башни; снаряды летят сами (src/cgame/views/bolt-view.ts) */
+/** Tower shot: trails, jets, lightning and sound per tower kind; projectiles fly on their own (src/cgame/views/bolt-view.ts) */
 function fire(e: SimEvent, ctx: FxCtx, loud: boolean): void {
   const { fx } = ctx;
   switch (str(e.kind)) {
@@ -236,7 +237,7 @@ function fire(e: SimEvent, ctx: FxCtx, loud: boolean): void {
     }
     case 'oil': if (loud) hiss({ dur: 0.2, vol: 0.06, f: 400, f1: 250, q: 1 }); break;
     case 'meteor': {
-      // предупреждение на земле и шлейф с неба — сам метеорит летит записью `b<n>`
+      // a warning on the ground and a trail from the sky — the meteor itself flies as a `b<n>` record
       const to = new THREE.Vector3(num(e.tx), 0, num(e.tz)), from = to.clone().add(new THREE.Vector3(-4, 22, -4));
       fx.shock(to.clone().setY(0.08), num(e.r, 4.5), STAR_DEEP, 0.8, 0.1);
       fx.streak({ path: (k, out) => out.lerpVectors(from, to, k), dur: 0.8, color: STAR, color2: STAR_DEEP, width: 0.5, tail: 0.6, halo: 3, core: 0.8 });
@@ -247,7 +248,7 @@ function fire(e: SimEvent, ctx: FxCtx, loud: boolean): void {
       const pts = Array.isArray(e.pts) ? (e.pts as number[]) : [];
       for (let i = 3; i + 2 < pts.length; i += 3) {
         const a = new THREE.Vector3(pts[i - 3], pts[i - 2], pts[i - 1]), b = new THREE.Vector3(pts[i], pts[i + 1], pts[i + 2]);
-        // ломаная молния: смещение посередине, гаснет быстро
+        // jagged lightning: offset in the middle, fades fast
         const mid = a.clone().lerp(b, 0.5).add(new THREE.Vector3((Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 1.2));
         fx.streak({ path: (k, out) => (k < 0.5 ? out.lerpVectors(a, mid, k * 2) : out.lerpVectors(mid, b, (k - 0.5) * 2)), dur: 0.12, color: VOLT, color2: C(3.6, 3.6, 4), width: 0.12, tail: 1, halo: 2, core: 0.9 });
         fx.flash(b, VOLT, 1.2, 0.12);

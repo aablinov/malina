@@ -4,16 +4,16 @@ import { DECOR, WORLD_DECOR_CATEGORIES } from './decor.ts';
 import { buildWorldZone } from './world-zone.ts';
 
 /**
- * Карта плейграунда: арена 48 × 48 м из блоков (трава, стены, укрытия, колонна, диагональ, угол, коридор, пруд, площадка со ступенями)
- * и «витрина» за южной стеной — все блоки палитры, вода, дерево, лестницы, забор, костёр, весь декор.
- * `npm run map:playground` пишет assets/maps/playground.json; дальше карту можно править в редакторе.
+ * Playground map: a 48 × 48 m arena of blocks (grass, walls, covers, column, diagonal, corner, corridor, pond, platform with stairs)
+ * and a "showcase" beyond the south wall — all palette blocks, water, a tree, stairs, a fence, a campfire, all decor.
+ * `npm run map:playground` writes assets/maps/playground.json; after that the map can be edited in the editor.
  */
 
 export const PG_HALF = 24;
-/** Надписи на полу витрины: [подпись, x, z] */
+/** Floor labels of the showcase: [caption, x, z] */
 export interface PgLabel { text: string; x: number; z: number; size?: number }
 
-/** Плавный шум 0..1 с шагом 3 м для края дорог (детерминированный) */
+/** Smooth noise 0..1 with a 3 m step for road edges (deterministic) */
 function wobble(x: number, z: number): number {
   const h = (i: number, j: number) => { let v = Math.imul(i, 374761393) + Math.imul(j, 668265263); v = Math.imul(v ^ (v >>> 13), 1274126177); return ((v ^ (v >>> 16)) >>> 0) / 4294967296; };
   const gx = Math.floor(x / 3), gz = Math.floor(z / 3), fx = x / 3 - gx, fz = z / 3 - gz;
@@ -22,24 +22,24 @@ function wobble(x: number, z: number): number {
 }
 
 export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
-  const L = new Level('Плейграунд');
+  const L = new Level('Playground');
   const labels: PgLabel[] = [];
-  /** Предмет декора: rot — рыск в градусах (как у блоков), on — клетка, к которой прикреплён */
+  /** Decor item: rot — yaw in degrees (as for blocks), on — the cell it is attached to */
   const dec = (name: string, x: number, y: number, z: number, rot = 0, on?: [number, number, number]) =>
     L.addDecor({ name, pos: [x, y, z], ...(rot ? { rot: [rot] } : {}), ...(on ? { on } : {}) });
   const H = PG_HALF;
 
-  // ---------- арена ----------
-  // пол — трава, у нулевой точки площадка из плит; разметка 10 м — дороги (видно расстояния, но это кусочек мира, а не серая сетка)
+  // ---------- arena ----------
+  // floor — grass, a slab plaza at the origin; 10 m marks — roads (distances are visible, but it is a piece of the world, not a grey grid)
   for (let x = -H; x <= H; x++) for (let z = -H; z <= H; z++) {
     const plaza = Math.max(Math.abs(x), Math.abs(z)) <= 2;
-    // дороги 3 м по отметкам через 10 м (как в Minecraft Dungeons — широкие, с рваным краем травы)
+    // 3 m roads at marks every 10 m (as in Minecraft Dungeons — wide, with a ragged grass edge)
     const on10 = (v: number) => [0, 1, 9].includes(((v % 10) + 10) % 10);
     const mark = (on10(x) && Math.abs(z) <= H - 1) || (on10(z) && Math.abs(x) <= H - 1);
     L.set(x, -1, z, plaza ? 'tiles' : mark ? 'path' : 'grass');
   }
-  // край дороги не по линейке: по плавному шуму клетки у края дороги зарастают травой, а трава у края вытоптана в дорогу —
-  // заливы и мысы в метр-два; внутри клетки край рвёт ещё маска мешера (bleed)
+  // the road edge is not ruler-straight: by smooth noise, cells at the road edge grow over with grass, and grass at the edge is trampled into road —
+  // bays and capes of a metre or two; inside the cell the edge is torn further by the mesher mask (bleed)
   const isPath = (x: number, z: number) => L.nameAt(x, -1, z) === 'path';
   const flips: [number, number, string][] = [];
   for (let x = -H + 1; x <= H - 1; x++) for (let z = -H + 1; z <= H - 1; z++) {
@@ -52,52 +52,52 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     else if (me === 'grass' && n > 0.68) flips.push([x, z, 'path']);
   }
   for (const [x, z, name] of flips) L.set(x, -1, z, name);
-  // стены по периметру: дальние (−X, −Z) 3 блока, со стороны камеры (+X, +Z) — 1 блок; на юге проём к витрине, на востоке — в зону «мир»
+  // perimeter walls: the far ones (−X, −Z) 3 blocks, on the camera side (+X, +Z) — 1 block; an opening to the showcase in the south, to the "world" zone in the east
   const W = H + 1;
   for (let i = -W; i <= W; i++) {
     for (let y = 0; y < 3; y++) { L.set(i, y, -W, y === 2 ? 'bricks' : 'bricks_old'); L.set(-W, y, i, y === 2 ? 'bricks' : 'bricks_old'); }
-    if (Math.abs(i) > 1) L.set(W, 0, i, 'bricks_mossy'); // проём на восток — в зону «мир»
+    if (Math.abs(i) > 1) L.set(W, 0, i, 'bricks_mossy'); // opening to the east — into the "world" zone
     if (Math.abs(i) > 1) L.set(i, 0, W, 'bricks_mossy');
   }
   for (let i = -W; i <= W; i++) { L.set(i, -1, -W, 'stone'); L.set(i, -1, W, 'stone'); L.set(-W, -1, i, 'stone'); L.set(W, -1, i, 'stone'); }
-  // факелы на дальних стенах — тёплые пятна света
+  // torches on the far walls — warm spots of light
   for (let i = -20; i <= 20; i += 8) { L.set(i, 0, -H, 'torch'); L.set(-H, 0, i, 'torch'); }
 
-  // укрытия: низкие (14/16) и высокие 2 блока
+  // covers: low (14/16) and high 2 blocks
   for (let x = 5; x <= 7; x++) L.set(x, 0, -8, 'cobble_low');
   for (let z = -14; z <= -12; z++) L.set(10, 0, z, 'bricks_low');
   for (let x = 2; x <= 4; x++) L.fill(x, 0, -13, x, 1, -13, 'mossy');
   for (let x = 14; x <= 15; x++) L.fill(x, 0, -9, x, 1, -9, 'mossy');
-  // колонна
+  // column
   L.fill(9, 0, -3, 9, 2, -3, 'bricks');
-  // диагональ: скольжение вдоль стены
+  // diagonal: sliding along a wall
   for (let k = 0; k < 5; k++) L.fill(17 + k, 0, -1 - k, 17 + k, 2, -1 - k, 'bricks_old');
-  // угол комнаты
+  // room corner
   for (let x = 16; x <= 21; x++) L.fill(x, 0, 5, x, 2, 5, 'bricks_old');
   for (let z = 5; z <= 10; z++) L.fill(16, 0, z, 16, 2, z, 'bricks_old');
-  // коридор 3 м с проёмом 1 м посередине
+  // 3 m corridor with a 1 m opening in the middle
   for (let x = 2; x <= 12; x++) { L.fill(x, 0, 13, x, 1, 13, 'bricks'); L.fill(x, 0, 17, x, 1, 17, 'bricks'); }
   L.fill(7, 0, 14, 7, 1, 14, 'bricks'); L.fill(7, 0, 16, 7, 1, 16, 'bricks');
 
-  // площадка 2 блока с подъёмом по ступеням: прыжка нет, перепады высоты — ступени и полублоки
+  // a 2-block platform climbed by stairs: there is no jump, height differences are stairs and half-blocks
   L.fill(-20, 0, -21, -16, 1, -19, 'cobble');
-  // подъём к −X: ступени (0,5 → 1) → блок с полублоком (1,5) → площадка (2)
+  // ascent towards −X: stairs (0.5 → 1) → block with a half-block (1.5) → platform (2)
   for (let z = -21; z <= -19; z++) { L.set(-14, 0, z, 'cobble_stairs', 2); L.set(-15, 0, z, 'cobble'); L.set(-15, 1, z, 'cobble_slab'); }
   L.set(-18, 2, -21, 'torch');
-  labels.push({ text: 'площадка 2 м: ступени', x: -17, z: -17.6, size: 0.7 });
+  labels.push({ text: '2 m platform: stairs', x: -17, z: -17.6, size: 0.7 });
 
-  // пруд: живая вода с песчаным дном, кувшинки-цветы по берегу
+  // pond: live water with a sandy bottom, lily-flowers along the bank
   L.fill(-21, -1, 2, -15, -1, 6, 'water');
   L.fill(-21, -2, 2, -15, -2, 6, 'sand');
   L.set(-15, -1, 2, 'sand'); L.set(-21, -1, 6, 'sand'); L.set(-16, -1, 6, 'grass');
   for (const [fx, fz, f] of [[-22, 3, 'flower_blue'], [-22, 5, 'fern'], [-14, 4, 'flower_yellow'], [-18, 7, 'tall_grass'], [-17, 1, 'flower_white']] as [number, number, string][]) L.set(fx, 0, fz, f);
-  labels.push({ text: 'пруд', x: -18, z: 7.8, size: 0.7 });
+  labels.push({ text: 'pond', x: -18, z: 7.8, size: 0.7 });
 
-  // травяной холм в три яруса у западной стены: уступы по 1 м с рваным краем — на них видна бахрома травы
+  // a three-tier grass hill by the west wall: 1 m ledges with a ragged edge — the grass fringe shows on them
   const tier = (x0: number, x1: number, z0: number, z1: number, y: number) => {
     for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
       const edge = x === x0 || x === x1 || z === z0 || z === z1;
-      if (edge && ((x * 7 + z * 13 + y * 5) % 4 === 0)) continue; // рваный край
+      if (edge && ((x * 7 + z * 13 + y * 5) % 4 === 0)) continue; // ragged edge
       for (let k = 0; k < y; k++) L.set(x, k, z, 'dirt');
       L.set(x, y, z, 'grass');
     }
@@ -105,39 +105,39 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   tier(-23, -16, 11, 22, 0);
   tier(-23, -19, 13, 21, 1);
   tier(-23, -21, 15, 19, 2);
-  // подъём: ступени с травы на 1-й ярус и с 1-го на 2-й
+  // ascent: stairs from the grass to tier 1 and from tier 1 to tier 2
   for (const z of [16, 17]) { L.set(-15, 0, z, 'cobble_stairs', 2); L.set(-18, 1, z, 'cobble_stairs', 2); }
-  labels.push({ text: 'уступы: трава свисает с края', x: -19.5, z: 23.6, size: 0.7 });
+  labels.push({ text: 'ledges: grass hangs from the edge', x: -19.5, z: 23.6, size: 0.7 });
 
-  // трава и цветы россыпью по свободной траве (детерминированно)
+  // grass and flowers scattered over free grass (deterministic)
   const FLORA = ['tall_grass', 'tall_grass', 'tall_grass', 'fern', 'flower_red', 'flower_yellow', 'flower_blue', 'flower_white'];
   for (let x = -H + 1; x <= H - 1; x++) for (let z = -H + 1; z <= H - 1; z++) {
     const h = ((x * 73856093) ^ (z * 19349663)) >>> 0;
     if (h % 100 >= 7 || L.nameAt(x, -1, z) !== 'grass' || L.nameAt(x, 0, z) !== 'air') continue;
-    if (Math.abs(x) <= 4 && Math.abs(z) <= 6) continue; // у старта чисто
-    if (x >= -14 && x <= -1 && z >= 9 && z <= 21) continue; // склад
-    if (z >= -18 && z <= -16) continue; // рельс чучела
+    if (Math.abs(x) <= 4 && Math.abs(z) <= 6) continue; // clear at the start
+    if (x >= -14 && x <= -1 && z >= 9 && z <= 21) continue; // storage yard
+    if (z >= -18 && z <= -16) continue; // dummy rail
     L.set(x, 0, z, FLORA[(h >>> 8) % FLORA.length]);
   }
 
-  // Солнечная поляна (MOB_ROOMS, glade): кольцо жёлтых цветов вокруг поста Соллера
+  // Sunny Glade (MOB_ROOMS, glade): a ring of yellow flowers around the Soller's post
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI * 2, x = Math.round(18.5 + Math.cos(a) * 2.8), z = Math.round(18.5 + Math.sin(a) * 2.8);
     if (L.nameAt(x, -1, z) === 'grass') L.set(x, 0, z, i % 3 ? 'flower_yellow' : 'flower_white');
   }
   for (let x = 17; x <= 20; x++) for (let z = 17; z <= 20; z++) if (L.nameAt(x, 0, z) !== 'air' && !String(L.nameAt(x, 0, z)).startsWith('flower')) L.set(x, 0, z, 'air');
-  labels.push({ text: 'Солнечная поляна', x: 18.5, z: 22.6, size: 0.7 });
+  labels.push({ text: 'Sunny Glade', x: 18.5, z: 22.6, size: 0.7 });
 
-  // ---------- витрина ----------
+  // ---------- showcase ----------
   const Z0 = W + 1, Z1 = W + 30;
   for (let x = -W; x <= W; x++) for (let z = Z0; z <= Z1; z++) L.set(x, -1, z, Math.abs(x) <= 1 && z <= Z0 + 3 ? 'gravel' : 'grass');
-  // низкая ограда витрины
+  // low fence of the showcase
   for (let x = -W; x <= W; x++) L.set(x, 0, Z1, 'fence');
   for (let z = Z0; z <= Z1; z++) { L.set(-W, 0, z, 'fence'); L.set(W, 0, z, 'fence'); }
-  labels.push({ text: 'витрина блоков: все блоки палитры', x: 0, z: Z0 + 1.2, size: 1.1 });
+  labels.push({ text: 'block showcase: all palette blocks', x: 0, z: Z0 + 1.2, size: 1.1 });
 
-  // ряды 1–3: все «твёрдые» блоки палитры по одному, подпись под каждым
-  const solids = BLOCKS.filter((b) => b.category !== 'служебные' && !WORLD_CATEGORIES.includes(b.category) && !b.scatter && !b.name.endsWith('_stairs') && b.parts.length && b.collide > 0 && b.name !== 'water' && b.name !== 'acid');
+  // rows 1–3: all "solid" palette blocks one each, a caption under every one
+  const solids = BLOCKS.filter((b) => b.category !== 'service' && !WORLD_CATEGORIES.includes(b.category) && !b.scatter && !b.name.endsWith('_stairs') && b.parts.length && b.collide > 0 && b.name !== 'water' && b.name !== 'acid');
   let i = 0;
   for (const b of solids) {
     const x = -22 + (i % 23) * 2, z = Z0 + 4 + Math.floor(i / 23) * 3;
@@ -145,7 +145,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     labels.push({ text: b.title, x, z: z + 1, size: 0.5 });
     i++;
   }
-  // ряд 3: ступени в четырёх поворотах и проходимые блоки
+  // row 3: stairs in four rotations and walkable blocks
   const stairs = BLOCKS.filter((b) => b.name.endsWith('_stairs') && !WORLD_CATEGORIES.includes(b.category));
   let x = -22;
   const zs = Z0 + 12;
@@ -156,15 +156,15 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   }
   for (const name of ['tall_grass', 'fern', 'flower_red', 'flower_blue', 'flower_white', 'flower_yellow', 'hole', 'fire']) { L.set(x, 0, zs, name); labels.push({ text: name, x, z: zs + 1, size: 0.4 }); x += 1; }
 
-  // ряд 4: сборки — вода, кислота, дерево, забор с сеном, костёр, лестница на площадку, домик
+  // row 4: kits — water, acid, a tree, a fence with hay, a campfire, stairs to a platform, a cottage
   const zb = Z0 + 15;
   L.fill(-23, -1, zb, -19, -1, zb + 3, 'water');
   L.fill(-23, -2, zb, -19, -2, zb + 3, 'sand');
-  labels.push({ text: 'вода', x: -21, z: zb + 4.4, size: 0.6 });
+  labels.push({ text: 'water', x: -21, z: zb + 4.4, size: 0.6 });
   L.fill(-16, -1, zb, -14, -1, zb + 3, 'acid');
   L.fill(-16, -2, zb, -14, -2, zb + 3, 'stone');
-  labels.push({ text: 'кислота', x: -15, z: zb + 4.4, size: 0.6 });
-  // дерево
+  labels.push({ text: 'acid', x: -15, z: zb + 4.4, size: 0.6 });
+  // tree
   const tx = -10, tz = zb + 2;
   L.fill(tx, 0, tz, tx, 3, tz, 'log');
   for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = 3; dy <= 5; dy++) {
@@ -172,36 +172,36 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     if (d2 <= 4.6 && !(dx === 0 && dz === 0 && dy === 3)) L.set(tx + dx, dy, tz + dz, 'leaves');
   }
   L.set(tx + 2, 0, tz + 1, 'berry_bush'); L.set(tx - 2, 0, tz - 1, 'berry_bush');
-  labels.push({ text: 'дерево и кусты', x: tx, z: zb + 4.4, size: 0.6 });
-  // загон с сеном
+  labels.push({ text: 'tree and bushes', x: tx, z: zb + 4.4, size: 0.6 });
+  // pen with hay
   for (let fx = -5; fx <= -1; fx++) { L.set(fx, 0, zb, 'fence'); L.set(fx, 0, zb + 3, 'fence'); }
   for (let fz = zb; fz <= zb + 3; fz++) { L.set(-5, 0, fz, 'fence'); L.set(-1, 0, fz, 'fence'); }
   L.set(-3, 0, zb + 1, 'hay'); L.set(-4, 0, zb + 2, 'hay'); L.set(-3, 1, zb + 1, 'hay');
-  labels.push({ text: 'забор, сено', x: -3, z: zb + 4.4, size: 0.6 });
-  // костёр и факелы
+  labels.push({ text: 'fence, hay', x: -3, z: zb + 4.4, size: 0.6 });
+  // campfire and torches
   L.set(2, 0, zb + 1, 'campfire'); L.set(0, 0, zb + 3, 'torch'); L.set(4, 0, zb + 3, 'torch');
   for (const [cx, cz] of [[1, zb + 3], [3, zb + 3]]) L.set(cx, 0, cz, 'crate');
-  labels.push({ text: 'костёр, факелы', x: 2, z: zb + 4.4, size: 0.6 });
-  // лестница на площадку 2 блока: ступени → полублок → ступени; наверху стенка
+  labels.push({ text: 'campfire, torches', x: 2, z: zb + 4.4, size: 0.6 });
+  // stairs to a 2-block platform: stairs → half-block → stairs; a wall on top
   L.fill(8, 0, zb, 12, 1, zb + 3, 'stone');
   L.fill(8, 2, zb, 12, 2, zb + 3, 'cobble_wall'); L.fill(9, 2, zb + 1, 11, 2, zb + 2, 'air');
-  L.fill(8, 2, zb + 1, 8, 2, zb + 2, 'air'); L.fill(12, 2, zb + 1, 12, 2, zb + 2, 'air'); // проходы для подъёма и спуска
-  // подъём: ступени (0,5 → 1) → блок с полублоком (1,5) → площадка (2); спуск с другой стороны ступенями
+  L.fill(8, 2, zb + 1, 8, 2, zb + 2, 'air'); L.fill(12, 2, zb + 1, 12, 2, zb + 2, 'air'); // passages for ascent and descent
+  // ascent: stairs (0.5 → 1) → block with a half-block (1.5) → platform (2); descent on the other side by stairs
   for (const dz of [1, 2]) {
     L.set(6, 0, zb + dz, 'stone_stairs', 0);
     L.set(7, 0, zb + dz, 'stone'); L.set(7, 1, zb + dz, 'stone_slab');
     L.set(13, 1, zb + dz, 'cobble_stairs', 2); L.set(13, 0, zb + dz, 'cobble');
     L.set(14, 0, zb + dz, 'cobble_stairs', 2);
   }
-  labels.push({ text: 'ступени → площадка 2 м → спуск', x: 10, z: zb + 4.4, size: 0.6 });
-  // домик с крышей из ступеней
+  labels.push({ text: 'stairs → 2 m platform → descent', x: 10, z: zb + 4.4, size: 0.6 });
+  // cottage with a roof of stairs
   const hx = 19, hz = zb + 1;
   for (let dx = -2; dx <= 2; dx++) for (let dz = -1; dz <= 2; dz++) {
     const edge = Math.abs(dx) === 2 || dz === -1 || dz === 2;
     if (!edge) continue;
     const corner = Math.abs(dx) === 2 && (dz === -1 || dz === 2);
     for (let y = 0; y < 2; y++) {
-      if (dx === 0 && dz === -1) continue; // дверь на север
+      if (dx === 0 && dz === -1) continue; // door to the north
       L.set(hx + dx, y, hz + dz, corner ? 'log' : 'planks');
     }
   }
@@ -213,13 +213,13 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     L.set(hx - 1, 4, hz + dz, 'roof_slab'); L.set(hx, 4, hz + dz, 'roof_slab'); L.set(hx + 1, 4, hz + dz, 'roof_slab');
   }
   L.set(hx - 1, 0, hz - 2, 'torch'); L.set(hx + 1, 0, hz - 2, 'torch');
-  labels.push({ text: 'домик', x: hx, z: zb + 4.4, size: 0.6 });
+  labels.push({ text: 'cottage', x: hx, z: zb + 4.4, size: 0.6 });
 
-  // ряд 5: декор — свободные предметы поверх блоков; у стены — настенный и потолочный, перед ней — напольный
+  // row 5: decor — free items on top of blocks; by the wall — wall and ceiling ones, in front of it — floor ones
   const zw = Z0 + 22;
   for (let x = -22; x <= 22; x++) for (let y = 0; y < 3; y++) L.set(x, y, zw, y === 2 ? 'bricks' : 'bricks_old');
   for (let x = 6; x <= 12; x++) L.set(x, 2, zw + 1, 'bricks_slab');
-  labels.push({ text: 'декор: стоит где угодно, под любым углом, из кубиков 1/16', x: 0, z: zw - 1.3, size: 0.9 });
+  labels.push({ text: 'decor: stands anywhere, at any angle, made of 1/16 cubes', x: 0, z: zw - 1.3, size: 0.9 });
   const face = zw + 0.5;
   const onWall: [string, number, number][] = [['roots', -19, 2.3], ['cobweb', -15, 2.3], ['banner', -11, 2.6], ['torch_wall', -7, 1.4], ['banner', -3, 2.6], ['torch_wall', 1, 1.4]];
   for (const [name, x, y] of onWall) {
@@ -227,7 +227,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     labels.push({ text: DECOR.find((d) => d.name === name)!.title, x, z: face + 1, size: 0.45 });
   }
   for (const x of [7, 9, 11]) dec('chain', x, 2, zw + 1, x * 30, [x, 2, zw + 1]);
-  labels.push({ text: 'Цепь', x: 9, z: face + 1.4, size: 0.45 });
+  labels.push({ text: 'Chain', x: 9, z: face + 1.4, size: 0.45 });
   const floorItems = DECOR.filter((d) => d.anchor === 'floor' && !WORLD_DECOR_CATEGORIES.includes(d.category));
   floorItems.forEach((d, k) => {
     const x = -21 + k * 4, z = zw + 4;
@@ -235,7 +235,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
     labels.push({ text: d.title, x, z: z + 1.7, size: 0.45 });
   });
 
-  // декор в арене: знамёна между факелами, корни и паутина на дальних стенах, руины, фонари, ящики с цветами
+  // decor in the arena: banners between the torches, roots and cobwebs on the far walls, ruins, lanterns, flower boxes
   for (const x of [-16, -8, 8, 16]) dec('banner', x, 2.6, -H - 0.5, 0, [x, 2, -W]);
   dec('cobweb', -23.4, 2.4, -H - 0.5, 0, [-23, 2, -W]);
   for (const [z, name] of [[-14, 'roots'], [-6, 'torch_wall'], [14, 'roots']] as [number, string][]) dec(name, -H - 0.5, name === 'roots' ? 2.5 : 1.4, z, -90, [-W, 2, z]);
@@ -254,7 +254,7 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   dec('crates_tilted', 21, 0, 21, -30);
   dec('candles', -17.6, 2, -20.4);
 
-  // ---------- зона «мир» за восточной стеной: наборы по скриншотам Minecraft Dungeons ----------
+  // ---------- "world" zone beyond the east wall: kits from Minecraft Dungeons screenshots ----------
   buildWorldZone(L, labels, (name, x, y, z, rot = 0, on) => { dec(name, x, y, z, rot, on); });
 
   buildBossArena(L, labels, W);
@@ -270,36 +270,36 @@ export function buildPlaygroundLevel(): { level: Level; labels: PgLabel[] } {
   return { level: L, labels };
 }
 
-/** Арена стража: пол, ворота в коридор, невидимый квадрат-триггер, точка возврата */
+/** Warden arena: floor, gate into the corridor, an invisible trigger square, return point */
 export interface BossArenaSpec {
   id: string;
   title: string;
   x0: number; x1: number; z0: number; z1: number;
-  /** Ворота в стене коридора: центр, поворот (90° — вдоль Z) */
+  /** Gate in the corridor wall: centre, rotation (90° — along Z) */
   gate: { x: number; z: number; rot: number };
   trigger: { x0: number; x1: number; z0: number; z1: number };
   exit: { x: number; z: number; yaw: number };
-  /** Несколько ворот (карты из meta.arenas); нет — одни gate */
+  /** Several gates (maps from meta.arenas); none — the single gate */
   gates?: { x: number; z: number; w: number; rot?: number }[];
-  /** Где стоит страж (карты из meta.arenas); нет — в глубине арены лицом к воротам */
+  /** Where the warden stands (maps from meta.arenas); none — deep in the arena facing the gate */
   home?: { x: number; z: number; yaw: number };
 }
 
 /**
- * Зал стражей за северной стеной (wiki/design-bosses.md, раздел 1): коридор x −1…1 на север, по сторонам — восемь арен
- * 21 × 20 м, по четыре с каждой стороны; ворота — в стене коридора, квадрат-триггер — сразу за воротами.
+ * Hall of wardens beyond the north wall (wiki/design-bosses.md, section 1): a corridor x −1…1 to the north, on its sides — eight arenas
+ * 21 × 20 m, four on each side; the gate is in the corridor wall, the trigger square is right behind the gate.
  */
 const HALL = [
-  ['cauldron', 'Котёл Ордена'], ['boar', 'Морозный кабан'], ['storm', 'Грозовой голем'], ['golden', 'Золотой страж'],
-  ['night', 'Ночной всадник'], ['druse', 'Друзовый голем'], ['gatherer', 'Скорбная Сборщица'], ['cat', 'Кот-могильщик'],
+  ['cauldron', 'Order Cauldron'], ['boar', 'Frost Boar'], ['storm', 'Storm Golem'], ['golden', 'Golden Warden'],
+  ['night', 'Night Rider'], ['druse', 'Druse Golem'], ['gatherer', 'Sorrowful Gatherer'], ['cat', 'Grave Cat'],
 ] as const;
-/** Боссы этажа — дальше по коридору, арены просторнее (27 × 24 м) */
+/** Floor bosses — further down the corridor, roomier arenas (27 × 24 m) */
 const HALL_BOSSES = [
-  ['serpent', 'Рдяный Змей'], ['beast', 'Громовой Зверь'], ['queen', 'Королева Звёздного Сада'], ['judge', 'Судия Ордена'], ['general', 'Генерал Рдян'],
+  ['serpent', 'Crimson Serpent'], ['beast', 'Thunder Beast'], ['queen', 'Queen of the Star Garden'], ['judge', 'Judge of the Order'], ['general', 'General Rdyan'],
 ] as const;
-/** Финальные стражи — в самом конце коридора, арены 31 × 30 м */
-const HALL_FINALS = [['winter', 'Хозяйка Вечной Зимы'], ['star', 'Павшая Звезда'], ['gardener', 'Первый Садовник']] as const;
-/** Акцент пола по стражу: блоки, которыми усыпан пол, и декор у стен */
+/** Final wardens — at the very end of the corridor, 31 × 30 m arenas */
+const HALL_FINALS = [['winter', 'Mistress of Eternal Winter'], ['star', 'Fallen Star'], ['gardener', 'First Gardener']] as const;
+/** Floor accent per warden: blocks the floor is strewn with, and decor by the walls */
 const THEME: Record<string, { floor: string[]; dots: string[] }> = {
   cauldron: { floor: ['cobble', 'stone', 'bricks_cracked'], dots: ['fire', 'campfire'] },
   boar: { floor: ['stone', 'gravel', 'tiles'], dots: ['dry_grass'] },
@@ -314,13 +314,13 @@ const THEME: Record<string, { floor: string[]; dots: string[] }> = {
   queen: { floor: ['tiles', 'grass', 'path'], dots: ['flower_white', 'flower_blue', 'daisies'] },
   judge: { floor: ['tiles', 'bricks', 'stone'], dots: ['torch', 'flower_white'] },
   general: { floor: ['path', 'grass', 'cobble'], dots: ['berry_bush', 'tall_grass', 'flower_red'] },
-  // тёмный пол: белая ледяная Хозяйка на нём читается
+  // dark floor: the white icy Mistress reads on it
   winter: { floor: ['cobble', 'bricks_old', 'mossy'], dots: ['dry_grass', 'torch'] },
   star: { floor: ['bricks_cracked', 'stone', 'gravel'], dots: ['torch', 'dry_grass'] },
   gardener: { floor: ['grass', 'dirt', 'path'], dots: ['berry_bush', 'flower_red', 'tall_grass', 'daisies'] },
 };
 
-/** Арена: сторона, верхний край по z, ширина, глубина */
+/** Arena: side, top edge by z, width, depth */
 function arenaSpec(id: string, title: string, left: boolean, z1: number, w: number, d: number): BossArenaSpec {
   const z0 = z1 - d + 1, zc = (z0 + z1) / 2;
   const x0 = left ? -3 - w + 1 : 3, x1 = left ? -3 : 3 + w - 1;
@@ -343,7 +343,7 @@ export const BOSS_HALL_END = Math.min(...BOSS_ARENAS.map((a) => a.z0)) - 1;
 function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
   const hash = (x: number, z: number, s = 0) => (((x * 73856093) ^ (z * 19349663) ^ (s * 83492791)) >>> 0) % 1000 / 1000;
   const END = BOSS_HALL_END;
-  // проход в северной стене плейграунда и коридор на север
+  // opening in the north wall of the playground and a corridor to the north
   for (let x = -1; x <= 1; x++) for (let y = 0; y < 3; y++) L.set(x, y, -W, 'air');
   for (let z = END; z <= -W; z++) {
     for (let x = -1; x <= 1; x++) { L.set(x, -1, z, 'tiles'); L.set(x, -2, z, 'stone'); }
@@ -359,7 +359,7 @@ function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
       L.set(x, -1, z, n < 0.5 ? T.floor[0] : n < 0.82 ? T.floor[1] : T.floor[2]);
       L.set(x, -2, z, 'stone');
     }
-    // стены: дальняя (запад у левых, север) — скала 3 блока, остальные 1 блок; между аренами — одна стена
+    // walls: the far one (west for the left ones, north) — cliff 3 blocks, the rest 1 block; between arenas — a single wall
     const ox = left ? A.x0 - 1 : A.x1 + 1;
     for (let z = A.z0 - 1; z <= A.z1 + 1; z++) {
       L.set(ox, -1, z, 'stone');
@@ -369,9 +369,9 @@ function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
       L.set(x, -1, z, 'stone');
       for (let y = 0; y < (z === A.z0 - 1 ? 2 : 1); y++) L.set(x, y, z, z === A.z0 - 1 ? 'cliff_dark' : 'cliff');
     }
-    // ворота: проём 3 м в стене коридора
+    // gate: a 3 m opening in the corridor wall
     for (let dz = -1; dz <= 1; dz++) { L.set(A.gate.x, 0, Math.round(A.gate.z) + dz, 'air'); L.set(A.gate.x, -1, Math.round(A.gate.z) + dz, 'tiles'); }
-    // россыпь декора у стен — по теме стража
+    // scattered decor by the walls — by the warden's theme
     for (let j = 0; j < 9; j++) {
       const x = Math.round(A.x0 + 1 + hash(j, A.z0, 3) * (A.x1 - A.x0 - 2)), z = Math.round(A.z0 + 1 + hash(j, A.z1, 5) * (A.z1 - A.z0 - 2));
       const nearWall = x <= A.x0 + 2 || x >= A.x1 - 2 || z <= A.z0 + 2 || z >= A.z1 - 2;
@@ -379,53 +379,53 @@ function buildBossArena(L: Level, labels: PgLabel[], W: number): void {
     }
     labels.push({ text: A.title, x: left ? -1.6 : 1.6, z: Math.round(A.gate.z) + (left ? 2.4 : -2.4), size: 0.55 });
   }
-  labels.push({ text: 'зал стражей ↑', x: 0, z: -22.6, size: 0.8 });
+  labels.push({ text: 'hall of wardens ↑', x: 0, z: -22.6, size: 0.8 });
 }
 
 /**
- * Комнаты мобов за западной стеной (wiki/design-mobs.md): казарма Ордена (проход в западной стене плейграунда, z −1…1)
- * и Терновый сад южнее (проход из казармы). Гарнизон стоит группами на постах и просыпается, когда герой подходит
- * (src/mobs/, playground.ts). Группы — дальше 8 м друг от друга: соседи в 8 м просыпаются вместе.
+ * Mob rooms beyond the west wall (wiki/design-mobs.md): the Order barracks (opening in the west wall of the playground, z −1…1)
+ * and the Thorn Garden to the south (passage from the barracks). The garrison stands in groups at posts and wakes up when the hero
+ * comes close (src/mobs/, playground.ts). Groups are more than 8 m apart: neighbours within 8 m wake up together.
  */
 export interface MobRoomSpec {
   id: string;
   title: string;
   x0: number; x1: number; z0: number; z1: number;
   posts: MobPost[];
-  /** Куда встать у входа (кнопка в F1) */
+  /** Where to stand at the entrance (button in F1) */
   enter: { x: number; z: number; yaw: number };
-  /** Весь гарнизон пал, герой ушёл — комната снова полна (плейграунд); false — павшие не возвращаются (карты) */
+  /** The whole garrison fell, the hero left — the room is full again (playground); false — the fallen do not return (maps) */
   respawn?: boolean;
 }
 
-/** Моб на посту: aggro — с какого расстояния видит героя (засада — меньше), route — патрулирует по точкам, пока не заметил */
+/** A mob at a post: aggro — from what distance it sees the hero (ambush — less), route — patrols the points until it notices */
 export interface MobPost { kind: string; x: number; z: number; aggro?: number; route?: [number, number][] }
 
 const at = (kind: string, pts: number[][]) => pts.map(([x, z]) => ({ kind, x, z }));
 
 export const MOB_ROOMS: MobRoomSpec[] = [
   {
-    id: 'barracks', title: 'Казарма Ордена', x0: -58, x1: -26, z0: -10, z1: 10,
+    id: 'barracks', title: 'Order Barracks', x0: -58, x1: -26, z0: -10, z1: 10,
     enter: { x: -22, z: 0, yaw: -Math.PI / 2 },
     posts: [
-      // у входа — мелочь: малинёныши и садовники
+      // at the entrance — small fry: berrylings and gardeners
       ...at('berryling', [[-30, -7], [-31, -5.6], [-29.6, -5], [-31.2, -7.6]]),
       ...at('gardener', [[-30, 5], [-31.5, 6.8], [-29.5, 7.4]]),
-      // дальше — волки и рыцари; за рыцарями — целительница, за волками — маги
+      // further — wolves and knights; behind the knights — the healer, behind the wolves — mages
       ...at('wolf', [[-40, -6], [-41.5, -7.5], [-41.5, -4.5]]),
       ...at('shield', [[-40.5, 6]]), ...at('squire', [[-41.5, 4.2], [-41.5, 7.8]]),
       ...at('healer', [[-45, 6]]),
       ...at('pyro', [[-44, -3.5]]), ...at('summoner', [[-44, -8]]),
-      // в глубине — гвардия со знаменем: молотобоец впереди, копейщики, арбалетчики у стены
+      // deep inside — the guard with the banner: the hammerer in front, spearmen, crossbowmen by the wall
       ...at('hammer', [[-52.5, 0]]), ...at('spear', [[-53.5, -2.5], [-53.5, 2.5]]),
       ...at('banner', [[-56, 0]]), ...at('crossbow', [[-57, -4], [-57, 4]]),
     ],
   },
   {
-    id: 'garden', title: 'Терновый сад', x0: -50, x1: -27, z0: 12, z1: 35,
+    id: 'garden', title: 'Thorn Garden', x0: -50, x1: -27, z0: 12, z1: 35,
     enter: { x: -35, z: 9, yaw: 0 },
     posts: [
-      // у входа — лозы стерегут дорожку; справа слизни, слева клубки, в глубине — чудище и бутоны
+      // at the entrance — vines guard the path; slimes on the right, prickle balls on the left, deep inside — the horror and buds
       ...at('vine', [[-37, 15], [-33, 15], [-35, 17]]),
       ...at('slime', [[-28.5, 24], [-29, 27.5]]),
       ...at('hedgehog', [[-46, 22], [-47, 25.5]]),
@@ -433,10 +433,10 @@ export const MOB_ROOMS: MobRoomSpec[] = [
     ],
   },
   {
-    id: 'crypt', title: 'Старый погост', x0: -50, x1: -27, z0: -36, z1: -13,
+    id: 'crypt', title: 'Old Graveyard', x0: -50, x1: -27, z0: -36, z1: -13,
     enter: { x: -22, z: -16, yaw: -Math.PI / 2 },
     posts: [
-      // у входа — сборщики; посреди — огоньки; в глубине — пугало, у дальней стены — лучники
+      // at the entrance — reapers; in the middle — wisps; deep inside — the scarecrow, by the far wall — archers
       ...at('reaper', [[-31, -20], [-32.5, -22], [-30, -23]]),
       ...at('wisp', [[-41, -15], [-43, -17], [-40, -18]]),
       ...at('scarecrow', [[-35, -30.5]]),
@@ -444,10 +444,10 @@ export const MOB_ROOMS: MobRoomSpec[] = [
     ],
   },
   {
-    id: 'lair', title: 'Звериное логово', x0: -50, x1: -27, z0: -62, z1: -39,
+    id: 'lair', title: 'Beast Lair', x0: -50, x1: -27, z0: -62, z1: -39,
     enter: { x: -35, z: -34, yaw: Math.PI },
     posts: [
-      // у входа справа — кабанчики, слева — лозоплёты, в глубине — жуки и улей
+      // at the entrance on the right — boarlets, on the left — vine weavers, deep inside — beetles and the hive
       ...at('boarlet', [[-30, -44], [-29, -47]]),
       ...at('spider', [[-44, -45], [-46, -48]]),
       ...at('beetle', [[-36, -55], [-34, -57]]),
@@ -455,10 +455,10 @@ export const MOB_ROOMS: MobRoomSpec[] = [
     ],
   },
   {
-    id: 'workshop', title: 'Мастерская Ордена', x0: -50, x1: -27, z0: 38, z1: 61,
+    id: 'workshop', title: 'Order Workshop', x0: -50, x1: -27, z0: 38, z1: 61,
     enter: { x: -35, z: 34, yaw: 0 },
     posts: [
-      // у входа справа — бочонки; посреди — котелки; в глубине — обелиск с големчиками; по углам — «корзины малины»
+      // at the entrance on the right — kegs; in the middle — pots; deep inside — the obelisk with golemlings; in the corners — "raspberry baskets"
       ...at('keg', [[-29, 41], [-30, 43], [-28, 44.5]]),
       ...at('pot', [[-36, 50], [-33, 52]]),
       ...at('obelisk', [[-41, 57]]), ...at('druseling', [[-38, 58.5], [-44, 58.5]]),
@@ -466,8 +466,8 @@ export const MOB_ROOMS: MobRoomSpec[] = [
     ],
   },
   {
-    // не комната, а поляна в юго-восточном углу арены: один Соллер под лучом солнца, вокруг жёлтые цветы
-    id: 'glade', title: 'Солнечная поляна', x0: 14, x1: 23, z0: 12, z1: 23,
+    // not a room but a glade in the south-east corner of the arena: a single Soller under a sunbeam, yellow flowers around
+    id: 'glade', title: 'Sunny Glade', x0: 14, x1: 23, z0: 12, z1: 23,
     enter: { x: 13, z: 11, yaw: Math.PI / 4 },
     posts: at('soller', [[18.5, 18.5]]),
   },
@@ -475,7 +475,7 @@ export const MOB_ROOMS: MobRoomSpec[] = [
 
 type Dec = (name: string, x: number, y: number, z: number, rot?: number, on?: [number, number, number]) => void;
 
-/** Коробка комнаты: пол по floor(x, z), стены — северная и западная 3 блока (wall), южная и восточная 1 блок (low) */
+/** Room box: floor by floor(x, z), walls — north and west 3 blocks (wall), south and east 1 block (low) */
 function roomShell(L: Level, R: MobRoomSpec, floor: (x: number, z: number) => string, wall: string, low: string): void {
   for (let x = R.x0; x <= R.x1; x++) for (let z = R.z0; z <= R.z1; z++) { L.set(x, -1, z, floor(x, z)); L.set(x, -2, z, 'stone'); }
   for (let x = R.x0 - 1; x <= R.x1 + 1; x++) {
@@ -493,22 +493,22 @@ function roomShell(L: Level, R: MobRoomSpec, floor: (x: number, z: number) => st
 function buildBarracks(L: Level, labels: PgLabel[], W: number, dec: Dec): void {
   const B = MOB_ROOMS[0];
   const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
-  // пол: плиты с булыжником, дорожка от входа
+  // floor: slabs with cobblestone, a path from the entrance
   for (let x = B.x0; x <= B.x1; x++) for (let z = B.z0; z <= B.z1; z++) {
     const n = hash(x, z);
     L.set(x, -1, z, Math.abs(z) <= 1 ? 'path' : n < 0.55 ? 'tiles' : n < 0.85 ? 'cobble' : 'stone');
     L.set(x, -2, z, 'stone');
   }
-  // проход в западной стене плейграунда
+  // opening in the west wall of the playground
   for (let z = -1; z <= 1; z++) { for (let y = 0; y < 3; y++) L.set(-W, y, z, 'air'); L.set(-W, -1, z, 'path'); }
-  // стены: дальняя (запад) и северная — 3 блока, южная (к камере) — 1 блок
+  // walls: the far (west) and north ones — 3 blocks, the south one (towards the camera) — 1 block
   for (let z = B.z0 - 1; z <= B.z1 + 1; z++) { L.set(B.x0 - 1, -1, z, 'stone'); for (let y = 0; y < 3; y++) L.set(B.x0 - 1, y, z, y === 2 ? 'bricks' : 'bricks_old'); }
   for (let x = B.x0 - 1; x <= B.x1; x++) {
     L.set(x, -1, B.z0 - 1, 'stone'); L.set(x, -1, B.z1 + 1, 'stone');
     for (let y = 0; y < 3; y++) L.set(x, y, B.z0 - 1, y === 2 ? 'bricks' : 'bricks_old');
     L.set(x, 0, B.z1 + 1, 'bricks_mossy');
   }
-  // знамёна Ордена и факелы на дальних стенах, стойки и ящики по углам
+  // Order banners and torches on the far walls, racks and crates in the corners
   for (const x of [-54, -42, -34]) dec('banner', x, 2.6, B.z0 - 0.5, 0, [x, 2, B.z0 - 1]);
   for (const z of [-5, 5]) dec('banner', B.x0 - 0.5, 2.6, z, -90, [B.x0 - 1, 2, z]);
   for (const x of [-58, -50, -46, -38, -30]) L.set(x, 0, B.z0, 'torch');
@@ -517,17 +517,17 @@ function buildBarracks(L: Level, labels: PgLabel[], W: number, dec: Dec): void {
   dec('bones', -27.5, 0, -9, 40);
   dec('lantern_post', -27, 0, 2.6, 90);
   dec('lantern_post', -27, 0, -2.6, 90);
-  labels.push({ text: 'казарма Ордена ←', x: -21.6, z: 0, size: 0.8 });
-  labels.push({ text: 'малинёныши', x: -30.5, z: -9, size: 0.55 });
-  labels.push({ text: 'садовники', x: -30.5, z: 9.2, size: 0.55 });
-  labels.push({ text: 'волки', x: -40, z: -9.2, size: 0.55 });
-  labels.push({ text: 'рыцари и целительница', x: -41, z: 9.2, size: 0.55 });
-  labels.push({ text: 'маги', x: -44, z: -1.6, size: 0.55 });
-  labels.push({ text: 'гвардия со знаменем', x: -54, z: 8.6, size: 0.55 });
-  labels.push({ text: 'Терновый сад ↓', x: -35, z: 8.4, size: 0.6 });
+  labels.push({ text: 'Order barracks ←', x: -21.6, z: 0, size: 0.8 });
+  labels.push({ text: 'berrylings', x: -30.5, z: -9, size: 0.55 });
+  labels.push({ text: 'gardeners', x: -30.5, z: 9.2, size: 0.55 });
+  labels.push({ text: 'wolves', x: -40, z: -9.2, size: 0.55 });
+  labels.push({ text: 'knights and the healer', x: -41, z: 9.2, size: 0.55 });
+  labels.push({ text: 'mages', x: -44, z: -1.6, size: 0.55 });
+  labels.push({ text: 'guard with the banner', x: -54, z: 8.6, size: 0.55 });
+  labels.push({ text: 'Thorn Garden ↓', x: -35, z: 8.4, size: 0.6 });
 }
 
-/** Терновый сад: трава и мох, кусты малины по краю, живая изгородь вместо стен; проход — из казармы */
+/** Thorn Garden: grass and moss, raspberry bushes along the edge, a hedge instead of walls; the passage is from the barracks */
 function buildGarden(L: Level, labels: PgLabel[], dec: Dec): void {
   const G = MOB_ROOMS[1];
   const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
@@ -536,15 +536,15 @@ function buildGarden(L: Level, labels: PgLabel[], dec: Dec): void {
     L.set(x, -1, z, Math.abs(x + 35) <= 1 && z <= 20 ? 'path' : n < 0.78 ? 'grass' : 'dirt');
     L.set(x, -2, z, 'stone');
   }
-  // проход в южной стене казармы
+  // passage in the south wall of the barracks
   for (let x = -36; x <= -34; x++) { L.set(x, 0, G.z0 - 1, 'air'); L.set(x, -1, G.z0 - 1, 'path'); }
-  // стены: запад — 3 блока скалы, юг и восток (к камере) — 1 блок
+  // walls: west — 3 blocks of cliff, south and east (towards the camera) — 1 block
   for (let z = G.z0 - 1; z <= G.z1 + 1; z++) {
     L.set(G.x0 - 1, -1, z, 'stone'); for (let y = 0; y < 3; y++) L.set(G.x0 - 1, y, z, 'cliff_dark');
     L.set(G.x1 + 1, -1, z, 'stone'); L.set(G.x1 + 1, 0, z, 'bricks_mossy');
   }
   for (let x = G.x0 - 1; x <= G.x1 + 1; x++) { L.set(x, -1, G.z1 + 1, 'stone'); L.set(x, 0, G.z1 + 1, 'bricks_mossy'); }
-  // кусты малины и цветы вдоль стен
+  // raspberry bushes and flowers along the walls
   for (let j = 0; j < 26; j++) {
     const side = j % 3, t = hash(j, 7);
     const x = side === 0 ? G.x0 : Math.round(G.x0 + 1 + t * (G.x1 - G.x0 - 2)), z = side === 0 ? Math.round(G.z0 + 1 + t * (G.z1 - G.z0 - 2)) : side === 1 ? G.z1 : G.z0;
@@ -553,20 +553,20 @@ function buildGarden(L: Level, labels: PgLabel[], dec: Dec): void {
   dec('mushrooms_glow', -48.5, 0, 30, 30);
   dec('roots', G.x0 - 0.5, 2.5, 20, -90, [G.x0 - 1, 2, 20]);
   dec('roots', G.x0 - 0.5, 2.5, 30, -90, [G.x0 - 1, 2, 30]);
-  labels.push({ text: 'лозы', x: -35, z: 13.2, size: 0.5 });
-  labels.push({ text: 'слизни', x: -29, z: 21.6, size: 0.5 });
-  labels.push({ text: 'клубки', x: -46.5, z: 19.6, size: 0.5 });
-  labels.push({ text: 'чудище и бутоны', x: -39, z: 29.4, size: 0.5 });
+  labels.push({ text: 'vines', x: -35, z: 13.2, size: 0.5 });
+  labels.push({ text: 'slimes', x: -29, z: 21.6, size: 0.5 });
+  labels.push({ text: 'prickle balls', x: -46.5, z: 19.6, size: 0.5 });
+  labels.push({ text: 'horror and buds', x: -39, z: 29.4, size: 0.5 });
 }
 
-/** Старый погост: мшистые плиты и земля, надгробия, свечи; проход — в западной стене плейграунда (z −17…−15) */
+/** Old Graveyard: mossy slabs and dirt, gravestones, candles; the passage is in the west wall of the playground (z −17…−15) */
 function buildCrypt(L: Level, labels: PgLabel[], W: number, dec: Dec): void {
   const R = MOB_ROOMS[2];
   const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
   roomShell(L, R, (x, z) => { const n = hash(x, z); return Math.abs(z + 16) <= 1 && x > -34 ? 'path' : n < 0.55 ? 'bricks_old' : n < 0.8 ? 'dirt' : 'grass'; }, 'cliff_dark', 'bricks_mossy');
-  // проход: западная стена плейграунда и восточная погоста
+  // passage: the west wall of the playground and the east wall of the graveyard
   for (let z = -17; z <= -15; z++) for (const x of [-W, R.x1 + 1]) { for (let y = 0; y < 3; y++) L.set(x, y, z, 'air'); L.set(x, -1, z, 'path'); }
-  // надгробия рядами: невысокие камни, у каждого — свеча или цветок
+  // gravestones in rows: low stones, a candle or flower by each
   for (const [x, z] of [[-30, -32], [-33, -34], [-38, -34], [-41, -24], [-47, -21], [-48, -34], [-29, -28], [-37, -25]] as const) {
     L.set(x, 0, z, 'cobble_low');
     if (L.nameAt(x, 0, z + 1) === 'air') L.set(x, 0, z + 1, hash(x, z) < 0.5 ? 'flower_white' : 'fern');
@@ -578,20 +578,20 @@ function buildCrypt(L: Level, labels: PgLabel[], W: number, dec: Dec): void {
   dec('roots', R.x0 - 0.5, 2.5, -26, -90, [R.x0 - 1, 2, -26]);
   dec('lantern_post', -28, 0, -18.6, 90);
   dec('lantern_post', -28, 0, -13.4, 90);
-  labels.push({ text: 'Старый погост ←', x: -21.6, z: -16, size: 0.7 });
-  labels.push({ text: 'сборщики', x: -31, z: -17.6, size: 0.5 });
-  labels.push({ text: 'огоньки', x: -41.5, z: -20.4, size: 0.5 });
-  labels.push({ text: 'пугало', x: -35, z: -28, size: 0.5 });
-  labels.push({ text: 'лучники', x: -45, z: -34.4, size: 0.5 });
-  labels.push({ text: 'Звериное логово ↑', x: -35, z: -34.6, size: 0.55 });
+  labels.push({ text: 'Old Graveyard ←', x: -21.6, z: -16, size: 0.7 });
+  labels.push({ text: 'reapers', x: -31, z: -17.6, size: 0.5 });
+  labels.push({ text: 'wisps', x: -41.5, z: -20.4, size: 0.5 });
+  labels.push({ text: 'scarecrow', x: -35, z: -28, size: 0.5 });
+  labels.push({ text: 'archers', x: -45, z: -34.4, size: 0.5 });
+  labels.push({ text: 'Beast Lair ↑', x: -35, z: -34.6, size: 0.55 });
 }
 
-/** Звериное логово: земля, мох и сено, корни и кости; проход — из северной стены погоста */
+/** Beast Lair: dirt, moss and hay, roots and bones; the passage is from the north wall of the graveyard */
 function buildLair(L: Level, labels: PgLabel[], dec: Dec): void {
   const R = MOB_ROOMS[3];
   const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
   roomShell(L, R, (x, z) => (hash(x, z) < 0.5 ? 'dirt' : 'grass'), 'cliff', 'bricks_old');
-  // проход между погостом и логовом: стены у них общие по z −38…−37
+  // passage between the graveyard and the lair: they share walls at z −38…−37
   for (let x = -36; x <= -34; x++) for (const z of [R.z1 + 1, MOB_ROOMS[2].z0 - 1]) { for (let y = 0; y < 3; y++) L.set(x, y, z, 'air'); L.set(x, -1, z, 'dirt'); }
   for (const [x, z, b] of [[-49, -61, 'dry_grass'], [-48, -40, 'berry_bush'], [-28, -61, 'berry_bush'], [-28, -55, 'tall_grass'], [-49, -52, 'dry_grass'], [-40, -40, 'fern']] as [number, number, string][]) L.set(x, 0, z, b);
   dec('bones', -32, 0, -51, 30);
@@ -599,21 +599,21 @@ function buildLair(L: Level, labels: PgLabel[], dec: Dec): void {
   dec('roots', R.x0 - 0.5, 2.5, -44, -90, [R.x0 - 1, 2, -44]);
   dec('roots', -40, 2.5, R.z0 - 0.5, 0, [-40, 2, R.z0 - 1]);
   dec('mushrooms', -29, 0, -58, 40);
-  labels.push({ text: 'кабанчики', x: -29.5, z: -41.6, size: 0.5 });
-  labels.push({ text: 'лозоплёты', x: -45, z: -42.4, size: 0.5 });
-  labels.push({ text: 'жуки', x: -35, z: -52.4, size: 0.5 });
-  labels.push({ text: 'улей', x: -44, z: -56.6, size: 0.5 });
+  labels.push({ text: 'boarlets', x: -29.5, z: -41.6, size: 0.5 });
+  labels.push({ text: 'vine weavers', x: -45, z: -42.4, size: 0.5 });
+  labels.push({ text: 'beetles', x: -35, z: -52.4, size: 0.5 });
+  labels.push({ text: 'hive', x: -44, z: -56.6, size: 0.5 });
 }
 
-/** Мастерская Ордена: плиты и булыжник, ящики и тележки, свечи; проход — из южной стены Тернового сада */
+/** Order Workshop: slabs and cobblestone, crates and carts, candles; the passage is from the south wall of the Thorn Garden */
 function buildWorkshop(L: Level, labels: PgLabel[], dec: Dec): void {
   const R = MOB_ROOMS[4];
   const hash = (x: number, z: number) => (((x * 73856093) ^ (z * 19349663)) >>> 0) % 1000 / 1000;
   roomShell(L, R, (x, z) => (Math.abs(x + 35) <= 1 && z <= 46 ? 'path' : hash(x, z) < 0.6 ? 'tiles' : 'cobble'), 'bricks_old', 'bricks_mossy');
-  // проход между садом и мастерской: стены по z 36…37
+  // passage between the garden and the workshop: walls at z 36…37
   for (let x = -36; x <= -34; x++) {
     for (const z of [R.z0 - 1, MOB_ROOMS[1].z1 + 1]) { for (let y = 0; y < 3; y++) L.set(x, y, z, 'air'); L.set(x, -1, z, 'path'); }
-    // кусты у южной стены сада не загораживают проход
+    // bushes by the south wall of the garden do not block the passage
     L.set(x, 0, MOB_ROOMS[1].z1, 'air');
   }
   for (const x of [-48, -40, -30]) L.set(x, 0, R.z1, 'torch');
@@ -623,8 +623,8 @@ function buildWorkshop(L: Level, labels: PgLabel[], dec: Dec): void {
   dec('crate_small', -29, 0, 57.5, 15);
   dec('chest', -46, 0, 60, 180);
   dec('candles_row', -40, 0, 60.4, 0);
-  labels.push({ text: 'Мастерская Ордена ↓', x: -35, z: 33.4, size: 0.55 });
-  labels.push({ text: 'бочонки', x: -29, z: 39.4, size: 0.5 });
-  labels.push({ text: 'котелки', x: -34.5, z: 47.6, size: 0.5 });
-  labels.push({ text: 'обелиск и големчики', x: -41, z: 54.4, size: 0.5 });
+  labels.push({ text: 'Order Workshop ↓', x: -35, z: 33.4, size: 0.55 });
+  labels.push({ text: 'kegs', x: -29, z: 39.4, size: 0.5 });
+  labels.push({ text: 'pots', x: -34.5, z: 47.6, size: 0.5 });
+  labels.push({ text: 'obelisk and golemlings', x: -41, z: 54.4, size: 0.5 });
 }

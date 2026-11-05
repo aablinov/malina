@@ -1,1 +1,1 @@
-{"id":"boulder_single","title":"Валун","category":"природа","hint":"камень 1 × 1 с травой у подножия","size":[3,1,2],"seed":1,"cells":[[0,0,-1,"tall_grass",0],[0,0,0,"cliff",0],[1,0,0,"cliff_slab",0]],"decor":[{"name":"rock_small","pos":[-1,0,-1],"rot":[101]}],"entities":[]}
+{"id":"boulder_single","title":"Boulder","category":"nature","hint":"a 1 × 1 rock with grass at the foot","size":[3,1,2],"seed":1,"cells":[[0,0,-1,"tall_grass",0],[0,0,0,"cliff",0],[1,0,0,"cliff_slab",0]],"decor":[{"name":"rock_small","pos":[-1,0,-1],"rot":[101]}],"entities":[]}

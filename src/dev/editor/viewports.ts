@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { h, icon, menuButton, type MenuItem } from './ui.ts';
+import { t } from '../../i18n/i18n.ts';
 
 /**
- * Вьюпорты редактора, как в Unreal: один большой или четыре (перспектива, сверху, спереди, сбоку).
- * Холст один на всю область — каждый вьюпорт рисуется в свой прямоугольник (setViewport + setScissor).
- * Над каждым — прозрачный слой с панелью (вид, режим отрисовки, развернуть) и осями в углу; он же ловит мышь.
+ * Editor viewports, like in Unreal: one big or four (perspective, top, front, side).
+ * One canvas for the whole area — each viewport draws into its own rectangle (setViewport + setScissor).
+ * Over each — a transparent layer with a bar (view, draw mode, maximise) and axes in the corner; it also catches the mouse.
  *
- * Камера: колесо — зум, СКМ — вращать вокруг цели (или Alt+ЛКМ), ПКМ — двигать; в ортографических — только двигать и зум.
- * F — к выделенному, турель — сцена медленно вращается.
+ * Camera: wheel — zoom, MMB — orbit around the target (or Alt+LMB), RMB — pan; in orthographic views — only pan and zoom.
+ * F — to the selection, turntable — the scene slowly rotates.
  */
 
 export type ViewKind = 'persp' | 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
@@ -16,11 +17,11 @@ export type ViewMode = 'lit' | 'unlit' | 'wire' | 'nopost';
 export type Layout = 'one' | 'two' | 'four';
 
 export const VIEW_TITLES: Record<ViewKind, string> = {
-  persp: 'Перспектива', top: 'Сверху', bottom: 'Снизу', front: 'Спереди', back: 'Сзади', left: 'Слева', right: 'Справа',
+  persp: t('Perspective'), top: t('Top'), bottom: t('Bottom'), front: t('Front'), back: t('Back view'), left: t('Left'), right: t('Right'),
 };
-export const MODE_TITLES: Record<ViewMode, string> = { lit: 'С освещением', unlit: 'Без освещения', wire: 'Каркас', nopost: 'Без постобработки' };
+export const MODE_TITLES: Record<ViewMode, string> = { lit: t('Lit'), unlit: t('Unlit'), wire: t('Wireframe'), nopost: t('No post-processing') };
 
-/** Куда смотрит ортографическая камера (от цели к камере) и какой вектор у неё «вверх» */
+/** Where the orthographic camera looks (from the target to the camera) and its "up" vector */
 const ORTHO: Record<Exclude<ViewKind, 'persp'>, { dir: [number, number, number]; up: [number, number, number] }> = {
   top: { dir: [0, 1, 0], up: [0, 0, -1] },
   bottom: { dir: [0, -1, 0], up: [0, 0, 1] },
@@ -40,9 +41,9 @@ export class Viewport {
   readonly persp: THREE.PerspectiveCamera;
   readonly ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, -500, 500);
   controls: OrbitControls;
-  /** Прямоугольник в пикселях CSS относительно области вьюпортов */
+  /** Rectangle in CSS pixels relative to the viewports area */
   readonly rect = { x: 0, y: 0, w: 1, h: 1 };
-  /** Камера летит к цели (F) */
+  /** The camera flies to the target (F) */
   private fly: { from: THREE.Vector3; to: THREE.Vector3; camFrom: THREE.Vector3; camTo: THREE.Vector3; zoomTo: number; t: number } | null = null;
 
   readonly owner: Viewports;
@@ -102,7 +103,7 @@ export class Viewport {
     this.resizeCamera();
   }
 
-  /** Alt+ЛКМ — вращать (в перспективе), без Alt ЛКМ отдан редактору */
+  /** Alt+LMB — orbit (in perspective); without Alt, LMB belongs to the editor */
   setAltOrbit(on: boolean): void {
     if (this.isOrtho) return;
     this.controls.mouseButtons.LEFT = on ? THREE.MOUSE.ROTATE : (null as unknown as THREE.MOUSE);
@@ -121,30 +122,30 @@ export class Viewport {
     b.textContent = '';
     const menuBtn = h('button.ue-vp-btn', { html: icon('select') });
     menuButton(menuBtn, () => [
-      { label: 'Развернуть / свернуть', shortcut: 'Alt+X', icon: 'layout1', action: () => this.owner.toggleMax(this) },
-      { label: 'Турель: сцена вращается', checked: this.controls.autoRotate, icon: 'turntable', action: () => { this.controls.autoRotate = !this.controls.autoRotate; } },
-      { label: 'Вернуть камеру', icon: 'camera', action: () => this.owner.onHome?.(this) },
+      { label: t('Maximise / restore'), shortcut: 'Alt+X', icon: 'layout1', action: () => this.owner.toggleMax(this) },
+      { label: t('Turntable: the scene rotates'), checked: this.controls.autoRotate, icon: 'turntable', action: () => { this.controls.autoRotate = !this.controls.autoRotate; } },
+      { label: t('Reset camera'), icon: 'camera', action: () => this.owner.onHome?.(this) },
       { sep: true },
-      { head: 'Раскладка' },
-      { label: 'Один вьюпорт', icon: 'layout1', checked: this.owner.layout === 'one', action: () => this.owner.setLayout('one') },
-      { label: 'Два рядом', icon: 'layout2', checked: this.owner.layout === 'two', action: () => this.owner.setLayout('two') },
-      { label: 'Четыре вида', icon: 'layout4', checked: this.owner.layout === 'four', action: () => this.owner.setLayout('four') },
+      { head: t('Layout') },
+      { label: t('One viewport'), icon: 'layout1', checked: this.owner.layout === 'one', action: () => this.owner.setLayout('one') },
+      { label: t('Two side by side'), icon: 'layout2', checked: this.owner.layout === 'two', action: () => this.owner.setLayout('two') },
+      { label: t('Four views'), icon: 'layout4', checked: this.owner.layout === 'four', action: () => this.owner.setLayout('four') },
     ]);
     const kindBtn = h('button.ue-vp-btn', { html: `${icon(this.kind === 'persp' ? 'cube' : 'grid')}<span>${VIEW_TITLES[this.kind]}</span>` });
     menuButton(kindBtn, () => {
-      const it: MenuItem[] = [{ head: 'Перспектива' }, { label: VIEW_TITLES.persp, checked: this.kind === 'persp', action: () => this.setKind('persp') }, { head: 'Ортографические' }];
+      const it: MenuItem[] = [{ head: t('Perspective') }, { label: VIEW_TITLES.persp, checked: this.kind === 'persp', action: () => this.setKind('persp') }, { head: t('Orthographic') }];
       for (const k of ['top', 'bottom', 'front', 'back', 'left', 'right'] as ViewKind[]) it.push({ label: VIEW_TITLES[k], checked: this.kind === k, action: () => this.setKind(k) });
       return it;
     });
     const modeBtn = h('button.ue-vp-btn', { html: `${icon('sun')}<span>${MODE_TITLES[this.mode]}</span>` });
     menuButton(modeBtn, () => (Object.keys(MODE_TITLES) as ViewMode[]).map((m) => ({ label: MODE_TITLES[m], checked: this.mode === m, action: () => { this.mode = m; this.buildBar(); } })));
-    const showBtn = h('button.ue-vp-btn', { html: '<span>Показать</span>' });
+    const showBtn = h('button.ue-vp-btn', { html: `<span>${t('Show')}</span>` });
     menuButton(showBtn, () => this.owner.showMenu?.() ?? []);
-    const maxBtn = h('button.ue-vp-btn.ue-vp-max', { html: icon(this.owner.maxed === this ? 'layout4' : 'layout1'), title: 'Развернуть / свернуть (Alt+X)', onclick: () => this.owner.toggleMax(this) });
+    const maxBtn = h('button.ue-vp-btn.ue-vp-max', { html: icon(this.owner.maxed === this ? 'layout4' : 'layout1'), title: t('Maximise / restore (Alt+X)'), onclick: () => this.owner.toggleMax(this) });
     b.append(menuBtn, kindBtn, modeBtn, showBtn, h('span.ue-grow'), maxBtn);
   }
 
-  /** Плавно навести камеру на точку; radius — размер того, что показываем */
+  /** Smoothly aim the camera at a point; radius — the size of what we show */
   focus(p: THREE.Vector3, radius: number): void {
     const c = this.controls;
     const dir = this.camera.position.clone().sub(c.target);
@@ -168,7 +169,7 @@ export class Viewport {
     this.drawAxes();
   }
 
-  /** Оси в углу: X красная, Y зелёная, Z синяя — клик по концу оси ставит вид вдоль неё */
+  /** Axes in the corner: X red, Y green, Z blue — clicking an axis end sets the view along it */
   private axisEnds: { k: ViewKind; x: number; y: number }[] = [];
   private drawAxes(): void {
     const g = this.axes.getContext('2d')!;
@@ -186,7 +187,7 @@ export class Viewport {
       g.strokeStyle = a.c; g.beginPath(); g.moveTo(32, 32); g.lineTo(x, y); g.stroke();
       g.fillStyle = a.c; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill();
       g.fillStyle = '#0b0c0e'; g.font = 'bold 9px Inter, system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(a.l, x, y + 0.5);
-      // обратный конец — бледная точка
+      // the opposite end — a pale dot
       const nx = 32 - a.p.x * 20, ny = 32 + a.p.y * 20;
       g.globalAlpha = 0.45; g.beginPath(); g.arc(nx, ny, 4, 0, Math.PI * 2); g.fillStyle = a.c; g.fill(); g.globalAlpha = 1;
       this.axisEnds.push({ k: a.k, x, y }, { k: a.nk, x: nx, y: ny });
@@ -199,7 +200,7 @@ export class Viewport {
     for (const a of this.axisEnds) { const d = Math.hypot(a.x - x, a.y - y); if (d < bd) { bd = d; best = a.k; } }
     if (!best) return;
     if (this.kind === 'persp') {
-      // в перспективе — повернуть камеру вдоль оси, оставаясь перспективой
+      // in perspective — turn the camera along the axis while staying in perspective
       const o = ORTHO[best as Exclude<ViewKind, 'persp'>];
       const dist = this.camera.position.distanceTo(this.controls.target);
       const dir = new THREE.Vector3(...o.dir);
@@ -215,7 +216,7 @@ export class Viewports {
   layout: Layout = 'one';
   maxed: Viewport | null = null;
   active: Viewport;
-  /** Меню «Показать» (флаги сцены) — даёт редактор */
+  /** The "Show" menu (scene flags) — provided by the editor */
   showMenu?: () => MenuItem[];
   onHome?: (vp: Viewport) => void;
   onLayout?: () => void;
@@ -238,7 +239,7 @@ export class Viewports {
     window.addEventListener('blur', () => this.list.forEach((v) => v.setAltOrbit(false)));
   }
 
-  /** Поставить всем вьюпортам общую цель и расстояние (при открытии карты) */
+  /** Give all viewports a common target and distance (when opening a map) */
   home(target: THREE.Vector3, dist = 40): void {
     for (const vp of this.list) {
       vp.controls.target.copy(target);
@@ -261,7 +262,7 @@ export class Viewports {
     this.list.forEach((v) => v.buildBar());
   }
 
-  /** Видимые вьюпорты */
+  /** Visible viewports */
   visible(): Viewport[] {
     if (this.maxed) return [this.maxed];
     return this.layout === 'one' ? [this.list[0]] : this.layout === 'two' ? this.list.slice(0, 2) : this.list;
@@ -284,7 +285,7 @@ export class Viewports {
     if (!vis.includes(this.active)) this.setActive(vis[0]);
   }
 
-  /** Перейти к рисованию вьюпорта: прямоугольник в пикселях буфера */
+  /** Switch to drawing a viewport: rectangle in buffer pixels */
   begin(vp: Viewport): void {
     const H = this.el.clientHeight;
     const r = vp.rect;
@@ -293,7 +294,7 @@ export class Viewports {
     this.renderer.setScissorTest(this.visible().length > 1);
   }
 
-  /** Вьюпорт под точкой экрана и нормированные координаты в нём */
+  /** The viewport under a screen point and the normalised coordinates inside it */
   pick(clientX: number, clientY: number, vp?: Viewport): { vp: Viewport; ndc: THREE.Vector2 } | null {
     const box = this.el.getBoundingClientRect();
     const x = clientX - box.left, y = clientY - box.top;

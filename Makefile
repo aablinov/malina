@@ -1,12 +1,12 @@
-# Малина — запуск и проверки (node через mise, см. AGENTS.md)
-#   make dev    — сервер (localhost:8787) и клиент Vite (localhost:5173) вместе, Ctrl+C гасит оба
-#   make play   — собрать игру и поднять один сервер, который отдаёт и игру: http://localhost:8787
-#   make server / make client — по отдельности
-#   make check  — типы и быстрые тесты сети и симуляции (секунды)
-#   make e2e    — Playwright на установленном Google Chrome (≈17 мин)
+# Malina — running and checks (node via mise, see AGENTS.md)
+#   make dev    — server (localhost:8787) and Vite client (localhost:5173) together, Ctrl+C stops both
+#   make play   — build the game and start one server that also serves it: http://localhost:8787
+#   make server / make client — separately
+#   make check  — types and the fast net and simulation tests (seconds)
+#   make e2e    — Playwright on the installed Google Chrome (≈17 min)
 MISE := mise exec --
 PW_CHROMIUM ?= /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-# свои имена, чтобы не подхватить PORT из окружения запускателя
+# own names, so PORT from the launcher's environment is not picked up
 SERVER_PORT ?= 8787
 CLIENT_PORT ?= 5173
 DB_PATH ?= data/malina.db

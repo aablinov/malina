@@ -4,7 +4,7 @@ import type { Decoy } from '../decoys.ts';
 import type { EntityState } from '../net/snapshot.ts';
 import type { SimWorld } from './world.ts';
 
-/** Куст малины — что защищаем (wiki/design-tower-defence.md, раздел 4): приманка с taunt, здоровье из meta.td.bush */
+/** The raspberry bush — what we defend (wiki/design-tower-defence.md, section 4): a decoy with taunt, health from meta.td.bush */
 export class SimBush implements Decoy {
   readonly id = 'bush';
   readonly pos: THREE.Vector3;
@@ -14,7 +14,7 @@ export class SimBush implements Decoy {
   hp: number;
   maxHp: number;
   dead = false;
-  /** Всего получено урона (для тестов) */
+  /** Total damage taken (for tests) */
   taken = 0;
   onDeath?: () => void;
   private readonly w: SimWorld;

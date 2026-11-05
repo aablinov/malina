@@ -8,14 +8,14 @@ import { bossSfx } from './boss-audio.ts';
 import { C, glowMat, RASP, UNIT } from './kit.ts';
 
 /**
- * Гримуар со стража (wiki/design-spells.md, раздел 1): столб света, замедление, хор; книга поднимается из лопнувшего
- * сердца, парит и листает страницы. Подойти — забрать. В паре (выбор из двух у боссов) взял один — второй гаснет.
+ * Grimoire from a warden (wiki/design-spells.md, section 1): a pillar of light, slow motion, a choir; the book rises from the burst
+ * heart, hovers and turns its pages. Walk up to take it. In a pair (choice of two at bosses) taking one fades the other.
  */
 
 const RISE = 1.6;
 const PAGES = 5;
 
-/** Переплёт общий для всех книг: материалы и обложки живут весь сеанс (прогреваются в src/fx-zoo.ts) */
+/** Binding shared by all books: materials and covers live for the whole session (warmed up in src/fx-zoo.ts) */
 let book: { leather: THREE.MeshLambertMaterial; gold: THREE.MeshLambertMaterial; paper: THREE.MeshLambertMaterial; spine: THREE.MeshBasicMaterial } | null = null;
 export function bookMats(): NonNullable<typeof book> {
   return book ??= {
@@ -26,7 +26,7 @@ export function bookMats(): NonNullable<typeof book> {
   };
 }
 const covers = new Map<string, THREE.MeshBasicMaterial>();
-/** Обложка с иконкой заклинания: одна текстура на иконку */
+/** Cover with the spell icon: one texture per icon */
 export function coverMat(icon: string): THREE.MeshBasicMaterial {
   let m = covers.get(icon);
   if (!m) {
@@ -41,7 +41,7 @@ export class Grimoire {
   readonly group = new THREE.Group();
   readonly pos: THREE.Vector3;
   taken = false;
-  /** Пара: взял этот — остальные гаснут */
+  /** Pair: took this one — the others fade */
   siblings: Grimoire[] = [];
   private t = 0;
   private pageT = 0;
@@ -62,13 +62,13 @@ export class Grimoire {
     const def = itemDef(item);
     const c = new THREE.Color(RARITY[def.rarity].color);
     this.group.position.copy(at);
-    // переплёт: тёмно-малиновая кожа, золотые уголки, на обложке — иконка заклинания, корешок светится
+    // binding: dark raspberry leather, gold corners, the spell icon on the cover, the spine glows
     const { leather, gold, paper, spine } = bookMats();
     const cover = coverMat(def.icon);
     const add = (m: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, parent: THREE.Object3D = this.book) => {
       const b = new THREE.Mesh(UNIT, m); b.scale.set(w, h, d); b.position.set(x, y, z); parent.add(b); return b;
     };
-    // книга раскрыта: две крышки под углом, между ними листы
+    // the book is open: two covers at an angle, sheets between them
     for (const s of [-1, 1]) {
       const half = new THREE.Group();
       half.rotation.z = s * 0.28;
@@ -83,7 +83,7 @@ export class Grimoire {
     }
     add(spine, 0.06, 0.08, 0.58, 0, -0.02, 0);
     for (let i = 0; i < PAGES; i++) {
-      // лист на петле вдоль корешка (ось Z): поворот петли переносит его справа налево
+      // a sheet on a hinge along the spine (Z axis): rotating the hinge carries it from right to left
       const p = new THREE.Group();
       const sheet = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.48), paper);
       sheet.rotation.x = -Math.PI / 2;
@@ -97,7 +97,7 @@ export class Grimoire {
     this.book.rotation.x = -0.5;
     this.book.scale.setScalar(1.8);
     this.group.add(this.book);
-    // свет: столб цвета редкости с малиновой сердцевиной, лучи за книгой, ореол на полу
+    // light: a pillar in the rarity colour with a raspberry core, rays behind the book, a halo on the floor
     this.beam = lightBeam(c.clone().lerp(RASP, 0.35).multiplyScalar(1.1), 9, 1.6);
     this.group.add(this.beam.group);
     this.rays = new THREE.Sprite(additiveSprite(raysTex(), c.clone().multiplyScalar(1.6), 0.9));
@@ -110,7 +110,7 @@ export class Grimoire {
     this.floor.position.y = 0.03;
     this.group.add(this.floor);
     scene.add(this.group);
-    // событие: замедление, засветка, хор, искры из сердца
+    // event: slow motion, flash, choir, sparks from the heart
     fx.slowmo = Math.max(fx.slowmo, 0.5);
     fx.screenFlash('#ffd0e0', 0.35, 0.3);
     fx.light(at.clone().setY(2), '#ffb0d0', 10, 12, 2.5);
@@ -118,7 +118,7 @@ export class Grimoire {
     if (!quiet()) bossSfx.choir();
   }
 
-  /** Кадр; true — герой забрал книгу сейчас */
+  /** Frame; true — the hero took the book just now */
   update(dt: number, hero: THREE.Vector3): boolean {
     this.t += dt;
     const t = this.t;
@@ -138,7 +138,7 @@ export class Grimoire {
     this.rays.scale.setScalar(2.6 + Math.sin(t * 2.5) * 0.3);
     this.rays.material.rotation = t * 0.7;
     this.floor.material.opacity = 0.6 + Math.sin(t * 3) * 0.2;
-    // страницы: раз в 0,7 с одна переворачивается слева направо
+    // pages: every 0.7 s one turns from left to right
     this.pageT -= dt;
     if (this.pageT <= 0 && up >= 1) { this.pageT = 0.7; const p = this.pages.find((x) => !x.visible); if (p) { p.visible = true; p.userData.t = 0; if (!this.quiet() && rnd() < 0.5) bossSfx.page(); } }
     for (const p of this.pages) if (p.visible) {

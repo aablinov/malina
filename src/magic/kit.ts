@@ -4,35 +4,35 @@ import type { ArtifactStats } from '../items.ts';
 import type { School, Spells } from '../spells.ts';
 
 /**
- * Общее для всех заклинаний (wiki/design-spells.md): стартовых (starters.ts), базовых у торговца (base-*.ts) и с боссов.
- * Каждое — Spell: школа (цвета, круг, звук заряда), ступень пафоса, cast и, если надо, своя картинка заряда.
- * Реестр по id предмета — SPELLS (registry.ts); заряд и каст ведёт Spells (src/spells.ts), чьи методы и есть
- * инструменты каста: later, proc, impact, windup, pomp, groundSigil, bolt, nearest, within, ground, face, hand, color, buff, aim, tex;
- * хуки h — сцена, FX, герой, цели, урон.
+ * Shared by all spells (wiki/design-spells.md): starters (starters.ts), base ones from the merchant (base-*.ts) and boss spells.
+ * Each is a Spell: school (colours, circle, charge sound), pomp tier, cast and, when needed, its own charge picture.
+ * The registry by item id is SPELLS (registry.ts); charging and casting are driven by Spells (src/spells.ts), whose methods are
+ * the casting tools: later, proc, impact, windup, pomp, groundSigil, bolt, nearest, within, ground, face, hand, color, buff, aim, tex;
+ * hooks h — scene, FX, hero, targets, damage.
  */
 
-/** Ступень пафоса: обычное, редкое, легендарное, мифическое */
+/** Pomp tier: common, rare, legendary, mythic */
 export type Tier = 'common' | 'rare' | 'legendary' | 'mythic';
 
 export interface Spell {
   school: School;
   tier: Tier;
-  /** Название для крупной надписи мифических */
+  /** Title for the big caption of mythic spells */
   title: string;
-  /** На себя: пока заряжается, герой смотрит вперёд, а не на курсор */
+  /** Self-cast: while charging the hero looks forward, not at the cursor */
   self?: boolean;
-  /** Размер сгустка в руке по заряду 0..1 (по умолчанию 0,35 + 0,7·k) */
+  /** Size of the orb in the hand by charge 0..1 (default 0.35 + 0.7·k) */
   orb?(k: number): number;
-  /** Каждый кадр заряда: своя картинка у ладони hand при заряде k */
+  /** Every charge frame: own picture at the palm hand at charge k */
   charging?(kit: Spells, hand: THREE.Vector3, k: number): void;
-  /** power — уже с зарядом (×1…×2,5) и силой предмета; k — заряд 0..1; at — точка курсора на земле */
+  /** power — already with charge (×1…×2.5) and item power; k — charge 0..1; at — cursor point on the ground */
   cast(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void;
 }
 
 export const C = (r: number, g: number, b: number): THREE.Color => new THREE.Color(r, g, b);
 export const rand = (a: number, b: number): number => a + rnd() * (b - a);
 
-/** Заглушка, пока заклинание не сделано: замах, удар по площади у курсора, вспышка */
+/** Placeholder until the spell is made: windup, area hit at the cursor, flash */
 export function placeholder(school: School, tier: Tier, title: string): Spell {
   return {
     school, tier, title,

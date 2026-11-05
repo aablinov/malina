@@ -1,11 +1,11 @@
-/* Имена над героями в общем бою (src/cgame/net-battle.ts) */
+/* Names above heroes in a shared battle (src/cgame/net-battle.ts) */
 .net-names { position: fixed; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
 .net-name { position: absolute; left: 0; top: 0; padding: 0.15em 0.5em; font: 600 13px/1.2 system-ui, sans-serif; color: #fff;
   background: rgba(20, 18, 28, 0.55); border-radius: 0.3em; white-space: nowrap; text-shadow: 0 1px 0 #000; }
 .net-name.me { color: #ffd76a; }
 .net-name.down { opacity: 0.5; }
 
-/* Список игроков и чат (src/net/battle-ui.ts) */
+/* Player list and chat (src/net/battle-ui.ts) */
 .net-roster { position: fixed; right: 12px; top: 120px; z-index: 7; display: flex; flex-direction: column; gap: 4px; pointer-events: none;
   font: 600 12px/1.2 system-ui, sans-serif; color: #fff; }
 .net-row { display: grid; grid-template-columns: 9em 5em 4em; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(20, 18, 28, 0.6); border-radius: 4px; }

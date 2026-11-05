@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 /**
- * Молнии и огненные кубы одним InstancedMesh на слой (wiki/dev-performance.md): раньше каждый сегмент молнии был
- * отдельным мешем со своим материалом (до 60 на небесный разряд), теперь — экземпляр с цветом и прозрачностью
- * в атрибутах. Ничего не создаётся в бою; при нехватке места самые старые уступают.
+ * Lightning bolts and fire cubes as one InstancedMesh per layer (wiki/dev-performance.md): each bolt segment used to be
+ * a separate mesh with its own material (up to 60 per sky strike), now it is an instance with colour and opacity
+ * in attributes. Nothing is created in battle; when space runs out the oldest give way.
  */
 
 const _m = new THREE.Matrix4();
@@ -15,7 +15,7 @@ const _up = new THREE.Vector3(0, 1, 0);
 const _c = new THREE.Color();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
-/** Материал с прозрачностью на экземпляр: атрибут aAlpha умножает альфу */
+/** Material with per-instance opacity: the aAlpha attribute multiplies the alpha */
 function alphaMaterial(additive: boolean): THREE.MeshBasicMaterial {
   const m = new THREE.MeshBasicMaterial({
     color: '#ffffff', toneMapped: false, transparent: true, depthWrite: !additive,
@@ -33,11 +33,11 @@ function alphaMaterial(additive: boolean): THREE.MeshBasicMaterial {
   return m;
 }
 
-/** Слой экземпляров-кубов с цветом и альфой */
+/** A layer of cube instances with colour and alpha */
 class Layer {
   readonly mesh: THREE.InstancedMesh;
   readonly alpha: THREE.InstancedBufferAttribute;
-  /** Сколько экземпляров рисовать: верхняя граница занятых слотов */
+  /** How many instances to draw: the upper bound of occupied slots */
   used = 0;
 
   readonly cap: number;
@@ -71,10 +71,10 @@ class Layer {
   }
 }
 
-/** Одна молния: отрезок слотов [start, start + n) в обоих слоях */
+/** One bolt: the slot range [start, start + n) in both layers */
 interface Bolt { start: number; n: number; t: number; dur: number; core: THREE.Color; halo: THREE.Color; shrink: number; alive: boolean }
 
-/** Сегмент: позиция, поворот, длина и ширина — чтобы пересчитывать матрицу при усадке */
+/** Segment: position, rotation, length and width — to recompute the matrix while shrinking */
 const SEG = 9; // px py pz qx qy qz qw len w
 
 export class Bolts {
@@ -91,13 +91,13 @@ export class Bolts {
     this.seg = new Float32Array(cap * SEG);
   }
 
-  /** Ломаная молния из брусков: ядро и мягкий ореол, мерцает и тает; branches — отростки */
+  /** A zigzag bolt of bars: core and soft halo, flickers and fades; branches — offshoots */
   bolt(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color, width: number, branches: number, dur = 0.32): void {
     const len = from.distanceTo(to);
     const nMain = Math.max(3, Math.round(len * 1.2));
     const total = nMain + branches * 3;
     if (total > this.cap) return;
-    // место: подряд, с переносом в начало; чьи слоты заняли — те молнии гаснут
+    // placement: contiguous, wrapping to the start; the bolts whose slots were taken go out
     if (this.cursor + total > this.cap) this.cursor = 0;
     const start = this.cursor;
     this.cursor += total;
@@ -164,7 +164,7 @@ export class Bolts {
       const k = b.t / b.dur;
       if (k >= 1) { this.kill(b); this.bolts.splice(j, 1); continue; }
       b.shrink *= 0.97;
-      // мерцание: в первой половине жизни случайные кадры гаснут
+      // flicker: in the first half of its life random frames go dark
       this.write(b, 1 - k * k, 0.5 * (1 - k), k > 0.5 || Math.random() > 0.25);
       live++;
     }
@@ -173,7 +173,7 @@ export class Bolts {
   }
 }
 
-/** Огненный куб: летит от центра, кувыркается, раздувается и гаснет */
+/** Fire cube: flies from the centre, tumbles, swells and fades */
 const CUBE = 16; // mx my mz vx vy vz sx sy sz t dur size r g b _
 export class Cubes {
   private readonly layer: Layer;
@@ -186,7 +186,7 @@ export class Cubes {
     this.d = new Float32Array(cap * CUBE);
   }
 
-  /** n кубов из точки mid разлетаются на R; цвета — случайно из списка; size — базовый размер */
+  /** n cubes from the point mid scatter over R; colours — random from the list; size — the base size */
   burst(mid: THREE.Vector3, R: number, n: number, colors: THREE.Color[], size: number, life: [number, number] = [0.35, 0.6]): void {
     for (let k = 0; k < n; k++) {
       let i: number;

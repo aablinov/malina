@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { C, glowMat } from '../../bosses/kit.ts';
 import type { TdPad } from '../../td/types.ts';
 
-/** Площадка под башню: кольцо на земле, подсветка под курсором и с открытым меню; занята ли — говорит TdView (по записи башни) */
+/** Tower pad: a ring on the ground, highlighted under the cursor and with the menu open; whether it is taken is told by TdView (from the tower record) */
 export class PadView {
   readonly pos: THREE.Vector3;
   readonly group = new THREE.Group();
   hover = false;
-  /** На площадке стоит башня (запись `t<n>` в снимке) */
+  /** A tower stands on the pad (a `t<n>` record in the snapshot) */
   occupied = false;
   private readonly ring: THREE.MeshBasicMaterial;
   private readonly disc: THREE.Mesh;
@@ -19,7 +19,7 @@ export class PadView {
   constructor(scene: THREE.Scene, spec: TdPad, index: number) { this.scene = scene; this.spec = spec; this.index = index;
     this.pos = new THREE.Vector3(spec.x, spec.y ?? 0, spec.z);
     this.group.position.copy(this.pos);
-    // кольцо-подсветка: тускло всегда, ярко под курсором; каменный круг площадки рисует карта блоками
+    // highlight ring: always dim, bright under the cursor; the pad's stone circle is drawn by the map in blocks
     this.ring = glowMat(C(1.2, 1.0, 0.5), 0.35, true);
     const r = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.45, 24), this.ring);
     r.rotation.x = -Math.PI / 2;
@@ -39,7 +39,7 @@ export class PadView {
     this.disc.visible = this.hover && !this.occupied;
   }
 
-  /** Луч камеры проходит над площадкой (на высоте башни, если она стоит) */
+  /** The camera ray passes over the pad (at tower height if one stands) */
   hitBy(ray: THREE.Ray): boolean {
     const a = this.pos, b = this.pos.clone().setY(this.pos.y + (this.occupied ? 3 : 0.4));
     return ray.distanceSqToSegment(a, b) < 1.45 * 1.45;

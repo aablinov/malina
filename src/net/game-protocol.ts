@@ -2,15 +2,15 @@ import type { EntityState } from './snapshot.ts';
 import type { GearAction, TdCommand } from './protocol.ts';
 
 /**
- * Протокол боя (wiki/design-multiplayer.md, раздел 7) — отдельный WebSocket `/game` поверх `Channel` (src/net/channel.ts):
- * ненадёжная полоса — команды ввода (`Cmd`) от клиента и дельты снимков (`Delta`) от сервера; надёжная — вход в матч,
- * постройки, действия снаряжения, наборы, итог. Сервер считает бой (src/game/match.ts), клиент предсказывает своего героя
+ * Battle protocol (wiki/design-multiplayer.md, section 7) — a separate WebSocket `/game` over `Channel` (src/net/channel.ts):
+ * the unreliable lane carries input commands (`Cmd`) from the client and snapshot deltas (`Delta`) from the server; the reliable one — joining the match,
+ * builds, gear actions, kits, the result. The server runs the battle (src/game/match.ts), the client predicts its own hero
  */
 
-/** Команда ввода — usercmd: номер, подтверждённый снимок, движение, прицел, удар, перекат (однократно), лук, пинг */
+/** Input command — usercmd: number, acknowledged snapshot, movement, aim, attack, roll (once), bow, ping */
 export interface Cmd {
   seq: number;
-  /** Последний применённый снимок (его номер — база следующей дельты) */
+  /** Last applied snapshot (its number is the base of the next delta) */
   snap: number;
   move: [number, number];
   aim: [number, number, number];
@@ -23,9 +23,9 @@ export interface Cmd {
 export type GameClientMsg =
   | { t: 'hello'; token: string; matchId: string; protocol: number }
   | ({ t: 'td' } & Omit<TdCommand, 't'>)
-  /** seq — последняя команда клиента перед действием: сервер исполняет его в том же порядке с движением */
+  /** seq — the client's last command before the action: the server executes it in the same order with movement */
   | ({ t: 'act'; seq?: number } & GearAction)
-  /** Свой набор снаряжения (предметы и надетое) — купил у маркитанта за cost малины боя */
+  /** Own gear kit (items and equipped) — bought from the sutler for cost battle raspberries */
   | { t: 'kit'; items: unknown[]; equip: unknown; cost?: number };
 
 export type GameServerMsg =
@@ -36,22 +36,22 @@ export type GameServerMsg =
   | { t: 'over'; result: 'won' | 'lost' | 'abandoned'; wave: number }
   | { t: 'error'; text: string };
 
-/** Герой в снимке: `h<место>` */
+/** Hero in the snapshot: `h<seat>` */
 export type HeroEnt = EntityState & { seat: number; x: number; y: number; z: number; yaw: number; hp: number; maxHp: number; down: 0 | 1; mx: number; mz: number; ax: number; az: number; attack: 0 | 1; roll: 0 | 1; bow: 0 | 1; ack: number; ping: number };
-/** Враг в снимке: `m<сетевой id>` */
+/** Enemy in the snapshot: `m<network id>` */
 export type MobEnt = EntityState & { kind: string; x: number; y: number; z: number; yaw: number; hp: number; maxHp: number; flags: number; attack: string; seq: number; ax: number; az: number; lane: string; marchI: number; mx: number; mz: number };
-/** Флаги врага в снимке: призван (без малины), оглушён, замедлен холодом, воодушевлён знаменем, заметил героя */
+/** Enemy flags in the snapshot: summoned (no raspberries), stunned, slowed by cold, inspired by a banner, noticed the hero */
 export const MOB_FLAG = { summoned: 1, daze: 2, chill: 4, rally: 8, alerted: 16 } as const;
 
-/** Такт физики и кадр сервера (снимок после каждого кадра) */
+/** Physics tick and server frame (a snapshot after every frame) */
 export const TICK = 1 / 60;
 export const FRAME_MS = 50;
 export const CMD_BACKLOG = 8;
-/** Команд в одном кадре клиента по транспорту с потерями (cl_packetdup): последняя и предыдущие — потеря кадра не теряет ввод; по TCP — одна */
+/** Commands per client frame over a lossy transport (cl_packetdup): the latest and the previous ones — a lost frame does not lose input; over TCP — one */
 export const CMD_DUP = 3;
-/** Ненадёжная часть кадра клиента — пачка последних команд по возрастанию seq */
+/** Unreliable part of a client frame — a batch of the latest commands in ascending seq */
 export type CmdBatch = Cmd[];
-/** Снимков в кольце сервера */
+/** Snapshots in the server ring */
 export const SNAP_RING = 32;
-/** Конец боя → итог через столько секунд: сбор урожая долетает в кошельки */
+/** Battle end → result after this many seconds: the harvest reaches the purses */
 export const LOOT_DELAY = 4.5;

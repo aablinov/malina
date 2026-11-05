@@ -1,4 +1,4 @@
-/* HUD и инвентарь в духе Minecraft Dungeons (wiki/design-inventory.md). Размеры — в em от шрифта корня, он растёт с окном */
+/* HUD and inventory in the spirit of Minecraft Dungeons (wiki/design-inventory.md). Sizes in em of the root font, which grows with the window */
 :root {
   --mcd-px: 'Press Start 2P', 'Courier New', monospace;
   --mcd-text: Rubik, system-ui, sans-serif;
@@ -23,7 +23,7 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
   text-shadow: 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 1px 1px #000;
 }
 
-/* ---------- нижняя панель ---------- */
+/* ---------- bottom bar ---------- */
 .hud-bar {
   position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
   display: flex; align-items: flex-end; gap: 0.45em; padding: 0 1.6em 0.75em 1.4em;
@@ -58,7 +58,7 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-slot img { width: 2.5em; height: 2.5em; }
 .hud-slot:hover { outline-color: #b9b7c2; }
 .hud-inv { outline-color: #9b6ad8; }
-/* перезарядка как в MCD: иконка серая, цвет возвращается снизу вверх, сверху — лёгкая тень остатка */
+/* cooldown like in MCD: the icon is grey, colour returns from bottom to top, a light shadow of the remainder on top */
 .hud-cd { position: absolute; left: 0; right: 0; top: 0; height: 0; background: rgba(20, 18, 26, 0.38); pointer-events: none; border-bottom: 0.12em solid rgba(255, 255, 255, 0.55); box-sizing: border-box; }
 .hud-slot.cooling .hud-cd { border-bottom-color: rgba(255, 255, 255, 0.55); }
 .hud-slot:not(.cooling) .hud-cd { border: 0; }
@@ -71,9 +71,9 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-art.souls .hud-ico { filter: grayscale(0.85) brightness(0.7); }
 @keyframes hud-glow { from { box-shadow: 0 0.18em 0 #000, 0 0 0.3em #ffc23a; } to { box-shadow: 0 0.18em 0 #000, 0 0 1.1em #ffc23a; } }
 
-/* гнездо ауры: шкала цветом ауры снизу вверх, полная — светится и ждёт R */
+/* aura slot: a meter in the aura colour from bottom to top; full — glows and waits for R */
 .hud-aura { margin-left: 0.35em; outline-color: #7a6a9a; overflow: hidden; }
-/* спец-удар оружия (Q): шкала как у ауры */
+/* weapon art (Q): a meter like the aura's */
 .hud-spec { overflow: hidden; outline-color: #9a7a4a; }
 .hud-spec .hud-ico { position: relative; }
 .hud-spec.ready { outline-color: #fff; animation: hud-aura-ready 0.6s ease-in-out infinite alternate; }
@@ -95,7 +95,7 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-xp .hud-fill { background: linear-gradient(#d0a8ff, var(--mcd-xp)); }
 .hud-xp span { font: 400 0.62em/1 var(--mcd-px); color: #d8d4e0; white-space: nowrap; margin-left: -4.2em; width: 3.9em; text-align: right; }
 
-/* сердце: щит-рамка выше панели, красная заливка убывает сверху */
+/* heart: a shield frame above the bar, the red fill drains from the top */
 .hud-heart { position: relative; width: 7.8em; height: 8.2em; margin: 0 0.25em -0.1em; cursor: default; }
 .hud-heart-frame {
   position: absolute; inset: 0 0 0.9em 0; background: #050407;
@@ -136,7 +136,7 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-ammo.empty > b { color: #ff5a5a; }
 .hud-ammo.empty img:not(.hud-mouse) { filter: grayscale(1) brightness(0.6); }
 
-/* ---------- эффекты, задание, баннер ---------- */
+/* ---------- effects, goal, banner ---------- */
 .hud-buffs { position: absolute; left: 1.4em; top: 4.2em; display: flex; flex-direction: column; gap: 0.5em; }
 .hud-buff { display: flex; align-items: center; gap: 0.6em; text-shadow: 0 1px 2px #000, 0 0 4px #000; font-size: 1.05em; }
 .hud-buff b { font: 400 0.8em/1 var(--mcd-px); }
@@ -159,7 +159,7 @@ img.px { image-rendering: pixelated; image-rendering: crisp-edges; display: bloc
 .hud-banner small { display: block; font: 700 0.42em/1.5 var(--mcd-text); color: #fff; letter-spacing: 0.02em; }
 .hud-banner.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---------- карты (src/hud/automap.ts) ---------- */
+/* ---------- maps (src/hud/automap.ts) ---------- */
 .hud-minibox {
   position: absolute; right: 1.6em; top: 5.2em; width: 15em; height: 10.5em; pointer-events: auto; cursor: pointer;
   background: radial-gradient(closest-side, rgba(8, 12, 22, 0.55), rgba(8, 12, 22, 0.25) 80%, transparent);

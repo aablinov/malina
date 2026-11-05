@@ -7,31 +7,31 @@ import type { TdLane, TdPad, TdSpec } from '../td/types.ts';
 import { TD_WAVES } from '../td/waves.ts';
 
 /**
- * Карта «Оборона куста» — лавовая (wiki/design-tower-defence.md, раздел 7): 96 × 96 м пепельной земли, куст малины в центре,
- * три дороги врагов от логов-пещер на краях, площадки под башни вдоль дорог. Землю режут **разломы с лавой** — светят тёплым
- * запечённым светом, над ними дымка (src/td/lava-fx.ts); дороги идут через них по мостам с перилами. По углам — вулканы
- * с кратерами и потёками, вдоль дорог — заборчики, фонари и жаровни, у логов — клетки с добычей, кости и черепа.
- * `npm run map:td` пишет assets/maps/td.json; открыть — `?map=td`. Дороги, площадки и куст — в `meta.td` (src/td/types.ts).
+ * "Bush Defence" map — the lava one (wiki/design-tower-defence.md, section 7): 96 × 96 m of ash ground, the raspberry bush in the centre,
+ * three enemy roads from cave lairs at the edges, tower pads along the roads. **Lava rifts** cut the ground — they glow with warm
+ * baked light with haze above (src/td/lava-fx.ts); the roads cross them on bridges with railings. Volcanoes in the corners
+ * with craters and flows, little fences, lanterns and braziers along the roads, loot cages, bones and skulls by the lairs.
+ * `npm run map:td` writes assets/maps/td.json; open with `?map=td`. Roads, pads and the bush are in `meta.td` (src/td/types.ts).
  */
 
 export const TD_HALF = 48;
 
-/** Дороги врагов: от логова к кусту (метры) */
+/** Enemy roads: from the lair to the bush (metres) */
 export const TD_LANES: TdLane[] = [
-  { id: 'west', title: 'Западная тропа', points: [[-45, -8], [-37, -8], [-31, 2], [-22, 5], [-15, -2], [-8, -3], [-3, -1]] },
-  { id: 'north', title: 'Северная тропа', points: [[7, -45], [7, -37], [-1, -31], [-4, -22], [3, -15], [4, -8], [1, -3]] },
-  { id: 'east', title: 'Восточная тропа', points: [[45, 9], [37, 9], [31, 2], [23, -2], [17, 5], [9, 6], [3, 2]] },
+  { id: 'west', title: 'West path', points: [[-45, -8], [-37, -8], [-31, 2], [-22, 5], [-15, -2], [-8, -3], [-3, -1]] },
+  { id: 'north', title: 'North path', points: [[7, -45], [7, -37], [-1, -31], [-4, -22], [3, -15], [4, -8], [1, -3]] },
+  { id: 'east', title: 'East path', points: [[45, 9], [37, 9], [31, 2], [23, -2], [17, 5], [9, 6], [3, 2]] },
 ];
 
-/** Площадки под башни: у поворотов дорог, по две-три на дорогу, и у куста */
+/** Tower pads: at the road turns, two or three per road, and by the bush */
 export const TD_PADS: TdPad[] = [
-  // запад
+  // west
   { x: -40, z: -12 }, { x: -33, z: -3 }, { x: -25, z: 1 }, { x: -18, z: 2 }, { x: -11, z: -7 },
-  // север
+  // north
   { x: 3, z: -40 }, { x: -5, z: -35 }, { x: -8, z: -24 }, { x: 0, z: -19 }, { x: 8, z: -12 },
-  // восток
+  // east
   { x: 40, z: 5 }, { x: 34, z: -2 }, { x: 26, z: 2 }, { x: 20, z: 9 }, { x: 13, z: 2 },
-  // у куста
+  // by the bush
   { x: -6, z: 5 }, { x: 6, z: -4 },
 ];
 
@@ -44,7 +44,7 @@ export const TD_SPEC: TdSpec = {
   rest: 20,
 };
 
-/** Разломы: ломаные линии (метры) и ширина; лава в них вровень с землёй, вброд, но жжёт */
+/** Rifts: polylines (metres) and width; the lava in them is level with the ground, wadable but burns */
 const RIFTS: [number[], number][] = [
   [[-48, 22, -34, 15, -24, 22, -12, 17, -2, 24, 8, 30, 20, 23, 32, 29, 48, 24], 1.7],
   [[-48, -30, -36, -24, -24, -31, -12, -25, 0, -33, 12, -27, 24, -36, 48, -30], 1.6],
@@ -53,14 +53,14 @@ const RIFTS: [number[], number][] = [
   [[-16, 12, -12, 14, -9, 10], 0.9],
   [[14, -14, 18, -11, 22, -16], 0.9],
 ];
-/** Лавовые озёра: [x, z, радиус] */
+/** Lava pools: [x, z, radius] */
 const POOLS: [number, number, number][] = [[-26, -12, 2.6], [26, 14, 2.6], [-30, 30, 3], [30, -18, 2.4], [-6, 36, 2], [40, 30, 2.4]];
-/** Вулканы: [x, z, радиус, высота, зерно] — конус с кратером лавы и потёком */
+/** Volcanoes: [x, z, radius, height, seed] — a cone with a lava crater and a flow */
 const VOLCANOES: [number, number, number, number, number][] = [[-38, 38, 9, 6, 1], [38, -38, 8, 5, 2], [-39, -39, 7, 5, 3], [40, 40, 8, 6, 4], [-18, -42, 4, 3, 5], [22, 42, 4, 3, 6]];
-/** Обожжённые скалы: [x, z, rx, rz, высота, зерно] — между дорогами, чтобы карта не была плоской */
+/** Scorched rocks: [x, z, rx, rz, height, seed] — between the roads so the map is not flat */
 const ROCKS: [number, number, number, number, number, number][] = [[-22, -22, 6, 4, 3, 7], [22, 22, 5, 5, 3, 8], [-36, 18, 5, 4, 4, 9], [36, -14, 4, 6, 4, 10], [18, -26, 5, 3, 3, 11], [-10, 28, 4, 3, 2, 12], [26, -8, 3, 3, 2, 13], [-28, 10, 3, 3, 2, 14]];
 
-/** Скальный массив из обожжённого камня: контур рваный, бока в пластах, сверху пепел; h — высота блоков */
+/** A rock mass of scorched stone: ragged outline, layered sides, ash on top; h — height in blocks */
 function lavaRock(L: Level, cx: number, cz: number, rx: number, rz: number, h: number, seed: number, top = 'cliff_lava_top'): void {
   for (let x = Math.floor(cx - rx - 2); x <= Math.ceil(cx + rx + 2); x++) for (let z = Math.floor(cz - rz - 2); z <= Math.ceil(cz + rz + 2); z++) {
     const wx = x + (noise2(x, z, 7, seed + 1) - 0.5) * 4, wz = z + (noise2(x, z, 7, seed + 2) - 0.5) * 4;
@@ -73,7 +73,7 @@ function lavaRock(L: Level, cx: number, cz: number, rx: number, rz: number, h: n
   }
 }
 
-/** Вулкан: конус с рваным краем, кратер с лавой и огнём наверху, потёк лавы по склону в сторону seed */
+/** Volcano: a cone with a ragged edge, a crater with lava and fire on top, a lava flow down the slope in a seed-chosen direction */
 function volcano(L: Level, cx: number, cz: number, r: number, h: number, seed: number): void {
   const flowA = hash2(cx, cz, seed) * Math.PI * 2;
   for (let x = Math.floor(cx - r - 2); x <= Math.ceil(cx + r + 2); x++) for (let z = Math.floor(cz - r - 2); z <= Math.ceil(cz + r + 2); z++) {
@@ -91,13 +91,13 @@ function volcano(L: Level, cx: number, cz: number, r: number, h: number, seed: n
 }
 
 export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
-  const L = new Level('Оборона куста');
+  const L = new Level('Bush Defence');
   const H = TD_HALF;
   const used = new Set<string>();
   const key = (x: number, z: number): string => `${x},${z}`;
   const mark = (x: number, z: number, r: number): void => { for (let xx = x - r; xx <= x + r; xx++) for (let zz = z - r; zz <= z + r; zz++) used.add(key(xx, zz)); };
   const inMap = (x: number, z: number): boolean => Math.abs(x) <= H && Math.abs(z) <= H;
-  /** Обойти линию с радиусом: cb(x, z, dx, dz, far) для клеток в r (far — в полосе r..r+1) */
+  /** Walk a line with a radius: cb(x, z, dx, dz, far) for cells within r (far — in the r..r+1 band) */
   const walk = (line: number[], r: number, cb: (x: number, z: number, dx: number, dz: number, far: boolean) => void): void => {
     for (let i = 0; i + 3 < line.length; i += 2) {
       const [ax, az, bx, bz] = [line[i], line[i + 1], line[i + 2], line[i + 3]];
@@ -111,20 +111,20 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
       }
     }
   };
-  // ---------- земля: пепел с пятнами базальта ----------
+  // ---------- ground: ash with basalt patches ----------
   for (let x = -H; x <= H; x++) for (let z = -H; z <= H; z++) {
     const n = noise2(x, z, 6, 1);
     L.set(x, -1, z, n > 0.72 ? 'basalt' : 'ash_ground');
     L.set(x, -2, z, 'cliff_lava');
   }
-  // ---------- что лава не должна трогать: куст, площадки, логова ----------
+  // ---------- what lava must not touch: the bush, pads, lairs ----------
   const keep = (x: number, z: number): boolean => {
     if (Math.hypot(x, z) < 7) return true;
     for (const p of TD_PADS) if (Math.hypot(x - p.x, z - p.z) < 3.2) return true;
     for (const l of TD_LANES) if (Math.hypot(x - l.points[0][0], z - l.points[0][1]) < 9) return true;
     return false;
   };
-  // ---------- разломы и озёра с лавой ----------
+  // ---------- rifts and lava pools ----------
   const lava = new Set<string>();
   const pour = (x: number, z: number): void => { if (keep(x, z)) return; lava.add(key(x, z)); used.add(key(x, z)); };
   for (const [line, r] of RIFTS) walk(line, r, (x, z, _dx, _dz, far) => { if (!far || noise2(x, z, 3, 2) > 0.72) pour(x, z); });
@@ -132,7 +132,7 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     if (Math.hypot(x - px0, z - pz0) + (noise2(x, z, 3, 3) - 0.5) * 2 <= pr) pour(x, z);
   }
   for (const k of lava) { const [x, z] = k.split(',').map(Number); L.set(x, -1, z, 'lava'); L.set(x, -2, z, 'cliff_lava'); }
-  // берег разлома: базальтовая кромка кусками и лавовые цветы
+  // rift shore: a basalt rim in pieces and lava flowers
   for (const k of lava) {
     const [x, z] = k.split(',').map(Number);
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -143,7 +143,7 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
       else if (v < 0.42 && L.isAir(xx, 0, zz)) L.set(xx, 0, zz, v < 0.385 ? 'flower_orange' : 'flower_red');
     }
   }
-  // ---------- дороги врагов: булыжник 3 м с рваным краем; через лаву — мост с перилами ----------
+  // ---------- enemy roads: 3 m of cobble with a ragged edge; a bridge with railings over lava ----------
   const road = new Set<string>();
   const band = new Map<string, [number, number]>();
   for (const lane of TD_LANES) walk(lane.points.flat(), 1.5, (x, z, dx, dz, far) => {
@@ -152,7 +152,7 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     if (lava.has(key(x, z))) { L.set(x, -1, z, 'bridge_deck', Math.abs(dx) >= Math.abs(dz) ? 1 : 0); L.set(x, -2, z, 'bridge_beam', Math.abs(dx) >= Math.abs(dz) ? 0 : 1); return; }
     L.set(x, -1, z, hash2(x, z, 6) < 0.85 ? 'cobble' : 'stone');
   });
-  // перила мостов: клетки у дороги над лавой — брус и столбы; вдоль обычной дороги — заборчики кусками
+  // bridge railings: cells beside the road over lava get beams and posts; little fences in pieces along an ordinary road
   for (const [k, [dx, dz]] of band) {
     const [x, z] = k.split(',').map(Number);
     if (road.has(k)) continue;
@@ -160,7 +160,7 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     if (lava.has(k)) { L.set(x, -1, z, 'bridge_beam', alongX ? 0 : 1); L.set(x, 0, z, (alongX ? x : z) % 3 === 0 ? 'bridge_post' : 'fence'); used.add(k); continue; }
     if (noise2(x, z, 5, 7) > 0.58 && hash2(x, z, 8) < 0.8 && L.isAir(x, 0, z) && !keep(x, z)) { L.set(x, 0, z, 'fence'); used.add(k); }
   }
-  // ---------- площадь куста: плиты, кольцо базальта с проёмами у дорог, фонари ----------
+  // ---------- bush square: tiles, a basalt ring with gaps at the roads, lanterns ----------
   for (let x = -6; x <= 6; x++) for (let z = -6; z <= 6; z++) {
     const d = Math.hypot(x, z);
     if (d <= 4.6) L.set(x, -1, z, hash2(x, z, 9) < 0.85 ? 'tiles' : 'tiles_broken');
@@ -168,7 +168,7 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     used.add(key(x, z));
   }
   for (const [x, z] of [[4, 4], [-4, 4], [4, -4], [-4, -4]]) L.addDecor({ name: 'lantern_post', pos: [x, 0, z], rot: [45] });
-  // ---------- площадки: круг камня, базальтовый обод, четыре столбика ----------
+  // ---------- pads: a circle of stone, a basalt rim, four posts ----------
   for (const p of TD_PADS) {
     for (let x = p.x - 3; x <= p.x + 3; x++) for (let z = p.z - 3; z <= p.z + 3; z++) {
       const d = Math.hypot(x - p.x, z - p.z);
@@ -177,10 +177,10 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     for (const [sx, sz] of [[2, 2], [-2, 2], [2, -2], [-2, -2]]) if (L.isAir(p.x + sx, 0, p.z + sz)) L.set(p.x + sx, 0, p.z + sz, 'basalt_slab');
     mark(p.x, p.z, 3);
   }
-  // ---------- скалы и вулканы ----------
+  // ---------- rocks and volcanoes ----------
   for (const [x, z, rx, rz, h, seed] of ROCKS) { lavaRock(L, x, z, rx, rz, h, 100 + seed); mark(x, z, Math.max(rx, rz) + 2); }
   for (const [x, z, r, h, seed] of VOLCANOES) { volcano(L, x, z, r, h, 200 + seed); mark(x, z, r + 2); }
-  // ---------- логова: пещера в обожжённой скале, из неё выходит дорога; у входа — клетки, кости, факелы ----------
+  // ---------- lairs: a cave in scorched rock with the road coming out of it; cages, bones, torches at the entrance ----------
   for (const lane of TD_LANES) {
     const [x, z] = lane.points[0], [nx, nz] = lane.points[1];
     const dx = Math.sign(nx - x), dz = Math.sign(nz - z);
@@ -203,7 +203,7 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     const bx = x + dx * 5 + (dz ? -4 : 0), bz = z + dz * 5 + (dx ? -4 : 0);
     if (L.isAir(bx, 0, bz) && !road.has(key(bx, bz))) { L.addDecor({ name: 'bones', pos: [bx, 0, bz], rot: [hash2(bx, bz, 12) * 360] }); mark(bx, bz, 1); }
   }
-  // ---------- край карты: обожжённая скала с рваной высотой ----------
+  // ---------- map edge: scorched rock of ragged height ----------
   for (let i = -H - 1; i <= H + 1; i++) for (const [x, z] of [[i, -H - 1], [i, H + 1], [-H - 1, i], [H + 1, i]]) {
     const t = L.topAt(x, z);
     if (t !== null && t >= 0) continue;
@@ -211,14 +211,14 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     for (let y = -1; y < hh; y++) L.set(x, y, z, noise2(x, z, 3, 14) > 0.6 ? 'basalt' : 'cliff_lava');
     L.set(x, hh, z, 'cliff_lava_top');
   }
-  // ---------- декор и мелочь на свободной земле ----------
+  // ---------- decor and small stuff on free ground ----------
   const free = (x: number, z: number, r: number): boolean => {
     for (let xx = x - r; xx <= x + r; xx++) for (let zz = z - r; zz <= z + r; zz++) if (Math.abs(xx) > H - 1 || Math.abs(zz) > H - 1 || used.has(key(xx, zz)) || road.has(key(xx, zz)) || L.topAt(xx, zz) !== -1 || L.nameAt(xx, -1, zz) === 'lava') return false;
     return true;
   };
   const stamp = (id: string, x: number, z: number, q = 0): boolean => {
     const p = lib[id];
-    if (!p) throw new Error(`Нет пресета «${id}»`);
+    if (!p) throw new Error(`No prefab "${id}"`);
     const rx = Math.ceil(p.size[0] / 2) + 1, rz = Math.ceil(p.size[2] / 2) + 1;
     if (!free(x, z, Math.max(rx, rz))) return false;
     const r = stampPrefab(L, p, x, 0, z, q);
@@ -228,7 +228,7 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     return true;
   };
   const dec = (name: string, x: number, z: number, rot = hash2(x, z, 15) * 360): void => { L.addDecor({ name, pos: [x, 0, z], rot: [rot] }); mark(x, z, 1); };
-  // мёртвые деревья, валуны и пни — пресеты; у дорог — фонари и жаровни на поворотах
+  // dead trees, boulders and stumps are prefabs; lanterns and braziers at the road turns
   const ids = ['tree_dead', 'tree_dead_2', 'boulder_group', 'boulder_single', 'stump_logs'];
   for (let z = -H + 3; z <= H - 3; z += 2) for (let x = -H + 3; x <= H - 3; x += 2) {
     if (hash2(x, z, 16) > 0.1) continue;
@@ -247,13 +247,13 @@ export function buildTdMap(lib: Record<string, LibraryPrefab>): Level {
     else if (v < 0.056 && free(x, z, 1)) dec(small[Math.floor(hash2(x, z, 20) * small.length)], x, z);
     else if (v < 0.06 && L.nameAt(x, -1, z) === 'basalt') L.set(x, 0, z, 'fire');
   }
-  // ---------- герой, цель, мир: тёплый полумрак, дымка цвета пепла, искры и пепел в воздухе ----------
+  // ---------- hero, goal, world: warm dusk, ash-coloured haze, sparks and ash in the air ----------
   L.spawn = [0, 0, 7];
   L.meta.spawnYaw = 270;
-  L.meta.goal = ['Защити куст малины', 'Оборона куста'];
-  // маркитант обороны (раздел 12 вики): у точки появления, не на дороге и не у площадки
+  L.meta.goal = ['Defend the raspberry bush', 'Bush Defence'];
+  // the defence sutler (wiki section 12): near the spawn point, not on a road and not by a pad
   const sutler = sutlerSpot(L, TD_LANES, TD_PADS, 4, 10);
-  if (!sutler) throw new Error('Нет места для маркитанта');
+  if (!sutler) throw new Error('No room for the sutler');
   L.meta.merchants = [sutler];
   L.meta.td = TD_SPEC;
   L.meta.world = {

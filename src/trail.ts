@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 
 /**
- * Светящийся след клинка (light trail): лента между основанием и кончиком клинка за последние доли секунды.
- * Точки берутся раз в кадр и сглаживаются сплайном Катмулла — Рома, поэтому быстрый взмах даёт ровную дугу.
- * Цвет HDR (> 1) — ленту подхватывает bloom. Яркость падает с возрастом точки и к основанию клинка; свежий край —
- * color, хвост перетекает в color2 (две закалки — два цвета), у самого кончика — белое ядро (core).
+ * Glowing blade trail (light trail): a ribbon between the blade base and tip over the last fractions of a second.
+ * Points are taken once per frame and smoothed with a Catmull–Rom spline, so a fast swing gives an even arc.
+ * HDR colour (> 1) — bloom picks up the ribbon. Brightness falls with the point's age and towards the blade base; the fresh edge is
+ * color, the tail blends into color2 (two tempers — two colours), at the very tip a white core (core).
  */
 
 const MAX = 96;
@@ -25,14 +25,14 @@ function catmull(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: TH
 }
 
 export class SwordTrail {
-  /** Сколько живёт точка следа, с */
+  /** How long a trail point lives, s */
   life = 0.16;
   readonly color = new THREE.Color(2.2, 2.6, 3.2);
-  /** Цвет хвоста следа: к нему перетекает color с возрастом точки */
+  /** Trail tail colour: color blends into it as the point ages */
   readonly color2 = new THREE.Color(2.2, 2.6, 3.2);
-  /** Белое ядро у кончика: 0 — нет, 1 — свежий край почти белый */
+  /** White core at the tip: 0 — none, 1 — the fresh edge is almost white */
   core = 0.35;
-  /** Ширина следа: доля клинка от кончика (1 — весь клинок) */
+  /** Trail width: fraction of the blade from the tip (1 — the whole blade) */
   width = 0.85;
   private readonly samples: Sample[] = [];
   private readonly mesh: THREE.Mesh;
@@ -62,14 +62,14 @@ export class SwordTrail {
     scene.add(this.mesh);
   }
 
-  /** Добавить положение клинка в момент t (вызывается, пока идёт взмах) */
+  /** Add the blade position at time t (called while the swing is in progress) */
   push(base: THREE.Vector3, tip: THREE.Vector3, t: number): void {
     const b = _a.copy(tip).lerp(base, this.width);
     this.samples.push({ base: b.clone(), tip: tip.clone(), t });
     if (this.samples.length > MAX) this.samples.shift();
   }
 
-  /** Разорвать след: следующий взмах начнёт новую ленту */
+  /** Break the trail: the next swing starts a new ribbon */
   cut(): void { this.samples.length = 0; }
 
   get visible(): boolean { return this.mesh.visible; }
@@ -84,11 +84,11 @@ export class SwordTrail {
       const age = Math.min(1, (now - t) / this.life), fade = 1 - age;
       const k = fade * fade;
       const a = this.color, b = this.color2, w = Math.min(1, age * 1.6);
-      // свежий край раскалён добела, к хвосту — второй цвет
+      // the fresh edge is white hot, towards the tail — the second colour
       const hot = this.core * fade * fade * fade * 2.4;
       const r = (a.r + (b.r - a.r) * w) * k + hot, g = (a.g + (b.g - a.g) * w) * k + hot, bl = (a.b + (b.b - a.b) * w) * k + hot;
       this.pos.set([base.x, base.y, base.z, tip.x, tip.y, tip.z], v * 6);
-      // к основанию след гаснет, у кончика самый яркий
+      // the trail fades towards the base, brightest at the tip
       this.col.set([r * 0.08, g * 0.08, bl * 0.08, r, g, bl], v * 6);
       v++;
     };

@@ -11,13 +11,13 @@ import type { Rooms as RoomRepo, RoomRow } from './repo/rooms.ts';
 import type { MatchRunner } from './game/runner.ts';
 
 /**
- * Комнаты сетевой игры (wiki/design-multiplayer.md): живут в памяти, каждое изменение пишется в SQLite,
- * чтобы лобби пережили перезапуск. Соединение (`Conn`) даёт server/hub.ts — менеджер о WebSocket не знает.
+ * Multiplayer rooms (wiki/design-multiplayer.md): live in memory, every change is written to SQLite
+ * so lobbies survive a restart. The connection (`Conn`) comes from server/hub.ts — the manager knows nothing about WebSocket.
  *
- * Обрыв связи не выкидывает из комнаты сразу: место держится NET_LIMITS.graceMs. Это нужно и для «В бой» —
- * браузеры перезагружают страницу на адрес боя и входят заново. После перезапуска сервера места держатся RESTORE_MS.
- * Бой считает сервер (`Match`, src/game/match.ts): старт создаёт матч в раннере, в идущий бой можно войти, пока есть место,
- * уход хоста бой не прерывает (хост — только корона и права в лобби); все ушли — матч прерван.
+ * A dropped connection does not kick out of the room at once: the seat is held for NET_LIMITS.graceMs. This is also needed for "To battle" —
+ * browsers reload the page at the battle address and sign in again. After a server restart seats are held for RESTORE_MS.
+ * The server runs the battle (`Match`, src/game/match.ts): start creates a match in the runner, a running battle can be joined while there is a seat,
+ * the host leaving does not interrupt the battle (the host is only the crown and lobby rights); everyone gone — the match is abandoned.
  */
 
 export interface Conn {
@@ -33,14 +33,14 @@ interface Member {
   ready: boolean;
   joinedAt: number;
   conn: Conn | null;
-  /** Отключён: когда освободить место */
+  /** Disconnected: when to free the seat */
   deadline: number | null;
 }
 
 interface Room {
   row: RoomRow;
   members: Member[];
-  /** Идущий бой */
+  /** Running battle */
   matchId: string | null;
 }
 
@@ -50,16 +50,16 @@ export interface RoomDeps {
   matches: Matches;
   profiles: Profiles;
   maps: MapCatalog;
-  /** Идущие матчи */
+  /** Running matches */
   games: MatchRunner;
-  /** Имя игрока по id — для восстановления мест после перезапуска */
+  /** Player name by id — to restore seats after a restart */
   nameOf: (playerId: string) => string;
   now?: () => number;
 }
 
-/** Места после перезапуска сервера держатся дольше: игроки не знают, что надо войти заново */
+/** Seats are held longer after a server restart: players do not know they need to sign in again */
 export const RESTORE_MS = 10 * 60_000;
-/** Закрытые комнаты удаляются через сутки (история боёв остаётся в matches) */
+/** Closed rooms are deleted after a day (battle history stays in matches) */
 export const PURGE_MS = 24 * 3600_000;
 const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
@@ -80,9 +80,9 @@ export class RoomManager {
     this.restore();
   }
 
-  // ---------- Вход в комнату ----------
+  // ---------- Entering a room ----------
 
-  /** Новое соединение игрока: если он сидит в комнате (перезагрузил страницу, сменил вкладку) — вернуть на место */
+  /** New player connection: if they sit in a room (reloaded the page, switched tabs) — return them to their seat */
   attach(c: Conn): void {
     const room = this.byPlayer.get(c.playerId);
     if (!room) return;
@@ -93,12 +93,12 @@ export class RoomManager {
     this.broadcast(room);
   }
 
-  /** Соединение закрылось: место держится, пока не выйдет срок */
+  /** Connection closed: the seat is held until the deadline */
   detach(c: Conn): void {
     const room = this.byPlayer.get(c.playerId);
     if (!room) return;
     const m = this.member(room, c.playerId);
-    if (m.conn !== c) return; // уже вошёл с другой вкладки
+    if (m.conn !== c) return; // already signed in from another tab
     m.conn = null;
     m.deadline = this.now() + NET_LIMITS.graceMs;
     this.saveMember(room, m);
@@ -106,7 +106,7 @@ export class RoomManager {
   }
 
   create(c: Conn, map: string, max: number, priv: boolean): void {
-    if (!this.d.maps.has(map)) throw new RoomError('bad-map', `Нет карты ${map}`);
+    if (!this.d.maps.has(map)) throw new RoomError('bad-map', 'No such map');
     this.leave(c, 'leave');
     const now = this.now();
     const row: RoomRow = {
@@ -124,16 +124,16 @@ export class RoomManager {
 
   join(c: Conn, code: string): void {
     const room = [...this.byId.values()].find((r) => r.row.code === code.trim().toUpperCase());
-    if (!room || room.row.state === 'closed') throw new RoomError('no-room', 'Комнаты с таким кодом нет');
+    if (!room || room.row.state === 'closed') throw new RoomError('no-room', 'No room with that code');
     if (this.byPlayer.get(c.playerId) === room) { this.attach(c); return; }
-    if (room.members.length >= room.row.max) throw new RoomError('room-full', 'Комната заполнена');
+    if (room.members.length >= room.row.max) throw new RoomError('room-full', 'Room is full');
     this.leave(c, 'leave');
     const matchId = room.matchId;
     let seat = 0;
     tx(this.d.db, () => {
       const m = this.addMember(room, c);
       seat = m.seat;
-      // в идущий бой: строка в матче (для награды) — и сразу на страницу боя
+      // into a running battle: a row in the match (for the reward) — and straight to the battle page
       if (matchId) this.d.matches.addPlayer(matchId, m.playerId, m.seat);
     });
     if (matchId) this.d.games.get(matchId)?.join({ seat, playerId: c.playerId, name: c.name, profile: this.profileOf(c.playerId) });
@@ -141,7 +141,7 @@ export class RoomManager {
     if (room.row.state === 'battle' && matchId) c.send(this.startMsg(room, matchId));
   }
 
-  /** Чат комнаты: всем в ней, с именем и местом */
+  /** Room chat: to everyone in it, with name and seat */
   chat(c: Conn, text: string): void {
     const room = this.roomOf(c), m = this.member(room, c.playerId);
     const t = text.replace(/\s+/g, ' ').trim().slice(0, NET_LIMITS.chatMax);
@@ -149,7 +149,7 @@ export class RoomManager {
     this.each(room, (x) => x.conn?.send({ t: 'chat', seat: m.seat, name: m.name, text: t }));
   }
 
-  /** Выйти самому (reason 'leave') или по кику хоста */
+  /** Leave on one's own (reason 'leave') or by the host's kick */
   leave(c: Conn | string, reason: 'leave' | 'kick'): void {
     const playerId = typeof c === 'string' ? c : c.playerId;
     const room = this.byPlayer.get(playerId);
@@ -159,7 +159,7 @@ export class RoomManager {
     this.removeMember(room, m);
   }
 
-  // ---------- Лобби ----------
+  // ---------- Lobby ----------
 
   ready(c: Conn, ready: boolean): void {
     const room = this.roomOf(c);
@@ -172,10 +172,10 @@ export class RoomManager {
 
   setMap(c: Conn, map: string): void {
     const room = this.hostRoom(c);
-    if (!this.d.maps.has(map)) throw new RoomError('bad-map', `Нет карты ${map}`);
+    if (!this.d.maps.has(map)) throw new RoomError('bad-map', 'No such map');
     if (room.row.state !== 'lobby') return;
     room.row.map = map;
-    // карта сменилась — готовность заново
+    // map changed — readiness is reset
     for (const m of room.members) m.ready = false;
     this.saveRoom(room, true);
     this.broadcast(room);
@@ -187,11 +187,11 @@ export class RoomManager {
     this.leave(playerId, 'kick');
   }
 
-  /** «В бой»: хост, все гости готовы и на связи; again — «Ещё раз» после боя: тем же составом, без готовности */
+  /** "To battle": host, all guests ready and online; again — "Once more" after a battle: same party, no readiness */
   start(c: Conn, again = false): void {
     const room = this.hostRoom(c);
-    if (room.row.state !== 'lobby') throw new RoomError('not-ready', 'Бой уже идёт');
-    if (!again && room.members.some((m) => m.playerId !== room.row.host_id && (!m.ready || !m.conn))) throw new RoomError('not-ready', 'Не все готовы');
+    if (room.row.state !== 'lobby') throw new RoomError('not-ready', 'Battle already in progress');
+    if (!again && room.members.some((m) => m.playerId !== room.row.host_id && (!m.ready || !m.conn))) throw new RoomError('not-ready', 'Not everyone is ready');
     const now = this.now();
     room.row.state = 'battle';
     room.row.seed = randomInt(1, 2 ** 31 - 1);
@@ -201,9 +201,9 @@ export class RoomManager {
       this.saveRoom(room, false);
       this.d.matches.start(matchId, room.row.id, room.row.map, room.row.seed, room.members.map((m) => ({ playerId: m.playerId, seat: m.seat })), now);
     });
-    // серверный бой: мир с героями партии по их профилям
+    // server-side battle: a world with the party's heroes built from their profiles
     const map = this.d.maps.load(room.row.map);
-    if (!map) throw new RoomError('bad-map', `Нет карты ${room.row.map}`);
+    if (!map) throw new RoomError('bad-map', 'No such map');
     const match = new Match({ id: matchId, map, seed: room.row.seed, players: room.members.map((m) => ({ seat: m.seat, playerId: m.playerId, name: m.name, profile: this.profileOf(m.playerId) })) });
     match.onEnd = (e) => this.finishMatch(room, matchId, e);
     this.d.games.add(match);
@@ -217,24 +217,24 @@ export class RoomManager {
     return { t: 'battle.start', matchId, map: room.row.map, players: room.members.length, seed: room.row.seed, hostSeat: host.seat, seats: this.seats(room) };
   }
 
-  // ---------- Бой ----------
+  // ---------- Battle ----------
 
-  /** Место игрока в матче (вход на `/game`); null — не в этом бою */
+  /** Player's seat in the match (entry at `/game`); null — not in this battle */
   seatOf(matchId: string, playerId: string): number | null {
     const room = [...this.byId.values()].find((r) => r.matchId === matchId);
     const m = room?.members.find((x) => x.playerId === playerId);
     return m ? m.seat : null;
   }
 
-  /** Профиль героя для серверного боя: из базы, нет — стартовый */
+  /** Hero profile for the server-side battle: from the database, else the starter one */
   private profileOf(playerId: string): ProfileData {
     const p = this.d.profiles.get(playerId);
     return p ? (p.data as ProfileData) : Profile.starter();
   }
 
   /**
-   * Матч кончился (куст отбит, засох или все ушли): матч в историю, награды с потолком по карте — в профили героев партии,
-   * комната — снова лобби
+   * Match ended (bush defended, withered, or everyone left): match goes to history, rewards capped per map go into the party heroes' profiles,
+   * the room becomes a lobby again
    */
   private finishMatch(room: Room, matchId: string, e: MatchEnd): void {
     this.d.games.remove(matchId);
@@ -264,9 +264,9 @@ export class RoomManager {
     this.broadcast(room);
   }
 
-  // ---------- Обслуживание ----------
+  // ---------- Maintenance ----------
 
-  /** Раз в секунду: освободить места с вышедшим сроком, удалить старые закрытые комнаты */
+  /** Once a second: free seats past their deadline, delete old closed rooms */
   sweep(): void {
     const now = this.now();
     for (const room of [...this.byId.values()]) {
@@ -275,20 +275,20 @@ export class RoomManager {
     this.d.rooms.purge(now - PURGE_MS);
   }
 
-  /** Публичные комнаты с местами — для списка в лагере (и в идущий бой можно войти) */
+  /** Public rooms with free seats — for the list in the camp (a running battle can be joined too) */
   list(): RoomInfo[] {
     return [...this.byId.values()].filter((r) => r.row.state !== 'closed' && !r.row.private && r.members.length < r.row.max).map((r) => this.info(r));
   }
 
-  /** Комната игрока — для тестов и отладки */
+  /** Player's room — for tests and debugging */
   roomOfPlayer(playerId: string): RoomInfo | null {
     const r = this.byPlayer.get(playerId);
     return r ? this.info(r) : null;
   }
 
-  // ---------- Внутреннее ----------
+  // ---------- Internals ----------
 
-  /** После перезапуска: бои прерваны, лобби остаются, все игроки — отключены */
+  /** After a restart: battles are abandoned, lobbies remain, all players are disconnected */
   private restore(): void {
     const now = this.now();
     tx(this.d.db, () => {
@@ -320,8 +320,8 @@ export class RoomManager {
   }
 
   /**
-   * Место освободилось: герой уходит из матча; ушёл хост — хостом становится следующий (в бою — только корона).
-   * Никого не осталось — комната закрыта, матч прерван
+   * Seat freed: the hero leaves the match; if the host left, the next one becomes host (in battle — only the crown).
+   * Nobody left — the room is closed, the match abandoned
    */
   private removeMember(room: Room, m: Member): void {
     room.members = room.members.filter((x) => x !== m);
@@ -352,7 +352,7 @@ export class RoomManager {
     this.byId.delete(room.row.id);
   }
 
-  /** Бой кончился: комната снова лобби, готовность заново */
+  /** Battle over: the room is a lobby again, readiness reset */
   private toLobby(room: Room): void {
     room.row.state = 'lobby';
     room.matchId = null;
@@ -370,19 +370,19 @@ export class RoomManager {
 
   private roomOf(c: Conn): Room {
     const r = this.byPlayer.get(c.playerId);
-    if (!r) throw new RoomError('no-room', 'Ты не в комнате');
+    if (!r) throw new RoomError('no-room', 'You are not in a room');
     return r;
   }
 
   private hostRoom(c: Conn): Room {
     const r = this.roomOf(c);
-    if (r.row.host_id !== c.playerId) throw new RoomError('not-host', 'Это может только хост');
+    if (r.row.host_id !== c.playerId) throw new RoomError('not-host', 'Only the host can do that');
     return r;
   }
 
   private member(room: Room, playerId: string): Member {
     const m = room.members.find((x) => x.playerId === playerId);
-    if (!m) throw new Error(`Нет ${playerId} в комнате ${room.row.id}`);
+    if (!m) throw new Error(`No ${playerId} in room ${room.row.id}`);
     return m;
   }
 

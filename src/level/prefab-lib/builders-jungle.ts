@@ -3,34 +3,34 @@ import { bake, stampInto, type BuildCtx, type Builder } from './build.ts';
 import { onWall, pillar, wallRun, type Mat } from './builders-ruins.ts';
 
 /**
- * Биом «джунгли с кристаллами» (wiki/design-prefab-library.md, раздел «Биомы»; референс 16 — MCD, храм в джунглях).
- * Земля `jungle_floor` в контуре с рваным краем, широкие деревья с корнями-контрфорсами и плоской кроной, заросли,
- * светящиеся кристаллы (слой `glow` + запечённый бирюзовый свет), храм из бирюзово-серого камня с резьбой и мхом —
- * через помощники руин с материалом `TEMPLE`. Композиция `temple_ruins_jungle` вложена из средних пресетов.
+ * The "jungle with crystals" biome (wiki/design-prefab-library.md, "Biomes" section; reference 16 — MCD, the jungle temple).
+ * `jungle_floor` ground in a ragged-edged outline, wide trees with buttress roots and a flat crown, thickets,
+ * glowing crystals (the `glow` layer + baked teal light), a temple of teal-grey stone with carvings and moss —
+ * via the ruin helpers with the `TEMPLE` material. The `temple_ruins_jungle` composition is nested from medium prefabs.
  */
 
 const pick = <T,>(c: BuildCtx, list: T[]): T => list[Math.floor(c.rnd() * list.length)];
 const yaw = (c: BuildCtx): number => Math.floor(c.rnd() * 360);
-/** Материал храма для pillar / wallRun / arch */
+/** Temple material for pillar / wallRun / arch */
 export const TEMPLE: Mat = { full: 'temple_stone', low: 'temple_stone_mossy', cracked: 'temple_stone_carved', stairs: 'temple_stone_stairs', slab: 'temple_stone_slab' };
-/** Реестр строителей — передаётся из builders.ts (композиция вкладывает средние по id) */
+/** Builder registry — passed in from builders.ts (the composition nests medium ones by id) */
 let ALL: Builder[] = [];
-const find = (id: string): Builder => { const b = ALL.find((b) => b.id === id); if (!b) throw new Error(`Нет строителя «${id}»`); return b; };
-/** Вложить средний пресет по id строителя (вариант — своё зерно, поворот — четверти) */
+const find = (id: string): Builder => { const b = ALL.find((b) => b.id === id); if (!b) throw new Error(`No builder "${id}"`); return b; };
+/** Nest a medium prefab by builder id (variant — its own seed, rotation — quarters) */
 function use(c: BuildCtx, id: string, x: number, z: number, quarter = 0, seed?: number): void {
   const b = find(id);
   stampInto(c, bake(b, seed ?? 1 + Math.floor(c.rnd() * (b.variants ?? 1))), x, z, quarter);
 }
 
 const GROUND_J = new Set(['jungle_floor', 'jungle_floor_red', 'moss_teal', 'moss_block']);
-/** Земля джунглей в эллипсе rx × rz с рваным краем (клетки y = −1): мозаика блоков по шуму (jungleGroundAt), воду и камень не трогаем */
+/** Jungle ground in an rx × rz ellipse with a ragged edge (cells y = −1): a mosaic of blocks by noise (jungleGroundAt), water and stone untouched */
 function jungleGround(c: BuildCtx, rx: number, rz: number, cx = 0, cz = 0): void {
   for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) for (let z = Math.floor(cz - rz - 1); z <= Math.ceil(cz + rz + 1); z++) {
     const e = ((x + 0.5 - cx) / rx) ** 2 + ((z + 0.5 - cz) / rz) ** 2;
     if (e <= 1 + (c.rnd() - 0.5) * 0.35 && c.L.nameAt(x, -1, z) === 'air') c.L.set(x, -1, z, jungleGroundAt(x, z, c.seed * 11));
   }
 }
-/** Подлесок: папоротники, лианы, цветы, мох и малые кристаллы на свободных клетках земли в радиусе r */
+/** Undergrowth: ferns, vines, flowers, moss and small crystals on free ground cells within radius r */
 function undergrowth(c: BuildCtx, n: number, r: number, crystals = 0.08): void {
   for (let i = 0; i < n; i++) {
     const x = Math.round((c.rnd() - 0.5) * 2 * r), z = Math.round((c.rnd() - 0.5) * 2 * r);
@@ -44,7 +44,7 @@ function undergrowth(c: BuildCtx, n: number, r: number, crystals = 0.08): void {
     else c.L.set(x, 0, z, 'vine');
   }
 }
-/** Плоская широкая крона: эллипс радиуса r в два слоя (нижний полнее), шапки — leaves_jungle */
+/** A flat wide crown: an ellipse of radius r in two layers (the lower fuller), caps of leaves_jungle */
 function canopy(c: BuildCtx, x: number, y: number, z: number, r: number): void {
   for (const [dy, rr] of [[0, r], [1, r - 1.2], [-1, r - 2.2]] as [number, number][]) {
     if (rr <= 0) continue;
@@ -55,26 +55,26 @@ function canopy(c: BuildCtx, x: number, y: number, z: number, r: number): void {
     }
   }
 }
-/** Большое дерево джунглей: ствол 2 × 2 из log_jungle высотой h, корни-контрфорсы, плоская крона 7 × 7 */
+/** Big jungle tree: a 2 × 2 trunk of log_jungle of height h, buttress roots, a flat 7 × 7 crown */
 export function jungleTreeBig(c: BuildCtx, x: number, z: number, h: number): void {
   for (let k = 0; k < h; k++) for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) c.L.set(x + dx, k, z + dz, 'log_jungle');
-  // контрфорсы: по блоку бревна у подножия с четырёх сторон и декор корней
+  // buttresses: a log block at the foot on four sides and root decor
   for (const [dx, dz] of [[-1, 0], [2, 1], [1, -1], [0, 2]]) {
     if (c.rnd() < 0.85) c.L.set(x + dx, 0, z + dz, 'log_jungle');
     if (c.rnd() < 0.4) c.L.set(x + dx, 1, z + dz, 'log_jungle');
   }
   c.dec('roots_big', x + 1, 0, z + 1, yaw(c));
   canopy(c, x + 1, h, z + 1, 3.6);
-  // лианы свисают с кроны
+  // vines hang from the crown
   for (let i = 0; i < 3; i++) { const dx = pick(c, [-3, -2, 3, 4]), dz = pick(c, [-3, 4, -2, 3]); if (c.L.nameAt(x + dx, h - 1, z + dz) !== 'air') c.dec('vines_hanging', x + dx, h - 1, z + dz, yaw(c), [x + dx, h - 1, z + dz]); }
 }
-/** Малое дерево: ствол 1 × 1 высотой h, крона 5 × 5 */
+/** Small tree: a 1 × 1 trunk of height h, a 5 × 5 crown */
 export function jungleTreeSmall(c: BuildCtx, x: number, z: number, h: number): void {
   for (let k = 0; k < h; k++) c.L.set(x, k, z, 'log_jungle');
   canopy(c, x, h, z, 2.4);
   if (c.rnd() < 0.6) c.L.set(x + pick(c, [-1, 1]), 0, z + pick(c, [-1, 1]), 'log_jungle');
 }
-/** Кристаллы блоками с мхом вокруг: центр — большой, по краю малые и декор */
+/** Crystal blocks with moss around: a big one in the centre, small ones and decor at the edge */
 function crystalPatch(c: BuildCtx, r: number, big: number): void {
   jungleGround(c, r + 0.5, r + 0.5);
   for (let x = -r; x <= r; x++) for (let z = -r; z <= r; z++) if (Math.abs(x) + Math.abs(z) <= r && c.rnd() < 0.6) c.L.set(x, -1, z, 'moss_block');
@@ -85,7 +85,7 @@ function crystalPatch(c: BuildCtx, r: number, big: number): void {
   c.dec('crystal_shard', pick(c, [-1, 1]), 0, pick(c, [-r, r]), yaw(c));
   undergrowth(c, r * 4, r, 0.35);
 }
-/** Храмовый пол в прямоугольнике: плиты храмового камня, местами мшистый и резной, в дырах земля с мхом */
+/** Temple floor in a rectangle: temple stone tiles, mossy and carved in places, mossy ground in the holes */
 function templeFloor(c: BuildCtx, x0: number, z0: number, x1: number, z1: number): void {
   for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
     const v = c.rnd();
@@ -93,7 +93,7 @@ function templeFloor(c: BuildCtx, x0: number, z0: number, x1: number, z1: number
     if (v >= 0.82 && c.rnd() < 0.6) c.L.set(x, 0, z, pick(c, ['fern_big', 'moss_carpet', 'fern', 'flower_pink']));
   }
 }
-/** Ступенчатая пирамида: уровни level по кругу, лестница с −Z в середине, верх — площадка */
+/** Stepped pyramid: levels all round, stairs from −Z in the middle, a platform on top */
 function pyramid(c: BuildCtx, half: number, levels: number): void {
   for (let k = 0; k < levels; k++) {
     const h = half - k;
@@ -102,17 +102,17 @@ function pyramid(c: BuildCtx, half: number, levels: number): void {
       const v = c.rnd();
       c.L.set(x, k, z, edge && v < 0.15 ? 'temple_stone_mossy' : edge && v < 0.3 ? 'temple_stone_carved' : 'temple_stone');
     }
-    // лестница с +Z (лицо витрины): ступени на внешнем ряду, высокая половина к −Z — поворот 3 (+X → −Z)
+    // stairs from +Z (the showcase face): steps on the outer row, the tall half towards −Z — rotation 3 (+X → −Z)
     for (const x of [-1, 0, 1]) c.L.set(x, k, h, 'temple_stone_stairs', 3);
   }
 }
 
-/** Строители джунглей; all — реестр (композиция вкладывает средние по id) */
+/** Jungle builders; all — the registry (the composition nests medium ones by id) */
 export function jungleBuilders(all: Builder[]): Builder[] {
   ALL = all;
   return [
   {
-    id: 'jungle_tree_big', title: 'Дерево джунглей большое', category: 'джунгли', hint: 'ствол 2 × 2 высотой 6, корни-контрфорсы, плоская крона 7 × 7, лианы, подлесок', variants: 2,
+    id: 'jungle_tree_big', title: 'Big jungle tree', category: 'jungle', hint: 'a 2 × 2 trunk 6 high, buttress roots, a flat 7 × 7 crown, vines, undergrowth', variants: 2,
     build(c) {
       jungleGround(c, 4.2, 4.2);
       jungleTreeBig(c, -1, -1, 5 + Math.floor(c.rnd() * 2));
@@ -122,7 +122,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'jungle_tree_small', title: 'Дерево джунглей малое', category: 'джунгли', hint: 'ствол 4, крона 5 × 5, папоротники и цветы у корней', variants: 2,
+    id: 'jungle_tree_small', title: 'Small jungle tree', category: 'jungle', hint: 'trunk 4, a 5 × 5 crown, ferns and flowers at the roots', variants: 2,
     build(c) {
       jungleGround(c, 2.8, 2.8);
       jungleTreeSmall(c, 0, 0, 3 + Math.floor(c.rnd() * 2));
@@ -131,7 +131,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'jungle_thicket', title: 'Заросли', category: 'джунгли', hint: '8 × 8: папоротники, лианы, розовые цветы, мох, бревно во мху, малые кристаллы', variants: 2,
+    id: 'jungle_thicket', title: 'Thicket', category: 'jungle', hint: '8 × 8: ferns, vines, pink flowers, moss, a mossy log, small crystals', variants: 2,
     build(c) {
       jungleGround(c, 4.2, 4.2);
       for (let i = 0; i < 4; i++) { const x = -3 + Math.floor(c.rnd() * 7), z = -3 + Math.floor(c.rnd() * 7); if (c.L.nameAt(x, 0, z) === 'air') { c.L.set(x, 0, z, 'leaves_jungle'); if (c.rnd() < 0.4) c.L.set(x, 1, z, 'leaves_jungle'); } }
@@ -143,19 +143,19 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'crystal_cluster_small', title: 'Кристаллы малые', category: 'джунгли', hint: '3 × 3: кристалл блоком, гроздь и обломок на мху, запечённый бирюзовый свет', variants: 2,
+    id: 'crystal_cluster_small', title: 'Small crystals', category: 'jungle', hint: '3 × 3: a crystal block, a cluster and a shard on moss, baked teal light', variants: 2,
     build(c) { crystalPatch(c, 1, 1); },
   },
   {
-    id: 'crystal_cluster_big', title: 'Кристаллы большие', category: 'джунгли', hint: '5 × 5: пять кристаллов блоками в два яруса, гроздь, обломок, мох и малые кристаллы вокруг', variants: 2,
+    id: 'crystal_cluster_big', title: 'Big crystals', category: 'jungle', hint: '5 × 5: five crystal blocks in two tiers, a cluster, a shard, moss and small crystals around', variants: 2,
     build(c) { crystalPatch(c, 2, 3); c.dec('crystal_cluster', 2, 0, -2, yaw(c)); },
   },
   {
-    id: 'crystal_cave_mouth', title: 'Вход в кристальную пещеру', category: 'джунгли', hint: '8 × 6: скала во мху с проёмом 2 × 2 с +Z, внутри кристаллы светятся, лианы над входом', variants: 2,
+    id: 'crystal_cave_mouth', title: 'Crystal cave mouth', category: 'jungle', hint: '8 × 6: a mossy rock with a 2 × 2 opening from +Z, glowing crystals inside, vines over the entrance', variants: 2,
     build(c) {
       jungleGround(c, 5, 4);
       rockOutcrop(c.L, 0, -1, 3.6, 2.4, 4, 0, c.seed * 7);
-      // мох на верхушке вместо травы; проём 2 × 2 с +Z (лицо витрины) вглубь до z = −1
+      // moss on top instead of grass; a 2 × 2 opening from +Z (the showcase face) going in to z = −1
       c.L.forEach((x, y, z) => { if (c.L.nameAt(x, y, z) === 'cliff_grass') c.L.set(x, y, z, 'cliff_jungle'); });
       for (let y = 0; y <= 1; y++) for (const x of [-1, 0]) for (let z = -1; z <= 3; z++) c.L.set(x, y, z, 'air');
       for (const x of [-1, 0]) for (let z = -1; z <= 3; z++) c.L.set(x, -1, z, c.rnd() < 0.5 ? 'moss_block' : 'jungle_floor');
@@ -171,7 +171,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'temple_wall_carved', title: 'Стена храма резная', category: 'джунгли', hint: '7 × 3 вдоль X: храмовый камень с резным рядом, гуляющая высота, лианы и мох у подножия', variants: 2,
+    id: 'temple_wall_carved', title: 'Carved temple wall', category: 'jungle', hint: '7 × 3 along X: temple stone with a carved row, uneven height, vines and moss at the foot', variants: 2,
     build(c) {
       jungleGround(c, 4.5, 2.2);
       wallRun(c, [[-3, 0], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [3, 0]], 2, 3, TEMPLE);
@@ -183,7 +183,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'temple_gate', title: 'Ворота храма', category: 'джунгли', hint: 'два столба 1 × 4 с резными капителями и перемычка над проёмом шириной 2, лианы свисают, идол сбоку', variants: 2,
+    id: 'temple_gate', title: 'Temple gate', category: 'jungle', hint: 'two 1 × 4 pillars with carved capitals and a lintel over a 2-wide opening, hanging vines, an idol at the side', variants: 2,
     build(c) {
       jungleGround(c, 3.5, 2.5);
       for (const x of [-2, 2]) { pillar(c, x, 0, 3, false, TEMPLE); c.L.set(x, 3, 0, 'temple_stone_carved'); c.L.set(x, 4, 0, 'temple_stone_slab'); }
@@ -197,7 +197,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'temple_pyramid_small', title: 'Пирамида храма', category: 'джунгли', hint: '9 × 9: три ступени храмового камня, лестница с +Z, наверху алтарь с кристаллом и свечами, мох и лианы', variants: 2,
+    id: 'temple_pyramid_small', title: 'Temple pyramid', category: 'jungle', hint: '9 × 9: three tiers of temple stone, stairs from +Z, an altar with a crystal and candles on top, moss and vines', variants: 2,
     build(c) {
       jungleGround(c, 5.5, 5.5);
       pyramid(c, 4, 3);
@@ -215,7 +215,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'temple_altar_crystal', title: 'Алтарь с кристаллом', category: 'джунгли', hint: '3 × 3: плита храмового камня, кристалл, свечи, обломки — бирюзовый запечённый свет', variants: 2,
+    id: 'temple_altar_crystal', title: 'Crystal altar', category: 'jungle', hint: '3 × 3: a temple stone slab, a crystal, candles, shards — baked teal light', variants: 2,
     build(c) {
       jungleGround(c, 2.2, 2.2);
       templeFloor(c, -1, -1, 1, 1);
@@ -228,7 +228,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'temple_column_row', title: 'Колонны храма', category: 'джунгли', hint: '8 м вдоль X: столбы храмового камня с резными капителями, один обрушен, плиты под ними', variants: 2,
+    id: 'temple_column_row', title: 'Temple columns', category: 'jungle', hint: '8 m along X: temple stone pillars with carved capitals, one collapsed, tiles beneath', variants: 2,
     build(c) {
       jungleGround(c, 5, 2.5);
       templeFloor(c, -4, -1, 3, 1);
@@ -243,7 +243,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'jungle_pond', title: 'Пруд в джунглях', category: 'джунгли', hint: '6 × 6: вода с кувшинками, мох и папоротники по берегу, малые кристаллы', variants: 2,
+    id: 'jungle_pond', title: 'Jungle pond', category: 'jungle', hint: '6 × 6: water with lily pads, moss and ferns on the shore, small crystals', variants: 2,
     build(c) {
       jungleGround(c, 4, 3.6);
       for (let x = -3; x <= 2; x++) for (let z = -3; z <= 2; z++) {
@@ -261,7 +261,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'mossy_boulders', title: 'Валуны во мху', category: 'джунгли', hint: '4 × 4: скала во мху, мох, папоротники, кристалл в щели', variants: 2,
+    id: 'mossy_boulders', title: 'Mossy boulders', category: 'jungle', hint: '4 × 4: mossy rock, moss, ferns, a crystal in a crack', variants: 2,
     build(c) {
       jungleGround(c, 2.8, 2.8);
       c.L.set(0, 0, 0, 'cliff_jungle'); c.L.set(1, 0, 0, 'cliff_jungle'); c.L.set(0, 0, 1, 'cliff_jungle');
@@ -276,7 +276,7 @@ export function jungleBuilders(all: Builder[]): Builder[] {
     },
   },
   {
-    id: 'temple_ruins_jungle', title: 'Руины храма в джунглях', category: 'джунгли', hint: '16 × 16: пирамида, ворота, резная стена, колонны, кристаллы, деревья, заросли, пруд', variants: 2,
+    id: 'temple_ruins_jungle', title: 'Jungle temple ruins', category: 'jungle', hint: '16 × 16: a pyramid, a gate, a carved wall, columns, crystals, trees, thickets, a pond', variants: 2,
     build(c) {
       jungleGround(c, 9, 9);
       use(c, 'temple_pyramid_small', 2, 2);

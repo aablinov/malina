@@ -3,7 +3,7 @@ import http from 'node:http';
 import { after, before, test } from 'node:test';
 import { startServer, type TestServer } from './helpers.ts';
 
-/** Рукопожатие WebSocket боя `/game` с разными предложениями сжатия: как Chrome, как Safari (без параметров), без расширений */
+/** Battle WebSocket `/game` handshake with different compression offers: like Chrome, like Safari (no parameters), no extensions */
 let s: TestServer;
 before(async () => { s = await startServer(); });
 after(async () => { await s.stop(); });
@@ -18,12 +18,12 @@ function upgrade(ext: string | null): Promise<{ status: number; ext: string }> {
   });
 }
 
-test('/game: сжатие договаривается с Chrome и с Safari (голый permessage-deflate), без расширений — просто соединение', async () => {
+test('/game: compression negotiates with Chrome and with Safari (bare permessage-deflate), without extensions — plain connection', async () => {
   const chrome = await upgrade('permessage-deflate; client_max_window_bits');
   assert.equal(chrome.status, 101);
   assert.match(chrome.ext, /permessage-deflate/);
   const safari = await upgrade('permessage-deflate');
-  assert.equal(safari.status, 101, 'Safari не получает 400');
+  assert.equal(safari.status, 101, 'Safari does not get 400');
   assert.match(safari.ext, /permessage-deflate/);
   const plain = await upgrade(null);
   assert.equal(plain.status, 101);

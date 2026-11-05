@@ -1,15 +1,15 @@
 import { Level } from './level.ts';
 
 /**
- * Комнаты подземелья — заготовки в ASCII (design-dungeon.md, раздел 3).
- * `npm run map:rooms` превращает их в assets/maps/rooms/*.json; дальше их можно править в редакторе,
- * а генератор этажа (dungeon.ts) берёт готовые JSON.
+ * Dungeon rooms — ASCII templates (design-dungeon.md, section 3).
+ * `npm run map:rooms` turns them into assets/maps/rooms/*.json; after that they can be edited in the editor,
+ * and the floor generator (dungeon.ts) takes the ready JSON.
  *
- * Легенда:  # стена · . пол · o колонна · = низкое укрытие · ~ кислота · n нора · c сундук
- *           D дверь (проём 3 клетки по центру стороны; лишние генератор закладывает)
- *           S точка появления · M торговец · A алтарь · B босс · T факел
- * Строки — ряды вдоль Z (сверху вниз: от −Z к +Z), символы — вдоль X.
- * Пол — верх клеток y = −1, стены — y 0..2 (со стороны камеры, +X и +Z, в 1 блок).
+ * Legend:  # wall · . floor · o column · = low cover · ~ acid · n burrow · c chest
+ *          D door (a 3-cell opening centred on a side; the generator walls up the unused ones)
+ *          S spawn point · M merchant · A altar · B boss · T torch
+ * Strings are rows along Z (top to bottom: from −Z to +Z), characters run along X.
+ * The floor is the top of cells y = −1, walls are y 0..2 (1 block on the camera side, +X and +Z).
  */
 
 export type RoomType = 'start' | 'combat' | 'elite' | 'storage' | 'merchant' | 'altar' | 'boss';
@@ -19,7 +19,7 @@ export interface RoomMeta {
   type: RoomType;
   w: number;
   d: number;
-  /** Стороны с дверями (у заготовок — все четыре) */
+  /** Sides with doors (templates have all four) */
   doors: Side[];
 }
 
@@ -33,11 +33,11 @@ function hash(x: number, z: number, s = 0): number {
 
 export const WALL_H = 3;
 
-/** Проверить заготовку: прямоугольник, рамка из стен и дверей, двери по 3 клетки по центру каждой стороны */
+/** Validate a template: a rectangle, a frame of walls and doors, 3-cell doors centred on each side */
 export function validateRoom(t: RoomTemplate): void {
   const d = t.rows.length, w = t.rows[0]?.length ?? 0;
-  if (d < 8 || w < 8) throw new Error(`Комната «${t.name}»: слишком маленькая`);
-  for (const r of t.rows) if (r.length !== w) throw new Error(`Комната «${t.name}»: ряды разной длины (${r.length} ≠ ${w})`);
+  if (d < 8 || w < 8) throw new Error(`Room "${t.name}": too small`);
+  for (const r of t.rows) if (r.length !== w) throw new Error(`Room "${t.name}": rows of different length (${r.length} ≠ ${w})`);
   const cx = Math.floor(w / 2), cz = Math.floor(d / 2);
   for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) {
     const ch = t.rows[z][x];
@@ -46,12 +46,12 @@ export function validateRoom(t: RoomTemplate): void {
       const doorN = z === 0 && Math.abs(x - cx) <= 1, doorS = z === d - 1 && Math.abs(x - cx) <= 1;
       const doorW = x === 0 && Math.abs(z - cz) <= 1, doorE = x === w - 1 && Math.abs(z - cz) <= 1;
       const want = doorN || doorS || doorW || doorE ? 'D' : '#';
-      if (ch !== want) throw new Error(`Комната «${t.name}»: в (${x}, ${z}) ожидается «${want}», а там «${ch}»`);
-    } else if (!'.o=~ncSMABT'.includes(ch)) throw new Error(`Комната «${t.name}»: неизвестный символ «${ch}» в (${x}, ${z})`);
+      if (ch !== want) throw new Error(`Room "${t.name}": expected "${want}" at (${x}, ${z}), found "${ch}"`);
+    } else if (!'.o=~ncSMABT'.includes(ch)) throw new Error(`Room "${t.name}": unknown character "${ch}" at (${x}, ${z})`);
   }
 }
 
-/** Комната в локальных координатах: клетка (x, z) заготовки → блок (x, y, z), пол на y = −1 */
+/** A room in local coordinates: template cell (x, z) → block (x, y, z), floor at y = −1 */
 export function roomFromTemplate(t: RoomTemplate): Level {
   validateRoom(t);
   const L = new Level(t.name);
@@ -70,7 +70,7 @@ export function roomFromTemplate(t: RoomTemplate): Level {
   };
   for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) {
     const ch = t.rows[z][x];
-    // стены со стороны камеры (+X, +Z) низкие, чтобы не закрывать комнату
+    // walls on the camera side (+X, +Z) are low so they do not hide the room
     const camSide = x === w - 1 || z === d - 1;
     switch (ch) {
       case '#': wall(x, z, camSide ? 1 : WALL_H); break;
@@ -101,9 +101,9 @@ export function roomFromTemplate(t: RoomTemplate): Level {
 }
 
 /**
- * «Одевалка» комнаты: декор поверх блоков (src/level/decor.ts), детерминированно от клеток.
- * Только проходимые предметы — пути и укрытия заготовки не меняются. На дальних стенах (−Z, −X, высокие) —
- * знамёна, паутина в углах, корни; у стен на полу — щебень, кирпичи, кости; у алтаря — свечи, у норы — светящиеся грибы.
+ * Room "dressing": decor on top of the blocks (src/level/decor.ts), deterministic from the cells.
+ * Walkable items only — the template's paths and cover do not change. On the far walls (−Z, −X, the tall ones) —
+ * banners, cobwebs in the corners, roots; on the floor by the walls — rubble, bricks, bones; candles by the altar, glow mushrooms by the burrow.
  */
 function dressRoom(L: Level, t: RoomTemplate): void {
   const d = t.rows.length, w = t.rows[0].length;
@@ -112,22 +112,22 @@ function dressRoom(L: Level, t: RoomTemplate): void {
   const nearDoor = (x: number, z: number) => (Math.abs(x - cx) <= 2 && (z <= 1 || z >= d - 2)) || (Math.abs(z - cz) <= 2 && (x <= 1 || x >= w - 2));
   const put = (name: string, x: number, y: number, z: number, rot: number, on?: [number, number, number]) =>
     L.addDecor({ name, pos: [x, y, z], ...(rot ? { rot: [rot] } : {}), ...(on ? { on } : {}) });
-  // северная стена (z = 0), грань к комнате — z = 0,5
+  // north wall (z = 0), the face towards the room is z = 0.5
   for (let x = 2; x < w - 2; x++) {
     if (Math.abs(x - cx) <= 2) continue;
     const r = hash(x, 0, 40);
     if ((x - 2) % 6 === 3 && t.type !== 'storage') put('banner', x, 2.6, 0.5, 0, [x, 2, 0]);
     else if (r < 0.14) put('roots', x, 2.5, 0.5, 0, [x, 2, 0]);
   }
-  // западная стена (x = 0), грань к комнате — x = 0,5, предмет смотрит к +X
+  // west wall (x = 0), the face towards the room is x = 0.5, the item faces +X
   for (let z = 2; z < d - 2; z++) {
     if (Math.abs(z - cz) <= 2) continue;
     if (hash(0, z, 41) < 0.16) put('roots', 0.5, 2.5, z, -90, [0, 2, z]);
   }
-  // паутина в дальнем углу и иногда у западной стены
+  // a cobweb in the far corner and sometimes by the west wall
   put('cobweb', 1, 2.4, 0.5, 0, [1, 2, 0]);
   if (hash(w, d, 42) < 0.6) put('cobweb', 0.5, 2.4, d - 3, -90, [0, 2, d - 3]);
-  // мусор у стен на полу
+  // junk on the floor by the walls
   const JUNK = ['rubble', 'bricks_loose', 'bones', 'rubble'];
   for (let z = 1; z < d - 1; z++) for (let x = 1; x < w - 1; x++) {
     if (at(x, z) !== '.' || nearDoor(x, z)) continue;
@@ -135,7 +135,7 @@ function dressRoom(L: Level, t: RoomTemplate): void {
     if (!wall || hash(x, z, 43) > 0.07) continue;
     put(JUNK[Math.floor(hash(x, z, 44) * JUNK.length)], x + (hash(x, z, 45) - 0.5) * 0.5, 0, z + (hash(x, z, 46) - 0.5) * 0.5, Math.round(hash(x, z, 47) * 24) * 15);
   }
-  // свечи у алтаря, грибы у нор, свечи у трона босса
+  // candles by the altar, mushrooms by the burrows, candles by the boss throne
   for (let z = 1; z < d - 1; z++) for (let x = 1; x < w - 1; x++) {
     const ch = at(x, z);
     if (ch === 'A') for (const [dx, dz] of [[-1, 0], [1, 0]]) put('candles', x + dx, 0, z + dz, 0);
@@ -144,7 +144,7 @@ function dressRoom(L: Level, t: RoomTemplate): void {
   }
 }
 
-// ---------- заготовки ----------
+// ---------- templates ----------
 
 export const ROOM_TEMPLATES: RoomTemplate[] = [
   { name: 'start', type: 'start', rows: [

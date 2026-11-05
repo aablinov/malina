@@ -17,9 +17,9 @@ import type { TdSpec } from '../td/types.ts';
 import { makeTextures, type Textures } from '../textures.ts';
 
 /**
- * Безголовый бой обороны (wiki/design-multiplayer.md): мир симуляции, герои партии со снаряжением и стая врагов —
- * те же классы, что в браузере, но без рендера (`src/headless.ts`). Сервер считает по нему матч (src/game/match.ts),
- * тесты гоняют настоящие волны в Node. Герой каждого места — `Knight` + `Gear` по его профилю (набор обороны)
+ * Headless defence battle (wiki/design-multiplayer.md): the simulation world, party heroes with gear and the enemy pack —
+ * the same classes as in the browser, but without rendering (`src/headless.ts`). The server runs the match on it (src/game/match.ts),
+ * tests run real waves in Node. The hero of each seat is `Knight` + `Gear` from its profile (the defence kit)
  */
 export interface BattleHero {
   seat: number;
@@ -28,21 +28,21 @@ export interface BattleHero {
   profile: Profile;
   input: KnightInput;
   bow: boolean;
-  /** Перекат защёлкнут до шага, который его прочтёт */
+  /** Roll latched until the step that reads it */
   rolled: boolean;
   lavaT: number;
   downT: number;
-  /** Опыт на старте — награда за бой считается от него */
+  /** Experience at the start — the battle reward is counted from it */
   xp0: number;
 }
 
-/** Без сил — встаёт через, с */
+/** Exhausted — gets up after, s */
 const REVIVE_S = 2;
 const LAVA_S = 0.4;
 const LAVA_DMG = 6;
 
 let textures: Textures | null = null;
-/** Всего опыта героя от первого уровня — чтобы посчитать, сколько набрано за бой */
+/** Total hero experience since level one — to count how much was gained in the battle */
 export const xpTotal = (d: ProfileData): number => { let n = d.xp; for (let l = 1; l < d.level; l++) n += xpToNext(l); return n; };
 
 export class HeadlessBattle {
@@ -56,7 +56,7 @@ export class HeadlessBattle {
   readonly fx = nullFx();
   private readonly levelObstacles: Obstacle[];
   private readonly lava: boolean;
-  /** Цель мобов по умолчанию, когда героев нет: далеко и без сил */
+  /** Default mob target when there are no heroes: far away and exhausted */
   private readonly nobody: Knight;
 
   constructor(map: { level: Level; td: TdSpec }, seed: number, players: number, personal = true) {
@@ -91,7 +91,7 @@ export class HeadlessBattle {
     this.world = new SimWorld(hooks, { seed, level: map.level, td: map.td, players, personal });
   }
 
-  /** Путей в обход за такт — не больше ROUTE_BUDGET (как лимит маршрутизации botlib): остальным мобам — в следующий такт */
+  /** Detour paths per tick — no more than ROUTE_BUDGET (like the botlib routing limit): the other mobs get theirs next tick */
   private routeTick = -1;
   private routeN = 0;
   private route(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] | null {
@@ -109,7 +109,7 @@ export class HeadlessBattle {
     return this.foeCache;
   }
 
-  /** Герой места seat по профилю (копия; в бой — набор обороны, как в браузере). Появляется у точки карты */
+  /** Hero of seat `seat` from the profile (a copy; the defence kit goes into battle, as in the browser). Appears at the map's point */
   addHero(seat: number, data: ProfileData): BattleHero {
     const knight = new Knight(this.scene, textures!);
     knight.tune = structuredClone(SWORD);
@@ -136,10 +136,10 @@ export class HeadlessBattle {
     this.heroes.delete(seat);
   }
 
-  /** Цели меча, стрел и заклинаний: враги и лёд на башнях */
+  /** Targets of sword, arrows and spells: enemies and ice on towers */
   targets(): Target[] { return [...this.pack.targets(), ...(this.world.td?.targets() ?? [])]; }
 
-  /** Удар моба по герою: урон и отброс (как hurtHero плейграунда, без искр и звука) */
+  /** Mob hit on a hero: damage and knockback (like the playground's hurtHero, without sparks and sound) */
   private hurt(k: Knight, dmg: number, from: THREE.Vector3, knock: number): void {
     if (!k.hurt(dmg)) return;
     if (knock > 0) {
@@ -149,7 +149,7 @@ export class HeadlessBattle {
     }
   }
 
-  /** Удар меча: цели в дуге перед героем (и в волне добивающего), без стены между — как `strike` плейграунда */
+  /** Sword strike: targets in the arc in front of the hero (and in the finisher's wave), no wall in between — like the playground's `strike` */
   private strike(s: Strike, h: BattleHero): number {
     const who = h.knight, g = h.gear;
     const fwd = new THREE.Vector3(Math.sin(s.yaw), 0, Math.cos(s.yaw));
@@ -186,7 +186,7 @@ export class HeadlessBattle {
     return hit.size;
   }
 
-  /** Герои и стая — внутри шага мира (крючок `step`): снаряжение, движение, лава, подъём без сил; потом стая и таймеры fx */
+  /** Heroes and the pack inside the world step (the `step` hook): gear, movement, lava, getting up from exhaustion; then the pack and fx timers */
   private stepActors(dt: number): void {
     const solids = this.world.solids;
     for (const h of this.heroes.values()) {
@@ -207,10 +207,10 @@ export class HeadlessBattle {
     this.fx.update(dt, 0, 0);
   }
 
-  /** Шаг боя */
+  /** Battle step */
   step(dt: number): void { this.world.step(dt); }
 
-  /** Награда каждому: непотраченная малина и опыт за бой */
+  /** Reward to everyone: unspent raspberries and the battle experience */
   rewards(): Map<number, { berries: number; xp: number }> {
     const out = new Map<number, { berries: number; xp: number }>();
     for (const h of this.heroes.values()) out.set(h.seat, { berries: Math.max(0, Math.floor(this.world.td?.berries(h.seat) ?? 0)), xp: Math.max(0, Math.floor(xpTotal(h.profile.data) - h.xp0)) });

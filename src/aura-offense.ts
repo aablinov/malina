@@ -5,35 +5,36 @@ import type { AuraStats, OffenseKind } from './items.ts';
 import type { Knight } from './knight.ts';
 import { spellSfx } from './spell-audio.ts';
 import type { Target } from './target.ts';
+import { LANG, t } from './i18n/i18n.ts';
 
 /**
- * Наступательные ауры (wiki/design-spells.md, раздел 4): сами бьют врагов вокруг героя — жгут, морозят, бьют молнией,
- * зовут луч, слабят, толкают землёй, режут клинками. Урон за раз — сила предмета (value), остальное — здесь, в OFF.
- * Вспышка (R) — ×3: где урон за раз, там урон ×3, где ритм — там чаще. Урон своей ауры копит шкалу вполовину.
+ * Offensive auras (wiki/design-spells.md, section 4): strike enemies around the hero on their own — burn, freeze, strike with lightning,
+ * call a beam, weaken, shove with the earth, cut with blades. Damage per tick is the item strength (value), the rest is here, in OFF.
+ * The flare (R) is ×3: where there is damage per tick it is ×3, where there is a rhythm it is faster. The aura's own damage fills the meter at half rate.
  */
 
 export const OFFENSE: readonly OffenseKind[] = ['inferno', 'frost', 'storm', 'halo', 'shade', 'quake', 'blades'];
 export const isOffense = (k: string | null): k is OffenseKind => !!k && (OFFENSE as readonly string[]).includes(k);
 
-/** Ритм, радиусы и прочие числа; вспышка — поля flare… */
+/** Rhythm, radii and other numbers; the flare — the flare… fields */
 export const OFF = {
-  /** Жжёт всех в reach м каждые every с */
+  /** Burns everyone within reach m every every s */
   inferno: { every: 0.5, reach: 2.5, flareReach: 4 },
-  /** Холод и замедление slow на slowFor с; вспышка — заморозка freeze с */
+  /** Cold and a slow of slow for slowFor s; the flare — a freeze of freeze s */
   frost: { every: 0.5, reach: 3, slow: 0.3, slowFor: 1, flareReach: 4, flareSlow: 0.6, freeze: 1.2 },
-  /** Молния в случайного врага в reach м, перескоки jumps на jumpR м, каждый — jumpK урона */
+  /** Lightning at a random enemy within reach m, jumps jumps over jumpR m, each — jumpK of the damage */
   storm: { every: 1.2, flareEvery: 0.4, reach: 5, jumps: 2, jumpR: 3, jumpK: 0.6 },
-  /** Луч в цель на каждый nth удар героя (во вспышке — на каждый), бьёт и соседей в splash м */
+  /** A beam at the target on every nth hero strike (in the flare — on every one), also hits neighbours within splash m */
   halo: { nth: 4, splash: 0.9 },
-  /** Ослабляет врагов в reach м; вспышка — тянет drain урона каждые every с, heal из него — герою */
+  /** Weakens enemies within reach m; the flare — drains drain damage every every s, heal of it goes to the hero */
   shade: { every: 0.5, reach: 3, flareReach: 4, drain: 4, heal: 0.5 },
-  /** Толчок каждые every с: урон и отброс knock в reach м */
+  /** A shove every every s: damage and knockback knock within reach m */
   quake: { every: 3, flareEvery: 1, reach: 2.2, flareReach: 3.5, knock: 1.2 },
-  /** n клинков на радиусе r, spin рад/с; одну цель режет не чаще hitCd с */
+  /** n blades at radius r, spin rad/s; one target is cut no more often than every hitCd s */
   blades: { n: 3, flareN: 6, r: 1.3, flareR: 1.8, spin: 3, flareSpin: 5, hitCd: 0.4, reach: 0.55 },
 } as const;
 
-/** Радиус, на котором аура бьёт (для карточки и тестов) */
+/** Radius at which the aura strikes (for the card and tests) */
 export const offenseReach = (k: OffenseKind): number => {
   switch (k) {
     case 'inferno': return OFF.inferno.reach;
@@ -46,31 +47,31 @@ export const offenseReach = (k: OffenseKind): number => {
   }
 };
 
-const fmt = (v: number): string => String(Math.round(v * 10) / 10).replace('.', ',');
+const fmt = (v: number): string => { const s = String(Math.round(v * 10) / 10); return LANG === 'ru' ? s.replace('.', ',') : s; };
 
-/** Строки карточки ауры (инвентарь, лавка): [иконка, текст]; k — множитель силы предмета */
+/** Aura card lines (inventory, shop): [icon, text]; k — item power multiplier */
 export function auraLines(a: AuraStats, k: number, icon: string): [string, string][] {
   const v = Math.round(a.value * k);
   const what: Record<string, string> = {
-    pact: `${v}% урона возвращается здоровьем`, bastion: `−${v}% получаемого урона`, rage: `+${v}% урона и +10% шанс крита`,
-    clarity: `−${v}% перезарядки заклинаний и артефактов, +50% душ`, thorns: `${v}% урона от ближнего удара — обратно врагу`,
-    inferno: `Жжёт всех в ${fmt(OFF.inferno.reach)} м: ${v} урона каждые ${fmt(OFF.inferno.every)} с`,
-    frost: `${v} урона каждые ${fmt(OFF.frost.every)} с и −${OFF.frost.slow * 100}% скорости врагам в ${OFF.frost.reach} м`,
-    storm: `Молния каждые ${fmt(OFF.storm.every)} с: ${v} урона и ${OFF.storm.jumps} перескока`,
-    halo: `Каждый ${OFF.halo.nth}-й удар — луч с неба: ${v} урона`,
-    shade: `Враги в ${OFF.shade.reach} м получают +${v}% урона`,
-    quake: `Толчок каждые ${OFF.quake.every} с: ${v} урона и отброс в ${fmt(OFF.quake.reach)} м`,
-    blades: `${OFF.blades.n} клинка кружат и режут: ${v} урона`,
+    pact: t('{v}% of damage returns as health', { v }), bastion: t('−{v}% damage taken', { v }), rage: t('+{v}% damage and +10% crit chance', { v }),
+    clarity: t('−{v}% spell and artifact cooldown, +50% souls', { v }), thorns: t('{v}% of a melee hit\'s damage goes back to the enemy', { v }),
+    inferno: t('Burns everyone within {r} m: {v} damage every {s} s', { r: fmt(OFF.inferno.reach), v, s: fmt(OFF.inferno.every) }),
+    frost: t('{v} damage every {s} s and −{slow}% speed for enemies within {r} m', { v, s: fmt(OFF.frost.every), slow: OFF.frost.slow * 100, r: OFF.frost.reach }),
+    storm: t('Lightning every {s} s: {v} damage and {n} jumps', { s: fmt(OFF.storm.every), v, n: OFF.storm.jumps }),
+    halo: t('Every {n}th strike — a beam from the sky: {v} damage', { n: OFF.halo.nth, v }),
+    shade: t('Enemies within {r} m take +{v}% damage', { r: OFF.shade.reach, v }),
+    quake: t('A shove every {s} s: {v} damage and knockback within {r} m', { s: OFF.quake.every, v, r: fmt(OFF.quake.reach) }),
+    blades: t('{n} blades circle and cut: {v} damage', { n: OFF.blades.n, v }),
   };
   const flare: Partial<Record<string, string>> = {
-    inferno: `радиус ${OFF.inferno.flareReach} м, урон ×3`, frost: `заморозка на ${fmt(OFF.frost.freeze)} с, урон ×3`,
-    storm: `молния каждые ${fmt(OFF.storm.flareEvery)} с`, halo: 'луч на каждый удар', shade: 'ослабление ×3, тень пьёт жизнь',
-    quake: 'толчок каждую секунду, каменные шипы', blades: `${OFF.blades.flareN} клинков, круг шире`,
+    inferno: t('Flare: radius {r} m, damage ×3', { r: OFF.inferno.flareReach }), frost: t('Flare: freeze for {s} s, damage ×3', { s: fmt(OFF.frost.freeze) }),
+    storm: t('Flare: lightning every {s} s', { s: fmt(OFF.storm.flareEvery) }), halo: t('Flare: a beam on every strike'), shade: t('Flare: weakening ×3, the shade drinks life'),
+    quake: t('Flare: a shove every second, stone spikes'), blades: t('Flare: {n} blades, a wider circle', { n: OFF.blades.flareN }),
   };
   return [
     [icon, what[a.kind]],
-    isOffense(a.kind) ? ['e-star', `Вспышка: ${flare[a.kind]}`] : ['e-star', `Союзники в радиусе ${a.radius} м тоже под аурой`],
-    ['e-clock', 'Урон копит шкалу ауры; полная — <b>R</b>: вспышка ×3 на 5 с'],
+    isOffense(a.kind) ? ['e-star', flare[a.kind] ?? ''] : ['e-star', t('Allies within {r} m are under the aura too', { r: a.radius })],
+    ['e-clock', t('Damage fills the aura meter; when full — <b>R</b>: a ×3 flare for 5 s')],
   ];
 }
 
@@ -88,28 +89,28 @@ const glowMat = (c: THREE.Color, opacity = 1): THREE.MeshBasicMaterial =>
 
 export class AuraOffense {
   kind: OffenseKind | null = null;
-  /** Урон за раз с учётом силы предмета (у тени — % ослабления) */
+  /** Damage per tick with item power (for the shade — % of weakening) */
   private v = 0;
-  /** Множитель силы предмета */
+  /** Item power multiplier */
   private pw = 1;
   private a = new THREE.Color();
   private b = new THREE.Color();
   private tick = 0;
   private time = 0;
-  /** Удары героя для ореола */
+  /** Hero strikes for the halo */
   private strikes = 0;
   private spin = 0;
   private readonly cut = new Map<Target, number>();
-  /** Кольцо по краю зоны: видно, докуда бьёт; вспыхивает на каждом пульсе */
+  /** Ring at the zone edge: shows how far it strikes; flashes on every pulse */
   private zone: THREE.Mesh | null = null;
   private zoneMat: THREE.MeshBasicMaterial | null = null;
   private pulse = 0;
   private readonly objs: THREE.Object3D[] = [];
   private readonly mats: THREE.Material[] = [];
   private readonly geos: THREE.BufferGeometry[] = [];
-  /** Сейчас бьёт сама аура: шкала копится вполовину, ореол не считает удар */
+  /** The aura itself is striking now: the meter fills at half rate, the halo does not count the strike */
   own = false;
-  /** Нанесено аурой и сколько раз (для тестов) */
+  /** Dealt by the aura and how many times (for tests) */
   dealt = 0;
   procs = 0;
 
@@ -134,8 +135,8 @@ export class AuraOffense {
       this.objs.push(this.zone); this.h.scene.add(this.zone);
     }
     if (kind === 'blades') {
-      // призрачный меч: клинок, гарда, рукоять — лежит по касательной к кругу
-      // плоский широкий клинок — сверху камеры читается как меч; цвет без засветки, кромка светится
+      // ghostly sword: blade, guard, grip — lies tangent to the circle
+      // a flat wide blade reads as a sword from the camera above; colour without bloom, the edge glows
       const blade = new THREE.BoxGeometry(0.15, 0.03, 0.85), edge = new THREE.BoxGeometry(0.05, 0.035, 0.8);
       const guard = new THREE.BoxGeometry(0.36, 0.05, 0.07), grip = new THREE.BoxGeometry(0.07, 0.05, 0.2);
       this.geos.push(blade, edge, guard, grip);
@@ -173,7 +174,7 @@ export class AuraOffense {
     this.kind = null;
   }
 
-  /** Живые враги (не бочки и ящики) в r м от c */
+  /** Living enemies (not barrels and crates) within r m of c */
   private foes(c: THREE.Vector3, r: number): Target[] {
     return this.h.targets().filter((t) => t.alive && !t.prop && Math.hypot(t.pos.x - c.x, t.pos.z - c.z) - t.radius <= r);
   }
@@ -186,9 +187,9 @@ export class AuraOffense {
     this.dealt += v;
   }
 
-  // ---------- события ----------
+  // ---------- events ----------
 
-  /** Герой ударил (не сама аура): ореол считает удары */
+  /** The hero struck (not the aura itself): the halo counts strikes */
   onDealt(at: THREE.Vector3 | undefined, flare: boolean): void {
     if (this.kind !== 'halo' || this.own || !at) return;
     this.strikes++;
@@ -196,7 +197,7 @@ export class AuraOffense {
     this.beam(at);
   }
 
-  /** R: вспышка началась */
+  /** R: the flare began */
   onFlare(): void {
     const fx = this.h.fx, hero = this.h.hero, c = hero.pos;
     this.tick = 0;
@@ -204,7 +205,7 @@ export class AuraOffense {
       fx.fireCubes(c.clone().setY(c.y + 0.3), OFF.inferno.flareReach, 18, [this.a.clone().multiplyScalar(0.45), this.b.clone().multiplyScalar(0.45)], 0.5, false, [0.4, 0.7]);
     }
     if (this.kind === 'frost') {
-      // заморозка: всё в круге застывает, лёд трескается
+      // freeze: everything in the circle stops, ice cracks
       for (const t of this.foes(c, OFF.frost.flareReach)) {
         t.stun?.(OFF.frost.freeze);
         t.chill?.(OFF.frost.flareSlow, OFF.frost.freeze + 1);
@@ -215,7 +216,7 @@ export class AuraOffense {
     }
   }
 
-  // ---------- кадр ----------
+  // ---------- frame ----------
 
   update(dt: number, flare: boolean): void {
     if (!this.kind) return;
@@ -237,7 +238,7 @@ export class AuraOffense {
         : k === 'frost' ? (flare ? OFF.frost.flareReach : OFF.frost.reach)
           : k === 'shade' ? (flare ? OFF.shade.flareReach : OFF.shade.reach) : (flare ? OFF.quake.flareReach : OFF.quake.reach);
       this.pulse = Math.max(0, this.pulse - dt * 4);
-      // толчок земли: кольцо разбегается от центра; остальные — дышат
+      // earth shove: the ring runs out from the centre; the others breathe
       const grow = k === 'quake' ? 1 - this.pulse * 0.6 : 1 + this.pulse * 0.06;
       this.zone.visible = !hero.down;
       this.zone.position.set(hero.pos.x, hero.pos.y + 0.07, hero.pos.z);
@@ -248,7 +249,7 @@ export class AuraOffense {
 
   private inferno(flare: boolean): void {
     const fx = this.h.fx, c = this.h.hero.pos, R = flare ? OFF.inferno.flareReach : OFF.inferno.reach;
-    // кольцо углей: языки пламени поднимаются по кругу
+    // ring of embers: tongues of flame rise around the circle
     for (let i = 0, n = flare ? 3 : 1 + (rnd() < 0.5 ? 1 : 0); i < n; i++) {
       const a = rnd() * Math.PI * 2, r = R * rand(0.55, 1);
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.08, Math.sin(a) * r)), vel: new THREE.Vector3(rand(-0.2, 0.2), rand(1, 2.2), rand(-0.2, 0.2)), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: rnd() < 0.6 ? this.a : this.b, gravity: -1.5 });
@@ -266,7 +267,7 @@ export class AuraOffense {
 
   private frost(flare: boolean): void {
     const fx = this.h.fx, c = this.h.hero.pos, R = flare ? OFF.frost.flareReach : OFF.frost.reach;
-    // снежинки кружат и опускаются, иней у ног
+    // snowflakes swirl and sink, rime at the feet
     if (rnd() < (flare ? 0.9 : 0.45)) {
       const a = this.time * 1.5 + rnd() * Math.PI * 2, r = R * rand(0.3, 1);
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(0.8, 1.8), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.sin(a) * 0.8, -0.6, Math.cos(a) * 0.8), life: rand(0.6, 1), size: rand(0.05, 0.08), color: rnd() < 0.5 ? this.a : this.b, gravity: 0 });
@@ -285,7 +286,7 @@ export class AuraOffense {
 
   private storm(flare: boolean): void {
     const fx = this.h.fx, hero = this.h.hero, c = hero.pos;
-    // искры бегут по доспеху
+    // sparks run over the armour
     if (rnd() < (flare ? 0.8 : 0.35)) {
       const a = rnd() * Math.PI * 2;
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * 0.35, rand(0.5, 1.6), Math.sin(a) * 0.35)), vel: new THREE.Vector3(Math.cos(a) * rand(0.5, 1.5), rand(-0.5, 1), Math.sin(a) * rand(0.5, 1.5)), life: rand(0.08, 0.2), size: rand(0.04, 0.07), color: rnd() < 0.6 ? this.a : this.b, gravity: 0, shrink: false });
@@ -294,7 +295,7 @@ export class AuraOffense {
     const near = this.foes(c, OFF.storm.reach);
     if (!near.length) { this.tick = 0.15; return; }
     this.tick += flare ? OFF.storm.flareEvery : OFF.storm.every;
-    // молния с плеча в случайного врага и дальше перескоками
+    // lightning from the shoulder at a random enemy and onward in jumps
     let from = c.clone().setY(c.y + 1.6), t = near[(rnd() * near.length) | 0], dmg = this.v;
     const done = new Set<Target>();
     for (let i = 0; i <= OFF.storm.jumps && t; i++) {
@@ -329,7 +330,7 @@ export class AuraOffense {
     }
   }
 
-  /** Луч с неба в точку at: бьёт всех в splash м */
+  /** A beam from the sky at point at: hits everyone within splash m */
   private beam(at: THREE.Vector3): void {
     const fx = this.h.fx, p = at.clone().setY(this.h.hero.pos.y);
     const geo = new THREE.CylinderGeometry(0.22, 0.22, 9, 10, 1, true), mat = glowMat(this.a.clone().multiplyScalar(0.7));
@@ -347,7 +348,7 @@ export class AuraOffense {
 
   private shade(flare: boolean): void {
     const fx = this.h.fx, hero = this.h.hero, c = hero.pos, R = flare ? OFF.shade.flareReach : OFF.shade.reach;
-    // фиолетовая дымка у ног
+    // violet haze at the feet
     if (rnd() < (flare ? 0.9 : 0.4)) {
       const a = rnd() * Math.PI * 2, r = R * rand(0.2, 0.9);
       fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.1, Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * 0.3, rand(0.2, 0.6), -Math.sin(a) * 0.3), life: rand(0.6, 1), size: rand(0.08, 0.14), color: rnd() < 0.7 ? this.a : this.b, gravity: -0.2 });
@@ -360,7 +361,7 @@ export class AuraOffense {
       t.expose?.((this.v / 100) * (flare ? 3 : 1), OFF.shade.every + 0.3);
       if (rnd() < 0.5) fx.particle({ pos: t.pos.clone().setY(t.pos.y + (t.topY ?? 1.5) + 0.2), vel: new THREE.Vector3(0, 0.4, 0), life: 0.5, size: 0.09, color: this.a, gravity: 0 });
       if (!flare) continue;
-      // во вспышке тень пьёт: капли дугой от врага к герою
+      // in the flare the shade drinks: drops arc from the enemy to the hero
       const dmg = OFF.shade.drain * this.pw;
       this.hurt(t, dmg, 0);
       if (!hero.down) hero.hp = Math.min(hero.maxHp, hero.hp + dmg * OFF.shade.heal);
@@ -376,7 +377,7 @@ export class AuraOffense {
 
   private quake(flare: boolean): void {
     const fx = this.h.fx, hero = this.h.hero, c = hero.pos, R = flare ? OFF.quake.flareReach : OFF.quake.reach;
-    // камешки подпрыгивают у ног; перед толчком — чаще
+    // pebbles bounce at the feet; more often before a shove
     const soon = this.tick < 0.4 ? 3 : 1;
     if (rnd() < 0.12 * soon * (flare ? 2 : 1)) {
       const a = rnd() * Math.PI * 2, r = rand(0.3, R * 0.8);
@@ -396,7 +397,7 @@ export class AuraOffense {
     spellSfx.auraStomp(flare);
   }
 
-  /** Во вспышке толчок выпускает из земли кольцо каменных шипов */
+  /** In the flare the shove raises a ring of stone spikes out of the ground */
   private spikes(c: THREE.Vector3, R: number): void {
     const geo = new THREE.ConeGeometry(0.16, 0.7, 4), mat = new THREE.MeshLambertMaterial({ color: '#8a7a64' });
     const g = new THREE.Group();
@@ -425,7 +426,7 @@ export class AuraOffense {
       if (!g.visible) return;
       const a = this.spin + (i / n) * Math.PI * 2;
       g.position.set(hero.pos.x + Math.cos(a) * r, hero.pos.y + 0.9 + Math.sin(this.time * 3 + i) * 0.08, hero.pos.z + Math.sin(a) * r);
-      // остриём по ходу вращения
+      // point along the direction of rotation
       g.rotation.set(0, -a, 0);
       if (rnd() < (flare ? 0.5 : 0.25)) fx.particle({ pos: g.position.clone(), vel: new THREE.Vector3(0, 0.1, 0), life: 0.25, size: 0.06, color: i % 2 ? this.a : this.b, gravity: 0 });
       for (const t of foes) {

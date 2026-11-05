@@ -11,13 +11,13 @@ import { SYNERGY_FX } from './weapon-synergies.ts';
 import { specialSound, weaponHit, type SpecialCue } from './weapon-audio.ts';
 
 /**
- * Искусство оружия (wiki/design-weapon-arts.md): закалка зачарованиями и спец-удары.
- * — Облик: клинок светится цветом закалки, с лезвия сыплются искры своего зачарования, шлейф перетекает из цвета
- *   в цвет, каждый удар рисует серп, каждое попадание — эффект своего зачарования.
- * — Синергии (src/weapon-synergies.ts): у пары зачарований — своя, срабатывает на добивающем и на спец-ударе;
- *   у трёх — резонанс, все три сразу.
- * — Спец-удар (Q): шкала копится попаданиями (SPECIAL_HITS), у каждого вида оружия свой удар.
- * Данные и тексты — src/temper.ts; урон по целям, лечение и души — через хуки Gear (src/gear.ts).
+ * Weapon arts (wiki/design-weapon-arts.md): temper by enchantments and weapon arts.
+ * — Look: the blade glows in the temper colour, sparks of the enchantment fall off the edge, the trail blends from colour
+ *   to colour, every strike draws a crescent, every hit — the enchantment's effect.
+ * — Synergies (src/weapon-synergies.ts): a pair of enchantments has its own, fires on the finisher and on the weapon art;
+ *   three — resonance, all three at once.
+ * — Weapon art (Q): the meter fills with hits (SPECIAL_HITS), each weapon category has its own art.
+ * Data and texts — src/temper.ts; damage to targets, healing and souls — through the Gear hooks (src/gear.ts).
  */
 
 export interface ArtsHooks {
@@ -26,38 +26,38 @@ export interface ArtsHooks {
   hero: Knight;
   terrain: Terrain;
   targets(): Target[];
-  /** Урон эффекта по цели: цифра над целью, души, опыт; melee — считать ударом оружия (вампиризм, души за удар) */
+  /** Effect damage to a target: number above the target, souls, XP; melee — count as a weapon strike (leeching, souls per strike) */
   hitTarget(t: Target, v: number, dir: THREE.Vector3, knock: number, melee: boolean): void;
   heal(v: number): void;
   souls(n: number): void;
-  /** Множитель урона ближнего боя (сила оружия, острота, ауры) */
+  /** Melee damage multiplier (weapon power, sharpness, auras) */
   meleeMult(): number;
   sound(k: 'boom' | 'zap' | 'horn' | 'souls' | 'dash' | 'hit'): void;
-  /** Взрыв поджигает бочки и бьёт ящики */
+  /** An explosion ignites barrels and hits crates */
   blast?(at: THREE.Vector3, r: number, dmg: number): void;
-  /** Без звука (сцену ведёт тест) */
+  /** No sound (a test drives the scene) */
   quiet?(): boolean;
 }
 
-/** Что знает синергия о сработавшем ударе */
+/** What a synergy knows about the strike that fired it */
 export interface ProcCtx {
-  /** Точка удара на уровне ног */
+  /** Impact point at foot level */
   at: THREE.Vector3;
   yaw: number;
-  /** Кого задел удар */
+  /** Whom the strike hit */
   hits: Target[];
-  /** Урон синергии с учётом силы, ступеней и резонанса */
+  /** Synergy damage with power, tiers and resonance */
   dmg: number;
-  /** Цвета пары: первая и вторая закалка */
+  /** Pair colours: the first and second temper */
   a: THREE.Color;
   b: THREE.Color;
-  /** 0..1 — ступени пары (I+I → 0,33, III+III → 1): размер и число частиц */
+  /** 0..1 — tiers of the pair (I+I → 0.33, III+III → 1): size and particle count */
   power: number;
 }
 
 interface Ent { t: number; dur: number; tick(dt: number, k: number): void; end?(): void }
 
-/** Спец-удар вида оружия: движение героя, длительность и события по доле удара */
+/** Weapon art of a category: hero movement, duration and events by strike fraction */
 interface SpecialRun { move: SpecialMove; dur: number; events: [number, () => void][] }
 
 const DEFAULT_COLORS = [new THREE.Color(0.8, 1.8, 2.8), new THREE.Color(1.9, 1.0, 2.8)];
@@ -66,7 +66,7 @@ const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
-/** Общие геометрии эффектов: серп, кубик, кольцо */
+/** Shared effect geometries: crescent, cube, ring */
 let crescentGeo: THREE.BufferGeometry | null = null;
 export const CRESCENT = (): THREE.BufferGeometry => crescentGeo ??= markShared(new THREE.RingGeometry(0.62, 1, 24, 1, -1.05, 2.1).rotateX(-Math.PI / 2));
 let cubeGeo: THREE.BoxGeometry | null = null;
@@ -77,13 +77,13 @@ export const glowMat = (c: THREE.Color, opacity = 1): THREE.MeshBasicMaterial =>
 });
 
 export class WeaponArts {
-  /** Шкала спец-удара 0..1 */
+  /** Weapon art meter 0..1 */
   meter = 0;
-  /** Сколько спец-ударов сделано (для тестов) */
+  /** How many weapon arts were performed (for tests) */
   specials = 0;
-  /** Сколько раз сработали синергии (для тестов): id → раз */
+  /** How many times synergies fired (for tests): id → count */
   readonly procs = new Map<string, number>();
-  /** Следующие удары — гарантированный крит («Сердце звезды») */
+  /** The next strikes are guaranteed crits ("Heart of the Star") */
   forcedCrits = 0;
   private def: WeaponDef | null = null;
   private temper: TemperSlot[] = [];
@@ -94,7 +94,7 @@ export class WeaponArts {
   private sparkAcc = 0;
   private boltAcc = 0;
   private time = 0;
-  /** След летящего оружия: бумеранг, небесный меч */
+  /** Trail of a flying weapon: boomerang, sky sword */
   private readonly flyTrail: SwordTrail;
   private flying: { obj: THREE.Object3D; base: number; tip: number } | null = null;
   private model: THREE.Group | null = null;
@@ -109,14 +109,14 @@ export class WeaponArts {
   get hero(): Knight { return this.h.hero; }
   get synergies(): readonly Synergy[] { return this.syn; }
   get tempers(): readonly TemperSlot[] { return this.temper; }
-  get category(): WeaponCategory { return this.def?.category ?? 'меч'; }
+  get category(): WeaponCategory { return this.def?.category ?? 'sword'; }
   get specialTitle(): string { return WEAPON_SPECIAL[this.category].title; }
   get ready(): boolean { return this.meter >= 1; }
-  /** Главный цвет закалки (или стандартный) — для HUD */
+  /** Main temper colour (or the default) — for the HUD */
   get color(): THREE.Color { return this.colors[0]; }
   get busy(): boolean { return this.ents.length > 0 || !!this.run; }
 
-  /** Надето оружие с закалкой: цвета клинка и шлейфа, синергии */
+  /** A tempered weapon is equipped: blade and trail colours, synergies */
   set(def: WeaponDef, temper: TemperSlot[]): void {
     const same = this.def === def && temper.length === this.temper.length && temper.every((t, i) => t.id === this.temper[i].id && t.tier === this.temper[i].tier);
     if (same) return;
@@ -139,13 +139,13 @@ export class WeaponArts {
     hero.setBladeTint(c[0], 1);
   }
 
-  // ---------- ближний бой ----------
+  // ---------- melee ----------
 
-  /** Удар достиг середины: серп по дуге, на добивающем — синергии; шкала спец-удара растёт */
+  /** The strike reached its midpoint: a crescent along the arc, synergies on the finisher; the weapon art meter grows */
   onStrike(s: Strike, hits: Target[], impact: THREE.Vector3): void {
     const fx = this.h.fx, hero = this.h.hero;
     const c = this.swingColor(s.step);
-    // каждый взмах немного свой: радиус, угол, высота серпа и куда слетают искры
+    // every swing is slightly different: radius, angle, crescent height and where the sparks fly
     const j = (a: number) => (rnd() - 0.5) * a;
     const y = hero.pos.y + 0.85 + j(0.25), yaw = s.yaw + j(0.22), R = (s.range + 0.2) * (0.92 + rnd() * 0.16);
     const fin = s.step === 2;
@@ -154,11 +154,11 @@ export class WeaponArts {
       this.sparks(s.from.clone().addScaledVector(this.dir(yaw), s.range).setY(y), this.dir(yaw), c, fin ? 5 : 3, 1.2, 0.5);
     } else {
       const half = Math.min(Math.PI, s.half) * (0.9 + rnd() * 0.2);
-      // серп: тонкий яркий край, мягкий широкий под ним, на добивающем — третий слой
+      // crescent: a thin bright edge, a soft wide one under it, a third layer on the finisher
       fx.arc(s.from, yaw, c.clone().multiplyScalar(0.32), R, half, y, 0.82);
       fx.arc(s.from, yaw, c.clone().multiplyScalar(0.12), R * 0.96, half, y - 0.05, 0.5);
       if (fin) fx.arc(s.from, yaw + j(0.3), c.clone().lerp(new THREE.Color(1, 1, 1), 0.4).multiplyScalar(0.2), R * 1.12, half * 0.8, y + 0.1, 0.9);
-      // искры слетают с края серпа по касательной
+      // sparks fly off the crescent edge tangentially
       const n = fin ? 6 : 3 + Math.floor(rnd() * 2);
       for (let i = 0; i < n; i++) {
         const a = yaw + (rnd() * 2 - 1) * half;
@@ -170,11 +170,11 @@ export class WeaponArts {
     if (s.step === 2 && this.syn.length) this.proc(impact.clone().setY(hero.pos.y), s.yaw, hits, 1);
   }
 
-  /** Попадание по цели: вспышка и эффект каждого зачарования */
+  /** A hit on a target: a flash and each enchantment's effect */
   onHitTarget(t: Target, point: THREE.Vector3, dir: THREE.Vector3, crit: boolean, finisher: boolean): void {
     const fx = this.h.fx, hero = this.h.hero;
     fx.flash(point, this.colors[0].clone().multiplyScalar(finisher ? 1.3 : 0.9), (finisher ? 2 : 1.3) * (0.85 + rnd() * 0.3), 0.16);
-    // брызги-ленты от удара: по направлению удара с разбросом, у каждой закалки — своего цвета
+    // ribbon splashes from the hit: along the strike direction with spread, each temper in its own colour
     this.sparks(point, dir, this.temper.length ? this.colors[(rnd() * this.colors.length) | 0] : this.colors[0], finisher ? 6 : 3, finisher ? 1.8 : 1.2, 1.1);
     const yaw = Math.atan2(dir.x, dir.z);
     for (const { id, tier } of this.temper) {
@@ -209,12 +209,12 @@ export class WeaponArts {
     }
   }
 
-  /** Цвет серпа на шаге комбо: как у следа этого взмаха (закалка, цвет оружия или стандартный шага) */
+  /** Crescent colour on a combo step: as the trail of that swing (temper, weapon colour or the step default) */
   private swingColor(step: number): THREE.Color {
     return this.h.hero.swingLooks?.[step]?.color ?? this.h.hero.trail.color.clone();
   }
 
-  /** Сработать синергиям закалки в точке: у трёх закалок — резонанс */
+  /** Fire the temper synergies at a point: three tempers — resonance */
   proc(at: THREE.Vector3, yaw: number, hits: Target[], mult: number): void {
     if (!this.syn.length) return;
     const res = this.syn.length >= 3;
@@ -229,7 +229,7 @@ export class WeaponArts {
       this.procs.set(s.id, (this.procs.get(s.id) ?? 0) + 1);
     }
     if (res) {
-      // резонанс: три кольца трёх цветов расходятся одно за другим
+      // resonance: three rings of three colours spread one after another
       this.colors.forEach((c, i) => this.later(i * 0.08, () => this.fx.ring(at.clone().setY(at.y + 0.08), 3 + i, c, 0.5, 0.12)));
       this.fx.flash(at.clone().setY(at.y + 1), this.colors[0].clone().lerp(new THREE.Color(1, 1, 1), 0.3), 2.4, 0.25);
       this.procs.set('resonance', (this.procs.get('resonance') ?? 0) + 1);
@@ -237,12 +237,12 @@ export class WeaponArts {
     }
   }
 
-  // ---------- спец-удар ----------
+  // ---------- weapon art ----------
 
-  /** Q: спец-удар в сторону aim, если шкала полна */
+  /** Q: weapon art towards aim, if the meter is full */
   special(aim: THREE.Vector3): boolean {
     const hero = this.h.hero;
-    if (this.run && hero.special === null) this.run = null; // героя переставили посреди удара
+    if (this.run && hero.special === null) this.run = null; // the hero was moved mid-strike
     if (!this.ready || this.run || hero.down || hero.rolling || hero.weaponHidden) return false;
     const yaw = Math.atan2(aim.x - hero.pos.x, aim.z - hero.pos.z);
     const spec = this.specialRun(this.category, Number.isFinite(yaw) ? yaw : hero.yaw);
@@ -255,10 +255,10 @@ export class WeaponArts {
     return true;
   }
 
-  /** Звук спец-удара своего вида оружия (src/weapon-audio.ts) */
+  /** Weapon art sound of the weapon's category (src/weapon-audio.ts) */
   private cue(c: SpecialCue): void { if (!this.h.quiet?.()) specialSound(this.category, c); }
 
-  /** Урон спец-удара: от добивающего оружия */
+  /** Weapon art damage: from the weapon's finisher */
   private B(k: number): number { return Math.max(1, Math.round(this.h.hero.tune.swings[2].dmg * this.h.meleeMult() * k)); }
 
   private specialRun(cat: WeaponCategory, yaw: number): SpecialRun {
@@ -268,8 +268,8 @@ export class WeaponArts {
     const R = this.h.hero.tune.swings[0].range + 0.6;
     const ground = (p: THREE.Vector3) => p.clone().setY(hero.pos.y + 0.06);
     switch (cat) {
-      case 'меч': {
-        // вихрь: четыре удара по кругу, кольцо при каждом
+      case 'sword': {
+        // whirl: four strikes around, a ring on each
         const ring = (i: number) => () => {
           this.area(hero.pos, R, this.B(0.45), 0.9, true);
           fx.ring(ground(hero.pos), R, (i % 2 ? c2 : c).clone(), 0.3, 0.18);
@@ -278,14 +278,14 @@ export class WeaponArts {
         };
         return { move: 'spin', dur: 0.85, events: [[0.22, ring(0)], [0.42, ring(1)], [0.62, ring(2)], [0.82, ring(3)], [0.93, () => { this.cue('end'); this.proc(hero.pos.clone(), hero.yaw, this.near(hero.pos, R), 1.2); }]] };
       }
-      case 'топор':
+      case 'axe':
         return { move: 'throw', dur: 0.6, events: [[0.55, () => this.boomerang(yaw)]] };
-      case 'кинжал':
+      case 'dagger':
         return {
           move: 'dash', dur: 0.5, events: [
             [0.14, () => {
               fx.burst(start.clone().setY(start.y + 0.8), [new THREE.Color(0.6, 0.3, 1.2), c], 16, { speed: 2, up: 1, size: 0.1, life: 0.5, glow: true, gravity: 0 });
-              // тень тянется за героем лентой, слегка петляя
+              // the shadow trails behind the hero as a ribbon, weaving slightly
               const ph = rnd() * 6.28;
               fx.streak({ path: (k, out) => out.copy(hero.pos).setY(hero.pos.y + 0.8 + Math.sin(ph + k * 12) * 0.2), dur: 0.2, color: new THREE.Color(0.9, 0.4, 2), color2: c, width: 0.9, tail: 0.3, halo: 1.8 });
             }],
@@ -307,7 +307,7 @@ export class WeaponArts {
             }],
           ],
         };
-      case 'копьё':
+      case 'spear':
         return {
           move: 'lunge', dur: 0.6, events: [[0.5, () => {
             const end = hero.pos.clone().addScaledVector(fwd, 1.4);
@@ -315,7 +315,7 @@ export class WeaponArts {
             fx.spray(end.clone().setY(end.y + 0.9), fwd, [c, c2, new THREE.Color(3.4, 3.4, 3)], 24, { speed: 9, spread: 0.35, life: 0.4 });
             const victims = this.onSegment(start, end, 1.2);
             for (const t of victims) {
-              // расталкивает в стороны от линии выпада
+              // shoves aside from the lunge line
               const side = Math.sign((t.pos.x - start.x) * fwd.z - (t.pos.z - start.z) * fwd.x) || 1;
               this.hit(t, this.B(1.6), _w.set(fwd.z * side, 0, -fwd.x * side).add(fwd).normalize().clone(), 2.2, true);
             }
@@ -325,7 +325,7 @@ export class WeaponArts {
             this.proc(end, yaw, victims, 1);
           }]],
         };
-      case 'булава':
+      case 'mace':
         return {
           move: 'slam', dur: 0.75, events: [[0.48, () => {
             const at = hero.pos.clone().addScaledVector(fwd, 1.2);
@@ -342,7 +342,7 @@ export class WeaponArts {
             this.proc(at, yaw, this.near(at, 2.6), 1);
           }]],
         };
-      case 'молот':
+      case 'hammer':
         return {
           move: 'leap', dur: 1, events: [[0.62, () => {
             const at = hero.pos.clone().addScaledVector(fwd, 1);
@@ -351,7 +351,7 @@ export class WeaponArts {
             fx.ring(ground(at), 3.6, c2.clone(), 0.4, 0.18);
             fx.flash(at.clone().setY(at.y + 0.8), c.clone().multiplyScalar(1.3), 5, 0.3);
             fx.light(at.clone().setY(at.y + 1.5), c.clone().multiplyScalar(0.4), 6, 12, 0.5);
-            // камни из земли
+            // rocks out of the ground
             fx.burst(ground(at), ['#8a8f99', '#6e737c', '#a6a09a', '#5e5148'], 26, { speed: 5, up: 7, size: 0.26, life: 1.1, gravity: 14 });
             fx.burst(ground(at), ['#d8cfa8', '#b9ad88'], 20, { speed: 6, up: 2, size: 0.14, life: 0.6, gravity: 6 });
             fx.shake = Math.max(fx.shake, 1.2);
@@ -362,7 +362,7 @@ export class WeaponArts {
             this.proc(at, yaw, this.near(at, 5.5), 1.2);
           }]],
         };
-      case 'посох':
+      case 'staff':
         return {
           move: 'wave', dur: 0.65, events: [[0.45, () => {
             const from = hero.pos.clone().addScaledVector(fwd, 0.6);
@@ -370,11 +370,11 @@ export class WeaponArts {
             this.crescent(from, yaw, 16, 10, 1.6, this.B(1.4), 1.2, c, (end, hit) => { this.cue('end'); this.proc(end, yaw, hit, 1); });
           }]],
         };
-      case 'коса': {
+      case 'scythe': {
         const reap = (first: boolean) => () => {
           const hit = this.near(hero.pos, 4);
           for (const t of hit) {
-            // тянет к герою
+            // pulls towards the hero
             const d = _w.set(hero.pos.x - t.pos.x, 0, hero.pos.z - t.pos.z).normalize().clone();
             this.hit(t, this.B(0.6), d, 1.8, true);
             if (first) { this.h.souls(1); this.orbs(t.pos.clone().setY(hero.pos.y + 1), new THREE.Color(0.6, 2.5, 3.4), 2, 0.9); }
@@ -385,7 +385,7 @@ export class WeaponArts {
         };
         return { move: 'reap', dur: 0.8, events: [[0.45, reap(true)], [0.72, reap(false)], [0.86, () => { this.cue('end'); this.proc(hero.pos.clone(), hero.yaw, this.near(hero.pos, 4), 1); }]] };
       }
-      case 'катана': {
+      case 'katana': {
         const reach = this.h.hero.tune.swings[2].range + 1.6;
         return {
           move: 'iai', dur: 0.95, events: [
@@ -396,9 +396,9 @@ export class WeaponArts {
               fx.hitstop = Math.max(fx.hitstop, 0.07);
               this.cue('hit');
             }],
-            // разрезы проступают на целях чуть позже самого взмаха
+            // the cuts appear on the targets slightly after the swing itself
             [0.8, () => {
-              // режет тех, кто стоял перед героем до шага, и тех, мимо кого прошёл
+              // cuts those who stood in front of the hero before the step and those he passed by
               const victims = [...new Set([...this.cone(start, yaw, reach + 1, 1.1), ...this.onSegment(start, hero.pos, 1.2)])];
               for (const t of victims) {
                 const p = t.pos.clone().setY(hero.pos.y + 1);
@@ -411,7 +411,7 @@ export class WeaponArts {
           ],
         };
       }
-      case 'великий меч': {
+      case 'greatsword': {
         const R2 = this.h.hero.tune.swings[0].range + 0.8;
         const ring = (i: number) => () => {
           this.area(hero.pos, R2, this.B(0.55), 2, true);
@@ -431,11 +431,11 @@ export class WeaponArts {
           }]],
         };
       }
-      case 'парные клинки':
-      case 'рапира':
-      case 'кастеты':
+      case 'dual blades':
+      case 'rapier':
+      case 'knuckles':
         return this.flurry(cat);
-      case 'алебарда': {
+      case 'halberd': {
         const sweep = (i: number) => () => {
           this.area(hero.pos, 3.3, this.B(0.5), 1.5, true);
           fx.ring(ground(hero.pos), 3.3, (i % 2 ? c2 : c).clone(), 0.3, 0.16);
@@ -447,24 +447,24 @@ export class WeaponArts {
     }
   }
 
-  /** Шквал: парные клинки, рапира, кастеты — серия коротких ударов и последний сильный */
-  private flurry(cat: 'парные клинки' | 'рапира' | 'кастеты'): SpecialRun {
+  /** Flurry: dual blades, rapier, knuckles — a series of short strikes and a final strong one */
+  private flurry(cat: 'dual blades' | 'rapier' | 'knuckles'): SpecialRun {
     const hero = this.h.hero, fx = this.h.fx, c = this.colors[0], c2 = this.colors[1 % this.colors.length];
-    // у клинков понтифика без закалки — пламя справа и свет слева
-    const L = this.temper.length ? [c, c2] : cat === 'парные клинки' ? [new THREE.Color(2.8, 0.8, 0.12), new THREE.Color(1.5, 0.9, 2.8)] : [c, c2];
-    const n = cat === 'рапира' ? 7 : 8;
+    // the pontiff blades without temper — flame on the right and light on the left
+    const L = this.temper.length ? [c, c2] : cat === 'dual blades' ? [new THREE.Color(2.8, 0.8, 0.12), new THREE.Color(1.5, 0.9, 2.8)] : [c, c2];
+    const n = cat === 'rapier' ? 7 : 8;
     const events: [number, () => void][] = [];
     for (let i = 0; i < n; i++) events.push([0.12 + (i / n) * 0.76, () => {
       const col = L[i % 2], f = this.dir(hero.yaw);
-      if (cat === 'рапира') {
+      if (cat === 'rapier') {
         const a = hero.yaw + (rnd() - 0.5) * 0.3, R2 = this.h.hero.tune.swings[0].range + 0.6;
         fx.line(hero.pos.clone().addScaledVector(f, 0.3), a, R2, col.clone().multiplyScalar(0.6), 0.22, 0.12, hero.pos.y + 1);
         for (const t of this.onSegment(hero.pos, hero.pos.clone().addScaledVector(this.dir(a), R2), 0.6)) this.hurt(t, this.B(0.32), hero.pos, 0.3, true);
       } else {
-        const R2 = cat === 'кастеты' ? 1.9 : 2.6;
+        const R2 = cat === 'knuckles' ? 1.9 : 2.6;
         fx.arc(hero.pos, hero.yaw + (i % 2 ? 0.5 : -0.5), col.clone().multiplyScalar(0.3), R2, 0.8, hero.pos.y + 0.9, 0.8);
         for (const t of this.cone(hero.pos, hero.yaw, R2, 0.9)) {
-          this.hurt(t, this.B(cat === 'кастеты' ? 0.25 : 0.3), hero.pos, 0.4, true);
+          this.hurt(t, this.B(cat === 'knuckles' ? 0.25 : 0.3), hero.pos, 0.4, true);
           fx.burst(t.pos.clone().setY(hero.pos.y + 1), [col], 5, { speed: 2.5, up: 1.5, size: 0.07, life: 0.35, glow: true, gravity: 4 });
         }
       }
@@ -472,14 +472,14 @@ export class WeaponArts {
     }]);
     events.push([0.94, () => {
       const f = this.dir(hero.yaw), at = hero.pos.clone().addScaledVector(f, 1.4);
-      if (cat === 'рапира') {
+      if (cat === 'rapier') {
         const R2 = this.h.hero.tune.swings[2].range + 1.5;
         fx.line(hero.pos.clone(), hero.yaw, R2, L[0].clone().multiplyScalar(0.9), 0.6, 0.3, hero.pos.y + 1);
         fx.spray(at.clone().setY(hero.pos.y + 1), f, [L[0], L[1]], 18, { speed: 9, spread: 0.2, life: 0.35 });
         const v = this.onSegment(hero.pos, hero.pos.clone().addScaledVector(f, R2), 0.7);
         for (const t of v) this.hurt(t, this.B(0.8), hero.pos, 2, true);
         this.proc(at, hero.yaw, v, 1);
-      } else if (cat === 'кастеты') {
+      } else if (cat === 'knuckles') {
         fx.ring(at.clone().setY(hero.pos.y + 0.06), 2.6, L[0].clone(), 0.35, 0.25);
         fx.burst(at.clone().setY(hero.pos.y + 0.1), ['#d8cfa8', '#b9ad88'], 14, { speed: 4, up: 4, size: 0.12, life: 0.6, gravity: 8 });
         fx.shake = Math.max(fx.shake, 0.6);
@@ -487,7 +487,7 @@ export class WeaponArts {
         this.cue('end');
         this.proc(at, hero.yaw, v, 1);
       } else {
-        // крест-накрест: пламя и свет, взрыв двух цветов
+        // criss-cross: flame and light, a two-colour explosion
         for (const [k, col] of [[1, L[0]], [-1, L[1]]] as const) fx.line(at.clone().addScaledVector(this.dir(hero.yaw + k * 0.8), -1.4), hero.yaw + k * 0.8, 2.8, col.clone().multiplyScalar(0.8), 0.45, 0.3, hero.pos.y + 1);
         fx.flash(at.clone().setY(hero.pos.y + 1), L[0].clone().lerp(L[1], 0.5), 3, 0.25);
         fx.fireCubes(at.clone().setY(hero.pos.y + 0.8), 1.4, 16, [L[0], L[1]], 0.24);
@@ -497,10 +497,10 @@ export class WeaponArts {
         this.proc(at, hero.yaw, v, 1);
       }
     }]);
-    return { move: 'flurry', dur: cat === 'рапира' ? 0.9 : 1.1, events };
+    return { move: 'flurry', dur: cat === 'rapier' ? 0.9 : 1.1, events };
   }
 
-  /** Цели в конусе от c: радиус r, полуугол half */
+  /** Targets in a cone from c: radius r, half-angle half */
   cone(c: THREE.Vector3, yaw: number, r: number, half: number): Target[] {
     return this.near(c, r).filter((t) => {
       const d = Math.hypot(t.pos.x - c.x, t.pos.z - c.z), a = Math.atan2(t.pos.x - c.x, t.pos.z - c.z) - yaw;
@@ -508,7 +508,7 @@ export class WeaponArts {
     });
   }
 
-  /** Бумеранг топора: летит вперёд, крутясь, и возвращается в руку; режет на пути туда и обратно */
+  /** Axe boomerang: flies forward spinning and returns to the hand; cuts on the way there and back */
   private boomerang(yaw: number): void {
     const hero = this.h.hero, def = this.def;
     if (!def) return;
@@ -525,7 +525,7 @@ export class WeaponArts {
     this.flyTrail.color.copy(this.colors[0]); this.flyTrail.color2.copy(this.colors[1 % this.colors.length]); this.flyTrail.width = 1; this.flyTrail.cut();
     let turned = false, spinAcc = 0;
     const T = 1.1;
-    // настоящий бумеранг: уходит дугой в одну сторону, возвращается по другой; изгиб каждый раз свой
+    // a real boomerang: goes out in an arc one way, comes back the other; the bend differs every time
     const side = new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar((rnd() < 0.5 ? -1 : 1) * (1.2 + rnd() * 1.6));
     const lift = rnd() * 0.6;
     this.ent(T, (_dt, k) => {
@@ -537,8 +537,8 @@ export class WeaponArts {
       obj.rotation.set(0, k * 26, Math.PI / 2);
       if (!out && !turned) { turned = true; this.proc(far.clone().setY(hero.pos.y), yaw, this.near(far, 2), 0.8); }
       const set = out ? hitOut : hitBack;
-      for (const t of this.near(p, 1.1)) if (!set.has(t)) { set.add(t); this.hurt(t, this.B(0.9), p, 1, true); if (!this.h.quiet?.()) weaponHit('топор', false); }
-      // свист вращения: раз в оборот
+      for (const t of this.near(p, 1.1)) if (!set.has(t)) { set.add(t); this.hurt(t, this.B(0.9), p, 1, true); if (!this.h.quiet?.()) weaponHit('axe', false); }
+      // spin whistle: once per revolution
       spinAcc += _dt * 9;
       if (spinAcc >= 1) { spinAcc -= 1; this.cue('hit'); }
     }, () => {
@@ -552,17 +552,17 @@ export class WeaponArts {
     this.h.scene.add(obj);
   }
 
-  /** Модель надетого оружия для броска (одна на оружие) */
+  /** Model of the equipped weapon for the throw (one per weapon) */
   private weaponModel(def: WeaponDef): THREE.Group {
     return this.model ??= buildWeaponModel(def);
   }
 
-  // ---------- кадр ----------
+  // ---------- frame ----------
 
   update(dt: number): void {
     this.time += dt;
     const hero = this.h.hero, fx = this.h.fx;
-    // события спец-удара по доле
+    // weapon art events by fraction
     if (this.run) {
       const k = hero.specialK, ev = this.run.spec.events;
       if (k < 0) { while (this.run.next < ev.length) ev[this.run.next++][1](); this.run = null; }
@@ -576,20 +576,20 @@ export class WeaponArts {
       e.tick(dt, k);
       if (e.t >= e.dur) { this.ents.splice(i, 1); e.end?.(); }
     }
-    // след летящего оружия
+    // trail of the flying weapon
     if (this.flying) {
       const f = this.flying;
       f.obj.updateMatrixWorld(true);
       this.flyTrail.push(_v.set(0, 0, f.base).applyMatrix4(f.obj.matrixWorld), _w.set(0, 0, f.tip).applyMatrix4(f.obj.matrixWorld), this.time);
     }
     this.flyTrail.update(this.time);
-    // клинок: свечение пульсирует, полная шкала — ярче
+    // blade: the glow pulses, a full meter — brighter
     if (this.temper.length || this.ready) {
       const pulse = this.ready ? 1.35 + Math.sin(this.time * 9) * 0.35 : 1 + Math.sin(this.time * 3) * 0.12;
       hero.setBladeTint(this.ready && !this.temper.length ? DEFAULT_COLORS[0] : this.colors[0], pulse);
     } else hero.setBladeTint(null);
     if (hero.weaponHidden || hero.down || !this.temper.length && !this.ready) return;
-    // искры с лезвия: своего зачарования, во взмахе — гуще
+    // sparks off the edge: of the enchantment, denser during a swing
     const swinging = hero.attacking || hero.special !== null;
     const tiers = this.temper.reduce((s, t) => s + t.tier, 0) || 2;
     this.sparkAcc += dt * (4 + tiers * 2) * (swinging ? 3 : 1);
@@ -607,7 +607,7 @@ export class WeaponArts {
     }
   }
 
-  /** Одна искра закалки у лезвия */
+  /** One temper spark at the edge */
   private spark(id: MeleeEnchant, p: THREE.Vector3): void {
     const fx = this.h.fx, c = rgb(id), r = () => (rnd() - 0.5);
     switch (id) {
@@ -622,20 +622,20 @@ export class WeaponArts {
     }
   }
 
-  // ---------- примитивы для синергий и спец-ударов ----------
+  // ---------- primitives for synergies and weapon arts ----------
 
-  /** Живые цели в радиусе r от c (по высоте — как удар меча) */
+  /** Living targets within r of c (by height — like a sword strike) */
   near(c: THREE.Vector3, r: number): Target[] {
     const y = this.h.hero.pos.y;
     return this.h.targets().filter((t) => t.alive && Math.abs(t.pos.y - y) <= 1.6 && Math.hypot(t.pos.x - c.x, t.pos.z - c.z) - t.radius <= r);
   }
 
-  /** Ближайшие n целей к c в радиусе r, кроме уже взятых */
+  /** The n nearest targets to c within r, except those already taken */
   nearest(c: THREE.Vector3, r: number, n: number, skip: ReadonlySet<Target> = new Set()): Target[] {
     return this.near(c, r).filter((t) => !skip.has(t)).sort((a, b) => a.pos.distanceToSquared(c) - b.pos.distanceToSquared(c)).slice(0, n);
   }
 
-  /** Цели у отрезка a → b (рывок, выпад) */
+  /** Targets along the segment a → b (dash, lunge) */
   onSegment(a: THREE.Vector3, b: THREE.Vector3, w: number): Target[] {
     const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz;
     return this.near(a.clone().lerp(b, 0.5), Math.sqrt(l2) / 2 + w).filter((t) => {
@@ -644,17 +644,17 @@ export class WeaponArts {
     });
   }
 
-  /** Урон цели от точки from (отбрасывает от неё) */
+  /** Damage to a target from point from (knocks back away from it) */
   hurt(t: Target, v: number, from: THREE.Vector3, knock: number, melee = false): void {
     const d = new THREE.Vector3(t.pos.x - from.x, 0, t.pos.z - from.z);
     if (d.lengthSq() < 1e-4) d.set(rnd() - 0.5, 0, rnd() - 0.5);
     this.h.hitTarget(t, v, d.normalize(), knock, melee);
   }
 
-  /** Урон цели с заданным направлением отбрасывания (тянуть — к герою, расталкивать — вбок) */
+  /** Damage to a target with a given knockback direction (pull — towards the hero, shove — sideways) */
   hit(t: Target, v: number, dir: THREE.Vector3, knock: number, melee = false): void { this.h.hitTarget(t, v, dir, knock, melee); }
 
-  /** Урон по площади: к краю слабее на 30 % (falloff) */
+  /** Area damage: 30 % weaker towards the edge (falloff) */
   area(c: THREE.Vector3, r: number, v: number, knock: number, melee = false, falloff = true): Target[] {
     const hit = this.near(c, r);
     for (const t of hit) {
@@ -672,29 +672,29 @@ export class WeaponArts {
   get maxHp(): number { return this.h.hero.maxHp; }
   get ground(): number { return this.h.hero.pos.y; }
 
-  /** Временный эффект: tick каждый кадр с долей k, end — в конце */
+  /** Temporary effect: tick every frame with fraction k, end — at the end */
   ent(dur: number, tick: (dt: number, k: number) => void, end?: () => void): void { this.ents.push({ t: 0, dur, tick, end }); }
 
-  /** Вызвать fn через sec секунд игрового времени */
+  /** Call fn after sec seconds of game time */
   later(sec: number, fn: () => void): void {
     if (sec <= 0) { fn(); return; }
     this.ents.push({ t: 0, dur: sec, tick: () => {}, end: fn });
   }
 
-  /** fn(i) n раз с шагом step секунд, первый — сразу */
+  /** fn(i) n times with a step of step seconds, the first at once */
   repeat(n: number, step: number, fn: (i: number) => void): void {
     for (let i = 0; i < n; i++) this.later(i * step, () => fn(i));
   }
 
-  /** Тело в сцене на dur секунд: tick двигает, в конце — убрать и освободить (общие геометрии остаются) */
+  /** A body in the scene for dur seconds: tick moves it, at the end — remove and free (shared geometries stay) */
   body(obj: THREE.Object3D, dur: number, tick: (k: number, dt: number) => void, end?: () => void): void {
     this.h.fx.custom(obj, dur, () => {});
     this.ent(dur, (dt, k) => tick(k, dt), end);
   }
 
   /**
-   * Элементальная траектория (wiki/design-weapon-arts.md, раздел 7): из from в to (точка или функция — цель движется)
-   * по дуге со случайным изгибом в сторону (bulge, доля расстояния), подъёмом (lift) и дрожью (wobble) — каждый раз своя
+   * Elemental trajectory (wiki/design-weapon-arts.md, section 7): from from to to (a point or a function — the target moves)
+   * along an arc with a random sideways bend (bulge, fraction of the distance), lift (lift) and jitter (wobble) — different every time
    */
   curve(from: THREE.Vector3, to: THREE.Vector3 | (() => THREE.Vector3), bulge = 0.4, lift = 0.3, wobble = 0.15): (k: number, out: THREE.Vector3) => THREE.Vector3 {
     const p0 = from.clone(), side = rnd() < 0.5 ? -1 : 1;
@@ -707,7 +707,7 @@ export class WeaponArts {
       tmp.subVectors(p2, p0);
       const d = Math.hypot(tmp.x, tmp.z) || 1;
       perp.set(-tmp.z / d, 0, tmp.x / d);
-      // смещение к середине пути сильнее (sin), к концу — сходится точно в цель
+      // the offset is strongest mid-path (sin), converges exactly on the target at the end
       const env = Math.sin(Math.PI * k), kk = k + sk * env * (k - 0.5);
       out.copy(p0).lerp(p2, kk);
       out.addScaledVector(perp, (bk * d + Math.sin(ph + k * fq * 6.28) * wobble * d) * env);
@@ -716,7 +716,7 @@ export class WeaponArts {
     };
   }
 
-  /** Огонёк-сущность: летит по своей кривой с хвостом-лентой, по пути роняет искры; onEnd — долетел */
+  /** A wisp entity: flies along its own curve with a ribbon tail, drops sparks on the way; onEnd — arrived */
   wisp(from: THREE.Vector3, to: THREE.Vector3 | (() => THREE.Vector3), c: THREE.Color, o: { dur?: number; width?: number; tail?: number; bulge?: number; lift?: number; wobble?: number; sparks?: number; c2?: THREE.Color; onEnd?: (p: THREE.Vector3) => void } = {}): void {
     const fx = this.h.fx, sp = o.sparks ?? 0.35;
     fx.streak({
@@ -728,7 +728,7 @@ export class WeaponArts {
     });
   }
 
-  /** Огоньки летят от точки к герою (лечение, души): каждый по своей дуге, догоняет героя */
+  /** Wisps fly from a point to the hero (healing, souls): each along its own arc, catching up with the hero */
   orbs(from: THREE.Vector3, c: THREE.Color, n: number, size = 0.7): void {
     const hero = this.h.hero, chest = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
@@ -737,7 +737,7 @@ export class WeaponArts {
     }
   }
 
-  /** Искры-ленты брызгами из точки: короткие кривые хвосты во все стороны вокруг направления dir */
+  /** Ribbon sparks splashing from a point: short curved tails in all directions around dir */
   sparks(at: THREE.Vector3, dir: THREE.Vector3 | null, c: THREE.Color, n: number, len = 1.4, spread = Math.PI): void {
     const base = dir ? Math.atan2(dir.x, dir.z) : rnd() * 6.28;
     for (let i = 0; i < n; i++) {
@@ -747,7 +747,7 @@ export class WeaponArts {
     }
   }
 
-  /** Завиток: частицы кружат вокруг c по касательной и поднимаются */
+  /** Curl: particles circle c tangentially and rise */
   swirl(c: THREE.Vector3, col: THREE.Color, r: number, n: number, inward = false): void {
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + rnd() * 0.4;
@@ -759,10 +759,10 @@ export class WeaponArts {
     }
   }
 
-  /** Молния с неба в точку */
+  /** Lightning from the sky at a point */
   skyBolt(at: THREE.Vector3, c: THREE.Color, width = 0.12): void {
     const fx = this.h.fx;
-    // каждый раз с другой стороны неба и с другим изломом; толстое ядро-лента поверх ломаной
+    // from a different side of the sky and with a different kink every time; a thick ribbon core over the polyline
     const top = at.clone().add(_v.set((rnd() - 0.5) * 4, 8 + rnd() * 3, (rnd() - 0.5) * 4));
     fx.bolt(top, at.clone(), c, width, 3 + Math.floor(rnd() * 3), 0.3);
     fx.streak({ path: this.curve(top, at.clone(), 0.12, 0, 0.05), dur: 0.08, color: c.clone().lerp(new THREE.Color(1, 1, 1), 0.3).multiplyScalar(1.3), width: width * 2.2, tail: 0.22, halo: 3.5 });
@@ -771,7 +771,7 @@ export class WeaponArts {
     this.sparks(at.clone().setY(at.y + 0.3), null, c, 5, 1.2);
   }
 
-  /** Цепная молния: от from по n ближайшим целям, прыжок до range */
+  /** Chain lightning: from from across the n nearest targets, a jump up to range */
   chain(from: THREE.Vector3, n: number, range: number, c: THREE.Color, v: number, each?: (t: Target) => void): Target[] {
     const done = new Set<Target>();
     let p = from.clone().setY(from.y + 1);
@@ -781,7 +781,7 @@ export class WeaponArts {
       done.add(t);
       const q = t.pos.clone().setY(this.ground + 1);
       this.later(i * (0.05 + rnd() * 0.05), ((a: THREE.Vector3, b: THREE.Vector3) => () => {
-        // дуга с провисом в случайную сторону: сочная лента и тонкая ломаная поверх
+        // an arc sagging in a random direction: a juicy ribbon and a thin polyline over it
         this.h.fx.streak({ path: this.curve(a, b, 0.35, 0.25, 0.06), dur: 0.12, color: c.clone().multiplyScalar(1.2), color2: c, width: 0.2, tail: 0.3, halo: 3 });
         this.h.fx.bolt(a, b, c, 0.05, 1, 0.2);
         this.h.fx.flash(b, c.clone(), 1.6, 0.16);
@@ -795,8 +795,8 @@ export class WeaponArts {
   }
 
   /**
-   * Летящий серп: от from вдоль yaw со скоростью speed на дальность range, ширина w; пробивает всех, каждого — раз.
-   * onEnd — где кончился и кого задел
+   * Flying crescent: from from along yaw at speed speed over range range, width w; pierces everyone, each once.
+   * onEnd — where it ended and whom it hit
    */
   crescent(from: THREE.Vector3, yaw: number, speed: number, range: number, w: number, v: number, knock: number, c: THREE.Color, onEnd?: (end: THREE.Vector3, hit: Target[]) => void): void {
     const mat = glowMat(c.clone().multiplyScalar(0.75));
@@ -807,7 +807,7 @@ export class WeaponArts {
     const p0 = from.clone().setY(this.ground + 0.8);
     const done = new Set<Target>();
     const T = range / speed;
-    // каждый серп загибает в свою сторону и чуть покачивается, разворачиваясь по ходу
+    // every crescent curls its own way and sways slightly, turning as it goes
     const curl = (rnd() - 0.5) * range * 0.35, ph = rnd() * 6.28;
     const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
     const at = (k: number, out: THREE.Vector3): THREE.Vector3 => out.copy(p0).addScaledVector(fwd, range * k).addScaledVector(side, curl * Math.sin(Math.PI * k) + Math.sin(ph + k * 9) * 0.12);
@@ -824,7 +824,7 @@ export class WeaponArts {
     }, () => onEnd?.(at(1, tip).clone().setY(this.ground), [...done]));
   }
 
-  /** Призрачная модель оружия: один светящийся материал на всю модель */
+  /** Ghostly weapon model: one glowing material for the whole model */
   ghost(c: THREE.Color, scale = 1): THREE.Group {
     const g = new THREE.Group();
     if (!this.def) return g;
@@ -837,7 +837,7 @@ export class WeaponArts {
     return g;
   }
 
-  /** Направление yaw как вектор */
+  /** Direction yaw as a vector */
   dir(yaw: number): THREE.Vector3 { return new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)); }
   get up(): THREE.Vector3 { return UP; }
 }

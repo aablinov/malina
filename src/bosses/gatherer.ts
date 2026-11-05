@@ -5,39 +5,40 @@ import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Скорбная Сборщица — мини-босс (wiki/design-bosses.md, раздел 2): призрачная жница Ордена в пыльной мантии-колоколе,
- * без ног, парит над полом; под глубоким капюшоном — бирюзовые глаза, над ним — тонкий венец из малиновых зёрнышек.
- * В руках — плетёная корзина с увядшими ягодами; живая из них одна — светящаяся ягода-сердце. Держится на расстоянии.
- * Атаки: призрачные руки из пола по меткам (держат героя), блуждающие огоньки, что ищут героя, перенос на дальний край
- * арены, если герой вплотную; призыв призраков; плач — ставит корзину, кольцо скорби, после него обессилена, сердце открыто.
- * Роняет «Хор мёртвых». Подвижных частей: капюшон, два рукава, корзина, ягода-сердце.
+ * Sorrowful Gatherer — mini-boss (wiki/design-bosses.md, section 2): a ghostly reaper of the Order in a dusty bell-shaped robe,
+ * no legs, hovers above the floor; turquoise eyes under a deep hood, a thin crown of raspberry seeds above it.
+ * In her hands a wicker basket of withered berries; only one of them is alive — the glowing berry heart. Keeps her distance.
+ * Attacks: ghostly hands out of the floor on marks (hold the hero), wandering wisps that seek the hero, a shift to the far edge
+ * of the arena if the hero is right next to her; summoning ghosts; a wail — puts the basket down, a ring of sorrow, after it exhausted, heart open.
+ * Drops "Choir of the Dead". Moving parts: hood, two sleeves, basket, berry heart.
  */
 
 const TURQ = C(0.6, 3.4, 3.2), PALE = C(1.6, 3.6, 3.4), PINK = C(4, 1.7, 2.4);
 const HOLD = 1.2, WISP_SPEED = 4, WISP_LIFE = 3.2;
 
 const sfx = {
-  /** Шёпот: отфильтрованное шипение короткими рваными вздохами */
+  /** Whisper: filtered hiss in short ragged sighs */
   whisper() {
     for (let i = 0; i < 9; i++) hiss({ dur: rand(0.05, 0.14), vol: rand(0.04, 0.09), f: rand(1800, 4200), f1: rand(1200, 3000), q: rand(2, 5), type: 'bandpass', attack: rand(0.005, 0.02), delay: i * rand(0.05, 0.11), verb: 0.6 });
   },
-  /** Руки вырвались из пола: глухой удар и шелест */
+  /** Hands burst out of the floor: a dull thud and a rustle */
   erupt() { boom(90, 35, 0.4, 0.4, 0, 0.5); hiss({ dur: 0.4, vol: 0.12, f: 600, f1: 2400, q: 0.7, type: 'lowpass', verb: 0.5 }); },
-  /** Огонёк родился: тихий колокольчик */
+  /** A wisp is born: a quiet bell */
   orb(i: number) { bell(880 + i * 220, 0.6, 0.04, 0, 0.7); },
-  /** Огонёк лопнул */
+  /** A wisp popped */
   pop() { bell(1320, 0.3, 0.04); hiss({ dur: 0.15, vol: 0.08, f: 3000, f1: 800, q: 1, type: 'bandpass' }); },
-  /** Перенос: стеклянный перезвон вверх */
+  /** Shift: a glassy chime going up */
   blink() { for (const [f, d] of [[660, 0], [990, 0.06], [1480, 0.12]] as const) bell(f, 0.5, 0.035, d, 0.8); hiss({ dur: 0.5, vol: 0.08, f: 4000, f1: 1500, q: 0.8, type: 'highpass', verb: 0.7 }); },
-  /** Плач: стонущий голос сверху вниз и вой ветра */
+  /** Wail: a moaning voice from top to bottom and the howl of wind */
   wail() {
     voice({ type: 'sawtooth', f: 620, f1: 260, dur: 1.4, vol: 0.06, detune: 25, lp: 2400, lp1: 600, verb: 0.8 });
     voice({ type: 'triangle', f: 930, f1: 390, dur: 1.4, vol: 0.04, detune: -18, verb: 0.8 });
     hiss({ dur: 1.4, vol: 0.18, f: 900, f1: 300, q: 1.2, type: 'bandpass', attack: 0.2, verb: 0.7 });
   },
-  /** Призыв: низкий погребальный звон */
+  /** Summon: a low funeral toll */
   summon() { bell(196, 1.4, 0.06, 0, 0.8); bell(233, 1.4, 0.04, 0.15, 0.8); },
 };
 
@@ -45,7 +46,7 @@ interface Wisp { mesh: THREE.Mesh; vel: THREE.Vector3; t: number }
 
 export class Gatherer extends MiniBoss {
   readonly radius = 0.9;
-  readonly title = 'Скорбная Сборщица';
+  readonly title = t('Sorrowful Gatherer');
   override readonly topY = 3.2;
   readonly drop = 'deadchoir';
   private readonly hood = new THREE.Group();
@@ -70,7 +71,7 @@ export class Gatherer extends MiniBoss {
   }
 
   protected build(): void {
-    // мантия полупрозрачна — нужна для исчезновения при переносе
+    // the robe is semi-transparent — needed for vanishing on the shift
     const robeLam = (c: string, tex?: THREE.Texture) => { const m = this.lam(c, tex); m.transparent = true; this.robeMats.push(m); return m; };
     const robe = robeLam('#5a4a66', pixelTex('#5a4a66', 10, 611));
     const hem = robeLam('#3e3248');
@@ -82,12 +83,12 @@ export class Gatherer extends MiniBoss {
     const crown = this.shimmer(TURQ, RASP, 1, 1.4);
     const cuff = this.shimmer(TURQ, RASP, 2, 1.2);
     const B = this.box.bind(this);
-    // мантия-колокол: три ступени шире книзу, подол темнее
+    // bell robe: three steps wider towards the bottom, the hem darker
     B(this.body, robe, 0.9, 0.7, 0.75, 0, 1.75, 0);
     B(this.body, robe, 1.2, 0.7, 1.0, 0, 1.1, 0);
     B(this.body, hem, 1.6, 0.55, 1.3, 0, 0.5, 0);
     B(this.body, robe, 1.05, 0.22, 0.8, 0, 2.1, 0);
-    // капюшон: глубокий, внутри тьма и два бирюзовых глаза; над ним — венец из малиновых зёрнышек (знак Ордена)
+    // hood: deep, darkness inside and two turquoise eyes; above it a crown of raspberry seeds (sign of the Order)
     this.hood.position.set(0, 2.2, 0);
     this.body.add(this.hood);
     B(this.hood, robe, 0.82, 0.8, 0.85, 0, 0.38, -0.02);
@@ -95,7 +96,7 @@ export class Gatherer extends MiniBoss {
     B(this.hood, shadow, 0.58, 0.52, 0.1, 0, 0.32, 0.4);
     for (const x of [-0.13, 0.13]) B(this.hood, eyes, 0.11, 0.07, 0.05, x, 0.38, 0.46);
     for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; B(this.hood, crown, 0.09, i % 2 ? 0.1 : 0.16, 0.09, Math.sin(a) * 0.34, 0.95, Math.cos(a) * 0.34 - 0.04); }
-    // рукава: висят от плеч и тянутся к корзине; на концах — светящиеся манжеты
+    // sleeves: hang from the shoulders and reach for the basket; glowing cuffs at the ends
     for (const s of [-1, 1]) {
       const g = new THREE.Group();
       g.position.set(s * 0.62, 2.0, 0.05);
@@ -104,7 +105,7 @@ export class Gatherer extends MiniBoss {
       B(g, cuff, 0.26, 0.08, 0.28, 0, -0.92, 0);
       this.arms.push(g);
     }
-    // корзина увядших ягод; живая — одна, ягода-сердце
+    // basket of withered berries; only one is alive, the berry heart
     this.basket.position.set(0, 1.25, 0.78);
     this.body.add(this.basket);
     B(this.basket, wicker, 0.8, 0.4, 0.55, 0, 0, 0);
@@ -141,7 +142,7 @@ export class Gatherer extends MiniBoss {
     const fx = this.h.fx;
     switch (name) {
       case 'hands': {
-        // метки под героем (на ярости — ещё две рядом), через секунду из пола рвутся призрачные руки
+        // marks under the hero (in rage — two more nearby), a second later ghostly hands burst out of the floor
         if (!this.hitDone) {
           this.hitDone = true;
           const spots = [this.heroAt()];
@@ -152,7 +153,7 @@ export class Gatherer extends MiniBoss {
         return t > 1.6;
       }
       case 'wisps': {
-        // из корзины выплывают три огонька и медленно ищут героя
+        // three wisps float out of the basket and slowly seek the hero
         for (let i = 0; i < 3; i++) {
           const at = 0.3 + i * 0.25;
           if (t >= at && t - dt < at) {
@@ -169,7 +170,7 @@ export class Gatherer extends MiniBoss {
         return t > 1.3;
       }
       case 'blink': {
-        // тает → переносится на дальний край арены → проступает снова
+        // fades → shifts to the far edge of the arena → appears again
         if (!this.hitDone) { this.hitDone = true; this.blinkCd = 7; if (!this.quiet) sfx.blink(); }
         if (t < 0.4) { this.fade = 1 - t / 0.4; return false; }
         if (t - dt < 0.4) {
@@ -186,7 +187,7 @@ export class Gatherer extends MiniBoss {
         return t > 1.0;
       }
       case 'summon': {
-        // погребальный звон — из пола поднимаются бледные призраки
+        // funeral toll — pale ghosts rise out of the floor
         if (!this.hitDone) { this.hitDone = true; this.summonCd = 12; if (!this.quiet) sfx.summon(); }
         const n = Math.min(2, 3 - this.minions.length);
         for (let i = 0; i < n; i++) {
@@ -200,7 +201,7 @@ export class Gatherer extends MiniBoss {
         return t > 1.5;
       }
       case 'wail': {
-        // ставит корзину, плачет — кольцо скорби; потом обессилена, ягода-сердце открыта
+        // puts the basket down, wails — a ring of sorrow; then exhausted, the berry heart open
         if (!this.hitDone) { this.hitDone = true; this.wailCd = 9; this.markCircle(this.pos, 4, 0.9, () => undefined, TURQ); }
         if (t < 0.9) { if (t > 0.5 && t - dt <= 0.5 && !this.quiet) sfx.wail(); return false; }
         fx.shock(this.pos.clone().setY(0.1), 4.4, TURQ, 0.6, 0.3);
@@ -216,7 +217,7 @@ export class Gatherer extends MiniBoss {
     return true;
   }
 
-  /** Руки рвутся из пола в точке p: урон и захват */
+  /** Hands burst out of the floor at point p: damage and a hold */
   private erupt(p: THREE.Vector3): void {
     const fx = this.h.fx;
     if (!this.quiet) { sfx.erupt(); sfx.whisper(); }
@@ -245,14 +246,14 @@ export class Gatherer extends MiniBoss {
   override update(dt: number): void {
     super.update(dt);
     const hero = this.h.hero;
-    // захват: руки держат героя на месте
+    // hold: the hands keep the hero in place
     if (this.pinT > 0) {
       this.pinT -= dt;
       hero.pos.copy(this.pinAt);
       hero.vel.set(0, 0, 0);
       if (rnd() < 0.3) this.h.fx.particle({ pos: hero.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), rand(0.2, 1.2), rand(-0.4, 0.4))), vel: new THREE.Vector3(0, -1, 0), life: 0.4, size: 0.07, color: TURQ, gravity: 0 });
     }
-    // огоньки: плывут и медленно доворачивают к герою
+    // wisps: float and slowly turn towards the hero
     const target = hero.pos.clone().setY(hero.pos.y + 1);
     for (let i = this.wisps.length - 1; i >= 0; i--) {
       const w = this.wisps[i];
@@ -277,33 +278,33 @@ export class Gatherer extends MiniBoss {
   protected animate(dt: number, walk: boolean): void {
     const t = this.time, S = this.st, dead = this.state === 'dead';
     if (this.awake) { this.summonCd -= dt; this.blinkCd -= dt; this.wailCd -= dt; }
-    // парит над полом, плавно качается; в движении — клонится вперёд
+    // hovers above the floor, sways smoothly; while moving — leans forward
     if (!dead) {
       this.body.position.y = 0.3 + Math.sin(t * 1.6) * 0.12;
       this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, this.state === 'daze' ? 0.3 : walk ? 0.12 : 0, 0.1);
     }
-    // исчезновение при переносе
+    // vanishing on the shift
     const op = this.state === 'attack' && this.attack === 'blink' ? this.fade : 1;
     for (const m of this.robeMats) m.opacity = op;
     this.body.scale.set(dead ? this.body.scale.x : 1, dead ? this.body.scale.y : 0.6 + 0.4 * op, dead ? this.body.scale.z : 1);
-    // капюшон: опущен во сне и в изнеможении, в плаче — запрокинут
+    // hood: lowered in sleep and in exhaustion, thrown back in the wail
     const wail = this.state === 'attack' && this.attack === 'wail';
     this.hood.rotation.x = this.state === 'sleep' || this.state === 'daze' ? 0.45 : wail && S > 0.5 ? -0.5 : Math.sin(t * 0.9) * 0.06;
-    // рукава держат корзину; при руках и огоньках — воздеты, в плаче — к лицу
+    // the sleeves hold the basket; on hands and wisps — raised, in the wail — to the face
     const cast = this.state === 'attack' && (this.attack === 'hands' || this.attack === 'wisps' || this.attack === 'summon');
     this.arms.forEach((g, i) => {
       const s = i ? 1 : -1;
       const rx = cast ? -2.4 + Math.sin(S * 8 + i) * 0.2 : wail ? (S < 0.5 ? -0.3 : -2.6) : this.state === 'daze' ? 0.1 : -0.75;
       g.rotation.set(rx, 0, s * (cast ? 0.35 : wail && S > 0.5 ? -0.25 : -0.12));
     });
-    // корзина: в руках; в плаче и оглушении — стоит на полу
+    // basket: in the hands; in the wail and the daze — stands on the floor
     const down = wail || this.state === 'daze';
     this.basket.position.y = THREE.MathUtils.lerp(this.basket.position.y, down ? 0.2 - this.body.position.y : cast ? 1.0 : 1.25, 0.15);
     this.basket.position.z = THREE.MathUtils.lerp(this.basket.position.z, down ? 1.0 : 0.78, 0.15);
-    // ягода-сердце: тихо бьётся, оглушена — крупно
+    // berry heart: beats quietly, dazed — hard
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 4)) * 0.1;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.8 : 1));
-    // бирюзовые огоньки-души вокруг
+    // turquoise soul wisps around
     if (!dead && this.state !== 'sleep' && rnd() < 0.3 * op) {
       const a = rand(0, Math.PI * 2);
       this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * 0.9, rand(0.4, 2.6), Math.sin(a) * 0.9)), vel: new THREE.Vector3(0, rand(0.2, 0.6), 0), life: rand(0.5, 0.9), size: rand(0.05, 0.1), color: rnd() < 0.8 ? TURQ : RASP, gravity: 0 });

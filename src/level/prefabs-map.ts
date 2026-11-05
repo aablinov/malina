@@ -5,19 +5,19 @@ import { stampPrefab } from './prefab-lib/stamp.ts';
 import type { LibraryPrefab } from './prefab-lib/types.ts';
 
 /**
- * Витрина библиотеки пресетов (`?map=prefabs`): травяное поле, по категории — ряд вдоль X, каждый пресет с подписью
- * на полу. `npm run prefabs` пишет assets/maps/prefabs.json. Для ревью «похоже ли на референс» и для теста.
+ * Prefab library showcase (`?map=prefabs`): a grass field, one row along X per category, each prefab with a label
+ * on the floor. `npm run prefabs` writes assets/maps/prefabs.json. For "does it look like the reference" reviews and for the test.
  */
 export function buildPrefabsMap(list: LibraryPrefab[]): Level {
-  const L = new Level('Витрина пресетов');
+  const L = new Level('Prefab Showcase');
   const labels: PgLabel[] = [];
   const cats = [...new Set(list.map((p) => p.category))];
   const GAP = 5;
   let z = 0, maxX = 0;
   const spots: [LibraryPrefab, number, number][] = [];
-  const ROW = 96; // ряд не длиннее ~100 м — дальше перенос на следующую строку той же категории
-  /** Земля под рядом биома: [верх, под ним]; остальные ряды — трава */
-  const GROUND: Record<string, [string, string]> = { 'снег': ['snow', 'dirt'], 'пустыня': ['sand', 'sand'], 'джунгли': ['jungle_floor', 'dirt'] };
+  const ROW = 96; // a row is no longer than ~100 m — beyond that it wraps to the next line of the same category
+  /** Ground under a biome row: [top, beneath it]; other rows are grass */
+  const GROUND: Record<string, [string, string]> = { snow: ['snow', 'dirt'], desert: ['sand', 'sand'], jungle: ['jungle_floor', 'dirt'] };
   const rows: [number, number, string][] = [];
   for (const cat of cats) {
     const all = list.filter((p) => p.category === cat);

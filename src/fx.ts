@@ -36,7 +36,7 @@ export interface BurstOptions {
   drag?: number;
 }
 
-/** Временный объект эффекта: живёт dur секунд, каждый кадр получает долю 0..1 */
+/** Temporary effect object: lives dur seconds, receives the fraction 0..1 every frame */
 interface Transient {
   obj: THREE.Object3D;
   t: number;
@@ -52,15 +52,15 @@ interface FloatText {
   dur: number;
   dx: number;
 }
-/** Сколько цифр урона на экране одновременно: дальше самая старая уступает место */
+/** How many damage numbers on screen at once: beyond that the oldest gives way */
 const MAX_TEXTS = 48;
 
 /**
- * Пул кубиков-частиц, рисуется одним InstancedMesh. Данные — в типизированных массивах (структура массивов), живые
- * частицы лежат плотно в начале; смерть — свап с последней. Спавн ничего не выделяет; при переполнении самая старая
- * частица уступает место (wiki/dev-performance.md)
+ * Pool of cube particles, drawn with one InstancedMesh. Data is in typed arrays (structure of arrays), live
+ * particles lie densely at the start; death is a swap with the last one. Spawning allocates nothing; on overflow the oldest
+ * particle gives way (wiki/dev-performance.md)
  */
-const F = 20; // полей на частицу
+const F = 20; // fields per particle
 const P_POS = 0, P_VEL = 3, P_LIFE = 6, P_MAX = 7, P_SIZE = 8, P_COL = 9, P_GRAV = 12, P_ROT = 13, P_SPIN = 16, P_DRAG = 17, P_SHRINK = 18;
 class Pool {
   readonly mesh: THREE.InstancedMesh;
@@ -107,7 +107,7 @@ class Pool {
       const o = i * F;
       d[o + P_LIFE] -= dt;
       if (d[o + P_LIFE] <= 0) {
-        // свап с последней живой
+        // swap with the last live one
         const last = --this.n;
         if (i !== last) d.copyWithin(o, last * F, last * F + F);
         continue;
@@ -145,10 +145,10 @@ const additive = (color: THREE.Color, opacity = 1, map?: THREE.Texture) => new T
   color, ...(map ? { map } : {}), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
 });
 
-/** Общие ресурсы: их не трогает дефолтный dispose в FX.custom (wiki/dev-performance.md) */
+/** Shared resources: the default dispose in FX.custom leaves them alone (wiki/dev-performance.md) */
 const SHARED = new WeakSet<THREE.Material | THREE.BufferGeometry>();
 export function markShared<T extends THREE.Material | THREE.BufferGeometry>(r: T): T { SHARED.add(r); return r; }
-/** Освободить геометрию и материалы тела, кроме общих */
+/** Free the body's geometry and materials, except shared ones */
 export function disposeOwned(obj: THREE.Object3D): void {
   obj.traverse((o) => {
     if (!(o instanceof THREE.Mesh) && !(o instanceof THREE.Sprite) && !(o instanceof THREE.Line) && !(o instanceof THREE.Points)) return;
@@ -159,7 +159,7 @@ export function disposeOwned(obj: THREE.Object3D): void {
   });
 }
 
-/** Квантованные общие геометрии колец и дуг: ключ — толщина или размах с шагом 0,05 */
+/** Quantised shared geometries of rings and arcs: key — thickness or span in steps of 0.05 */
 const ringGeos = new Map<string, THREE.RingGeometry>();
 const ringGeo = (inner: number, segments: number, start = 0, length = Math.PI * 2): THREE.RingGeometry => {
   const q = Math.round(inner * 20) / 20, qs = Math.round(start * 20) / 20, ql = Math.round(length * 20) / 20;
@@ -168,16 +168,16 @@ const ringGeo = (inner: number, segments: number, start = 0, length = Math.PI * 
   if (!g) ringGeos.set(key, g = markShared(new THREE.RingGeometry(q, 1, segments, 1, qs, ql)));
   return g;
 };
-/** Единичная плоскость: от (0,0) вверх до (0,1) — для черт; и центрированная — для декалей */
+/** Unit plane: from (0,0) up to (0,1) — for slashes; and a centred one — for decals */
 let planeUp: THREE.PlaneGeometry | null = null, planeC: THREE.PlaneGeometry | null = null;
 const PLANE_UP = (): THREE.PlaneGeometry => planeUp ??= markShared(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0) as THREE.PlaneGeometry);
 const PLANE_C = (): THREE.PlaneGeometry => planeC ??= markShared(new THREE.PlaneGeometry(1, 1));
 
-/** Слот пула временных тел: материал свой на слот (цвет и прозрачность правятся), геометрия общая */
+/** Slot of the temporary body pool: the material is per slot (colour and opacity are edited), the geometry is shared */
 interface Slot<M extends THREE.Material> { obj: THREE.Mesh<THREE.BufferGeometry, M> | THREE.Sprite; mat: M; gen: number }
 
 const WHITE = new THREE.Color(1, 1, 1);
-/** Стена кольца: открытый цилиндр высотой 1 от земли вверх, текстура — яркий низ, тающий вверх */
+/** Ring wall: an open cylinder of height 1 from the ground up, texture — a bright bottom fading upward */
 let wallGeo: THREE.CylinderGeometry | null = null;
 const WALL = (): THREE.CylinderGeometry => wallGeo ??= markShared(new THREE.CylinderGeometry(1, 1, 1, 48, 1, true).translate(0, 0.5, 0) as THREE.CylinderGeometry);
 let wallT: THREE.CanvasTexture | null = null;
@@ -190,7 +190,7 @@ function wallTex(): THREE.CanvasTexture {
   return wallT = new THREE.CanvasTexture(c);
 }
 
-/** Вспышка настоящего света: точечный источник из пула */
+/** A flash of real light: a point light from the pool */
 const SHOCK_COLOR = new THREE.Color(3, 0.6, 1.2);
 
 interface LightFlash { light: THREE.PointLight; t: number; dur: number; peak: number }
@@ -198,32 +198,32 @@ interface LightFlash { light: THREE.PointLight; t: number; dur: number; peak: nu
 export class FX {
   private readonly solid: Pool;
   private readonly glow: Pool;
-  /** Молнии и светящиеся кубы — экземплярами (src/fx-bolts.ts) */
+  /** Lightning bolts and glowing cubes — as instances (src/fx-bolts.ts) */
   private readonly bolts: Bolts;
   private readonly cubes: Cubes;
   private readonly cubesSolid: Cubes;
-  /** Ленты-шлейфы по кривым (src/fx-streaks.ts) */
+  /** Streak ribbons along curves (src/fx-streaks.ts) */
   private readonly streaks: Streaks;
   private readonly transients: Transient[] = [];
-  /** Пулы временных тел: кольца, вспышки, дуги, черты, декали — ничего не создаётся в бою */
+  /** Pools of temporary bodies: rings, flashes, arcs, slashes, decals — nothing is created in battle */
   private readonly shocks: FxPool<Slot<THREE.MeshBasicMaterial>>;
   private readonly flashes: FxPool<Slot<THREE.SpriteMaterial>>;
   private readonly planes: FxPool<Slot<THREE.MeshBasicMaterial>>;
   private readonly decals: FxPool<Slot<THREE.MeshBasicMaterial>>;
   private readonly texts: FloatText[] = [];
   private readonly freeTexts: FloatText[] = [];
-  /** Пул света заклинаний: источники всегда в сцене (с нулевой силой), чтобы число огней не менялось и шейдеры не пересобирались */
+  /** Spell light pool: the lights are always in the scene (at zero intensity) so the light count does not change and shaders are not rebuilt */
   private readonly lights: LightFlash[] = [];
   private readonly flashEl: HTMLDivElement;
   private flashT = 0;
   private flashDur = 1;
   private flashPeak = 0;
   shake = 0;
-  /** Стоп-кадр, с реального времени: пока > 0, цикл игры почти останавливает симуляцию */
+  /** Freeze frame, s of real time: while > 0 the game loop almost stops the simulation */
   hitstop = 0;
-  /** Замедление, с реального времени: пока > 0, игра идёт втрое медленнее (легендарные и мифические удары) */
+  /** Slow motion, s of real time: while > 0 the game runs three times slower (legendary and mythic strikes) */
   slowmo = 0;
-  /** Камера подаётся назад: доля дистанции, тает сама */
+  /** The camera pulls back: fraction of the distance, fades on its own */
   zoom = 0;
   private readonly darkEl: HTMLDivElement;
   private darkT = 0;
@@ -283,19 +283,19 @@ export class FX {
     document.body.appendChild(this.titleEl);
   }
 
-  // ---------- детали каста (wiki/design-spells.md, раздел 5) ----------
+  // ---------- cast details (wiki/design-spells.md, section 5) ----------
 
-  /** Засветка экрана цветом стихии: strength 0..1 — пик непрозрачности */
+  /** Screen flash in the element's colour: strength 0..1 — peak opacity */
   screenFlash(color: string, strength = 0.3, dur = 0.18): void {
     if (strength < this.flashPeak * (1 - this.flashT / this.flashDur)) return;
     this.flashEl.style.background = `radial-gradient(ellipse at center, ${color} 0%, ${color} 35%, transparent 100%)`;
     this.flashT = 0; this.flashDur = dur; this.flashPeak = strength;
   }
 
-  /** Мир темнеет и выцветает на dur секунд (мифическое заклинание): быстро наползает, держится, тает */
+  /** The world darkens and desaturates for dur seconds (mythic spell): creeps in fast, holds, fades */
   darken(dur = 0.6): void { this.darkT = 0; this.darkDur = dur; }
 
-  /** Крупное название заклинания по центру экрана */
+  /** Large spell name in the centre of the screen */
   title(text: string, color: string): void {
     this.titleEl.textContent = text;
     this.titleEl.style.setProperty('--c', color);
@@ -303,7 +303,7 @@ export class FX {
     this.titleT = 1.8;
   }
 
-  /** Вспышка настоящего света в точке: освещает пол и стены вокруг, гаснет за dur. follow — каждый кадр двигать за снарядом */
+  /** A flash of real light at a point: lights the floor and walls around, goes out over dur. follow — move it after the projectile every frame */
   light(pos: THREE.Vector3, color: ColorLike, intensity: number, dist = 10, dur = 0.5): THREE.PointLight {
     const f = this.lights.reduce((a, b) => (a.t / a.dur >= b.t / b.dur ? a : b));
     f.light.color.set(color); f.light.distance = dist; f.light.position.copy(pos);
@@ -312,7 +312,7 @@ export class FX {
     return f.light;
   }
 
-  /** След на полу: выжженное пятно, иней. additive — светится; иначе затемняет */
+  /** A mark on the floor: a scorch spot, frost. additive — glows; otherwise darkens */
   decal(pos: THREE.Vector3, map: THREE.Texture, color: ColorLike, size: number, dur: number, additive = false, opacity = 1): void {
     const s = this.decals.acquire();
     if (!s) return;
@@ -323,11 +323,11 @@ export class FX {
     m.scale.setScalar(size);
     m.rotation.z = Math.random() * Math.PI * 2;
     m.position.copy(pos); m.position.y += 0.03 + Math.random() * 0.01;
-    // плавно проявляется, держится и тает в последней трети
+    // fades in smoothly, holds, and fades out in the last third
     this.pooled(this.decals, s, dur, (k) => { mat.opacity = opacity * Math.min(1, k * 12) * Math.min(1, (1 - k) * 3); });
   }
 
-  // ---------- частицы ----------
+  // ---------- particles ----------
   burst(pos: THREE.Vector3, color: ColorLike | ColorLike[], n = 10, { speed = 3, size = 0.14, life = 0.8, up = 3, glow = false, gravity = 12, drag = 0 }: BurstOptions = {}): void {
     const pool = glow ? this.glow : this.solid;
     for (let i = 0; i < n; i++) {
@@ -342,12 +342,12 @@ export class FX {
     }
   }
 
-  /** Одна частица с полным контролем (искры, втягивающиеся в точку, и т. п.) */
+  /** One particle with full control (sparks sucked into a point, etc.) */
   particle(p: SpawnOptions, glow = true): void {
     (glow ? this.glow : this.solid).spawn(p);
   }
 
-  /** Направленный веер частиц */
+  /** A directed fan of particles */
   spray(pos: THREE.Vector3, dir: THREE.Vector3, color: ColorLike | ColorLike[], n: number, { speed = 6, size = 0.08, life = 0.35, glow = true, gravity = 4, spread = 0.5 }: BurstOptions & { spread?: number } = {}): void {
     const pool = glow ? this.glow : this.solid;
     const base = Math.atan2(dir.x, dir.z);
@@ -362,29 +362,29 @@ export class FX {
     }
   }
 
-  /** Ломаная молния из светящихся брусков: ядро и мягкий ореол, мерцает и тает; branches — отростки */
+  /** A zigzag lightning bolt of glowing bars: core and soft halo, flickers and fades; branches — offshoots */
   bolt(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color, width: number, branches: number, dur = 0.32): void {
     this.bolts.bolt(from, to, color, width, branches, dur);
   }
 
-  /** Светящиеся кубы разлетаются от mid на R, раздуваются и гаснут; additive — складываются светом */
+  /** Glowing cubes scatter from mid over R, swell and fade; additive — add up as light */
   fireCubes(mid: THREE.Vector3, R: number, n: number, colors: THREE.Color[], size: number, additive = true, life: [number, number] = [0.35, 0.6]): void {
     (additive ? this.cubes : this.cubesSolid).burst(mid, R, n, colors, size, life);
   }
 
-  // ---------- временные фигуры ----------
+  // ---------- temporary shapes ----------
   private add(obj: THREE.Object3D, dur: number, tick: (k: number) => void, dispose: () => void): void {
     this.scene.add(obj);
     this.transients.push({ obj, t: 0, dur, tick, dispose });
   }
 
-  /** Тело из пула живёт dur секунд, затем возвращается в пул (если слот не был перехвачен) */
+  /** A pooled body lives dur seconds, then returns to the pool (unless the slot was taken over) */
   private pooled<M extends THREE.Material>(pool: FxPool<Slot<M>>, s: Slot<M>, dur: number, tick: (k: number) => void): void {
     const gen = ++s.gen;
     this.add(s.obj, dur, tick, () => { if (s.gen === gen) pool.release(s); });
   }
 
-  /** Плоская светящаяся дуга удара; inner — доля внутреннего радиуса (0,38 — веер, 0,75 — тонкий серп) */
+  /** Flat glowing strike arc; inner — fraction of the inner radius (0.38 — a fan, 0.75 — a thin crescent) */
   arc(pos: THREE.Vector3, angle: number, color: THREE.Color, radius = 2.4, spread = 1.15, y = 0.75, inner = 0.38): void {
     const s = this.planes.acquire();
     if (!s) return;
@@ -396,7 +396,7 @@ export class FX {
     this.pooled(this.planes, s, 0.22, (k) => { mat.opacity = 0.85 * (1 - k); m.scale.setScalar(radius * (0.85 + k * 0.3)); });
   }
 
-  /** Узкая прямая черта — укол или разрез */
+  /** A narrow straight slash — a stab or a cut */
   line(from: THREE.Vector3, angle: number, len: number, color: THREE.Color, width = 0.45, dur = 0.18, y = 0.9): void {
     const s = this.planes.acquire();
     if (!s) return;
@@ -409,7 +409,7 @@ export class FX {
     this.pooled(this.planes, s, dur, (k) => { mat.opacity = 0.95 * (1 - k); m.scale.set(width * (1 - k * 0.7), len * (0.8 + k * 0.3), 1); });
   }
 
-  /** Кольцо, расходящееся по земле */
+  /** A ring spreading along the ground */
   shock(pos: THREE.Vector3, radius: number, color: THREE.Color = SHOCK_COLOR, dur = 0.45, thick = 0.15): void {
     const s = this.shocks.acquire();
     if (!s) return;
@@ -422,17 +422,17 @@ export class FX {
     this.pooled(this.shocks, s, dur, (k) => { m.scale.setScalar(0.3 + radius * Math.sqrt(k)); mat.opacity = 1 - k; });
   }
 
-  /** Светящаяся лента за головой, летящей по path (src/fx-streaks.ts) */
+  /** A glowing ribbon behind a head flying along path (src/fx-streaks.ts) */
   streak(o: StreakOptions): void { this.streaks.add(o); }
   get streakCount(): number { return this.streaks.count; }
 
   /**
-   * Сочное кольцо: широкий мягкий ореол, яркий тонкий обод с белым и полупрозрачная стена света над ним,
-   * тающая вверх (как кольца у артефактов MCD). Подпись как у shock
+   * Juicy ring: a wide soft halo, a bright thin rim with white and a translucent wall of light above it,
+   * fading upward (like the rings of MCD artifacts). Same signature as shock
    */
   ring(pos: THREE.Vector3, radius: number, color: THREE.Color = SHOCK_COLOR, dur = 0.45, thick = 0.15, wall = 1): void {
     radius *= 0.92 + Math.random() * 0.18;
-    // цвет насыщенный: слабые составляющие ниже 1, иначе наложение колец выгорает в белое пятно
+    // saturated colour: weak components below 1, otherwise overlapping rings burn out into a white spot
     const k = 1 / Math.max(1, color.r, color.g, color.b);
     this.shock(pos, radius, color.clone().multiplyScalar(0.55 * k * 1.6), dur * 1.1, Math.min(0.6, thick * 2.6));
     this.shock(pos, radius * 1.02, color.clone().multiplyScalar(k * 1.25).lerp(WHITE, 0.15), dur, Math.max(0.03, thick * 0.35));
@@ -448,31 +448,31 @@ export class FX {
     });
   }
 
-  /** Круглая вспышка-ореол */
+  /** Round halo flash */
   flash(pos: THREE.Vector3, color: THREE.Color, size = 1.4, dur = 0.18): void {
     const sl = this.flashes.acquire();
     if (!sl) return;
     const { mat, obj: s } = sl;
-    // вспышки приглушены, чтобы несколько попаданий подряд не слепили
+    // flashes are toned down so several hits in a row do not blind
     mat.color.copy(color).multiplyScalar(0.35); mat.opacity = 1;
     s.position.copy(pos);
     s.scale.setScalar(size * 0.6);
     this.pooled(this.flashes, sl, dur, (k) => { s.scale.setScalar(size * (0.6 + k * 0.8)); mat.opacity = 1 - k; });
   }
 
-  /** Добавить своё временное тело (для особых эффектов); по умолчанию освобождает его геометрию и материалы, кроме общих (markShared) */
+  /** Add a custom temporary body (for special effects); by default frees its geometry and materials, except shared ones (markShared) */
   custom(obj: THREE.Object3D, dur: number, tick: (k: number) => void, dispose: () => void = () => disposeOwned(obj)): void {
     this.add(obj, dur, tick, dispose);
   }
 
-  /** Попадание по жуку: искры и брызги панциря */
+  /** Hit on a beetle: sparks and shell splinters */
   hit(at: THREE.Vector3, dir: THREE.Vector3, color: THREE.Color, power = 1): void {
     const p = at.clone().setY(0.45);
     this.spray(p, dir, [color, new THREE.Color(3, 2.6, 1.6)], Math.round(5 * power), { speed: 6, spread: 0.6, life: 0.25 });
     this.spray(p, dir, ['#3a5a1a', '#5a7a2a', '#1a2a0a'], Math.round(3 * power), { speed: 3, glow: false, gravity: 12, size: 0.08, life: 0.6, spread: 0.9 });
   }
 
-  /** Взрыв: огненный шар, дым, обломки, кольцо */
+  /** Explosion: fireball, smoke, debris, ring */
   explosion(at: THREE.Vector3, r: number, tint: THREE.Color = new THREE.Color(3, 1.3, 0.3)): void {
     const c = at.clone(); c.y = Math.max(0.5, c.y);
     this.flash(c, tint.clone().multiplyScalar(1.1), Math.min(6, r * 1.5), 0.25);
@@ -488,7 +488,7 @@ export class FX {
     this.shake = Math.max(this.shake, Math.min(1.2, 0.25 + r * 0.18));
   }
 
-  /** Светящийся квадрат на земле (под игроком или целью) */
+  /** A glowing square on the ground (under the player or the target) */
   marker(color: ColorLike, size = 1.1): THREE.Mesh {
     const mat = new THREE.MeshBasicMaterial({ map: this.T.square, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
@@ -499,9 +499,9 @@ export class FX {
     return m;
   }
 
-  /** Всплывающая надпись над точкой мира */
+  /** A floating label above a world point */
   text(worldPos: THREE.Vector3, str: string, cls = ''): void {
-    // div-ы переиспользуются: создание и удаление узлов на каждое попадание дёргает раскладку
+    // divs are reused: creating and removing nodes on every hit thrashes the layout
     let tx: FloatText;
     if (this.texts.length >= MAX_TEXTS) { tx = this.texts.shift()!; tx.pos.copy(worldPos); }
     else if (this.freeTexts.length) { tx = this.freeTexts.pop()!; tx.pos.copy(worldPos); this.overlay.appendChild(tx.el); }
@@ -551,7 +551,7 @@ export class FX {
     }
   }
 
-  /** Засветка и стоп-кадр живут в реальном времени, а не в игровом */
+  /** The screen flash and the freeze frame live in real time, not game time */
   updateReal(real: number): void {
     this.hitstop = Math.max(0, this.hitstop - real);
     this.slowmo = Math.max(0, this.slowmo - real);

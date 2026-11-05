@@ -1,10 +1,12 @@
 import { setVolume } from '../audio.ts';
+import { LANG, setLang, t, type Lang } from '../i18n/i18n.ts';
 import { setMusicVolume } from '../music.ts';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './settings.ts';
 
 /**
- * Окно настроек — одно и в главном меню, и на паузе в бою (wiki/design-main-menu.md).
- * Громкость применяется сразу; остальное отдаётся в onChange — игра сама решает, что поменять на ходу.
+ * Settings window — the same one in the main menu and on pause in battle (wiki/design-main-menu.md).
+ * Volume applies at once; the rest goes to onChange — the game decides what to change on the fly.
+ * Language is not part of Settings: it lives in localStorage `malina.lang` (src/i18n/i18n.ts) and a change reloads the page.
  */
 export class SettingsPanel {
   readonly el: HTMLDivElement;
@@ -16,26 +18,32 @@ export class SettingsPanel {
     const el = document.createElement('div');
     el.className = 'mm-settings';
     el.innerHTML = `<div class="mm-win">
-      <h2>Настройки</h2>
-      <section><h3>Звук</h3>
-        <label class="mm-row"><span>Общая громкость</span><input type="range" min="0" max="100" step="5" data-k="volume"><b data-v="volume"></b></label>
-        <label class="mm-row"><span>Музыка</span><input type="range" min="0" max="100" step="5" data-k="music"><b data-v="music"></b></label>
+      <h2>${t('Settings')}</h2>
+      <section><h3>${t('Sound')}</h3>
+        <label class="mm-row"><span>${t('Master volume')}</span><input type="range" min="0" max="100" step="5" data-k="volume"><b data-v="volume"></b></label>
+        <label class="mm-row"><span>${t('Music')}</span><input type="range" min="0" max="100" step="5" data-k="music"><b data-v="music"></b></label>
       </section>
-      <section><h3>Графика</h3>
-        <label class="mm-row"><span>Качество</span><select data-k="quality"><option value="high">Высокое</option><option value="low">Быстрое</option></select></label>
-        <label class="mm-row"><span>Постобработка и свечение</span><input type="checkbox" data-k="postFX"></label>
-        <label class="mm-row"><span>Тени</span><input type="checkbox" data-k="shadows"></label>
+      <section><h3>${t('Graphics')}</h3>
+        <label class="mm-row"><span>${t('Quality')}</span><select data-k="quality"><option value="high">${t('High')}</option><option value="low">${t('Fast')}</option></select></label>
+        <label class="mm-row"><span>${t('Post-processing and glow')}</span><input type="checkbox" data-k="postFX"></label>
+        <label class="mm-row"><span>${t('Shadows')}</span><input type="checkbox" data-k="shadows"></label>
       </section>
-      <section><h3>Игра</h3>
-        <label class="mm-row"><span>Подсказка по управлению в начале боя</span><input type="checkbox" data-k="help"></label>
+      <section><h3>${t('Game')}</h3>
+        <label class="mm-row"><span>${t('Controls hint at the start of a battle')}</span><input type="checkbox" data-k="help"></label>
+        <label class="mm-row"><span>${t('Language')}</span><select data-lang><option value="en">English</option><option value="ru">Русский</option></select></label>
       </section>
-      <p class="mm-note">Качество применяется со следующего боя.</p>
-      <div class="mm-win-btns"><button class="mm-btn small" data-act="reset">По умолчанию</button><button class="mm-btn small primary" data-act="close">Готово <kbd>Esc</kbd></button></div>
+      <p class="mm-note">${t('Quality applies from the next battle. Changing the language reloads the page.')}</p>
+      <div class="mm-win-btns"><button class="mm-btn small" data-act="reset">${t('Defaults')}</button><button class="mm-btn small primary" data-act="close">${t('Done')} <kbd>Esc</kbd></button></div>
     </div>`;
     parent.appendChild(el);
     this.el = el;
     el.addEventListener('input', (e) => {
       const t = e.target as HTMLInputElement | HTMLSelectElement;
+      if (t instanceof HTMLSelectElement && t.dataset.lang !== undefined) {
+        const l = t.value as Lang;
+        if (l !== LANG) { setLang(l); location.reload(); }
+        return;
+      }
       const k = t.dataset.k as keyof Settings | undefined;
       if (!k) return;
       const s = this.settings as unknown as Record<string, unknown>;
@@ -63,7 +71,7 @@ export class SettingsPanel {
     this.onClose?.();
   }
 
-  /** Клавиши, пока окно открыто; true — съедено */
+  /** Keys while the window is open; true — consumed */
   key(e: KeyboardEvent): boolean {
     if (!this.open) return false;
     if (e.code === 'Escape' || e.code === 'Enter') this.hide();
@@ -86,10 +94,12 @@ export class SettingsPanel {
       else inp.value = String(v);
     }
     for (const b of this.el.querySelectorAll<HTMLElement>('[data-v]')) b.textContent = `${Math.round(Number(s[b.dataset.v ?? '']) * 100)}%`;
+    const lang = this.el.querySelector<HTMLSelectElement>('[data-lang]');
+    if (lang) lang.value = LANG;
   }
 }
 
-/** Громкость из настроек — в звук и музыку */
+/** Volume from the settings → sound and music */
 export function applyAudio(s: Settings): void {
   setVolume(s.volume);
   setMusicVolume(s.music);

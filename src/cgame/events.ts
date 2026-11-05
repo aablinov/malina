@@ -1,9 +1,9 @@
 /**
- * Единая очередь системных событий — `Sys_QueEvent`/`Com_EventLoop` Quake 3 (wiki/arch-layers.md): обработчики DOM и
- * транспорт сети ничего не делают сами, только кладут событие с меткой времени в кольцо; цикл кадра разбирает очередь
- * перед тактами (`drain`) — порядок «ввод → сеть → такт → кадр» один и тот же, клавиша-тап короче такта не теряется,
- * геймплей не выполняется внутри `keydown`. В обработчиках остаётся лишь то, что нельзя отложить: `preventDefault`,
- * первый жест для звука и клавиши интерфейса (меню, инвентарь, лавка, чат — `keyNow`): они не игра и отвечают сразу
+ * Single queue of system events — Quake 3's `Sys_QueEvent`/`Com_EventLoop` (wiki/arch-layers.md): DOM handlers and
+ * the network transport do nothing themselves, they only put a timestamped event into the ring; the frame loop drains the queue
+ * before the ticks (`drain`) — the order "input → network → tick → frame" is always the same, a key tap shorter than a tick is not lost,
+ * gameplay never runs inside `keydown`. Only what cannot be deferred stays in the handlers: `preventDefault`,
+ * the first gesture for audio and interface keys (menu, inventory, shop, chat — `keyNow`): they are not the game and respond at once
  */
 export type SysInput =
   | { kind: 'key'; code: string; down: boolean; repeat: boolean; e: KeyboardEvent }
@@ -11,19 +11,19 @@ export type SysInput =
   | { kind: 'button'; button: number; down: boolean }
   | { kind: 'wheel'; dy: number }
   | { kind: 'blur' }
-  /** Кадр сети: доставить получателю при разборе очереди */
+  /** Network frame: deliver to the receiver when the queue is drained */
   | { kind: 'net'; deliver: () => void };
-/** Событие в очереди: с меткой времени (мс, часы очереди) */
+/** Queued event: with a timestamp (ms, the queue's clock) */
 export type SysEvent = SysInput & { t: number };
 
-/** Как `MAX_QUED_EVENTS` в Quake 3 */
+/** Like `MAX_QUED_EVENTS` in Quake 3 */
 export const MAX_QUEUED = 256;
 
 export class EventQueue {
   private readonly ring: (SysEvent | undefined)[] = new Array<SysEvent | undefined>(MAX_QUEUED);
   private head = 0;
   private tail = 0;
-  /** Событий выброшено из-за переполнения (старейшие) */
+  /** Events dropped due to overflow (the oldest) */
   dropped = 0;
   private readonly clock: () => number;
 
@@ -36,7 +36,7 @@ export class EventQueue {
     this.ring[this.tail++ % MAX_QUEUED] = { ...e, t: this.clock() } as SysEvent;
   }
 
-  /** Разобрать всё, что накопилось к этому моменту (события, добавленные по ходу разбора, — в следующий раз) */
+  /** Drain everything accumulated so far (events added during the drain wait for the next one) */
   drain(fn: (e: SysEvent) => void): void {
     const end = this.tail;
     while (this.head < end) {
@@ -51,15 +51,15 @@ export class EventQueue {
 }
 
 export interface DomBinding {
-  /** Коды клавиш, у которых браузерное действие глушится сразу (Space, Tab, F-клавиши) */
+  /** Key codes whose browser action is suppressed right away (Space, Tab, F keys) */
   prevent: (e: KeyboardEvent) => boolean;
-  /** Первый жест пользователя — разрешить звук; зовётся в обработчике, не из очереди */
+  /** The user's first gesture — unlock audio; called in the handler, not from the queue */
   gesture?: () => void;
-  /** Клавиша интерфейса (меню, панели): обработана сразу, в очередь не идёт. true — съедена */
+  /** Interface key (menu, panels): handled at once, does not go into the queue. true — consumed */
   keyNow?: (e: KeyboardEvent) => boolean;
 }
 
-/** Слушатели окна и холста, которые только кладут события в очередь; вернёт снятие */
+/** Window and canvas listeners that only put events into the queue; returns the removal */
 export function bindDom(q: EventQueue, canvas: HTMLElement, b: DomBinding, target: Window = window): () => void {
   const onKeyDown = (e: KeyboardEvent): void => { if (b.prevent(e)) e.preventDefault(); b.gesture?.(); if (b.keyNow?.(e)) return; q.push({ kind: 'key', code: e.code, down: true, repeat: e.repeat, e }); };
   const onKeyUp = (e: KeyboardEvent): void => { q.push({ kind: 'key', code: e.code, down: false, repeat: false, e }); };

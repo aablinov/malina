@@ -3,7 +3,7 @@ import type { Rect } from './arena.ts';
 import type { BossHooks } from './kit.ts';
 import type { MiniBoss } from './mini.ts';
 import { Cauldron } from './cauldron.ts';
-// IMPORTS: каждый страж — своя строка импорта ниже
+// IMPORTS: every warden gets its own import line below
 import { FrostBoar } from './boar.ts';
 import { StormGolem } from './storm-golem.ts';
 import { GoldenRider } from './golden-rider.ts';
@@ -20,7 +20,7 @@ import { WinterMistress } from './winter-mistress.ts';
 import { FallenStar } from './fallen-star.ts';
 import { FirstGardener } from './first-gardener.ts';
 
-/** Мини-боссы зала стражей (wiki/design-bosses.md, раздел 2): id арены → страж */
+/** Mini-bosses of the hall of wardens (wiki/design-bosses.md, section 2): arena id → warden */
 export type MiniBossCtor = new (h: BossHooks, home: THREE.Vector3, yaw: number, arena: Rect) => MiniBoss;
 
 export const MINI_BOSSES: Record<string, MiniBossCtor> = {

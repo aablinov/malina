@@ -3,8 +3,8 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Плейграунд (ADR-004): герой с мечом — управление мышью как в Minecraft Dungeons, комбо из трёх ударов со следом клинка,
- * перекат, ступени без прыжка, живая вода, склад. Врагов и огнестрела нет.
+ * Playground (ADR-004): a hero with a sword — mouse control as in Minecraft Dungeons, a three-hit combo with a blade trail,
+ * dodge roll, stairs without jumping, living water, a storage yard. No enemies and no guns.
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground';
@@ -18,7 +18,7 @@ async function open(page: Page): Promise<void> {
   await page.evaluate(() => (window as any).__malina.script(true));
 }
 
-test('проходит 10 м с нужной скоростью, врагов и стволов нет', async ({ page }) => {
+test('walks 10 m at the right speed, no enemies and no guns', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -35,17 +35,17 @@ test('проходит 10 м с нужной скоростью, врагов и
   expect(r.dx).toBeGreaterThan(9.6);
   expect(r.dx).toBeLessThan(10.3);
   expect(r.maxSpeed).toBeCloseTo(r.walk, 1);
-  expect(r.state).toBe('стоит');
+  expect(r.state).toBe('idle');
   expect(r.enemies).toBe(false);
   expect(r.guns).toBe(false);
 });
 
-test('меч: комбо из трёх ударов, след клинка, добивающий бьёт по площади', async ({ page }) => {
+test('sword: a three-hit combo, a blade trail, the finisher hits an area', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     m.resetTargets();
-    const d1 = m.dummies.find((d: any) => d.name === 'чучело 1');
+    const d1 = m.dummies.find((d: any) => d.name === 'dummy 1');
     m.hero.place(d1.pos.x, d1.pos.z + 1.8, Math.PI);
     m.setAim(d1.pos.x, d1.pos.z);
     m.step(0.3);
@@ -59,21 +59,21 @@ test('меч: комбо из трёх ударов, след клинка, до
     return {
       states: [...states], trail, swings: m.hero.swings, combo: m.hero.combo, after: m.trail.visible,
       d1: d1.total, expect: sw[0].dmg + sw[1].dmg + sw[2].dmg,
-      others: m.dummies.filter((d: any) => d !== d1 && d.name.startsWith('чучело')).map((d: any) => d.hits),
-      far: m.dummies.find((d: any) => d.name === 'одиночное').hits,
+      others: m.dummies.filter((d: any) => d !== d1 && d.name.startsWith('dummy')).map((d: any) => d.hits),
+      far: m.dummies.find((d: any) => d.name === 'lone').hits,
     };
   });
-  expect(r.states).toEqual(expect.arrayContaining(['удар 1', 'удар 2', 'удар 3']));
+  expect(r.states).toEqual(expect.arrayContaining(['hit 1', 'hit 2', 'hit 3']));
   expect(r.swings).toBe(3);
   expect(r.combo).toBe(-1);
   expect(r.trail).toBe(true);
   expect(r.after).toBe(false);
   expect(r.d1).toBe(r.expect);
-  // соседей по кучке задевает хотя бы добивающий
+  // at least the finisher clips the neighbours in the cluster
   for (const h of r.others) expect(h).toBeGreaterThan(0);
   expect(r.far).toBe(0);
 
-  // одно нажатие — один удар, комбо не продолжается без нажатия
+  // one press — one strike, the combo does not continue without a press
   const one = await page.evaluate(() => {
     const m = (window as any).__malina;
     const s0 = m.hero.swings;
@@ -83,36 +83,36 @@ test('меч: комбо из трёх ударов, след клинка, до
   expect(one).toBe(1);
 });
 
-test('мышь: клик — идти, клик по чучелу — подойти и бить, Shift — бить на месте', async ({ page }) => {
+test('mouse: click — walk, click on a dummy — approach and strike, Shift — strike in place', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     m.resetTargets();
-    // клик по земле: дошёл и остановился
+    // a click on the ground: arrived and stopped
     m.hero.place(0, 6, 0); m.step(0.2);
     m.click(4, 8); m.step(1 / 60); m.release();
     m.step(2);
     const walked = { x: m.hero.pos.x, z: m.hero.pos.z, goal: m.goal };
-    // держим ЛКМ и ведём курсор — идёт за курсором
+    // hold LMB and move the cursor — follows the cursor
     m.click(4, 4); m.step(0.3); m.click(0, 4); m.step(1.5); m.release(); m.step(0.5);
     const followed = { x: m.hero.pos.x, z: m.hero.pos.z };
-    // клик по одиночному чучелу издалека: подошёл, ударил один раз
-    const far = m.dummies.find((d: any) => d.name === 'одиночное');
+    // a click on the lone dummy from afar: approached, struck once
+    const far = m.dummies.find((d: any) => d.name === 'lone');
     m.hero.place(far.pos.x + 6, far.pos.z + 1, 0); m.step(0.2);
     const s0 = m.hero.swings;
     m.click(far.pos.x, far.pos.z); m.step(1 / 60); m.release();
     m.step(3);
     const chased = { dist: Math.hypot(m.hero.pos.x - far.pos.x, m.hero.pos.z - far.pos.z), swings: m.hero.swings - s0, hits: far.hits, chase: m.chase };
-    // держим ЛКМ на чучеле — комбо из трёх
+    // hold LMB on the dummy — a combo of three
     far.reset();
     m.click(far.pos.x, far.pos.z); m.step(1.3); m.release(); m.step(0.8);
     const held = far.hits;
-    // Shift + ЛКМ — удар на месте, герой не двигается
+    // Shift + LMB — a strike in place, the hero does not move
     m.hero.place(10, 8, 0); m.step(0.2);
     const s1 = m.hero.swings;
     m.click(14, 8, true); m.step(0.5); m.release(); m.step(0.5);
     const here = { dx: Math.abs(m.hero.pos.x - 10), swings: m.hero.swings - s1, lunges: m.SWORD.swings.reduce((a: number, w: any) => a + w.lunge, 0) };
-    // WASD отменяет приказ мыши
+    // WASD cancels the mouse order
     m.click(10, 0); m.step(1 / 60); m.release();
     m.script(true); m.input.move.set(1, 0); m.step(0.1); m.input.move.set(0, 0);
     return { walked, followed, chased, held, here, goalAfterKeys: m.goal };
@@ -125,26 +125,26 @@ test('мышь: клик — идти, клик по чучелу — подой
   expect(r.chased.hits).toBe(1);
   expect(r.chased.chase).toBe(null);
   expect(r.held).toBe(3);
-  // к курсору не идёт — сдвигается только выпадами ударов
+  // does not walk to the cursor — shifts only by the strike lunges
   expect(r.here.dx).toBeLessThan(r.here.lunges + 0.05);
   expect(r.here.swings).toBeGreaterThan(0);
   expect(r.goalAfterKeys).toBe(null);
 });
 
-test('закалка: зачарования красят шлейф, все 28 синергий срабатывают на добивающем, спец-удар Q у каждого из 16 оружий', async ({ page }) => {
+test('temper: enchantments colour the trail, all 28 synergies fire on the finisher, the Q weapon art of each of the 16 weapons', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const E = ['sharpness', 'critical', 'leeching', 'knockback', 'swirling', 'fireAspect', 'soulSiphon', 'smiting'];
-    const d1 = () => m.dummies.find((d: any) => d.name === 'чучело 1');
+    const d1 = () => m.dummies.find((d: any) => d.name === 'dummy 1');
     const total = () => m.dummies.reduce((s: number, d: any) => s + d.total, 0);
     const stand = (dz: number) => { const d = d1(); m.hero.place(d.pos.x, d.pos.z + dz, Math.PI); m.setAim(d.pos.x, d.pos.z); m.step(0.3); };
-    // без закалки — стандартный шлейф; одна закалка — её цвет, синергий нет
+    // without temper — the standard trail; one temper — its colour, no synergies
     m.weapon('sword');
     const plain = m.hero.swingLooks;
     m.temper(['fireAspect']);
     const one = { looks: m.hero.swingLooks?.length, syn: m.arts.synergies.length, red: m.hero.swingLooks?.[0].color.r > m.hero.swingLooks?.[0].color.b };
-    // каждая пара: синергия срабатывает на добивающем комбо и бьёт чучела
+    // each pair: the synergy fires on the combo finisher and hits the dummies
     const pairs: [string, number][] = [];
     for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
       m.resetTargets(); m.step(0.2);
@@ -157,20 +157,20 @@ test('закалка: зачарования красят шлейф, все 28 
       m.step(2.5);
       pairs.push([id, (m.arts.procs.get(id) ?? 0) - p0]);
     }
-    // три закалки — резонанс: три синергии сразу
+    // three tempers — resonance: three synergies at once
     m.resetTargets(); m.step(0.2);
     const tri = m.temper(['sharpness', 'fireAspect', 'smiting']);
     stand(1.8);
     const res0 = m.arts.procs.get('resonance') ?? 0;
     m.input.attack = true; for (let k = 0; k < 120; k++) m.step(1 / 60); m.input.attack = false; m.step(2);
     const resonance = (m.arts.procs.get('resonance') ?? 0) - res0;
-    // шкала копится попаданиями; без неё Q не бьёт
+    // the meter fills with hits; without it Q does not strike
     m.temper([]); m.resetTargets(); m.step(0.2); stand(1.8);
     m.arts.meter = 0;
     const early = m.special(d1().pos.x, d1().pos.z);
     m.input.attack = true; for (let k = 0; k < 240; k++) m.step(1 / 60); m.input.attack = false; m.step(0.5);
     const filled = m.arts.meter;
-    // спец-удар каждого вида оружия
+    // the weapon art of each weapon kind
     const specials: Record<string, { ok: boolean; dmg: number; moved: number; hidden: boolean; back: boolean; state: string; dual: boolean; style: string }> = {};
     for (const id of ['sword', 'axe', 'dagger', 'mace', 'spear', 'hammer', 'scythe', 'katana', 'nagakiba', 'dragonslayer', 'pontiff', 'staff', 'halberd', 'rapier', 'knuckles']) {
       m.resetTargets(); m.step(0.2);
@@ -182,7 +182,7 @@ test('закалка: зачарования красят шлейф, все 28 
       let hidden = false;
       const states = new Set<string>();
       for (let k = 0; k < 150; k++) { m.step(1 / 60); hidden ||= m.hero.weaponHidden; states.add(m.hero.state); }
-      specials[id] = { ok, dmg: total() - t0, moved: p0.distanceTo(m.hero.pos), hidden, back: !m.hero.weaponHidden, state: [...states].includes('спец-удар') ? 'спец-удар' : '', dual: m.hero.dual, style: m.hero.style };
+      specials[id] = { ok, dmg: total() - t0, moved: p0.distanceTo(m.hero.pos), hidden, back: !m.hero.weaponHidden, state: [...states].includes('art') ? 'art' : '', dual: m.hero.dual, style: m.hero.style };
     }
     m.weapon(''); m.temper([]);
     return { plain, one, pairs, tri, resonance, early, filled, specials, after: m.arts.meter };
@@ -198,16 +198,16 @@ test('закалка: зачарования красят шлейф, все 28 
   expect(r.filled).toBe(1);
   for (const [id, s] of Object.entries(r.specials)) {
     expect(s.ok, id).toBe(true);
-    expect(s.state, id).toBe('спец-удар');
+    expect(s.state, id).toBe('art');
     expect(s.dmg, id).toBeGreaterThan(0);
     expect(s.back, id).toBe(true);
   }
   expect(r.specials.axe.hidden).toBe(true);
-  // парное оружие — второй клинок в левой руке
+  // dual weapons — the second blade in the left hand
   expect(r.specials.pontiff.dual).toBe(true);
   expect(r.specials.knuckles.dual).toBe(true);
   expect(r.specials.katana.dual).toBe(false);
-  // свои позы ударов у каждого вида: восемь стилей
+  // each kind has its own strike poses: eight styles
   expect(Object.fromEntries(Object.entries(r.specials).map(([id, s]) => [id, s.style]))).toEqual({
     sword: 'sword', axe: 'heavy', dagger: 'dagger', mace: 'heavy', spear: 'thrust', hammer: 'heavy', scythe: 'pole', katana: 'katana',
     nagakiba: 'katana', dragonslayer: 'heavy', pontiff: 'dual', staff: 'pole', halberd: 'pole', rapier: 'thrust', knuckles: 'fist',
@@ -215,11 +215,11 @@ test('закалка: зачарования красят шлейф, все 28 
   for (const id of ['dagger', 'spear', 'hammer', 'katana', 'halberd']) expect(r.specials[id].moved, id).toBeGreaterThan(2);
 });
 
-test('поиск пути: клик ведёт в обход стен, по ступеням, вброд через пруд и на площадку витрины', async ({ page }) => {
+test('pathfinding: a click leads around walls, up the stairs, wading through the pond and onto the showcase platform', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
-    /** Клик в точку и ждать, пока дойдёт */
+    /** Click at a point and wait until he arrives */
     const go = (x: number, z: number, y?: number, limit = 30) => {
       m.click(x, z, false, y); m.step(1 / 60); m.release();
       let t = 0;
@@ -227,23 +227,23 @@ test('поиск пути: клик ведёт в обход стен, по ст
       return { x: m.hero.pos.x, y: m.hero.pos.y, z: m.hero.pos.z, t, left: !!m.goal };
     };
     const out: Record<string, any> = {};
-    // за стену «угла»: прямая упирается в стену x = 16, путь — в обход её конца
+    // behind the "corner" wall: the straight line runs into the wall x = 16, the path goes around its end
     m.hero.place(12, 8, 0); m.step(0.1);
     out.cornerPath = m.pathfinder.find(m.hero.pos, m.hero.pos.clone().set(19, 0, 8)).length;
     out.corner = go(19, 8);
-    // на площадку 2 м — только по ступеням
+    // onto the 2 m platform — only by the stairs
     m.hero.place(-10, -17, 0); m.step(0.1);
     out.platform = go(-18, -20, 2);
-    // в пруд вброд и обратно на берег
+    // wading into the pond and back to the shore
     m.hero.place(-12, 4, 0); m.step(0.1);
     out.pond = go(-18, 4);
     out.shore = go(-12, 4);
-    // от старта — на площадку 2 м в витрине (через проём в южной стене, по ступеням)
+    // from the start — onto the 2 m platform in the showcase (through the opening in the south wall, by the stairs)
     m.hero.place(0, 4, 0); m.step(0.1);
     out.study = go(10, 42, 2);
-    // клик по чучелу за прудом: подходит в обход и бьёт
+    // a click on the dummy beyond the pond: approaches around and strikes
     m.resetTargets();
-    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const d = m.dummies.find((x: any) => x.name === 'lone');
     m.hero.place(-11, 6, 0); m.step(0.1);
     m.click(d.pos.x, d.pos.z); m.step(1 / 60); m.release(); m.step(4);
     out.dummyHits = d.hits;
@@ -259,27 +259,27 @@ test('поиск пути: клик ведёт в обход стен, по ст
   expect(r.dummyHits).toBe(1);
 });
 
-test('прыжка нет: площадка 2 м сбоку — стена, наверх 2 м — по ступеням, с края — падение; перекат на пробел', async ({ page }) => {
+test('no jump: the 2 m platform from the side is a wall, up 2 m — by the stairs, off the edge — a fall; roll on Space', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
-    // площадка сбоку — стена: без прыжка не залезть
+    // the platform from the side is a wall: no climbing without a jump
     m.hero.place(-18, -16, Math.PI); m.step(0.2);
     m.input.move.set(0, -1); m.step(1.5); m.input.move.set(0, 0);
     const wall = { z: m.hero.pos.z, y: m.hero.pos.y };
-    // по ступеням с +X — на площадку 2 м
+    // by the stairs from +X — onto the 2 m platform
     m.hero.place(-12, -20, -Math.PI / 2); m.step(0.2);
     m.input.move.set(-1, 0); m.step(1.2); m.input.move.set(0, 0); m.step(0.3);
     const top = m.hero.pos.y;
-    // с северного края площадки — падение
+    // off the north edge of the platform — a fall
     m.input.move.set(0, -1); m.step(1.2); m.input.move.set(0, 0); m.step(0.5);
     const fell = { y: m.hero.pos.y, grounded: m.hero.grounded };
-    // перекат: ~rollDist, повторно — только после перезарядки
+    // roll: ~rollDist, again — only after the cooldown
     m.hero.place(0, 8, Math.PI / 2); m.step(0.2);
     m.input.move.set(1, 0); m.press('roll'); m.step(m.HERO.rollTime); m.input.move.set(0, 0);
     const rollX = m.hero.pos.x;
     m.press('roll'); m.step(1 / 60);
-    return { wall, top, fell, rollX, rollAgain: m.hero.state === 'перекат', rollDist: m.HERO.rollDist, hasJump: 'jump' in m.input };
+    return { wall, top, fell, rollX, rollAgain: m.hero.state === 'roll', rollDist: m.HERO.rollDist, hasJump: 'jump' in m.input };
   });
   expect(r.hasJump).toBe(false);
   expect(r.wall.y).toBe(0);
@@ -291,7 +291,7 @@ test('прыжка нет: площадка 2 м сбоку — стена, на
   expect(r.rollAgain).toBe(false);
 });
 
-test('вода анимирована: время шейдера идёт', async ({ page }) => {
+test('water is animated: the shader time runs', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -301,13 +301,13 @@ test('вода анимирована: время шейдера идёт', asyn
   expect(r).toBeCloseTo(0.5, 2);
 });
 
-test('склад: сундук на F, в нём стрелы и предмет снаряжения, бочки взрываются цепочкой от меча, ящики разбиваются, источник лечит', async ({ page }) => {
+test('storage yard: a chest on F with arrows and a gear item inside, barrels explode in a chain from the sword, crates break, the fountain heals', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     m.resetTargets(); m.hero.revive(); m.hero.god = false;
     const P = m.props;
-    // сундук: подойти, F — трясётся, крышка распахивается, лут вылетает фонтаном, проходя — подобран
+    // chest: approach, F — it shakes, the lid flies open, loot bursts out in a fountain, walking over — picked up
     const s = P.supplies[0];
     m.hero.place(s.pos.x + Math.sin(s.yaw) * 1.2, s.pos.z + Math.cos(s.yaw) * 1.2, 0);
     m.step(0.1);
@@ -321,7 +321,7 @@ test('склад: сундук на F, в нём стрелы и предмет 
     const lootLeft = P.pickups.length, berries = m.berries - berries0;
     const items1 = m.profile.data.items.length, arrows1 = m.profile.data.arrows;
 
-    // бочки: бьём одну из тройки — взрываются три
+    // barrels: hit one of the three — all three explode
     m.hero.god = true;
     const b = P.barrels[2];
     m.hero.place(b.pos.x - 1.2, b.pos.z - 0.6, 0); m.setAim(b.pos.x, b.pos.z); m.step(0.2);
@@ -329,7 +329,7 @@ test('склад: сундук на F, в нём стрелы и предмет 
     m.step(2);
     const barrelsLeft = P.barrels.filter((x: any) => !x.exploded).length;
 
-    // деревянный ящик разбивается мечом
+    // a wooden crate breaks under the sword
     const c = P.crates[1];
     const ver0 = P.version;
     m.hero.place(c.pos.x, c.pos.z - 1.4, 0); m.setAim(c.pos.x, c.pos.z); m.step(0.2);
@@ -338,7 +338,7 @@ test('склад: сундук на F, в нём стрелы и предмет 
     m.input.attack = false;
     const crateBroken = c.broken, verChanged = P.version > ver0;
 
-    // источник здоровья: E лечит, пока стоишь рядом
+    // health fountain: E heals while you stand next to it
     m.hero.god = false; m.hero.hp = 30;
     const t = P.terminals[0];
     m.hero.place(t.pos.x + Math.sin(t.yaw) * 1.0, t.pos.z + Math.cos(t.yaw) * 1.0, 0); m.step(0.1);
@@ -347,7 +347,7 @@ test('склад: сундук на F, в нём стрелы и предмет 
     m.resetTargets(); m.hero.revive();
     return { lootCharging, burstEarly, loot, lootLeft, berries, barrelsLeft, crateBroken, verChanged, healed, items1, arrows1, items0, arrows0 };
   });
-  // пока сундук копит силу — пусто; потом 4 горсти малины, 2 лечения, связка стрел и предмет
+  // while the chest gathers strength — empty; then 4 handfuls of raspberries, 2 heals, a bundle of arrows and an item
   expect(r.lootCharging).toBe(0);
   expect(r.burstEarly).toBe(false);
   expect(r.loot).toBe(8);
@@ -361,7 +361,7 @@ test('склад: сундук на F, в нём стрелы и предмет 
   expect(r.healed).toBeGreaterThan(20);
 });
 
-test('декор: предметы из карты рисуются экземплярами, переживают JSON, светят', async ({ page }) => {
+test('decor: items from the map are drawn as instances, survive JSON, give light', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -392,11 +392,11 @@ test('декор: предметы из карты рисуются экземп
   expect(r.lights).toBeGreaterThan(5);
 });
 
-test('декор мешает пройти: герой упирается в обломок колонны, путь обходит упавшую, через щебень — насквозь', async ({ page }) => {
+test('decor blocks the way: the hero runs into a column stump, the path goes around a fallen one, through rubble — straight on', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
-    // обломок колонны 1 × 1 м в (−2, −21,5): идём на него с юга и упираемся
+    // a 1 × 1 m column stump at (−2, −21.5): walk at it from the south and run into it
     m.hero.place(-2, -19, Math.PI);
     m.step(0.2);
     m.input.move.set(0, -1);
@@ -404,14 +404,14 @@ test('декор мешает пройти: герой упирается в о�
     for (let t = 0; t < 1.2; t += 0.05) { m.step(0.05); touching ||= m.hero.touching; }
     m.input.move.set(0, 0);
     const blocked = { z: m.hero.pos.z, touching };
-    // колонна лежит в (13, −20) под 25°: клик за неё — путь в обход
+    // a column lies at (13, −20) at 25°: a click behind it — the path goes around
     m.hero.place(13, -17, Math.PI); m.step(0.2);
     const to = m.hero.pos.clone().set(13, 0, -22.5);
     const path = m.pathfinder.find(m.hero.pos, to, { solids: m.solids });
     m.click(13, -22.5); m.step(1 / 60); m.release();
     for (let t = 0; t < 12 && m.goal; t += 0.1) m.step(0.1);
     const around = { x: m.hero.pos.x, z: m.hero.pos.z, left: !!m.goal };
-    // щебень без коллайдера: проходим насквозь
+    // rubble without a collider: we walk straight through
     m.hero.place(11, 0, Math.PI); m.step(0.2);
     m.input.move.set(0, -1); m.step(1); m.input.move.set(0, 0);
     const rubble = m.hero.pos.z;
@@ -421,7 +421,7 @@ test('декор мешает пройти: герой упирается в о�
       inObstacles: m.obstacles.filter((o: any) => o.y0 !== undefined).length,
     };
   });
-  expect(r.blocked.z).toBeGreaterThan(-21.05); // передняя грань обломка — z = −21, герой перед ней
+  expect(r.blocked.z).toBeGreaterThan(-21.05); // the stump's front face is z = −21, the hero is in front of it
   expect(r.blocked.touching).toBe(true);
   expect(r.path).toBeGreaterThan(1);
   expect(Math.hypot(r.around.x - 13, r.around.z + 22.5)).toBeLessThan(0.3);
@@ -431,7 +431,7 @@ test('декор мешает пройти: герой упирается в о�
   expect(r.inObstacles).toBe(r.solids);
 });
 
-test('редактор: декор на пол, стену и потолок, перенос, отмена; стёрли стену — факел ушёл вместе с ней', async ({ page }) => {
+test('editor: decor onto the floor, a wall and the ceiling, move, undo; the wall erased — the torch went with it', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(pathToFileURL(resolve('dist/index.html')).href + '?dev=editor');
@@ -444,23 +444,23 @@ test('редактор: декор на пол, стену и потолок, п
     m.setDecor('rubble');
     const floor = m.aimDecor([3, 10, 3], [0, -1, 0]);
     m.setDecor('torch_wall');
-    const wall = m.aimDecor([18, 1.5, 0], [0, 0, 1]); // стена «угла» z = 5
+    const wall = m.aimDecor([18, 1.5, 0], [0, 0, 1]); // the "corner" wall z = 5
     m.setDecor('chain');
-    const ceiling = m.aimDecor([9, 0.5, 49], [0, 1, 0]); // навес витрины
+    const ceiling = m.aimDecor([9, 0.5, 49], [0, 1, 0]); // the showcase canopy
     m.setDecor('torch_wall');
-    const wrong = m.aimDecor([3, 10, 3], [0, -1, 0]); // настенный на пол — нельзя
+    const wrong = m.aimDecor([3, 10, 3], [0, -1, 0]); // a wall-mounted one onto the floor — not allowed
     const item = m.addDecor({ name: 'torch_wall', pos: wall.pos, rot: wall.rot, on: wall.on });
     const added = L.decor.length - n0;
     m.changeDecor(item, (d: any) => { d.pos = [d.pos[0] + 1, d.pos[1], d.pos[2]]; });
     const moved = item.pos[0];
     m.undo();
     const back = item.pos[0];
-    // стёрли клетку стены, к которой прикреплён факел, — уходит и факел; отмена возвращает оба
+    // the wall cell the torch is attached to is erased — the torch goes too; undo brings both back
     m.edit(wall.on[0], wall.on[1], wall.on[2], 'air');
     const erased = { decor: L.decor.length - n0, block: L.nameAt(...wall.on) };
     m.undo();
     const restored = { decor: L.decor.length - n0, block: L.nameAt(...wall.on), same: L.decor.includes(item) };
-    m.undo(); // убрать сам факел
+    m.undo(); // remove the torch itself
     m.view.sync();
     return { floor, wall, ceiling, wrong, added, moved, back, erased, restored, after: L.decor.length - n0, inst: m.view.decor.instances > 0 };
   });
@@ -482,7 +482,7 @@ test('редактор: декор на пол, стену и потолок, п
   expect(r.inst).toBe(true);
 });
 
-test('этаж подземелья: декор комнат переезжает вместе с ними, крепления — на стенах', async ({ page }) => {
+test('dungeon floor: room decor moves together with the rooms, mounts are on the walls', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=dungeon&seed=42&floor=2');
@@ -503,7 +503,7 @@ test('этаж подземелья: декор комнат переезжае�
   expect(r.inst).toBeGreaterThanOrEqual(r.n);
 });
 
-test('свет как в Unreal: AO, цветокоррекция и дымка включаются и выключаются, кадр рисуется', async ({ page }) => {
+test('light as in Unreal: AO, colour grading and haze switch on and off, the frame is drawn', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -517,7 +517,7 @@ test('свет как в Unreal: AO, цветокоррекция и дымка 
     m.setNight(true); m.render();
     const night = { bloom: L.bloom.strength, sun: L.sun.intensity };
     m.setNight(false); m.render();
-    // цена кадра: буфер постобработки не плотнее DPR 1,25, AO — в половину буфера
+    // the frame's cost: the post-processing buffer is no denser than DPR 1.25, AO — half the buffer
     const buf = L.composer.renderTarget1, css = window.innerWidth;
     const res = { dpr: buf.width / css, ao: L.ao.width / buf.width };
     return { on, off, night, day: { bloom: L.bloom.strength, sun: L.sun.intensity }, res };
@@ -530,7 +530,7 @@ test('свет как в Unreal: AO, цветокоррекция и дымка 
   expect(r.res.ao).toBeCloseTo(0.5, 2);
 });
 
-test('трава поверх блоков: бахрома свисает с уступов, пучки растут пятнами, край дорожки рваный', async ({ page }) => {
+test('grass over blocks: fringe hangs off ledges, tufts grow in patches, the path edge is ragged', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -538,7 +538,7 @@ test('трава поверх блоков: бахрома свисает с у�
     let detailShadow = false;
     v.group.traverse((o: any) => { if (o.isMesh && o.material === v.mats.detail && o.castShadow) detailShadow = true; });
     const before = v.triangles('detail');
-    // срезать верхний ярус холма — бахрома и пучки пересобираются
+    // cut off the hill's top tier — the fringe and tufts are rebuilt
     const L = m.level;
     L.set(-22, 3, 17, 'grass');
     v.sync();
@@ -546,8 +546,8 @@ test('трава поверх блоков: бахрома свисает с у�
     L.set(-22, 3, 17, 'air');
     v.sync();
     const back = v.triangles('detail');
-    // клетка дорожки посреди травы: рваный край в обе стороны (трава на дорожку и дорожка на траву) — до 8 наложений
-    // сравнение с землёй в той же клетке: пучки пропадают одинаково, трава заходит на обе, а дорожка ещё и сама заходит на траву
+    // a path cell amid grass: a ragged edge both ways (grass onto the path and the path onto the grass) — up to 8 overlays
+    // compared with dirt in the same cell: the tufts vanish alike, grass creeps onto both, and the path also creeps onto the grass itself
     const was = L.nameAt(6, -1, -6);
     L.set(6, -1, -6, 'path'); v.sync();
     const withPath = v.triangles('detail');
@@ -557,14 +557,14 @@ test('трава поверх блоков: бахрома свисает с у�
     return { before, after, back, opaque: v.triangles('opaque'), detailShadow, bleed, restored: v.triangles('detail') };
   });
   expect(r.before).toBeGreaterThan(5000);
-  expect(r.after).toBeGreaterThan(r.before); // новая трава на вершине: ещё бахрома на 4 стороны
+  expect(r.after).toBeGreaterThan(r.before); // new grass on the top: more fringe on 4 sides
   expect(r.back).toBe(r.before);
   expect(r.detailShadow).toBe(false);
-  expect(r.bleed).toBe(8); // 4 стороны × 2 треугольника: дорожка заходит на траву
+  expect(r.bleed).toBe(8); // 4 sides × 2 triangles: the path creeps onto the grass
   expect(r.restored).toBe(r.back);
 });
 
-test('мир: водопад, река с течением, портал и запечённый свет рисуются; через мост — на другой берег, по слоям ландшафта — на вершину', async ({ page }) => {
+test('world: the waterfall, the flowing river, the portal and baked light are drawn; across the bridge — to the other bank, up the terrain layers — to the top', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -574,12 +574,12 @@ test('мир: водопад, река с течением, портал и за
     const want = ['wall_stone', 'yard_floor', 'hay', 'cliff', 'cliff_dark', 'cliff_grass', 'waterfall', 'river', 'bridge_deck', 'bridge_post', 'grass_slab', 'leaves_fluffy', 'dry_grass', 'daisies', 'path_stairs', 'portal', 'portal_frame', 'portal_floor'];
     const decor = new Set(m.level.decor.map((d: any) => d.name));
     const wantDecor = ['crates_banded_stack', 'chest', 'cart_loaded', 'bench', 'lantern_post_double', 'lantern_wall', 'waterfall_splash', 'foam_patch', 'candles_group', 'candles_row', 'candle_tall'];
-    // по дороге через мост: от двора к порталу
+    // along the road over the bridge: from the yard to the portal
     m.hero.place(46, 0, 0); m.step(0.2);
     m.click(58, 0); m.step(1 / 60); m.release();
     for (let t = 0; t < 10 && m.goal; t += 0.1) m.step(0.1);
     const bridge = { x: m.hero.pos.x, z: m.hero.pos.z, y: m.hero.pos.y, left: !!m.goal };
-    // ландшафт проходим отовсюду: на самую высокую плиту юго-запада — без лестниц, по слоям 0,5 м
+    // the terrain is walkable from everywhere: onto the highest slab of the south-west — without stairs, by 0.5 m layers
     let best = { x: 0, z: 0, y: -1 };
     for (let x = 28; x <= 46; x++) for (let z = 8; z <= 22; z++) {
       const t = m.level.topAt(x, z, 12);
@@ -604,8 +604,8 @@ test('мир: водопад, река с течением, портал и за
   expect(r.falls).toBeGreaterThan(0);
   expect(r.river).toBeGreaterThan(0);
   expect(r.portal).toBeGreaterThan(0);
-  expect(r.baked).toBeGreaterThan(5); // свечи и портал
-  expect(r.bakedPoint).toBe(false); // у свечей нет PointLight
+  expect(r.baked).toBeGreaterThan(5); // candles and the portal
+  expect(r.bakedPoint).toBe(false); // candles have no PointLight
   expect(Math.hypot(r.hero.x - 58, r.hero.z)).toBeLessThan(0.3);
   expect(r.hero.y).toBe(0);
   expect(r.hero.left).toBe(false);
@@ -614,7 +614,7 @@ test('мир: водопад, река с течением, портал и за
   expect(r.plateau.d).toBeLessThan(0.3);
 });
 
-test('редактор: ландшафт — поставить, выбрать, править, сдвинуть, убрать; отмена и JSON', async ({ page }) => {
+test('editor: terrain — place, select, edit, move, remove; undo and JSON', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(pathToFileURL(resolve('dist/index.html')).href + '?dev=editor');
@@ -631,7 +631,7 @@ test('редактор: ландшафт — поставить, выбрать,
     let maxTop = 0;
     for (let x = -5; x <= 15; x++) for (let z = -2; z <= 14; z++) { const t = L.topAt(x, z, 10); if (t !== null) maxTop = Math.max(maxTop, t + 1); }
     const afterA = snap();
-    // второй кусок в стороне, затем выбрать первый кликом по его клетке и править
+    // a second piece to the side, then select the first by clicking its cell and edit
     const b = m.placeLand(40, 0, 6);
     const afterB = snap();
     const picked = m.landAt(5, 1, 6) === a && m.landAt(40, 0, 6) === b && m.landAt(80, 0, 80) === null;
@@ -642,7 +642,7 @@ test('редактор: ландшафт — поставить, выбрать,
     const edited = a.w === 14 && a.layers === 4 && m.selectedLand === a;
     m.editLand({ x: 8 });
     const moved = a.x === 8;
-    // ручной блок поверх куска переживает перестройку
+    // a manual block on top of the piece survives a rebuild
     m.edit(8, 6, 6, 'cobble');
     m.selectLand(a);
     m.randomizeLand();
@@ -651,22 +651,22 @@ test('редактор: ландшафт — поставить, выбрать,
     const inJson = Array.isArray(json.meta?.lands) && json.meta.lands.length === 2 && json.meta.lands[0].x === 8;
     m.removeLand(a);
     const removed = m.lands.length === 1 && m.selectedLand === null;
-    m.undo(); // вернуть кусок
+    m.undo(); // bring the piece back
     const back = m.lands.length === 2;
-    m.undo(); m.undo(); m.undo(); // правка после ручного блока, ручной блок, слитые правки куска
+    m.undo(); m.undo(); m.undo(); // the edit after the manual block, the manual block, the merged piece edits
     const restoredB = snap() === afterB && a.x === 5 && a.w === 20;
-    m.undo(); // второй кусок
+    m.undo(); // the second piece
     const restoredA = snap() === afterA && m.lands.length === 1;
     m.undo();
     return { placed, maxTop, picked, undoBefore, edited, moved, manualKept, inJson, removed, back, restoredB, restoredA, restored: snap() === orig && m.lands.length === 0 };
   });
   expect(errors).toEqual([]);
   expect(r.placed).toBeGreaterThan(50);
-  expect(r.maxTop).toBeLessThanOrEqual(3 + 1); // 6 слоёв = 3 м над уровнем 0 (+ трава и цветы сверху)
+  expect(r.maxTop).toBeLessThanOrEqual(3 + 1); // 6 layers = 3 m above level 0 (+ grass and flowers on top)
   expect(r).toMatchObject({ picked: true, edited: true, moved: true, manualKept: true, inJson: true, removed: true, back: true, restoredB: true, restoredA: true, restored: true });
 });
 
-test('HUD как в Minecraft Dungeons: панель с артефактами, сердце, зелье, карта, стрелы, опыт, задание', async ({ page }) => {
+test('HUD as in Minecraft Dungeons: the artifact bar, heart, potion, map, arrows, experience, quest', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -687,34 +687,34 @@ test('HUD как в Minecraft Dungeons: панель с артефактами, 
   expect(r.potionKey).toBe('E');
   expect(r.map).toBe(true);
   expect(Number(r.ammo)).toBeGreaterThan(0);
-  expect(r.goal).toContain('плейграунд');
+  expect(r.goal).toContain('playground');
   expect(r.lv).toBe('LV 1');
   expect(r.clip).toBeCloseTo(50, 0);
-  // стартовая куртка даёт здоровье сверх 100
+  // the starting tunic gives health above 100
   expect(r.maxHp).toBeGreaterThan(100);
-  // стартовые заклинания занимают все три гнезда
+  // the starting spells take all three slots
   expect(r.emptyArt).toBe(0);
 });
 
-test('снаряжение в бою: стрелы на ПКМ, артефакты 1/2/3 с перезарядкой, зелье, души и опыт', async ({ page }) => {
+test('gear in battle: arrows on RMB, artifacts 1/2/3 with cooldown, potion, souls and experience', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     m.resetTargets(); m.hero.revive(); m.hero.god = false;
-    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const d = m.dummies.find((x: any) => x.name === 'lone');
     m.hero.place(d.pos.x + 5, d.pos.z, -Math.PI / 2);
     m.step(0.2);
     const arrows0 = m.profile.data.arrows, hits0 = d.hits;
     let shots = 0;
     for (let i = 0; i < 4; i++) { if (m.shoot(d.pos.x, d.pos.z)) shots++; m.step(0.7); }
     const arrowHits = d.hits - hits0, arrows1 = m.profile.data.arrows;
-    // огненный шар: взрыв у чучела, перезарядка в HUD
+    // fireball: an explosion at the dummy, the cooldown in the HUD
     const hits1 = d.hits;
     const fired = m.artifact(0, d.pos.x, d.pos.z);
     const again = m.artifact(0, d.pos.x, d.pos.z);
     m.step(0.8);
     const boom = d.hits > hits1, cd = m.gear.hudState().artifacts[0][0];
-    // лечение лечит, пустое гнездо не срабатывает, зелье лечит и уходит на перезарядку
+    // heal heals, an empty slot does not fire, the potion heals and goes on cooldown
     m.hero.hp = 40;
     m.artifact(2, 0, 0); m.step(1);
     const totemHeal = m.hero.hp - 40;
@@ -741,7 +741,7 @@ test('снаряжение в бою: стрелы на ПКМ, артефакт
   expect(r.xp).toBeGreaterThan(1000);
 });
 
-test('заклинания: четыре стартовых, заряд сильнее тапа, удар со стоп-кадром, с боссов — не из сундуков', async ({ page }) => {
+test('spells: four starting ones, a charge is stronger than a tap, a hit with hitstop, from bosses — not from chests', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -749,36 +749,36 @@ test('заклинания: четыре стартовых, заряд силь
     const p = m.profile;
     const kinds = p.artifacts().map((it: any) => it?.def);
     const inBag = ['spark', 'fireball', 'icerain', 'heal'].every((d) => p.data.items.some((i: any) => i.def === d));
-    // в сундуках и у торговцев заклинаний нет
+    // no spells in chests or at merchants
     let lootSpell = false;
     for (let i = 0; i < 300; i++) if (['spark', 'fireball', 'icerain', 'heal'].includes(p.rollLoot().def)) lootSpell = true;
-    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const d = m.dummies.find((x: any) => x.name === 'lone');
     m.hero.place(d.pos.x + 6, d.pos.z, -Math.PI / 2);
     m.step(0.2);
     const sp = m.gear.spells;
-    // искра тапом и с полным зарядом: урон по чучелу
+    // spark by tap and with a full charge: damage to the dummy
     let h0 = d.hits;
     m.artifact(1, d.pos.x, d.pos.z, 0); m.step(0.4);
     const sparkHit = d.hits > h0;
     m.gear.artT[1][0] = 0;
-    // удержание: заряд копится, герой идёт медленнее, отпустить — каст
+    // holding: the charge builds, the hero walks slower, release — cast
     m.fx.hitstop = 0;
     const charged = m.hold(1, d.pos.x, d.pos.z, 1.2);
     m.step(0.2);
     const hitstop = m.fx.hitstop;
     const slowWhile = (() => { m.gear.artT[1][0] = 0; m.gear.pressArtifact(1, d.pos); m.step(0.3); const k = m.gear.spells.charging?.k ?? 0; const sm = m.hero.speedMul; m.gear.releaseArtifact(1, d.pos); return { k, sm }; })();
     m.step(0.5);
-    // ледяной дождь: надеть в гнездо 3 и кастовать
+    // ice rain: equip into slot 3 and cast
     const ice = p.data.items.find((i: any) => i.def === 'icerain');
     p.equip(ice.uid, 2);
     h0 = d.hits;
     m.artifact(2, d.pos.x, d.pos.z, 1); m.step(2.8);
     const iceHits = d.hits - h0;
-    // огненный шар долетает и взрывается
+    // the fireball flies there and explodes
     h0 = d.hits;
     m.artifact(0, d.pos.x, d.pos.z, 0.5); m.step(1);
     const fireHit = d.hits > h0;
-    // лечение: заряженное лечит сильнее
+    // heal: a charged one heals more
     const heal = p.data.items.find((i: any) => i.def === 'heal');
     p.equip(heal.uid, 2);
     m.hero.hp = 20; m.artifact(2, 0, 0, 0); m.step(0.5); const tap = m.hero.hp - 20;
@@ -798,11 +798,11 @@ test('заклинания: четыре стартовых, заряд силь
   expect(r.fireHit).toBe(true);
   expect(r.full).toBeGreaterThan(r.tap * 2);
   expect(r.impacts).toBeGreaterThanOrEqual(6);
-  // полный заряд — стоп-кадр на ударе
+  // a full charge — hitstop on the hit
   expect(r.hitstop).toBeGreaterThan(0);
 });
 
-test('заклинания с боссов: все 21 творятся с полным зарядом, бьют и не роняют игру', async ({ page }) => {
+test('boss spells: all 21 are cast with a full charge, hit and do not crash the game', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await open(page);
@@ -812,7 +812,7 @@ test('заклинания с боссов: все 21 творятся с пол
       'starbeam', 'judgement', 'deadchoir', 'gravitywell', 'skullscythe', 'fallenguards', 'rift', 'raspberrybush', 'titanform', 'bladephalanx'];
     const p = m.profile, sp = m.gear.spells;
     m.hero.god = true;
-    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const d = m.dummies.find((x: any) => x.name === 'lone');
     const res: Record<string, { cast: boolean; hits: number }> = {};
     for (const id of ids) {
       m.resetTargets(); m.hero.revive();
@@ -832,16 +832,16 @@ test('заклинания с боссов: все 21 творятся с пол
   expect(errors).toEqual([]);
   for (const [id, v] of Object.entries(r.res)) {
     expect(v.cast, id).toBe(true);
-    // всё, кроме облика титана (это усиление), задевает чучело
+    // everything except titan form (that is a buff) clips the dummy
     if (id !== 'titanform') expect(v.hits, id).toBeGreaterThan(0);
   }
   expect(r.impacts).toBeGreaterThanOrEqual(20);
-  // усиления кончились, герой снова обычного роста
+  // the buffs ran out, the hero is normal size again
   expect(r.buffs).toBe(0);
   expect(r.scale).toBeCloseTo(1, 2);
 });
 
-test('базовые заклинания: 10 у героя, бьют, кровь стоит здоровья, голем держит моба', async ({ page }) => {
+test('base spells: 10 on the hero, they hit, blood costs health, the golem holds a mob', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await open(page);
@@ -850,7 +850,7 @@ test('базовые заклинания: 10 у героя, бьют, кров�
     const ids = ['firewall', 'firestorm', 'armageddon', 'wolves', 'elemental', 'golem', 'bloodclaws', 'bloodswarm', 'bloodblade', 'blindflash'];
     const p = m.profile;
     const inBag = ids.every((id) => p.data.items.some((i: any) => i.def === id));
-    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const d = m.dummies.find((x: any) => x.name === 'lone');
     const res: Record<string, { cast: boolean; hits: number; paid: number }> = {};
     for (const id of ids) {
       m.pack.clear();
@@ -862,13 +862,13 @@ test('базовые заклинания: 10 у героя, бьют, кров�
       const h0 = d.hits, hp0 = m.hero.hp;
       const cast = m.artifact(0, d.pos.x, d.pos.z, 1);
       const paid = hp0 - m.hero.hp;
-      // малиновый клинок — усиление: бьём мечом сами
+      // raspberry blade is a buff: we strike with the sword ourselves
       if (id === 'bloodblade') for (let j = 0; j < 4; j++) { m.gear.onHit(10, true, d.pos, d); m.step(0.2); }
       m.step(4);
       res[id] = { cast, hits: d.hits - h0, paid };
       m.step(id === 'golem' ? 16 : id === 'elemental' ? 12 : id === 'wolves' ? 9 : 2);
     }
-    // голем перетягивает моба: тот целится в голема, а не в героя
+    // the golem pulls the mob: it targets the golem, not the hero
     m.pack.clear(); m.resetTargets(); m.hero.revive(); m.hero.god = false;
     m.hero.place(2, 8, Math.PI / 2); m.step(0.1);
     const g = p.data.items.find((i: any) => i.def === 'golem');
@@ -889,11 +889,11 @@ test('базовые заклинания: 10 у героя, бьют, кров�
     if (id.startsWith('blood')) expect(v.paid, id).toBeGreaterThan(0);
   }
   expect(r.focused).toBe(true);
-  // голем растворился — моб снова смотрит на героя
+  // the golem dissolved — the mob looks at the hero again
   expect(r.freed).toBe(true);
 });
 
-test('ауры: двенадцать в инвентаре, гнездо R, эффекты, вспышка ×3 по шкале', async ({ page }) => {
+test('auras: twelve in the inventory, the R slot, effects, a ×3 flare by the meter', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -902,7 +902,7 @@ test('ауры: двенадцать в инвентаре, гнездо R, эф
     const uid = (def: string) => p.data.items.find((i: any) => i.def === def).uid;
     const bag = ['pact', 'bastion', 'rage', 'clarity', 'thorns', 'inferno', 'frost', 'storm', 'halo', 'shade', 'quake', 'blades'].every((d) => p.data.items.some((i: any) => i.def === d));
     const emptySlot = p.data.equip.aura === null && !!document.querySelector('.hud-aura.empty');
-    // ярость: урон выше, вспышка — только с полной шкалой, ×3, потом назад
+    // rage: damage is higher, the flare — only with a full meter, ×3, then back
     const base = g.stats.meleeMult;
     p.equip(uid('rage')); m.step(0.1);
     const rage = g.stats.meleeMult / base;
@@ -913,23 +913,23 @@ test('ауры: двенадцать в инвентаре, гнездо R, эф
     const rageFlare = g.stats.meleeMult / base;
     m.step(5.2);
     const after = g.stats.meleeMult / base;
-    // бастион: удар слабее
+    // bastion: a hit is weaker
     p.equip(uid('bastion')); m.step(0.1);
     m.hero.hp = 100; m.hero.hurt(50); const bastionLoss = 100 - m.hero.hp;
-    // пакт: стрелы по чучелу лечат
-    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    // pact: arrows into the dummy heal
+    const d = m.dummies.find((x: any) => x.name === 'lone');
     p.equip(uid('pact')); m.step(0.1);
     m.hero.place(d.pos.x + 5, d.pos.z, -Math.PI / 2); m.step(0.2);
     m.hero.hp = 40;
     for (let i = 0; i < 3; i++) { m.shoot(d.pos.x, d.pos.z); m.step(0.7); }
     const pactHeal = m.hero.hp - 40;
-    // шипы: ударили вблизи — чучело получает урон
+    // thorns: struck up close — the dummy takes damage
     p.equip(uid('thorns')); m.step(0.1);
     m.hero.place(d.pos.x + 1.2, d.pos.z, -Math.PI / 2); m.step(0.2);
     m.hero.hp = 100; m.step(0.05);
     const h0 = d.hits; m.hero.hurt(30); m.step(0.1);
     const thornsHit = d.hits > h0;
-    // ясность: перезарядка короче
+    // clarity: the cooldown is shorter
     const cd0 = g.stats.artifactCdMult;
     p.equip(uid('clarity')); m.step(0.1);
     const clarity = g.stats.artifactCdMult / cd0;
@@ -950,7 +950,7 @@ test('ауры: двенадцать в инвентаре, гнездо R, эф
   expect(r.flares).toBe(1);
 });
 
-test('ауры с боссов: все двенадцать разложены по боссам этажа, шансы в сумме 100, выпадают по шансам', async ({ page }) => {
+test('boss auras: all twelve are spread over the floor bosses, the chances sum to 100, they drop by the chances', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -958,7 +958,7 @@ test('ауры с боссов: все двенадцать разложены �
     const sums = floor.map((b: any) => b.auras.reduce((a: number, [, w]: [string, number]) => a + w, 0));
     const all = floor.flatMap((b: any) => b.auras.map(([id]: [string, number]) => id));
     const others = m.bosses.filter((b: any) => b.tier !== 'boss').every((b: any) => b.aura === null && b.drops.length === 1);
-    // генерал: терн 40 / тень 30 / поступь 30 — 2000 бросков; аура держится до сброса
+    // the general: thorns 40 / shade 30 / quake 30 — 2000 rolls; the aura holds until reset
     const g = floor.find((b: any) => b.auras.length === 3 && b.auras.some(([id]: [string, number]) => id === 'thorns'));
     const freq: Record<string, number> = {};
     let stable = true;
@@ -982,32 +982,32 @@ test('ауры с боссов: все двенадцать разложены �
   expect(r.freq.quake / 2000).toBeGreaterThan(0.25);
 });
 
-test('наступательные ауры: бьют врагов рядом, шкала вполовину, холод, тень, заморозка вспышкой', async ({ page }) => {
+test('offensive auras: hit enemies nearby, the meter at half, frost, shade, a freeze by the flare', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     m.resetTargets(); m.pack.clear(); m.hero.revive(); m.hero.god = true;
     const p = m.profile, g = m.gear, au = g.auras, off = au.offense;
     const uid = (def: string) => p.data.items.find((i: any) => i.def === def).uid;
-    const d = m.dummies.find((x: any) => x.name === 'одиночное');
+    const d = m.dummies.find((x: any) => x.name === 'lone');
     const out: Record<string, { dealt: number; hits: number; procs: number }> = {};
-    // каждая аура задевает чучело в 1,3 м; ореолу нужны удары героя
+    // each aura clips the dummy at 1.3 m; the halo needs the hero's hits
     for (const id of ['inferno', 'frost', 'storm', 'halo', 'shade', 'quake', 'blades']) {
       p.equip(uid(id)); m.step(0.1);
       m.hero.place(d.pos.x + 1.3, d.pos.z, -Math.PI / 2); m.step(0.1);
       const h0 = d.hits, dealt0 = off.dealt, procs0 = off.procs;
       if (id === 'halo') for (let i = 0; i < 4; i++) { g.onHit(10, true, d.pos.clone()); m.step(0.1); }
-      // тень сама бьёт только во вспышке — пьёт жизнь
+      // shade strikes by itself only in the flare — drinks life
       if (id === 'shade') { au.meter = 1e9; m.step(0.05); m.flare(); }
       m.step(3.5);
       out[id] = { dealt: off.dealt - dealt0, hits: d.hits - h0, procs: off.procs - procs0 };
     }
-    // шкала: урон самой ауры — вполовину
+    // the meter: the aura's own damage — at half
     p.equip(uid('inferno')); m.step(0.1);
     au.meter = 0; const dl0 = off.dealt;
     m.step(1.6);
     const meterK = au.meter / Math.max(1, off.dealt - dl0);
-    // стужа: волк рядом замедлен, вспышка — заморожен
+    // frost: a wolf nearby is slowed, the flare — frozen
     m.hero.place(30, 30, 0); m.step(0.1);
     p.equip(uid('frost')); m.step(0.1);
     const w = m.spawnMob('wolf', 31.5, 30); m.step(1.2);
@@ -1016,12 +1016,12 @@ test('наступательные ауры: бьют врагов рядом, �
     const flared = m.flare(); m.step(0.1);
     const frozen = w.state === 'daze';
     m.step(5.5);
-    // тень: новый волк рядом ослаблен (первого стужа уже доела)
+    // shade: a new wolf nearby is weakened (the first was already finished off by the frost)
     m.pack.clear();
     p.equip(uid('shade')); m.step(0.1);
     const w2 = m.spawnMob('wolf', 31.5, 30); m.step(1.2);
     const exposed = w2.exposeT > 0 && w2.exposeK > 0.1;
-    // бочки и ящики аура не трогает
+    // the aura leaves barrels and crates alone
     m.pack.clear();
     const barrel = m.props.barrels?.[0];
     let barrelSafe = true;
@@ -1035,7 +1035,7 @@ test('наступательные ауры: бьют врагов рядом, �
   });
   for (const [id, v] of Object.entries(r.out)) {
     expect(v.dealt, id).toBeGreaterThan(0);
-    // молния бьёт случайного врага в 5 м — рядом есть и другие чучела
+    // the lightning hits a random enemy within 5 m — there are other dummies nearby
     if (id !== 'storm') expect(v.hits, id).toBeGreaterThan(0);
     expect(v.procs, id).toBeGreaterThan(0);
   }
@@ -1047,21 +1047,21 @@ test('наступательные ауры: бьют врагов рядом, �
   expect(r.barrelSafe).toBe(true);
 });
 
-test('инвентарь: I открывает, надеть клеймор и броню, зачаровать за очки, разобрать за малину', async ({ page }) => {
+test('inventory: I opens, equip the claymore and armour, enchant for points, salvage for raspberries', async ({ page }) => {
   await open(page);
   await page.keyboard.press('KeyI');
   await expect(page.locator('.inv.open')).toBeVisible();
   const tiles = await page.locator('.inv-grid .it[data-uid]').count();
   expect(tiles).toBeGreaterThan(15);
 
-  // надеть клеймор двойным кликом: оружие героя и числа удара сменились
+  // equip the claymore by double click: the hero's weapon and the strike numbers changed
   const clay = await page.evaluate(() => (window as any).__malina.profile.data.items.find((i: any) => i.def === 'claymore').uid);
   await page.locator(`.inv-grid .it[data-uid="${clay}"]`).dblclick();
   const eq = await page.evaluate(() => { const m = (window as any).__malina; return { melee: m.profile.equipped('melee').def, range: m.SWORD.swings[0].range }; });
   expect(eq.melee).toBe('claymore');
   expect(eq.range).toBeCloseTo(2.8, 2);
 
-  // броня: Enter надевает выбранное — здоровье растёт
+  // armour: Enter equips the selected — health grows
   const hp0 = await page.evaluate(() => (window as any).__malina.hero.maxHp);
   const champ = await page.evaluate(() => (window as any).__malina.profile.data.items.find((i: any) => i.def === 'champion').uid);
   await page.locator(`.inv-grid .it[data-uid="${champ}"]`).click();
@@ -1069,7 +1069,7 @@ test('инвентарь: I открывает, надеть клеймор и �
   const hp1 = await page.evaluate(() => (window as any).__malina.hero.maxHp);
   expect(hp1).toBeGreaterThan(hp0);
 
-  // зачарование: выбрать клеймор, открыть первое гнездо, первый вариант — очко ушло, урон вырос
+  // enchanting: select the claymore, open the first slot, the first option — a point spent, damage grew
   await page.locator(`.inv-grid .it[data-uid="${clay}"]`).click();
   const mult0 = await page.evaluate(() => (window as any).__malina.gear.stats.meleeMult);
   await page.locator('.gem[data-slot="0"]').click();
@@ -1082,7 +1082,7 @@ test('инвентарь: I открывает, надеть клеймор и �
   if (opt === 'sharpness') expect(en.mult).toBeGreaterThan(mult0);
   await expect(page.locator(`.inv-grid .it[data-uid="${clay}"]`)).toHaveClass(/ench/);
 
-  // разбор надетого запрещён; меч стража снят — разбираем: малина и очки назад
+  // salvaging an equipped item is forbidden; the warden's sword is unequipped — salvage it: raspberries and points back
   await page.keyboard.press('KeyX');
   await expect(page.locator('.d-salvage')).toHaveCount(0);
   const sword = await page.evaluate(() => (window as any).__malina.profile.data.items.find((i: any) => i.def === 'sword').uid);
@@ -1095,14 +1095,14 @@ test('инвентарь: I открывает, надеть клеймор и �
   expect(after.gone).toBe(true);
   expect(after.berries).toBeGreaterThan(b0);
 
-  // Esc закрывает, профиль сохранён
+  // Esc closes, the profile is saved
   await page.keyboard.press('Escape');
   await expect(page.locator('.inv.open')).toHaveCount(0);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('malina.profile') || '{}').equip?.melee);
   expect(saved).toBe(clay);
 });
 
-test('броня и лук видны на герое: надел доспех — детали на теле, выстрел — лук в левой руке', async ({ page }) => {
+test('armour and the bow are visible on the hero: armour on — parts on the body, a shot — the bow in the left hand', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -1126,7 +1126,7 @@ test('броня и лук видны на герое: надел доспех �
   expect(r.after).toBe(false);
 });
 
-test('кузнец и торговец: лавки с именами, F — окно, сетка всех товаров с ценой по силе, покупка выбранного, перековка, стрелы; всё оружие в инвентаре', async ({ page }) => {
+test('blacksmith and merchant: stalls with names, F — the window, a grid of all wares priced by power, buying the selected, reforging, arrows; every weapon in the inventory', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -1140,14 +1140,14 @@ test('кузнец и торговец: лавки с именами, F — ок
     const list = m.shop.list as { key: string; price: number }[];
     const price = (k: string) => list.find((w) => w.key === k)?.price ?? 0;
     const tiles = document.querySelectorAll('.trade.open .trade-ware').length;
-    // выбрать катану и купить именно её
+    // select the katana and buy exactly it
     m.shop.select('katana');
     const card = document.querySelector('.trade.open .trade-detail')?.textContent ?? '';
     const b0 = m.berries, n0 = m.profile.data.items.length;
     const bought = m.shop.buy();
     const got = m.profile.data.items[m.profile.data.items.length - 1];
     const spent = b0 - m.berries, added = m.profile.data.items.length - n0;
-    // Enter — надеть покупку
+    // Enter — equip the purchase
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter' }));
     const worn = m.profile.equipped('melee').def;
     const sword = m.profile.equipped('melee'), p0 = sword.power;
@@ -1178,19 +1178,19 @@ test('кузнец и торговец: лавки с именами, F — ок
       arrows, spellList, spellBought, spellGot, shopSpells, lootSpell, poor,
     };
   });
-  expect(r.labels).toEqual(['Кузнец', 'Торговец']);
+  expect(r.labels).toEqual(['Blacksmith', 'Merchant']);
   expect(r.inInventory).toHaveLength(16);
   expect(r.opened).toBe(true);
   expect(r.smithTabs).toEqual(['melee', 'ranged', 'armor']);
-  // ауры не продаются — падают с боссов этажа
+  // auras are not sold — they drop from the floor bosses
   expect(r.merchantTabs).toEqual(['melee', 'ranged', 'armor', 'artifact', 'spell']);
-  // всё оружие на прилавке, каждое — со своей ценой, дешёвые первыми
+  // every weapon on the counter, each with its own price, the cheap ones first
   expect(r.tiles).toBe(16);
   expect([...r.keys].sort()).toEqual([...r.inInventory].sort());
   expect(r.prices).toEqual([...r.prices].sort((a, b) => a - b));
   expect(r.dragonslayer).toBeGreaterThan(r.sword * 2);
   expect(r.katana).toBeGreaterThan(r.sword);
-  expect(r.card).toContain('Иайдо');
+  expect(r.card).toContain('Iaido');
   expect(r.card).toContain(String(r.katana));
   expect(r.bought).toBe(true);
   expect(r.got).toBe('katana');
@@ -1208,7 +1208,7 @@ test('кузнец и торговец: лавки с именами, F — ок
   await expect(page.locator('.trade.open')).toHaveCount(0);
 });
 
-test('карта как в Diablo: туман войны открывается по ходу, мини-карта, Tab — поверх игры, M — полная', async ({ page }) => {
+test('map as in Diablo: the fog of war opens as you go, the minimap, Tab — over the game, M — full', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -1229,12 +1229,12 @@ test('карта как в Diablo: туман войны открывается 
   await page.keyboard.press('KeyM');
   await page.evaluate(() => (window as any).__malina.render());
   await expect(page.locator('.hud-mapwrap.open')).toBeVisible();
-  await expect(page.locator('[data-id="mapStats"]')).toContainText('Сундуков открыто');
+  await expect(page.locator('[data-id="mapStats"]')).toContainText('Chests opened');
   await page.keyboard.press('KeyM');
   await expect(page.locator('.hud-mapwrap.open')).toHaveCount(0);
 });
 
-test('затенение AO не рисует спрайты: вспышки заклинаний не дают чёрных квадратов', async ({ page }) => {
+test('AO shading does not draw sprites: spell flashes do not make black squares', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -1254,11 +1254,11 @@ test('затенение AO не рисует спрайты: вспышки з�
   expect(r.back).toBe(true);
 });
 
-/** Стражи зала (src/bosses/roster.ts): все восемь — или сколько уже есть */
+/** Hall wardens (src/bosses/roster.ts): all eight — or as many as exist already */
 const BOSS_IDS = ['cauldron', 'boar', 'storm', 'golden', 'night', 'druse', 'gatherer', 'cat', 'serpent', 'beast', 'queen', 'judge', 'general', 'winter', 'star', 'gardener'];
 
 for (const id of BOSS_IDS) {
-  test(`страж «${id}»: квадрат закрывает арену, бьёт героя, оглушение даёт ×2, смерть — гримуар, пал — сброс`, async ({ page }) => {
+  test(`warden "${id}": the square closes the arena, hits the hero, a stun gives ×2, death — a grimoire, fell — reset`, async ({ page }) => {
     await open(page);
     const r = await page.evaluate((id) => {
       const m = (window as any).__malina;
@@ -1268,13 +1268,13 @@ for (const id of BOSS_IDS) {
       const V = m.hero.pos.constructor;
       const out: Record<string, unknown> = { missing: false };
       out.sleeping = boss.state === 'sleep' && arena.state === 'idle' && arena.solids.length === 0;
-      // от ворот — в квадрат за ними
+      // from the gate — into the square behind it
       m.toBoss(id);
       const t = arena.spec.trigger;
       m.hero.place((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2);
       m.step(0.3);
       out.fight = arena.state === 'fight' && arena.solids.length > 0 && m.bossBar.shown && boss.awake;
-      // герой стоит рядом со стражем — за 12 с страж должен его задеть
+      // the hero stands next to the warden — within 12 s the warden must clip him
       m.step(1.8);
       let lost = 0;
       for (let j = 0; j < 12 * 30 && lost < 5; j++) {
@@ -1287,25 +1287,25 @@ for (const id of BOSS_IDS) {
       }
       out.lost = lost;
       m.hero.god = true;
-      // ярость на половине здоровья
-      // страж может быть неуязвим в этот миг (исчез, в воздухе) — бьём, пока не попадёт
+      // rage at half health
+      // the warden may be invulnerable at this moment (vanished, in the air) — hit until it lands
       for (let j = 0; j < 240 && !boss.enraged; j++) { boss.hit(boss.hp - boss.maxHp * 0.45, new V(0, 0, 1), boss.pos.clone(), 0); m.step(1 / 60); }
       out.enraged = boss.enraged;
-      // оглушение: сердце открыто — урон ×2
+      // stun: the heart is open — damage ×2
       m.step(0.5);
       boss.daze(1.5);
       m.step(0.2);
       const h0 = boss.hp;
       boss.hit(10, new V(0, 0, 1), boss.pos.clone(), 0);
       out.heart = h0 - boss.hp;
-      // смерть — гримуар; подойти — заклинание в инвентаре
+      // death — a grimoire; walk up — the spell is in the inventory
       const had = m.profile.data.items.filter((x: any) => x.def === boss.drop).length;
       const berries0 = m.profile.data.berries;
       for (let j = 0; j < 240 && !boss.dead; j++) { boss.hit(99999, new V(0, 0, 1), boss.pos.clone(), 0); if (!boss.dead) m.step(1 / 60); }
       m.step(3);
       out.won = arena.state;
-      // фонтан малины: чем сильнее страж, тем больше; у боссов этажа — пара гримуаров на выбор
-      // ягоды: подобранные герой уже получил, остальные лежат на полу
+      // a fountain of raspberries: the stronger the warden, the more; floor bosses — a pair of grimoires to choose from
+      // berries: the picked-up ones the hero already has, the rest lie on the floor
       const onFloor = m.props.pickups.filter((p: any) => p.kind === 'berry').reduce((a: number, p: any) => a + p.amount, 0);
       out.berries = boss.berries > 0 && onFloor + m.profile.data.berries - berries0 >= boss.berries;
       const pair = m.grimoires.slice(-boss.drops.length);
@@ -1316,7 +1316,7 @@ for (const id of BOSS_IDS) {
       out.chose = pair.every((x: any) => x.taken);
       m.step(1);
       out.open = arena.solids.length === 0 && boss.minions.length === 0;
-      // сброс и гибель героя: страж спит, героя ставит у ворот
+      // reset and the hero's death: the warden sleeps, the hero is put at the gate
       m.resetTargets();
       m.hero.god = false;
       m.hero.place((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2);
@@ -1326,7 +1326,7 @@ for (const id of BOSS_IDS) {
       out.reset = { arena: arena.state, boss: boss.state, full: boss.hp === boss.maxHp, atExit: Math.hypot(m.hero.pos.x - arena.spec.exit.x, m.hero.pos.z - arena.spec.exit.z) < 0.5 };
       return out;
     }, id);
-    test.skip(r.missing === true, `страж ${id} ещё не сделан`);
+    test.skip(r.missing === true, `warden ${id} is not made yet`);
     expect(r.sleeping).toBe(true);
     expect(r.fight).toBe(true);
     expect(r.lost as number).toBeGreaterThan(4);
@@ -1342,26 +1342,26 @@ for (const id of BOSS_IDS) {
   });
 }
 
-test('масштаб стражей: здоровье, урон и малина растут с уровнем и числом игроков; уровень по умолчанию — героя', async ({ page }) => {
+test('warden scale: health, damage and raspberries grow with the level and the player count; the default level is the hero\'s', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const boss = m.bosses[m.bossIds.indexOf('cauldron')];
     const out: Record<string, unknown> = {};
-    // по умолчанию — уровень героя, один игрок: здоровье = база
+    // by default — the hero's level, one player: health = base
     out.start = { level: boss.scale.level, players: boss.scale.players, hp: m.profile.data.level === 1 ? boss.maxHp === boss.baseHp : true, heroLevel: m.profile.data.level };
     const berries1 = boss.berries;
-    // урон по герою: удар в 10 через хуки стража на уровне 1 и на уровне 11 с четырьмя игроками
+    // damage to the hero: a hit of 10 through the warden hooks at level 1 and at level 11 with four players
     const hit = () => { m.hero.hp = m.hero.maxHp; m.hero.down = false; m.step(0.5); const h0 = m.hero.hp; boss.h.hurtHero(10, boss.pos, 0); return h0 - m.hero.hp; };
     const d1 = hit();
     m.bossScale(11, 4);
     out.scaled = { level: boss.scale.level, players: boss.scale.players };
-    // здоровье: (1 + 0,06·10) · (1 + 0,5·3) = 1,6 · 2,5 относительно уровня 1 соло
+    // health: (1 + 0.06·10) · (1 + 0.5·3) = 1.6 · 2.5 relative to level 1 solo
     out.hpK = boss.maxHp / boss.baseHp;
-    // урон: (1 + 0,03·10) = 1,3 — от числа игроков не растёт
+    // damage: (1 + 0.03·10) = 1.3 — does not grow with the player count
     out.dmgK = hit() / d1;
     out.lootK = boss.berries / berries1;
-    // в бою доля здоровья сохраняется: половина остаётся половиной
+    // in battle the health share is kept: a half stays a half
     m.bossScale(1, 1);
     m.toBoss('cauldron');
     const t = m.arenas[m.bossIds.indexOf('cauldron')].spec.trigger;
@@ -1372,8 +1372,8 @@ test('масштаб стражей: здоровье, урон и малина 
     m.bossScale(1, 2);
     out.fightRatio = boss.hp / boss.maxHp;
     m.step(1 / 60);
-    out.bar = m.bossBar.el.textContent.includes('игроков 2');
-    // уровень героя вырос — стражи на плейграунде крепчают сами
+    out.bar = m.bossBar.el.textContent.includes('2 players');
+    // the hero's level grew — the wardens on the playground get tougher by themselves
     m.bossScale('hero', 1);
     m.profile.data.level = 6;
     m.step(0.1);
@@ -1390,13 +1390,13 @@ test('масштаб стражей: здоровье, урон и малина 
   expect(r.followsHero).toBe(true);
 });
 
-/** Рядовые мобы, первая партия (src/mobs/, wiki/design-mobs.md) */
+/** Rank-and-file mobs, the first batch (src/mobs/, wiki/design-mobs.md) */
 const MOB_IDS = ['healer', 'pyro', 'summoner', 'squire', 'shield', 'berryling', 'gardener', 'wolf',
   'spear', 'crossbow', 'banner', 'hammer', 'slime', 'hedgehog', 'vine', 'bud', 'horror',
   'reaper', 'archer', 'wisp', 'scarecrow', 'boarlet', 'beetle', 'spider', 'hive',
   'druseling', 'pot', 'obelisk', 'mimic', 'keg', 'soller'];
 
-test('мобы: каждый задевает героя, падает от меча и роняет малину', async ({ page }) => {
+test('mobs: each clips the hero, falls to the sword and drops raspberries', async ({ page }) => {
   await open(page);
   const r = await page.evaluate((ids) => {
     const m = (window as any).__malina;
@@ -1408,7 +1408,7 @@ test('мобы: каждый задевает героя, падает от ме
       m.hero.place(2, 8, Math.PI / 2);
       const mob = m.spawnMob(id, 8, 8);
       m.step(0.6);
-      // ближние — герой стоит перед мобом; дальние (держат дистанцию), волк и слизень (прыгают на метку) — герой стоит на месте
+      // melee ones — the hero stands in front of the mob; ranged ones (keep distance), the wolf and the slime (jump at the mark) — the hero stays put
       const far = mob.keep > 3 || id === 'slime';
       let lost = 0;
       for (let j = 0; j < 14 * 30 && lost < 4; j++) {
@@ -1424,7 +1424,7 @@ test('мобы: каждый задевает героя, падает от ме
       for (let j = 0; j < 60 && !mob.dead; j++) { mob.hit(9999, new V(0, 0, 1), mob.pos.clone(), 0); if (!mob.dead) m.step(1 / 60); }
       m.step(1.5);
       const floor = m.props.pickups.filter((p: any) => p.kind === 'berry').reduce((a: number, p: any) => a + p.amount, 0);
-      // огонёк лопается сам, бочонок взрывается сам — тогда он уже пал
+      // the wisp bursts by itself, the keg explodes by itself — then it has already fallen
       if ((id === 'wisp' || id === 'keg') && mob.dead) { out[id] = { lost: lost >= 4, dead: true, gone: true, berries: true }; continue; }
       out[id] = { lost: lost >= 4, dead: mob.dead, gone: !m.pack.mobs.includes(mob), berries: floor - floor0 + m.profile.data.berries - berries0 >= mob.loot };
     }
@@ -1434,14 +1434,14 @@ test('мобы: каждый задевает героя, падает от ме
   for (const id of MOB_IDS) expect(r[id], id).toEqual({ lost: true, dead: true, gone: true, berries: true });
 });
 
-test('мобы: щит держит удар спереди, целительница лечит и срывается от удара, призыватель зовёт малинёнышей, волк после промаха оглушён', async ({ page }) => {
+test('mobs: the shield holds a hit from the front, the healer heals and is interrupted by a hit, the summoner calls berrylings, the wolf is dazed after a miss', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const V = m.hero.pos.constructor;
     const out: Record<string, unknown> = {};
     m.hero.god = true;
-    // щитоносец смотрит на героя: спереди проходит 0,2, в спину — весь урон
+    // the shieldbearer faces the hero: from the front 0.2 gets through, in the back — full damage
     m.pack.clear();
     m.hero.place(2, 8);
     const sh = m.spawnMob('shield', 6, 8);
@@ -1450,7 +1450,7 @@ test('мобы: щит держит удар спереди, целительн�
     sh.cd = 99; sh.alerted = false; sh.aggro = 0;
     let h0 = sh.hp; sh.hit(10, new V(1, 0, 0), sh.pos.clone(), 0); out.front = h0 - sh.hp;
     h0 = sh.hp; sh.hit(10, new V(-1, 0, 0), sh.pos.clone(), 0); out.back = h0 - sh.hp;
-    // целительница лечит раненого оруженосца; удар во время каста — сорвано, оглушена
+    // the healer heals a wounded squire; a hit during the cast — interrupted, dazed
     m.pack.clear();
     m.hero.place(-14, 8);
     const sq = m.spawnMob('squire', 6, 8), he = m.spawnMob('healer', 8, 8.5);
@@ -1465,14 +1465,14 @@ test('мобы: щит держит удар спереди, целительн�
     he.hit(5, new V(0, 0, 1), he.pos.clone(), 0);
     m.step(1 / 30);
     out.interrupted = he.state === 'daze';
-    // призыватель: малинёныши из кругов, призванные малины не дают
+    // the summoner: berrylings from the circles, summoned ones give no raspberries
     m.pack.clear();
     m.hero.place(0, 8);
     const su = m.spawnMob('summoner', 8, 8);
     m.step(4);
     const called = m.pack.mobs.filter((x: any) => x.kind === 'berryling');
     out.summoned = called.length >= 3 && called.every((x: any) => x.summoned);
-    // волк: пока присел, герой отошёл в сторону — промах, оглушён
+    // the wolf: while it crouched, the hero stepped aside — a miss, dazed
     m.pack.clear();
     m.hero.place(2, 8);
     const w = m.spawnMob('wolf', 6, 8);
@@ -1481,7 +1481,7 @@ test('мобы: щит держит удар спереди, целительн�
     m.hero.place(w.pos.x + Math.cos(w.yaw) * 4, w.pos.z - Math.sin(w.yaw) * 4);
     m.step(1.2);
     out.wolfDazed = crouch && w.state === 'daze';
-    // масштаб — как у стражей
+    // scale — as for the wardens
     m.bossScale(11, 4);
     const w2 = m.spawnMob('wolf', 0, 0);
     out.scaled = w2.maxHp / w2.baseHp;
@@ -1499,7 +1499,7 @@ test('мобы: щит держит удар спереди, целительн�
   expect(r.scaled as number).toBeCloseTo(1.6 * 2.5, 1);
 });
 
-test('комнаты мобов: казарма, Терновый сад, погост, логово, мастерская — гарнизон на постах просыпается группами, пал весь — герой вышел, комната снова полна', async ({ page }) => {
+test('mob rooms: the barracks, the Thorn Garden, the graveyard, the lair, the workshop — the garrison at its posts wakes in groups, all fallen — the hero left, the room is full again', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
@@ -1511,23 +1511,23 @@ test('комнаты мобов: казарма, Терновый сад, пог
     out.kinds = [...new Set([...B.mobs, ...G.mobs].map((x: any) => x.kind))].sort();
     out.count = [B.mobs.length, G.mobs.length, room('crypt').mobs.length, room('lair').mobs.length, room('workshop').mobs.length];
     out.kinds = [...new Set(m.mobRooms.flatMap((x: any) => x.pack.mobs.map((y: any) => y.kind)))].sort();
-    // через проход в западной стене — в казарму; у входа никто не просыпается
+    // through the passage in the west wall — into the barracks; nobody wakes at the entrance
     m.hero.place(-23, 0, -Math.PI / 2);
     m.step(0.5);
     m.hero.place(-26.5, 0);
     m.step(0.5);
     out.door = B.mobs.filter((x: any) => x.alerted).length;
-    // подошёл к малинёнышам — проснулись они, волки, рыцари и гвардия дальше спят
+    // walked up to the berrylings — they woke up, the wolves, knights and guards further on sleep
     m.hero.place(-29, -4);
     m.step(0.3);
     const awake = (P: any, k: string) => P.mobs.filter((x: any) => x.kind === k).every((x: any) => x.alerted);
     const asleep = (P: any, k: string) => P.mobs.filter((x: any) => x.kind === k).every((x: any) => !x.alerted);
     out.groups = { berryling: awake(B, 'berryling'), wolf: asleep(B, 'wolf'), shield: asleep(B, 'shield'), healer: asleep(B, 'healer'), hammer: asleep(B, 'hammer') };
-    // сад: вход из казармы, у прохода просыпаются лозы, слизни и чудище спят
+    // the garden: the entrance is from the barracks, at the passage the vines wake, the slimes and the horror sleep
     m.hero.place(-35, 13);
     m.step(0.3);
     out.garden = { vine: awake(G, 'vine'), slime: asleep(G, 'slime'), horror: asleep(G, 'horror'), hedgehog: asleep(G, 'hedgehog') };
-    // гарнизон казармы пал; герой вышел на плейграунд — казарма снова полна и спит
+    // the barracks garrison fell; the hero went out to the playground — the barracks is full and asleep again
     for (let j = 0; j < 30; j++) { for (const x of B.mobs) if (!x.dead) x.hit(9999, new V(1, 0, 0), x.pos.clone(), 0); m.step(1 / 30); }
     out.allDead = B.mobs.every((x: any) => x.dead);
     m.hero.place(-10, 0);
@@ -1544,14 +1544,14 @@ test('комнаты мобов: казарма, Терновый сад, пог
   expect(r.refilled).toBe(true);
 });
 
-test('мобы второй партии: знамя воодушевляет рыцарей и падает с трёх ударов, слизень делится дважды, бутон сомкнут в плевке, клубок о стену оглушён, молот увязает', async ({ page }) => {
+test('mobs of the second batch: the banner rallies the knights and falls in three hits, the slime splits twice, the bud is shut while spitting, the ball is dazed against a wall, the hammer gets stuck', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const V = m.hero.pos.constructor;
     const out: Record<string, unknown> = {};
     m.hero.god = true;
-    // знаменосец втыкает знамя: рыцарь рядом бьёт на 25 % сильнее; три удара — знамя пало
+    // the bannerman plants the banner: a knight nearby hits 25 % harder; three hits — the banner fell
     m.pack.clear();
     m.hero.place(0, 8);
     const bb = m.spawnMob('banner', 6, 8), sq = m.spawnMob('squire', 6, 10);
@@ -1565,7 +1565,7 @@ test('мобы второй партии: знамя воодушевляет р
     const st = bb.standard;
     for (let j = 0; j < 3; j++) st.hit(1, new V(1, 0, 0), st.pos.clone(), 0);
     out.fell = !st.up && !m.pack.targets().includes(st);
-    // слизень: большой → два средних → четыре малых; малина — только с большого
+    // the slime: big → two medium → four small; raspberries — only from the big one
     m.pack.clear();
     const sl = m.spawnMob('slime', 8, 8);
     m.step(0.6);
@@ -1576,7 +1576,7 @@ test('мобы второй партии: знамя воодушевляет р
     m.step(0.6);
     const smalls = m.pack.mobs.filter((x: any) => x.kind === 'slime_small');
     out.slime = [mids.length, smalls.length, smalls.every((x: any) => x.summoned)];
-    // бутон: в плевке сомкнут — четверть урона, в паузе — весь
+    // the bud: shut while spitting — a quarter of the damage, in the pause — all
     m.pack.clear();
     m.hero.place(2, 8);
     const bud = m.spawnMob('bud', 9, 8);
@@ -1585,17 +1585,17 @@ test('мобы второй партии: знамя воодушевляет р
     let h0 = bud.hp; bud.hit(4, new V(1, 0, 0), bud.pos.clone(), 0); out.open = h0 - bud.hp;
     for (let j = 0; j < 4 * 30 && bud.state !== 'attack'; j++) m.step(1 / 30);
     h0 = bud.hp; bud.hit(4, new V(1, 0, 0), bud.pos.clone(), 0); out.shut = h0 - bud.hp;
-    // клубок катится в стену — оглушён
+    // the ball rolls into a wall — dazed
     m.pack.clear();
     m.hero.place(-22, -2.5);
     const hh = m.spawnMob('hedgehog', -17, -2.5);
     m.step(0.6);
     hh.notice();
     let dazed = false;
-    // свернулся — герой отошёл с полосы, клубок катится дальше в западную стену
+    // curled up — the hero stepped off the strip, the ball rolls on into the west wall
     for (let j = 0; j < 6 * 30 && !dazed; j++) { if (hh.state === 'attack' && hh.st > 0.3) m.hero.place(-14, -6); m.step(1 / 30); dazed = hh.state === 'daze'; }
     out.bonk = dazed;
-    // молотобоец после удара увяз — оглушён
+    // the hammerer got stuck after the hit — dazed
     m.pack.clear();
     m.hero.place(2, 8);
     const hm = m.spawnMob('hammer', 5, 8);
@@ -1615,14 +1615,14 @@ test('мобы второй партии: знамя воодушевляет р
   expect(r.hammer).toBe(true);
 });
 
-test('мобы третьей партии: огонёк летит сквозь стену, пугало зовёт ворон, жук под землёй неуязвим, паутина замедляет героя, кабанчик о стену оглушён, улей пал — шмели тоже', async ({ page }) => {
+test('mobs of the third batch: the wisp flies through a wall, the scarecrow calls crows, the beetle underground is invulnerable, the web slows the hero, the boarlet is dazed against a wall, the hive fell — the bees too', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const V = m.hero.pos.constructor;
     const out: Record<string, unknown> = {};
     m.hero.god = true;
-    // огонёк за западной стеной плейграунда, герой внутри — пролетает сквозь стену
+    // the wisp beyond the playground's west wall, the hero inside — it flies through the wall
     m.pack.clear();
     m.hero.place(-21, -9);
     const w = m.spawnMob('wisp', -30, -9);
@@ -1631,7 +1631,7 @@ test('мобы третьей партии: огонёк летит сквозь
     let inside = false;
     for (let j = 0; j < 6 * 30 && !inside; j++) { m.step(1 / 30); inside = w.pos.x > -24; }
     out.wisp = inside;
-    // пугало: три вороны, без малины; пало пугало — вороны тоже
+    // the scarecrow: three crows, no raspberries; the scarecrow fell — the crows too
     m.pack.clear();
     m.hero.place(0, 8);
     const sc = m.spawnMob('scarecrow', 6, 8);
@@ -1643,7 +1643,7 @@ test('мобы третьей партии: огонёк летит сквозь
     sc.hit(9999, new V(0, 0, 1), sc.pos.clone(), 0);
     m.step(0.1);
     out.crowsGone = crows.every((x: any) => x.dead);
-    // жук под землёй: удары мимо; вынырнул — оглушён
+    // the beetle underground: hits miss; surfaced — dazed
     m.pack.clear();
     m.hero.place(0, 8);
     const b = m.spawnMob('beetle', 7, 8);
@@ -1656,7 +1656,7 @@ test('мобы третьей партии: огонёк летит сквозь
     let up = false;
     for (let j = 0; j < 5 * 30 && !up; j++) { m.step(1 / 30); up = b.state === 'daze'; }
     out.surfaced = up && !b.burrowed;
-    // лозоплёт: сеть под героем — герой медленнее
+    // the vine weaver: a web under the hero — the hero is slower
     m.pack.clear();
     m.hero.place(0, 8);
     const sp = m.spawnMob('spider', 7, 8);
@@ -1668,7 +1668,7 @@ test('мобы третьей партии: огонёк летит сквозь
     m.pack.clear();
     m.step(0.1);
     out.slowGone = m.hero.slow;
-    // кабанчик несётся в западную стену — оглушён
+    // the boarlet charges into the west wall — dazed
     m.hero.place(-22, -4);
     const bo = m.spawnMob('boarlet', -16, -4);
     m.step(0.6);
@@ -1676,7 +1676,7 @@ test('мобы третьей партии: огонёк летит сквозь
     let dazed = false;
     for (let j = 0; j < 6 * 30 && !dazed; j++) { if (bo.state === 'attack' && bo.st > 0.3) m.hero.place(-14, -8); m.step(1 / 30); dazed = bo.state === 'daze'; }
     out.boar = dazed;
-    // улей выпускает шмелей; пал улей — шмели падают
+    // the hive releases bees; the hive fell — the bees fall
     m.pack.clear();
     m.hero.place(0, 8);
     const hv = m.spawnMob('hive', 6, 8);
@@ -1703,14 +1703,14 @@ test('мобы третьей партии: огонёк летит сквозь
   expect(r.beesGone).toBe(true);
 });
 
-test('мобы четвёртой партии: обелиск держит купол, бочонок взрывается и бьёт своих, мимик прикидывается корзиной, големчик и котелок', async ({ page }) => {
+test('mobs of the fourth batch: the obelisk holds a dome, the keg explodes and hits its own, the mimic poses as a basket, the golemling and the pot', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const V = m.hero.pos.constructor;
     const out: Record<string, unknown> = {};
     m.hero.god = true;
-    // обелиск: под куполом — половина урона; пал обелиск — купол спал
+    // the obelisk: under the dome — half damage; the obelisk fell — the dome is gone
     m.pack.clear();
     m.hero.place(0, 8);
     const ob = m.spawnMob('obelisk', 8, 8), sq = m.spawnMob('squire', 6, 8);
@@ -1721,7 +1721,7 @@ test('мобы четвёртой партии: обелиск держит ку
     ob.hit(9999, new V(0, 0, 1), ob.pos.clone(), 0);
     m.step(0.5);
     h0 = sq.hp; sq.hit(10, new V(0, 0, 1), sq.pos.clone(), 0); out.bare = h0 - sq.hp;
-    // бочонок: взрыв от удара бьёт соседа и подрывает второй бочонок
+    // the keg: the explosion from a hit strikes the neighbour and sets off the second keg
     m.pack.clear();
     m.hero.place(0, 8);
     const k1 = m.spawnMob('keg', 8, 8), k2 = m.spawnMob('keg', 9.5, 8), gd = m.spawnMob('gardener', 8, 9.6);
@@ -1731,7 +1731,7 @@ test('мобы четвёртой партии: обелиск держит ку
     k1.hit(99, new V(1, 0, 0), k1.pos.clone(), 0);
     m.step(0.1);
     out.keg = { chain: k2.dead, ally: h0 - gd.hp >= 30 };
-    // мимик: спит корзиной, пока герой не подошёл на 2,5 м; с него много малины
+    // the mimic: sleeps as a basket until the hero comes within 2.5 m; lots of raspberries from it
     m.pack.clear();
     m.hero.place(0, 8);
     const mi = m.spawnMob('mimic', 5, 8);
@@ -1741,7 +1741,7 @@ test('мобы четвёртой партии: обелиск держит ку
     m.step(0.3);
     out.awake = mi.alerted;
     out.loot = mi.loot >= 8;
-    // големчик: после удара шипами — кулаки в земле, оглушён
+    // the golemling: after the spike slam — fists in the ground, dazed
     m.pack.clear();
     m.hero.place(0, 8);
     const dg = m.spawnMob('druseling', 5, 8);
@@ -1749,7 +1749,7 @@ test('мобы четвёртой партии: обелиск держит ку
     let slam = false, stuck = false;
     for (let j = 0; j < 8 * 30 && !stuck; j++) { m.step(1 / 30); slam ||= dg.state === 'attack'; stuck = slam && dg.state === 'daze'; }
     out.druse = stuck;
-    // котелок: прыгает, а не ходит — после прыжка ближе к герою
+    // the pot: hops rather than walks — closer to the hero after a hop
     m.pack.clear();
     m.hero.place(0, 8);
     const pt = m.spawnMob('pot', 7, 8);
@@ -1772,13 +1772,13 @@ test('мобы четвёртой партии: обелиск держит ку
   expect(r.pot).toBe(true);
 });
 
-test('Соллер: славит солнце под лучом, просыпается в 6 м, серия мечом и копьё, молитва лечит и срывается, герой ушёл — снова на посту', async ({ page }) => {
+test('Soller: praises the sun under the beam, wakes at 6 m, a sword series and the spear, the prayer heals and is interrupted, the hero left — back at the post', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina;
     const V = m.hero.pos.constructor;
     const out: Record<string, unknown> = {};
-    // на Солнечной поляне стоит один Соллер
+    // one Soller stands on the Sun Glade
     const glade = m.mobRooms.find((x: any) => x.spec.id === 'glade').pack;
     out.glade = glade.mobs.map((x: any) => x.kind);
     m.pack.clear();
@@ -1787,7 +1787,7 @@ test('Соллер: славит солнце под лучом, просыпа�
     const s = m.spawnMob('soller', 8, 8);
     m.step(0.6);
     out.idle = { praising: s.praising, beam: s.shine > 0.8, alerted: s.alerted };
-    // в 7 м не видит, в 5,5 м — опускает руки, луч гаснет
+    // at 7 m it does not see, at 5.5 m — lowers its arms, the beam goes out
     m.hero.place(8, 15);
     m.step(0.3);
     const far = s.alerted;
@@ -1796,7 +1796,7 @@ test('Соллер: славит солнце под лучом, просыпа�
     const near = s.alerted && !s.praising;
     m.step(1);
     out.wake = { far, near, beamOff: s.shine < 0.3 };
-    // вплотную — серия мечом задевает героя
+    // up close — the sword series clips the hero
     m.hero.god = false;
     let lost = 0, combo = false;
     for (let j = 0; j < 4 * 30; j++) {
@@ -1808,7 +1808,7 @@ test('Соллер: славит солнце под лучом, просыпа�
       combo ||= s.attack === 'combo';
     }
     out.combo = combo && lost >= 10;
-    // издали — копьё по полосе
+    // from afar — the spear along a strip
     s.state = 'idle'; s.cd = 0; s.spearCd = 0;
     const hp0 = m.hero.hp = 100;
     m.hero.place(s.pos.x + Math.sin(s.yaw) * 9, s.pos.z + Math.cos(s.yaw) * 9);
@@ -1817,7 +1817,7 @@ test('Соллер: славит солнце под лучом, просыпа�
     for (let j = 0; j < 4 * 30; j++) { m.hero.place(spot.x, spot.z); m.step(1 / 30); spear ||= s.attack === 'spear'; }
     out.spear = spear && m.hero.hp < hp0;
     m.hero.god = true;
-    // ниже половины — молитва: луч вернулся, лечит; удар срывает; второй раз не молится
+    // below half — the prayer: the beam is back, it heals; a hit interrupts; it does not pray a second time
     s.state = 'idle'; s.cd = 0;
     s.hp = s.maxHp * 0.4;
     m.hero.place(s.pos.x + Math.sin(s.yaw) * 2, s.pos.z + Math.cos(s.yaw) * 2);
@@ -1832,7 +1832,7 @@ test('Соллер: славит солнце под лучом, просыпа�
     let again = false;
     for (let j = 0; j < 3 * 30; j++) { m.step(1 / 30); again ||= s.state === 'attack' && s.attack === 'praise'; }
     out.again = again;
-    // герой ушёл далеко — Соллер идёт на пост, здоровье полное, снова славит солнце
+    // the hero went far away — Soller walks to its post, full health, praises the sun again
     m.hero.place(-14, -8);
     for (let j = 0; j < 10 * 30 && (s.homing || s.alerted || s.state === 'attack'); j++) m.step(1 / 30);
     m.step(0.3);

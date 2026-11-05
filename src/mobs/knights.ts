@@ -5,32 +5,33 @@ import { boom, hiss, voice } from '../spell-audio.ts';
 import { C, rand, RASP } from '../bosses/kit.ts';
 import type { Target } from '../target.ts';
 import { Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Рыцари Малины (wiki/design-mobs.md, семья B): скелет «голем» — две ноги, корпус, шлем, две руки. Белые доспехи
- * с малиновой каймой, красный плащ с белой ягодой, на щите — малина, щель шлема светится белым ↔ малиновым.
+ * Raspberry Knights (wiki/design-mobs.md, family B): the "golem" skeleton — two legs, torso, helmet, two arms. White armour
+ * with raspberry trim, a red cloak with a white berry, a raspberry on the shield, the helmet slit glows white ↔ raspberry.
  */
 
 const EYE = C(2.6, 2.8, 3.4);
 
 const sfx = {
-  /** Взмах меча */
+  /** Sword swing */
   swing() { hiss({ dur: 0.18, vol: 0.12, f: 2400, f1: 900, q: 1.2, type: 'bandpass' }); },
-  /** Удар щитом: глухой лязг */
+  /** Shield bash: a dull clang */
   bash() { boom(120, 50, 0.4, 0.5); voice({ type: 'triangle', f: 330, dur: 0.4, vol: 0.04, verb: 0.4 }); },
 };
 
-/** Части рыцаря: всё, что качается */
+/** Knight parts: everything that sways */
 interface Rig { legs: THREE.Group[]; torso: THREE.Group; head: THREE.Group; arms: THREE.Group[] }
 
-/** Ягода-герб из кубиков: ряды 2-3-3-2-1 и листик сверху; u — размер кубика, z — на какой стороне (знак — куда смотрит) */
+/** Berry emblem of cubes: rows 2-3-3-2-1 and a leaf on top; u — cube size, z — which side (sign — which way it faces) */
 function berry(m: Mob, parent: THREE.Object3D, mat: THREE.Material, leaf: THREE.Material, u: number, x: number, y: number, z: number, tilt = 0): void {
   const rows = [[-0.5, 0.5], [-1, 0, 1], [-1, 0, 1], [-0.5, 0.5], [0]];
   rows.forEach((row, i) => { for (const c of row) m.box(parent, mat, u, u, 0.03, x + c * u, y + (1.5 - i) * u, z, tilt); });
   m.box(parent, leaf, u * 1.6, u * 0.6, 0.03, x + u * 0.3, y + 2.4 * u, z, tilt, 0, 0.3);
 }
 
-/** Тело рыцаря: ноги, корпус с поясом и плащом, шлем со щелью и плюмажем, наплечники, руки */
+/** Knight body: legs, torso with belt and cloak, helmet with a slit and plume, pauldrons, arms */
 function buildKnight(m: Mob, body: THREE.Group, seed: number, plume: boolean): Rig {
   const white = m.lam('#eceae4', pixelTex('#eceae4', 6, seed));
   const trim = m.lam('#c8245a');
@@ -54,12 +55,12 @@ function buildKnight(m: Mob, body: THREE.Group, seed: number, plume: boolean): R
   B(torso, white, 0.7, 0.74, 0.42, 0, 0.37, 0);
   B(torso, trim, 0.72, 0.1, 0.44, 0, 0.06, 0);
   B(torso, gold, 0.14, 0.12, 0.05, 0, 0.06, 0.23);
-  // герб на груди: малиновая ягода
+  // emblem on the chest: a raspberry
   berry(m, torso, trim, leaf, 0.07, 0, 0.44, 0.22);
-  // плащ: одна пластина за спиной, на ней белая ягода
+  // cloak: one plate behind the back with a white berry on it
   B(torso, cape, 0.66, 1.0, 0.05, 0, 0.18, -0.25, 0.08);
   berry(m, torso, snow, snow, 0.09, 0, 0.3, -0.285, 0.08);
-  // наплечники с малиновой каймой
+  // pauldrons with raspberry trim
   for (const s of [-1, 1]) { B(torso, white, 0.3, 0.16, 0.46, s * 0.44, 0.74, 0); B(torso, trim, 0.32, 0.05, 0.48, s * 0.44, 0.66, 0); }
   const head = new THREE.Group();
   head.position.y = 1.46;
@@ -81,7 +82,7 @@ function buildKnight(m: Mob, body: THREE.Group, seed: number, plume: boolean): R
   return { legs, torso, head, arms };
 }
 
-/** Короткий меч в правой руке: рукоять, гарда, клинок вдоль руки */
+/** Short sword in the right hand: grip, guard, blade along the arm */
 function sword(m: Mob, arm: THREE.Group): void {
   const steel = m.lam('#d8dde4'), gold = m.lam('#e8b84a'), grip = m.lam('#5a3a24');
   const B = m.box.bind(m);
@@ -91,7 +92,7 @@ function sword(m: Mob, arm: THREE.Group): void {
   B(arm, m.lam('#c8245a'), 0.07, 0.07, 0.07, 0, -0.62, -0.06);
 }
 
-/** Шаг рыцаря: ноги и руки вразмах */
+/** Knight step: legs and arms swinging */
 function walkPose(r: Rig, s: number, walk: boolean, dt: number): void {
   const k = Math.min(1, dt * 12);
   const a = walk ? s * 0.55 : 0;
@@ -101,11 +102,11 @@ function walkPose(r: Rig, s: number, walk: boolean, dt: number): void {
 
 const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x += (x - o.rotation.x) * k; };
 
-/** 4. Оруженосец — толпа: короткий меч, два взмаха; слабая броня */
+/** 4. Squire — crowd: a short sword, two swings; weak armour */
 export class Squire extends Mob {
   readonly kind = 'squire';
   override readonly knight = true;
-  readonly title = 'Оруженосец';
+  readonly title = t('Squire');
   readonly cost = 3;
   readonly radius = 0.45;
   override readonly topY = 2;
@@ -123,7 +124,7 @@ export class Squire extends Mob {
   protected choose(dist: number): string | null { return dist < 2.6 ? 'slash' : null; }
 
   protected act(_name: string, t: number, dt: number): boolean {
-    // два взмаха: на каждый — короткая полоса перед ним, удар по её концу, шажок вперёд
+    // two swings: for each a short strip in front of him, a hit at its end, a small step forward
     for (const at of [0, 0.55]) {
       if (t >= at && t - dt < at) {
         const from = this.pos.clone(), dir = this.fwd();
@@ -150,11 +151,11 @@ export class Squire extends Mob {
   }
 }
 
-/** 5. Щитоносец — стена: башенный щит держит удары спереди, удар щитом отбрасывает; после удара щит опущен */
+/** 5. Shieldbearer — wall: the tower shield holds hits from the front, the shield bash knocks back; after the bash the shield is lowered */
 export class ShieldKnight extends Mob {
   readonly kind = 'shield';
   override readonly knight = true;
-  readonly title = 'Щитоносец';
+  readonly title = t('Shieldbearer');
   readonly cost = 6;
   readonly radius = 0.55;
   override readonly topY = 2.1;
@@ -171,11 +172,11 @@ export class ShieldKnight extends Mob {
     this.loot = 2;
     this.rig = buildKnight(this, this.body, 621, true);
     sword(this, this.rig.arms[1]);
-    // башенный щит на левой руке: белое поле, золотой обод, малина с листиком
+    // tower shield on the left arm: white field, golden rim, a raspberry with a leaf
     const white = this.lam('#f4f2ec', pixelTex('#f4f2ec', 5, 622)), gold = this.lam('#e8b84a'), leaf = this.lam('#5aa03a');
     const glow = this.shimmer(RASP.clone().multiplyScalar(0.55), C(1.9, 0.8, 1.1), 0, 1.6);
     const B = this.box.bind(this);
-    // рука вперёд на 0,9 рад — щит стоит прямо перед корпусом
+    // arm forward by 0.9 rad — the shield stands right in front of the torso
     this.shield.position.set(0.3, -0.75, 0.1);
     this.shield.rotation.x = 0.9;
     this.rig.arms[0].add(this.shield);
@@ -185,12 +186,12 @@ export class ShieldKnight extends Mob {
     this.place();
   }
 
-  /** Щит поднят: спереди проходит 0,2 урона; после удара щитом и в оглушении — опущен */
+  /** Shield up: 0.2 of damage goes through from the front; after the shield bash and when stunned — lowered */
   get shieldUp(): boolean { return !(this.state === 'daze' || (this.state === 'attack' && this.st > 0.75)); }
 
   protected override guard(dir: THREE.Vector3): number {
     if (!this.shieldUp) return 1;
-    // dir — от героя к рыцарю; спереди — когда удар летит навстречу взгляду
+    // dir — from the hero to the knight; from the front — when the hit comes toward his gaze
     const f = this.fwd();
     return dir.x * f.x + dir.z * f.z < -0.3 ? 0.2 : 1;
   }
@@ -209,7 +210,7 @@ export class ShieldKnight extends Mob {
         if (this.inLine(from, this.bashDir, 3, 1.4)) this.hurt(10, from, 8);
       });
     }
-    // рывок щитом вперёд — и щит опущен, пока рыцарь выпрямляется: окно для удара
+    // shield lunge forward — and the shield is lowered while the knight straightens up: a window for a hit
     if (t > 0.6 && t < 0.8) this.move(this.bashDir, 7 * dt);
     return t > 1.9;
   }
@@ -217,7 +218,7 @@ export class ShieldKnight extends Mob {
   protected animate(dt: number, walk: boolean): void {
     const k = Math.min(1, dt * 10), r = this.rig;
     walkPose(r, this.stride(7), walk, dt);
-    // щит перед собой; в рывке — выброшен вперёд, после — опущен
+    // shield in front; in the lunge thrust forward, afterwards lowered
     const bash = this.state === 'attack' ? (this.st < 0.6 ? -0.9 : this.st < 0.8 ? -1.5 : 0.1) : this.state === 'daze' ? 0.2 : -0.9;
     lerpTo(r.arms[0], bash, k);
     lerpTo(r.arms[1], walk ? -0.4 + this.stride(7) * 0.2 : -0.5, k);
@@ -225,11 +226,11 @@ export class ShieldKnight extends Mob {
   }
 }
 
-/** 6. Копейщик — дистанция: выпад копьём на 4 м по полосе; после выпада открыт */
+/** 6. Spearman — range: a 4 m spear thrust along a strip; open after the thrust */
 export class Spearman extends Mob {
   readonly kind = 'spear';
   override readonly knight = true;
-  readonly title = 'Копейщик';
+  readonly title = t('Spearman');
   readonly cost = 4;
   readonly radius = 0.45;
   override readonly topY = 2;
@@ -241,7 +242,7 @@ export class Spearman extends Mob {
     this.speed = 2.8;
     this.keep = 3.4;
     this.rig = buildKnight(this, this.body, 701, true);
-    // длинное копьё в правой руке: древко, малиновый флажок, наконечник
+    // long spear in the right hand: shaft, raspberry pennant, tip
     const wood = this.lam('#7a5232'), steel = this.lam('#d8dde4'), flag = this.lam('#c8245a');
     const B = this.box.bind(this);
     const arm = this.rig.arms[1];
@@ -264,7 +265,7 @@ export class Spearman extends Mob {
         if (this.inLine(from, this.lunge, 4.2, 0.9)) this.hurt(8, from, 5);
       });
     }
-    // выпад: шаг вперёд вслед за копьём, потом 0,8 с вытаскивает его — окно
+    // thrust: a step forward after the spear, then 0.8 s pulling it out — a window
     if (t > 0.6 && t < 0.75) this.move(this.lunge, 4 * dt);
     return t > 1.55;
   }
@@ -272,7 +273,7 @@ export class Spearman extends Mob {
   protected animate(dt: number, walk: boolean): void {
     const k = Math.min(1, dt * 12), r = this.rig;
     walkPose(r, this.stride(), walk, dt);
-    // копьё отведено назад — выброшено вперёд — медленно возвращается
+    // spear drawn back — thrust forward — slowly returns
     const spear = this.state === 'attack' ? (this.st < 0.6 ? -1.2 : this.st < 0.75 ? -1.65 : -1.65 + (this.st - 0.75) * 0.5) : -1.4;
     r.arms[1].position.z = this.state === 'attack' ? (this.st < 0.6 ? -0.3 : this.st < 0.75 ? 0.5 : 0.5 - (this.st - 0.75) * 0.6) : 0;
     lerpTo(r.arms[1], spear, this.state === 'attack' ? 1 : k);
@@ -280,11 +281,11 @@ export class Spearman extends Mob {
   }
 }
 
-/** 7. Арбалетчик — стрелок: болт по линии-метке; перезаряжается 2 с — беззащитен */
+/** 7. Crossbowman — shooter: a bolt along a line mark; reloads for 2 s — defenceless */
 export class Crossbowman extends Mob {
   readonly kind = 'crossbow';
   override readonly knight = true;
-  readonly title = 'Арбалетчик';
+  readonly title = t('Crossbowman');
   readonly cost = 4;
   readonly radius = 0.45;
   override readonly topY = 2;
@@ -298,7 +299,7 @@ export class Crossbowman extends Mob {
     this.keep = 9;
     this.aggro = 16;
     this.rig = buildKnight(this, this.body, 711, false);
-    // арбалет держат обе руки перед грудью: ложе, дуга, тетива
+    // both hands hold the crossbow in front of the chest: stock, bow, string
     const wood = this.lam('#7a5232'), steel = this.lam('#a8b0b8'), str = this.lam('#f4ecd8');
     const B = this.box.bind(this);
     this.bow.position.set(0, 1.2, 0.5);
@@ -323,7 +324,7 @@ export class Crossbowman extends Mob {
         if (this.inLine(from, this.aim, 15, 0.5)) this.hurt(8, from, 3);
       });
     }
-    // перезарядка 2 с: крутит ворот — окно
+    // 2 s reload: cranks the winch — a window
     return t > 2.8;
   }
 
@@ -331,7 +332,7 @@ export class Crossbowman extends Mob {
     const k = Math.min(1, dt * 12), r = this.rig;
     walkPose(r, this.stride(), walk, dt);
     const reload = this.state === 'attack' && this.st > 0.8;
-    // руки на арбалете; в перезарядке он опущен, правая рука крутит ворот
+    // hands on the crossbow; during reload it is lowered, the right hand cranks the winch
     lerpTo(r.arms[0], reload ? -0.5 : -1.3, k);
     lerpTo(r.arms[1], reload ? -0.6 + Math.sin(this.st * 14) * 0.4 : -1.3, reload ? 1 : k);
     this.bow.rotation.x = reload ? 0.7 : 0;
@@ -339,7 +340,7 @@ export class Crossbowman extends Mob {
   }
 }
 
-/** Воткнутое знамя: цель для меча, падает с трёх ударов; пока стоит — рыцари в 6 м воодушевлены */
+/** Planted banner: a target for the sword, falls after three hits; while it stands knights within 6 m are inspired */
 class Standard implements Target {
   readonly pos = new THREE.Vector3();
   readonly radius = 0.35;
@@ -376,11 +377,11 @@ class Standard implements Target {
   dispose(): void { this.scene.remove(this.group); }
 }
 
-/** 8. Знаменосец — поддержка: втыкает знамя, рыцари рядом +25 % урона и скорости; сломать знамя (3 удара) */
+/** 8. Bannerman — support: plants a banner, nearby knights +25 % damage and speed; break the banner (3 hits) */
 export class BannerBearer extends Mob {
   readonly kind = 'banner';
   override readonly knight = true;
-  readonly title = 'Знаменосец';
+  readonly title = t('Bannerman');
   readonly cost = 7;
   readonly radius = 0.45;
   override readonly topY = 2;
@@ -396,7 +397,7 @@ export class BannerBearer extends Mob {
     this.loot = 2;
     this.rig = buildKnight(this, this.body, 721, true);
     const mats = { pole: this.lam('#5a3a24'), cloth: this.lam('#b3122e', pixelTex('#b3122e', 6, 722)), trim: this.lam('#e8b84a'), berry: this.lam('#fff6ee') };
-    // знамя в руке, пока не воткнуто
+    // banner in hand until planted
     const B = this.box.bind(this);
     this.carried.position.set(0, -0.6, 0.1);
     this.rig.arms[1].add(this.carried);
@@ -424,7 +425,7 @@ export class BannerBearer extends Mob {
     super.update(dt);
     if (was && !this.standard.up && !this.dead) { this.plantCd = 6; this.h.fx.burst(this.standard.pos.clone().setY(1.5), ['#b3122e', '#e8b84a'], 12, { speed: 3, up: 2, size: 0.1, life: 0.6, gravity: 6 }); }
     this.carried.visible = !this.standard.up;
-    // знамя воодушевляет рыцарей в 6 м, и самого знаменосца
+    // the banner inspires knights within 6 m, and the bannerman himself
     if (this.standard.alive) {
       for (const m of this.mh.allies()) if (m.knight && Math.hypot(m.pos.x - this.standard.pos.x, m.pos.z - this.standard.pos.z) < 6) m.rally = 0.3;
       this.standard.group.children[2].rotation.y = Math.sin(this.time * 2) * 0.15;
@@ -433,7 +434,7 @@ export class BannerBearer extends Mob {
 
   protected act(name: string, t: number, dt: number): boolean {
     if (name === 'plant') {
-      // поднял знамя — и с размаху в землю, по кругу на 6 м — малиновая волна
+      // raised the banner — and slams it into the ground, a raspberry wave in a 6 m circle
       if (t >= 0.6 && t - dt < 0.6) {
         const at = this.pos.clone().addScaledVector(this.fwd(), 0.9);
         this.standard.plant(at);
@@ -455,11 +456,11 @@ export class BannerBearer extends Mob {
   }
 }
 
-/** 9. Молотобоец — танк: двуручный молот по кругу-метке; медленный, после удара оглушён */
+/** 9. Hammerer — tank: a two-handed hammer onto a circle mark; slow, stunned after the hit */
 export class Hammerer extends Mob {
   readonly kind = 'hammer';
   override readonly knight = true;
-  readonly title = 'Молотобоец';
+  readonly title = t('Hammerer');
   readonly cost = 9;
   readonly radius = 0.65;
   override readonly topY = 2.5;
@@ -474,11 +475,11 @@ export class Hammerer extends Mob {
     this.keep = 2;
     this.mass = 3;
     this.loot = 3;
-    // крупнее остальных рыцарей
+    // bigger than the other knights
     this.big.scale.setScalar(1.25);
     this.body.add(this.big);
     this.rig = buildKnight(this, this.big, 731, true);
-    // молот двумя руками: длинная рукоять, боёк с малиновой полосой
+    // hammer in both hands: long handle, head with a raspberry stripe
     const wood = this.lam('#5a3a24'), steel = this.lam('#c8ccd2', pixelTex('#c8ccd2', 6, 732)), trim = this.lam('#c8245a');
     const B = this.box.bind(this);
     const arm = this.rig.arms[1];
@@ -503,7 +504,7 @@ export class Hammerer extends Mob {
         if (this.inCircle(this.smashAt, 2.2)) this.hurt(16, this.smashAt, 9);
       });
     }
-    // молот увяз: оглушён 1,4 с
+    // the hammer is stuck: stunned 1.4 s
     if (t >= 1.1) { this.daze(1.4); return false; }
     return false;
   }
@@ -511,7 +512,7 @@ export class Hammerer extends Mob {
   protected animate(dt: number, walk: boolean): void {
     const k = Math.min(1, dt * 8), r = this.rig;
     walkPose(r, this.stride(6), walk, dt);
-    // молот над головой — и вниз; в оглушении лежит на земле
+    // hammer over the head — and down; when stunned it lies on the ground
     const a = this.state === 'attack' ? (this.st < 1 ? -2.9 * Math.min(1, this.st / 0.7) : 0.3) : this.state === 'daze' ? 0.4 : -0.7;
     lerpTo(r.arms[1], a, this.state === 'attack' && this.st >= 1 ? 1 : k);
     lerpTo(r.arms[0], a, this.state === 'attack' && this.st >= 1 ? 1 : k);

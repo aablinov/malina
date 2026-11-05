@@ -1,9 +1,9 @@
 import type { EntityState } from '../net/snapshot.ts';
 
 /**
- * Записи сущностей для снимка (src/net/snapshot.ts): плоские, с короткими ключами. Ключ `id` — вид и номер:
- * `td` — оборона, `t<площадка>` — башня, `w:<id>` — стена, `b<n>` — снаряд башни, `pool<n>` — лужа смолы,
- * `p<n>` — кучка малины, `lair:<дорога>` — логово, `purse<место>` — малина игрока. Вид рисует только по ним и событиям
+ * Entity records for the snapshot (src/net/snapshot.ts): flat, with short keys. The `id` key is kind and number:
+ * `td` — the defence, `t<pad>` — tower, `w:<id>` — wall, `b<n>` — tower projectile, `pool<n>` — tar pool,
+ * `p<n>` — raspberry pile, `lair:<lane>` — lair, `purse<seat>` — a player's raspberries. The view draws only from these and events
  */
 export type TdEnt = EntityState & { id: 'td'; state: 'play' | 'lost' | 'won'; wave: number; next: number; running: 0 | 1; players: number; bush: number; bushMax: number; bushDead: 0 | 1; spawned: number; fallen: number };
 export type TowerEnt = EntityState & { pad: number; kind: string; level: number; hp: number; maxHp: number; frozen: number; yaw: number; x: number; y: number; z: number; spent: number; recoil: number };

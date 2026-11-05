@@ -2,22 +2,23 @@ import * as THREE from 'three';
 import type { Obstacle } from './collision.ts';
 import type { Textures } from './textures.ts';
 import { pixelTex } from './textures.ts';
+import { t } from './i18n/i18n.ts';
 
 /**
- * Лавки как в лагере Minecraft Dungeons (wiki/design-inventory.md, раздел «Торговцы»): кузнец — каменная стена
- * с горном и наковальней, навес в жёлто-бирюзовую полоску; торговец — ящики и бочки, навес в красно-оранжевую.
- * За прилавком житель (у кузнеца светятся глаза), над лавкой — имя пиксельным шрифтом. Прилавок и лавка — препятствие.
- * Торговля — окно src/hud/shop.ts, открывается на F рядом с прилавком.
+ * Shops as in the Minecraft Dungeons camp (wiki/design-inventory.md, section "Merchants"): the blacksmith — a stone wall
+ * with a forge and an anvil, a yellow-and-turquoise striped awning; the merchant — crates and barrels, a red-and-orange awning.
+ * A villager stands behind the counter (the blacksmith's eyes glow), the name in pixel font above the shop. The counter and the shop are an obstacle.
+ * Trading is the src/hud/shop.ts window, opened with F next to the counter.
  */
 
-/** sutler — маркитант обороны куста: свой прилавок за малину боя (src/hud/shop.ts) */
+/** sutler — the Bush Defence sutler: its own counter for battle raspberries (src/hud/shop.ts) */
 export type MerchantKind = 'smith' | 'merchant' | 'sutler';
 
-export const MERCHANT_TITLE: Record<MerchantKind, string> = { smith: 'Кузнец', merchant: 'Торговец', sutler: 'Маркитант' };
+export const MERCHANT_TITLE: Record<MerchantKind, string> = { smith: t('Blacksmith'), merchant: t('Merchant'), sutler: t('Sutler') };
 
 const ROT = (deg: number): number => THREE.MathUtils.degToRad(deg);
 
-/** Коробка с текстурой, повторённой по метрам (пиксели не растягиваются на большую грань) */
+/** A box with the texture repeated per metre (pixels are not stretched over a large face) */
 function tiled(w: number, h: number, d: number, tex: THREE.Texture, x: number, y: number, z: number, tint?: string): THREE.Mesh {
   const g = new THREE.BoxGeometry(w, h, d);
   const uv = g.getAttribute('uv') as THREE.BufferAttribute;
@@ -49,7 +50,7 @@ const glow = (c: string, k = 2.6): THREE.MeshBasicMaterial => new THREE.MeshBasi
 export class Merchant {
   readonly group = new THREE.Group();
   readonly pos: THREE.Vector3;
-  /** Где встать покупателю: перед прилавком */
+  /** Where the customer stands: in front of the counter */
   readonly front: THREE.Vector3;
   readonly solid: Obstacle;
   private readonly npc = new THREE.Group();
@@ -58,7 +59,7 @@ export class Merchant {
   private readonly fire: THREE.PointLight | null = null;
   private t = Math.random() * 6;
 
-  /** yaw — куда смотрит прилавок: 0 — к +Z */
+  /** yaw — where the counter faces: 0 — towards +Z */
   readonly kind: MerchantKind;
   constructor(scene: THREE.Scene, overlay: HTMLElement, T: Textures, kind: MerchantKind, x: number, z: number, yaw: number, y = 0) { this.kind = kind;
     this.pos = new THREE.Vector3(x, y, z);
@@ -71,14 +72,14 @@ export class Merchant {
     this.solid = { x, z, hx: 1.7, hz: 1.6, rot: -yaw, h: 2.4 };
 
     const wood = pixelTex('#9a6a3a', 7, 120), darkWood = pixelTex('#5e3d22', 6, 121);
-    // прилавок из досок
+    // plank counter
     g.add(tiled(2.8, 0.85, 0.7, T.planks, 0, 0.425, 1.05));
     g.add(tiled(2.9, 0.1, 0.8, T.planks, 0, 0.9, 1.05, '#e8c890'));
-    // столбы и навес в полоску
+    // posts and a striped awning
     for (const [px, pz] of [[-1.45, 0.65], [1.45, 0.65], [-1.45, -1.25], [1.45, -1.25]]) g.add(tiled(0.18, 2.9, 0.18, darkWood, px, 1.45, pz));
     const stripes = kind === 'smith' ? ['#f2c94a', '#5ab8b0'] : ['#e8452e', '#f59a23'];
     const awning = new THREE.Group();
-    // навес над задней половиной лавки: житель за прилавком виден сверху, как в MCD
+    // the awning covers the back half of the shop: the villager behind the counter is visible from above, as in MCD
     awning.position.set(0, 2.95, -0.35);
     awning.rotation.x = ROT(12);
     for (let i = 0; i < 6; i++) {
@@ -89,7 +90,7 @@ export class Merchant {
     g.add(awning);
 
     if (kind === 'smith') {
-      // каменная стена с горном и наковальня
+      // a stone wall with a forge and an anvil
       g.add(tiled(3.4, 2.6, 0.45, T.stoneBricksMossy, 0, 1.3, -1.55));
       g.add(tiled(1.0, 1.0, 0.5, T.stoneBricks, -0.9, 0.9, -1.15, '#9a9a9a'));
       g.add(cube(0.6, 0.35, 0.1, glow('#ff8a2a', 2.2), -0.9, 0.85, -0.88));
@@ -98,11 +99,11 @@ export class Merchant {
       g.add(this.fire);
       const iron = new THREE.MeshLambertMaterial({ map: pixelTex('#4a4e57', 6, 122) });
       g.add(cube(0.25, 0.4, 0.25, iron, 0.95, 0.2, -0.6), cube(0.55, 0.15, 0.3, iron, 0.95, 0.47, -0.6), cube(0.2, 0.1, 0.2, iron, 1.25, 0.5, -0.6));
-      // молот на прилавке и топор на стойке
+      // a hammer on the counter and an axe on the rack
       g.add(cube(0.08, 0.08, 0.5, new THREE.MeshLambertMaterial({ map: wood }), 0.8, 1.0, 1.0), cube(0.22, 0.14, 0.14, iron, 0.8, 1.02, 1.28));
       g.add(cube(0.06, 1.2, 0.06, new THREE.MeshLambertMaterial({ map: darkWood }), 1.75, 0.6, 1.2), cube(0.36, 0.3, 0.06, new THREE.MeshLambertMaterial({ map: pixelTex('#d8dde4', 6, 123) }), 1.75, 1.15, 1.2));
     } else {
-      // ящики, бочка и мешки с товаром
+      // crates, a barrel and sacks of goods
       g.add(tiled(0.8, 0.8, 0.8, T.crate, -1.0, 0.4, -0.9), tiled(0.6, 0.6, 0.6, T.crate, -1.0, 1.1, -0.9));
       g.add(tiled(0.7, 0.9, 0.7, darkWood, 1.0, 0.45, -0.9), cube(0.72, 0.06, 0.72, new THREE.MeshLambertMaterial({ map: pixelTex('#4a4e57', 6, 124) }), 1.0, 0.7, -0.9));
       g.add(cube(0.4, 0.3, 0.3, new THREE.MeshLambertMaterial({ map: pixelTex('#c8b07a', 8, 125) }), -0.7, 1.08, 1.05));
@@ -110,7 +111,7 @@ export class Merchant {
       g.add(cube(0.22, 0.22, 0.22, new THREE.MeshLambertMaterial({ color: '#c4284f', emissive: '#c4284f', emissiveIntensity: 0.25 }), 0.85, 1.06, 1.1));
     }
 
-    // житель за прилавком: роба, крупная голова с носом, руки скрещены
+    // the villager behind the counter: a robe, a big head with a nose, arms crossed
     const robe = kind === 'smith' ? '#3a3036' : '#4f7a3a';
     const skin = new THREE.MeshLambertMaterial({ map: pixelTex('#c99a78', 6, 126) });
     const cloth = new THREE.MeshLambertMaterial({ map: pixelTex(robe, 8, 127) });
@@ -134,7 +135,7 @@ export class Merchant {
     overlay.appendChild(this.label);
   }
 
-  /** Житель дышит и смотрит на героя, горн мерцает */
+  /** The villager breathes and watches the hero, the forge flickers */
   update(dt: number, hero: THREE.Vector3): void {
     this.t += dt;
     this.npc.position.y = Math.sin(this.t * 2) * 0.015;
@@ -144,7 +145,7 @@ export class Merchant {
     if (this.fire) this.fire.intensity = 5 + Math.sin(this.t * 13) * 0.8 + Math.sin(this.t * 7.3) * 0.6;
   }
 
-  /** Рядом с прилавком — можно торговать */
+  /** Next to the counter — trading is possible */
   near(p: THREE.Vector3): boolean { return Math.hypot(p.x - this.front.x, p.z - this.front.z) < 1.6 && Math.abs(p.y - this.pos.y) < 1.5; }
 
   drawLabel(camera: THREE.Camera, w: number, h: number): void {

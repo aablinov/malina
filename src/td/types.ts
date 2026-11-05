@@ -1,25 +1,25 @@
-/** Туман над логовами (`src/td/mist-fx.ts`): радиус, плотность 0..1, цвет */
+/** Mist over the lairs (`src/td/mist-fx.ts`): radius, density 0..1, colour */
 export interface TdMist { radius: number; density?: number; color?: string }
 
 /**
- * Режим «Оборона куста» (tower defence, wiki/design-tower-defence.md): всё, что карта говорит режиму, лежит в `meta.td`.
- * Координаты — метры мира, как у постов мобов и сундуков. Карта с `meta.td` играется в этом режиме (src/td/td.ts).
+ * Bush Defence mode (tower defence, wiki/design-tower-defence.md): everything the map tells the mode lives in `meta.td`.
+ * Coordinates are world metres, like mob posts and chests. A map with `meta.td` is played in this mode (src/td/td.ts).
  */
 
-/** Площадка под башню: центр клетки; башня занимает круг радиуса ~1,2 м. y — высота пола (площадки на стенах замка) */
+/** Tower pad: cell centre; the tower occupies a circle of radius ~1.2 m. y — floor height (pads on castle walls) */
 export interface TdPad { x: number; z: number; y?: number }
 
 /**
- * Дорога врагов: от логова (первая точка) к кусту (последняя); враги идут по точкам, башни бьют первого по дороге.
- * Осада (раздел 9 вики): дорога может упираться в стену или ворота (`wall` — id из `walls`): враги бьют их у конца дороги,
- * а когда пролом пробит, идут дальше по `inner` к кусту. Летуны идут по `inner` сразу.
+ * Enemy lane: from the lair (first point) to the bush (last); enemies walk the points, towers hit the one furthest along the lane.
+ * Siege (wiki section 9): a lane may end at a wall or gate (`wall` — an id from `walls`): enemies hit it at the end of the lane,
+ * and once the breach is open they continue along `inner` to the bush. Flyers take `inner` right away.
  */
 export interface TdLane { id: string; title: string; points: [number, number][]; wall?: string; inner?: [number, number][] }
 
 /**
- * Стена или ворота замка (осада, раздел 9 вики): прямоугольник клеток [x0..x1] × [z0..z1], блоки с y0 по y1, здоровье.
- * breach — клетка наружной грани, куда бьют враги и где пробивается пролом (±2 клетки вдоль стены, вся толщина); out — единичный вектор наружу.
- * Ворота (`gate`) — проём без блоков: створки закрыты для врагов, герой проходит через калитку.
+ * Castle wall or gate (siege, wiki section 9): a rectangle of cells [x0..x1] × [z0..z1], blocks from y0 to y1, health.
+ * breach — the cell of the outer face where enemies hit and where the breach opens (±2 cells along the wall, full thickness); out — unit vector pointing outward.
+ * A gate (`gate`) is an opening without blocks: the leaves are closed to enemies, the hero passes through the wicket.
  */
 export interface TdWall {
   id: string; title: string; kind: 'wall' | 'gate';
@@ -27,33 +27,33 @@ export interface TdWall {
   hp: number; breach: [number, number]; out: [number, number];
 }
 
-/** Куст малины — что защищаем: где стоит и сколько выдержит */
+/** The raspberry bush — what we defend: where it stands and how much it can take */
 export interface TdBush { x: number; z: number; hp: number }
 
-/** Группа волны: kind — моб из реестра (src/mobs/roster.ts), count штук с шагом every секунд по дороге lane (id), с задержкой delay от начала волны */
+/** Wave group: kind — a mob from the roster (src/mobs/roster.ts), count of them every `every` seconds along lane `lane` (id), starting `delay` seconds after the wave begins */
 export interface TdWaveGroup { kind: string; count: number; every: number; lane: string; delay?: number }
 
-/** Волна: группы и награда малиной за зачистку */
+/** Wave: groups and the raspberry bounty for clearing it */
 export interface TdWave { title?: string; groups: TdWaveGroup[]; bounty: number }
 
 export interface TdSpec {
   bush: TdBush;
   lanes: TdLane[];
   pads: TdPad[];
-  /** Малина на старте */
+  /** Raspberries at the start */
   berries: number;
-  /** Волны по порядку; нет — режим ждёт, враги только из панели F1 */
+  /** Waves in order; none — the mode waits, enemies come only from the F1 panel */
   waves?: TdWave[];
-  /** Пауза между волнами, с */
+  /** Rest between waves, s */
   rest?: number;
-  /** Уровень стаи на первой волне (дальше +3 за волну, src/td/scaling.ts); нет — 1 */
+  /** Pack level on the first wave (then +3 per wave, src/td/scaling.ts); none — 1 */
   level?: number;
-  /** Стены и ворота замка (осада); нет — куст в чистом поле */
+  /** Castle walls and gates (siege); none — the bush stands in the open */
   walls?: TdWall[];
-  /** Какие башни можно строить (src/td/towers.ts); нет — пять базовых */
+  /** Which towers can be built (src/td/towers.ts); none — the five basic ones */
   towers?: string[];
-  /** Цена починки стены: малины за 100 здоровья (нет — 20) */
+  /** Wall repair price: raspberries per 100 health (none — 20) */
   repair?: number;
-  /** Туман у лагерей врагов (src/td/mist-fx.ts): точки выхода не видны */
+  /** Mist at the enemy camps (src/td/mist-fx.ts): spawn points are hidden */
   mist?: TdMist;
 }

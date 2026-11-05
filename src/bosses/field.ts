@@ -4,16 +4,16 @@ import { glowTex } from '../loot-look.ts';
 import { C, glowMat, rand, UNIT, type BossHooks } from './kit.ts';
 
 /**
- * Сила боя — на полу (wiki/design-bosses.md, раздел 2): метки атак (круг, полоса), снаряды по дуге, опасные зоны.
- * Общее для стражей и рядовых мобов (wiki/design-mobs.md): у каждого бойца своё поле, урон — через его hurtHero.
+ * The power of the fight is on the floor (wiki/design-bosses.md, section 2): attack marks (circle, strip), lobbed projectiles, hazard zones.
+ * Shared by wardens and regular mobs (wiki/design-mobs.md): every fighter has its own field, damage goes through its hurtHero.
  */
 
-// ---------- метки на полу ----------
+// ---------- marks on the floor ----------
 
 interface Mark { mesh: THREE.Mesh; t: number; dur: number; done: () => void; pulse: boolean }
 const RED = C(2.2, 0.35, 0.18);
 
-/** Круг: наливается за dur, по краю — яркое кольцо; на исходе — done */
+/** Circle: fills up over dur, a bright ring along the edge; at the end — done */
 function circleMesh(r: number, color: THREE.Color): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.CircleGeometry(r, 40), glowMat(color.clone().multiplyScalar(0.35), 0, true));
   m.rotation.x = -Math.PI / 2;
@@ -23,7 +23,7 @@ function circleMesh(r: number, color: THREE.Color): THREE.Mesh {
   return m;
 }
 
-/** Полоса: от from на len вдоль dir, ширина w */
+/** Strip: from `from` for len along dir, width w */
 function lineMesh(len: number, w: number, color: THREE.Color): THREE.Mesh {
   const g = new THREE.PlaneGeometry(w, len);
   g.translate(0, len / 2, 0);
@@ -38,11 +38,11 @@ function lineMesh(len: number, w: number, color: THREE.Color): THREE.Mesh {
   return m;
 }
 
-// ---------- снаряды по дуге и опасные зоны ----------
+// ---------- lobbed projectiles and hazard zones ----------
 
 interface Lob { mesh: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; h: number; trail: THREE.Color; land: (at: THREE.Vector3) => void }
 interface Hazard { pos: THREE.Vector3; r: number; t: number; dps: number; color: THREE.Color; slow: number }
-/** Прямой выстрел (болт, стрела): только вид — урон считает тот, кто стрелял, по метке-полосе */
+/** Straight shot (bolt, arrow): visual only — damage is computed by the shooter along the strip mark */
 interface Shot { mesh: THREE.Mesh; from: THREE.Vector3; dir: THREE.Vector3; len: number; t: number; dur: number }
 
 export class Field {
@@ -51,40 +51,40 @@ export class Field {
   private readonly hazards: Hazard[] = [];
   private readonly shots: Shot[] = [];
   private hazardTick = 0;
-  /** Замедление героя от зон (0..1) */
+  /** Hero slowdown from zones (0..1) */
   heroSlow = 0;
 
   private readonly h: BossHooks;
   constructor(h: BossHooks) { this.h = h;}
 
-  /** Круг-метка: наливается dur секунд, потом done (там и бьют) */
+  /** Circle mark: fills for dur seconds, then done (that is where they hit) */
   markCircle(at: THREE.Vector3, r: number, dur: number, done: () => void, color = RED): void {
     const m = circleMesh(r, color);
     m.position.set(at.x, 0.06, at.z);
     this.h.scene.add(m);
     this.marks.push({ mesh: m, t: 0, dur, done, pulse: true });
   }
-  /** Полоса-метка от from вдоль dir */
+  /** Strip mark from `from` along dir */
   markLine(from: THREE.Vector3, dir: THREE.Vector3, len: number, w: number, dur: number, done: () => void, color = RED): void {
     const m = lineMesh(len, w, color);
     m.position.set(from.x, 0.06, from.z);
-    // после поворота плоскости на пол локальная +Y смотрит в −Z; поворот по Z разворачивает полосу вдоль dir
+    // after rotating the plane onto the floor local +Y points to −Z; rotation about Z turns the strip along dir
     m.rotation.z = Math.atan2(-dir.x, -dir.z);
     this.h.scene.add(m);
     this.marks.push({ mesh: m, t: 0, dur, done, pulse: false });
   }
-  /** Снаряд по дуге из from в to за dur с высотой h; land — на месте падения */
+  /** Lobbed projectile from `from` to `to` over dur with height h; land — at the landing point */
   lob(mesh: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, dur: number, h: number, trail: THREE.Color, land: (at: THREE.Vector3) => void): void {
     mesh.position.copy(from);
     this.h.scene.add(mesh);
     this.lobs.push({ mesh, from: from.clone(), to: to.clone().setY(0), t: 0, dur, h, trail, land });
   }
-  /** Опасная зона: dps урона в секунду, slow — замедление героя внутри */
+  /** Hazard zone: dps damage per second, slow — hero slowdown inside */
   hazard(pos: THREE.Vector3, r: number, t: number, dps: number, color: THREE.Color, slow = 0): void {
     this.hazards.push({ pos: pos.clone().setY(0), r, t, dps, color, slow });
     this.h.fx.decal(pos.clone().setY(0.03), glowTex(), color.clone().multiplyScalar(0.3), r * 2.4, t, true, 0.85);
   }
-  /** Убрать всё с пола */
+  /** Remove everything from the floor */
   clear(): void {
     for (const b of this.shots.splice(0)) this.disposeMesh(b.mesh);
     for (const m of this.marks.splice(0)) this.disposeMesh(m.mesh);
@@ -98,7 +98,7 @@ export class Field {
     o.traverse((x) => { if (x instanceof THREE.Mesh) { x.geometry !== UNIT && x.geometry.dispose(); (x.material as THREE.Material).dispose(); } });
   }
 
-  /** Выстрел из from вдоль dir на len метров со скоростью speed, на высоте y */
+  /** Shot from `from` along dir for len metres at speed, at height y */
   shot(from: THREE.Vector3, dir: THREE.Vector3, len: number, color: THREE.Color, speed = 60, y = 1.2): void {
     const mesh = new THREE.Mesh(UNIT, glowMat(color));
     mesh.scale.set(0.06, 0.06, 0.7);

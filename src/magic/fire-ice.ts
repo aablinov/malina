@@ -7,26 +7,27 @@ import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio.ts';
 import type { Spells } from '../spells.ts';
 import type { Target } from '../target.ts';
 import { C, rand, type Spell } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Огонь и лёд (wiki/design-spells.md, раздел 3): небесный молот, пламенный змей, пепельная корона,
- * ледяная гробница, морозный гребень, абсолютный ноль. Каждое — замах, удар (impact + pomp), послевкусие.
+ * Fire and ice (wiki/design-spells.md, section 3): sky hammer, flame serpent, ash crown,
+ * ice tomb, frost ridge, absolute zero. Each — windup, hit (impact + pomp), aftertaste.
  */
 
 const UNIT = new THREE.BoxGeometry(1, 1, 1);
 const SPIKE = new THREE.ConeGeometry(0.28, 1.3, 4);
-SPIKE.translate(0, 0.65, 0); // основание на земле
+SPIKE.translate(0, 0.65, 0); // base on the ground
 
 const FIRE_A = C(4, 1.5, 0.35), FIRE_B = C(4, 3, 1);
 const ICE_A = C(1.4, 2.8, 4), ICE_B = C(2.8, 3.6, 4);
 
 const glowMat = (c: THREE.Color, opacity = 1): THREE.MeshBasicMaterial =>
   new THREE.MeshBasicMaterial({ color: c, toneMapped: false, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
-/** Полупрозрачный лёд: обычное смешивание, чтобы было видно, что внутри */
+/** Translucent ice: normal blending so what is inside is visible */
 const iceMat = (opacity = 0.55): THREE.MeshBasicMaterial =>
   new THREE.MeshBasicMaterial({ color: C(0.42, 0.72, 0.98), toneMapped: false, transparent: true, opacity, depthWrite: false });
 
-/** Огонёк-угли на месте: n секунд по чуть-чуть поднимаются языки пламени */
+/** Ember flame in place: for n seconds flame tongues rise little by little */
 function burnSpots(kit: Spells, spots: THREE.Vector3[], dur: number, rate = 0.35): void {
   const fx = kit.h.fx;
   let left = dur;
@@ -40,12 +41,12 @@ function burnSpots(kit: Spells, spots: THREE.Vector3[], dur: number, rate = 0.35
   });
 }
 
-/** Огненные кубы разлетаются от центра, раздуваются и гаснут */
+/** Fire cubes fly out from the centre, swell and go out */
 function fireCubes(kit: Spells, mid: THREE.Vector3, R: number, n: number): void {
   kit.h.fx.fireCubes(mid, R, n, [FIRE_A.clone().multiplyScalar(0.45), FIRE_B.clone().multiplyScalar(0.45)], 0.25 + R * 0.16, false, [0.35, 0.65]);
 }
 
-/** Ледяные осколки-кубики веером от центра: летят, кувыркаются, тают */
+/** Ice shard cubes fan out from the centre: fly, tumble, melt */
 function iceShards(kit: Spells, c: THREE.Vector3, R: number, n: number): void {
   const mat = iceMat(0.8);
   const g = new THREE.Group();
@@ -69,15 +70,15 @@ function iceShards(kit: Spells, c: THREE.Vector3, R: number, n: number): void {
   }, () => mat.dispose());
 }
 
-// ---------- звуки группы: пентатоника, тёплые голоса, низ через boom ----------
+// ---------- group sounds: pentatonic, warm voices, low end via boom ----------
 const sfx = {
-  /** Вой падающего метеора: свист вниз и нарастающий гул */
+  /** Howl of a falling meteor: whistle downward and a growing rumble */
   meteorFall(dur: number) {
     voice({ type: 'sine', f: 1900, f1: 260, dur, vol: 0.06, attack: 0.2, verb: 0.4 });
     voice({ type: 'triangle', f: 950, f1: 130, dur, vol: 0.03, attack: 0.3, verb: 0.4 });
     hiss({ dur, vol: 0.22, f: 300, f1: 2400, q: 0.6, type: 'lowpass', attack: dur * 0.9, verb: 0.3 });
   },
-  /** Падение: тяжёлый удар, хруст камня, рёв, медный аккорд, стук обломков */
+  /** Landing: heavy hit, crunch of stone, roar, brass chord, clatter of debris */
   meteorHit(k: number) {
     boom(100 - k * 30, 24, 1.4, 0.85, 0, 0.5);
     hiss({ dur: 0.18, vol: 0.45, f: 1200, q: 0.5, verb: 0.3 });
@@ -85,15 +86,15 @@ const sfx = {
     [0, 7, 12, 19].forEach((s, i) => voice({ type: 'sawtooth', f: semi(98, s), dur: 1.2, vol: 0.05, detune: 10, lp: 2800, lp1: 220, delay: i * 0.02, verb: 0.55 }));
     for (let i = 0; i < 10; i++) voice({ type: 'triangle', f: rand(180, 420), dur: 0.08, vol: 0.05, delay: 0.25 + rnd() * 1, verb: 0.2 });
   },
-  /** Змей проснулся: рык и шипение */
+  /** The serpent woke: growl and hiss */
   serpentWake() {
     voice({ type: 'sawtooth', f: 82, f1: 123, dur: 0.8, vol: 0.08, detune: 14, lp: 600, lp1: 1800, verb: 0.4 });
     hiss({ dur: 0.9, vol: 0.25, f: 400, f1: 2400, q: 0.6, type: 'lowpass', attack: 0.15, verb: 0.4 });
     boom(130, 45, 0.6, 0.5);
   },
-  /** Змей ползёт: гул пламени (кусками, пока жив) */
+  /** The serpent crawls: hum of flame (in pieces while alive) */
   serpentCrawl() { hiss({ dur: 0.45, vol: 0.09, f: 700, q: 0.5, type: 'lowpass', attack: 0.15, verb: 0.2 }); },
-  /** Укус и удар хвостом */
+  /** Bite and tail strike */
   serpentBite(i: number) {
     pluck(deg(220, 4 + (i % 5)), 0.07);
     hiss({ dur: 0.2, vol: 0.22, f: 1800, f1: 500, q: 0.8, verb: 0.2 });
@@ -103,32 +104,32 @@ const sfx = {
     boom(110, 35, 0.8, 0.45);
     [12, 7, 0].forEach((s, i) => voice({ type: 'triangle', f: semi(220, s), dur: 0.7, vol: 0.05, delay: i * 0.07, verb: 0.5 }));
   },
-  /** Корона: вдох, хлопок огня, рёв волны */
+  /** Crown: inhale, a pop of fire, roar of the wave */
   crown(k: number) {
     boom(120 - k * 30, 32, 0.9, 0.65, 0, 0.35);
     hiss({ dur: 0.7, vol: 0.32, f: 300, f1: 3500, q: 0.5, type: 'lowpass', attack: 0.04, verb: 0.4 });
     [0, 4, 7, 12].forEach((s, i) => voice({ type: 'triangle', f: semi(293.66, s), dur: 0.8, vol: 0.05, delay: 0.05 + i * 0.04, verb: 0.55 }));
   },
-  /** Лёд схватился: стеклянный хруст и высокий аккорд */
+  /** The ice set: glassy crunch and a high chord */
   freeze() {
     hiss({ dur: 0.3, vol: 0.25, f: 6000, type: 'highpass', verb: 0.4 });
     for (let i = 0; i < 7; i++) voice({ type: 'triangle', f: deg(1567.98, (rnd() * 7) | 0), dur: 0.2, vol: 0.04, delay: i * 0.025, verb: 0.4 });
     [0, 4, 7].forEach((s) => bell(semi(783.99, s), 1.4, 0.05, 0.05, 0.7));
     boom(140, 50, 0.5, 0.4);
   },
-  /** Лёд трещит: щелчок (чаще к концу) */
+  /** The ice cracks: a click (more often toward the end) */
   creak(i: number) {
     voice({ type: 'triangle', f: deg(1046.5, 2 + (i % 6)), dur: 0.06, vol: 0.04, verb: 0.3 });
     hiss({ dur: 0.04, vol: 0.08, f: 5000, q: 2, verb: 0.1 });
   },
-  /** Кристалл разлетелся: удар, звон осколков, колокола */
+  /** The crystal shattered: hit, ringing of shards, bells */
   shatter(k: number) {
     boom(120 - k * 30, 30, 0.9, 0.7, 0, 0.45);
     hiss({ dur: 0.5, vol: 0.35, f: 4500, type: 'highpass', verb: 0.45 });
     for (let i = 0; i < 16; i++) voice({ type: 'triangle', f: deg(2093, (rnd() * 9) | 0), dur: 0.15, vol: 0.035, delay: rnd() * 0.35, verb: 0.4 });
     [0, 4, 7, 12, 16].forEach((s, i) => bell(semi(523.25, s), 1.8, 0.05, 0.04 + i * 0.03, 0.7));
   },
-  /** Шип гребня вырос: нота вверх по гамме и хруст */
+  /** A ridge spike grew: a note up the scale and a crunch */
   spike(i: number) {
     voice({ type: 'triangle', f: deg(523.25, i), dur: 0.22, vol: 0.05, verb: 0.35 });
     hiss({ dur: 0.07, vol: 0.12, f: 3500, q: 1.2, verb: 0.15 });
@@ -137,9 +138,9 @@ const sfx = {
     boom(130 - k * 30, 40, 0.6, 0.5);
     hiss({ dur: 0.5, vol: 0.2, f: 2500, f1: 7000, q: 0.7, attack: 0.05, verb: 0.4 });
   },
-  /** Сердцебиение — два удара */
+  /** Heartbeat — two beats */
   heart(vol = 0.35) { boom(70, 40, 0.18, vol, 0, 0.2); boom(66, 38, 0.2, vol * 0.75, 0.2, 0.2); },
-  /** Купол встал: глухой удар, долгий ледяной аккорд */
+  /** The dome rose: dull thud, a long icy chord */
   dome(k: number) {
     boom(90 - k * 25, 26, 1.6, 0.8, 0, 0.6);
     [0, 7, 12, 16, 19].forEach((s, i) => voice({ type: 'sine', f: semi(261.63, s), dur: 4, vol: 0.035, attack: 0.6, delay: i * 0.05, verb: 0.8 }));
@@ -147,23 +148,23 @@ const sfx = {
   },
 };
 
-// ---------- 1. Небесный молот ----------
+// ---------- 1. Sky hammer ----------
 
 const meteor: Spell = {
-  school: 'fireball', tier: 'rare', title: 'Небесный молот',
+  school: 'fireball', tier: 'rare', title: t('Sky hammer'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, c = kit.ground(at, 14), R = (a.radius ?? 3.5) + k * 1.5, fall = 0.95;
     kit.face(c);
     kit.windup('fireball', k);
     sfx.meteorFall(fall);
-    // замах: круг на земле и красная тень, которая растёт и наливается
+    // windup: a circle on the ground and a red shadow that grows and deepens
     kit.groundSigil('fireball', c, R, fall, 0.2, 0.25);
     const shadowMat = glowMat(C(1.6, 0.25, 0.08), 0);
     const shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 40), shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.copy(c).setY(c.y + 0.06);
     fx.custom(shadow, fall, (t) => { shadow.scale.setScalar(R * (0.2 + 0.8 * t)); shadowMat.opacity = 0.15 + t * 0.55 + Math.sin(t * 40) * 0.05; });
-    // метеор: белое ядро в пылающей оболочке, ореол и свет летят вместе
+    // meteor: white core in a blazing shell, halo and light fly along
     const size = 0.9 + k * 0.6;
     const g = new THREE.Group();
     const coreMat = new THREE.MeshBasicMaterial({ color: C(4, 3.4, 1.6), toneMapped: false });
@@ -187,7 +188,7 @@ const meteor: Spell = {
       if (rnd() < 0.4) fx.flash(g.position.clone(), FIRE_A.clone().multiplyScalar(0.5), size * 3, 0.15);
     }, () => { coreMat.dispose(); shellMat.dispose(); rockMat.dispose(); halo.material.dispose(); });
     kit.later(fall, () => {
-      // удар: кратер, камни, огненные кубы, кольца
+      // hit: crater, stones, fire cubes, rings
       const mid = c.clone().setY(c.y + 0.8);
       kit.impact('fireball', c, k, 18, 0.7);
       kit.pomp('rare', c, 'fireball');
@@ -200,7 +201,7 @@ const meteor: Spell = {
       fx.shock(c, R * 1.2, FIRE_A, 0.45, 0.25);
       fx.shock(c, R * 0.75, FIRE_B, 0.35, 0.18);
       kit.h.aoe(c, R, Math.round(power), 2.5 + k, true);
-      // кратер: кольцо камней выпирает из земли и медленно уходит обратно
+      // crater: a ring of stones bulges out of the ground and slowly sinks back
       const stoneMat = new THREE.MeshLambertMaterial({ color: '#6b5a4a' });
       const hotMat = new THREE.MeshLambertMaterial({ color: '#4a3a30', emissive: '#ff4a10', emissiveIntensity: 0.8 });
       const crater = new THREE.Group();
@@ -222,7 +223,7 @@ const meteor: Spell = {
         crater.children.forEach((m) => { const mm = m as THREE.Mesh; mm.position.y = c.y - mm.scale.y * 0.5 + (mm.userData.h + mm.scale.y * 0.5) * up; });
         hotMat.emissiveIntensity = 0.8 * Math.max(0, 1 - tt / 4);
       }, () => { stoneMat.dispose(); hotMat.dispose(); });
-      // послевкусие: выжженное пятно, тлеющий свет, огонь на полу
+      // aftertaste: a scorched spot, smouldering light, fire on the floor
       fx.decal(c, kit.tex.scorch(), '#ffffff', R * 2.6, 6, false, 0.75);
       fx.decal(c, kit.tex.glow(), FIRE_A.clone().multiplyScalar(0.35), R * 2, 2.5, true);
       const spots = Array.from({ length: 6 + Math.round(k * 5) }, () => { const ang = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R * 0.9; return c.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.05, Math.sin(ang) * r)); });
@@ -231,10 +232,10 @@ const meteor: Spell = {
   },
 };
 
-// ---------- 2. Пламенный змей ----------
+// ---------- 2. Flame serpent ----------
 
 const flameserpent: Spell = {
-  school: 'fireball', tier: 'legendary', title: 'Пламенный змей',
+  school: 'fireball', tier: 'legendary', title: t('Flame serpent'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
     const dur = (a.duration ?? 3.5) + k * 1.5, reach = a.radius ?? 1.6;
@@ -245,7 +246,7 @@ const flameserpent: Spell = {
     fwd.normalize();
     const start = hero.pos.clone().addScaledVector(fwd, 1.2);
     kit.later(0.2, () => {
-      // удар: змей вырывается из земли — вспышка, кольцо, замедление легендарного
+      // hit: the serpent bursts out of the ground — flash, ring, the legendary slow-down
       kit.impact('fireball', start, k, 12, 0.5);
       kit.pomp('legendary', start, 'fireball');
       sfx.serpentWake();
@@ -270,7 +271,7 @@ const flameserpent: Spell = {
       }
       kit.h.scene.add(g);
       const light = fx.light(start, '#ff8a30', 6, 7, dur + 0.5);
-      // голова идёт по своему следу; хвост повторяет путь
+      // the head follows its own trail; the tail repeats the path
       const path: THREE.Vector3[] = [start.clone()];
       const head = start.clone(), dir = fwd.clone();
       const bitten = new Map<Target, number>();
@@ -278,7 +279,7 @@ const flameserpent: Spell = {
       const rut: THREE.Vector3[] = [];
       kit.proc((dt) => {
         t += dt;
-        // цель: ближайший враг у головы, иначе курсор; поворот ограничен, сверху — волна (петляет)
+        // target: the nearest enemy near the head, otherwise the cursor; turning is limited, a wave on top (it weaves)
         const prey = kit.nearest(head, 9);
         const goal = prey ? prey.pos : kit.aim;
         const want = new THREE.Vector3(goal.x - head.x, 0, goal.z - head.z);
@@ -295,7 +296,7 @@ const flameserpent: Spell = {
         const last = path[path.length - 1];
         if (last.distanceTo(head) > 0.08) path.push(head.clone());
         if (path.length > 400) path.splice(0, path.length - 400);
-        // сегменты по пути: каждый на gap метров позади предыдущего
+        // segments along the path: each gap metres behind the previous one
         let need = 0, idx = path.length - 1, acc = 0;
         for (let i = 0; i < N; i++) {
           while (idx > 0 && acc < need) { acc += path[idx].distanceTo(path[idx - 1]); idx--; }
@@ -309,12 +310,12 @@ const flameserpent: Spell = {
           need += gap;
         }
         light.position.copy(segs[0].position); light.intensity = 6 + Math.sin(t * 20) * 1.5;
-        // пламя с тела
+        // flame off the body
         for (let i = 0; i < N; i += 3) if (rnd() < 0.4) fx.particle({ pos: segs[i].position.clone(), vel: new THREE.Vector3(rand(-0.4, 0.4), rand(1, 2.2), rand(-0.4, 0.4)), life: rand(0.25, 0.5), size: rand(0.06, 0.12), color: rnd() < 0.5 ? FIRE_A : FIRE_B, gravity: -1.5 });
-        // горящая колея
+        // burning track
         dropT -= dt;
         if (dropT <= 0) { dropT = 0.18; const p = segs[N - 1].position.clone().setY(head.y + 0.03); rut.push(p); fx.decal(p, kit.tex.scorch(), '#ffffff', 0.9, 3.5, false, 0.55); }
-        // укус: голова касается врага
+        // bite: the head touches an enemy
         for (const tg of kit.h.targets()) {
           if (!tg.alive) continue;
           if (Math.hypot(tg.pos.x - head.x, tg.pos.z - head.z) > tg.radius + 0.7) continue;
@@ -325,7 +326,7 @@ const flameserpent: Spell = {
           fx.burst(tg.pos.clone().setY(tg.pos.y + 1), [FIRE_A, FIRE_B], 14, { speed: 4, up: 3, size: 0.07, life: 0.4, glow: true, gravity: 6 });
           sfx.serpentBite(bites++);
         }
-        // удар хвостом: дуга огня и урон вокруг кончика
+        // tail strike: an arc of fire and damage around the tip
         lashT -= dt;
         if (lashT <= 0) {
           lashT = 1.1;
@@ -338,7 +339,7 @@ const flameserpent: Spell = {
         crawlT -= dt;
         if (crawlT <= 0) { crawlT = 0.4; sfx.serpentCrawl(); }
         if (t < dur) return true;
-        // конец: змей рассыпается углями
+        // end: the serpent crumbles into embers
         for (const seg of segs) {
           fx.flash(seg.position.clone(), FIRE_A.clone().multiplyScalar(0.5), 1.4, 0.3);
           fx.burst(seg.position.clone(), [FIRE_A, FIRE_B], 8, { speed: 3, up: 3, size: 0.07, life: 0.6, glow: true, gravity: 4 });
@@ -355,14 +356,14 @@ const flameserpent: Spell = {
   },
 };
 
-// ---------- 3. Пепельная корона ----------
+// ---------- 3. Ash crown ----------
 
 const ashcrown: Spell = {
-  school: 'fireball', tier: 'common', title: 'Пепельная корона',
+  school: 'fireball', tier: 'common', title: t('Ash crown'),
   cast(kit, a, power, _at, k) {
     const fx = kit.h.fx, hero = kit.h.hero, R = (a.radius ?? 5) + k * 2;
     kit.windup('fireball', k);
-    // замах: огонь собирается кольцом у ног
+    // windup: fire gathers in a ring at the feet
     for (let i = 0; i < 24; i++) {
       const ang = (i / 24) * Math.PI * 2, r = 1.8, life = 0.18;
       const from = hero.pos.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.2, Math.sin(ang) * r));
@@ -374,7 +375,7 @@ const ashcrown: Spell = {
       kit.pomp('common', c, 'fireball');
       sfx.crown(k);
       fx.flash(c.clone().setY(c.y + 0.8), FIRE_B.clone().multiplyScalar(0.6), 3, 0.3);
-      // волна: огненное кольцо растёт до R, по фронту — языки пламени; задевает всех, кого прошла
+      // wave: a fire ring grows to R, flame tongues along the front; hits everyone it has passed
       const ringMat = glowMat(FIRE_A.clone().multiplyScalar(0.5), 1);
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 64), ringMat);
       ring.rotation.x = -Math.PI / 2;
@@ -401,7 +402,7 @@ const ashcrown: Spell = {
         }
       });
       fx.shock(c, R, FIRE_B, 0.6, 0.08);
-      // послевкусие: пепельное кольцо и угли по кругу
+      // aftertaste: an ash ring and embers around the circle
       fx.decal(c, kit.tex.scorch(), '#ffffff', R * 1.6, 3.5, false, 0.45);
       const spots = Array.from({ length: 10 }, (_, i) => { const ang = (i / 10) * Math.PI * 2; return c.clone().add(new THREE.Vector3(Math.cos(ang) * R * 0.85, 0.05, Math.sin(ang) * R * 0.85)); });
       burnSpots(kit, spots, 1.8 + k, 0.3);
@@ -409,9 +410,9 @@ const ashcrown: Spell = {
   },
 };
 
-// ---------- 4. Ледяная гробница ----------
+// ---------- 4. Ice tomb ----------
 
-/** Кристалл льда вокруг точки: высокий блок и торчащие кубы; растёт за 0,2 с */
+/** Ice crystal around a point: a tall block and protruding cubes; grows in 0.2 s */
 function crystal(kit: Spells, p: THREE.Vector3, h: number, w: number): { g: THREE.Group; mat: THREE.MeshBasicMaterial; edge: THREE.MeshBasicMaterial } {
   const mat = iceMat(0.42), edge = glowMat(ICE_A.clone().multiplyScalar(0.07), 0.9);
   const g = new THREE.Group();
@@ -434,14 +435,14 @@ function crystal(kit: Spells, p: THREE.Vector3, h: number, w: number): { g: THRE
 }
 
 const icetomb: Spell = {
-  school: 'icerain', tier: 'rare', title: 'Ледяная гробница',
+  school: 'icerain', tier: 'rare', title: t('Ice tomb'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hold = a.duration ?? 2, R = (a.radius ?? 3.5) + k * 1.5;
     const victim = kit.nearest(at, 4);
     const c = victim ? victim.pos.clone() : kit.ground(at, 12);
     kit.face(c);
     kit.windup('icerain', k);
-    // замах: иней сбегается к цели по спирали
+    // windup: frost spirals in toward the target
     for (let i = 0; i < 24; i++) {
       const ang = (i / 24) * Math.PI * 4, r = 2.4 - i * 0.06, life = 0.25;
       const from = c.clone().add(new THREE.Vector3(Math.cos(ang) * r, rand(0.2, 2), Math.sin(ang) * r));
@@ -464,12 +465,12 @@ const icetomb: Spell = {
         cr.g.scale.set(1, 1 - (1 - grow) ** 3, 1);
         cr.edge.opacity = 0.7 + Math.sin(t * 8) * 0.25;
         if (rnd() < 0.3) fx.particle({ pos: c.clone().add(new THREE.Vector3(rand(-w, w) * 0.6, rand(0.2, h), rand(-w, w) * 0.6)), vel: new THREE.Vector3(0, rand(0.2, 0.6), 0), life: 0.6, size: 0.05, color: ICE_B, gravity: -0.2 });
-        // трещит всё чаще, под конец дрожит
+        // cracks more and more often, trembles toward the end
         creakT -= dt;
         if (creakT <= 0) { creakT = Math.max(0.06, 0.35 * (1 - t / hold)); sfx.creak(n++); }
         if (t > hold - 0.4) cr.g.position.set(c.x + rand(-0.04, 0.04), c.y, c.z + rand(-0.04, 0.04));
         if (t < hold) return true;
-        // разлетелся: осколки веером, урон по кругу
+        // shattered: shards fan out, damage around the circle
         kit.h.scene.remove(cr.g);
         cr.mat.dispose(); cr.edge.dispose();
         const mid = c.clone().setY(c.y + h * 0.5);
@@ -487,10 +488,10 @@ const icetomb: Spell = {
   },
 };
 
-// ---------- 5. Морозный гребень ----------
+// ---------- 5. Frost ridge ----------
 
 const frostridge: Spell = {
-  school: 'icerain', tier: 'common', title: 'Морозный гребень',
+  school: 'icerain', tier: 'common', title: t('Frost ridge'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero, L = (a.radius ?? 7) + k * 3;
     kit.face(at);
@@ -514,7 +515,7 @@ const frostridge: Spell = {
           const fy = kit.h.terrain.floorAt(p.x, p.z, from.y + 1.5);
           p.y = Number.isFinite(fy) ? fy : from.y;
           kit.later(dist / speed, () => {
-            // шип вырастает с перехлёстом, держится и уходит в землю
+            // the spike grows with overshoot, holds and sinks into the ground
             const g = new THREE.Group();
             const sp = new THREE.Mesh(SPIKE, mat), gl = new THREE.Mesh(SPIKE, glow);
             gl.scale.setScalar(1.1);
@@ -527,7 +528,7 @@ const frostridge: Spell = {
               const tt = t * life;
               const up = tt < 0.12 ? (tt / 0.12) * 1.15 : tt < 0.22 ? 1.15 - ((tt - 0.12) / 0.1) * 0.15 : tt > life - 0.35 ? Math.max(0, (life - tt) / 0.35) : 1;
               g.scale.set(sc, sc * up, sc);
-            }, () => { /* общие форма и материал */ });
+            }, () => { /* shared shape and material */ });
             fx.burst(p.clone().setY(p.y + 0.2), [ICE_A, ICE_B], 3, { speed: 2, up: 3, size: 0.05, life: 0.35, glow: true, gravity: 10 });
             if (li === 0 || li === lines - 1) sfx.spike(note++ % 10);
             for (const tg of kit.within(p, 0.7)) {
@@ -540,7 +541,7 @@ const frostridge: Spell = {
           });
         }
       }
-      // послевкусие: холодный туман вдоль веера, общие материалы убрать, когда всё растаяло
+      // aftertaste: cold fog along the fan; dispose the shared materials once everything has melted
       let left = L / speed + 1.8;
       kit.proc((dt) => {
         left -= dt;
@@ -556,23 +557,23 @@ const frostridge: Spell = {
   },
 };
 
-// ---------- 6. Абсолютный ноль ----------
+// ---------- 6. Absolute zero ----------
 
 const absolutezero: Spell = {
-  school: 'icerain', tier: 'mythic', title: 'Абсолютный ноль',
+  school: 'icerain', tier: 'mythic', title: t('Absolute zero'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, R = (a.radius ?? 8) + k * 2, hold = (a.duration ?? 4) + k, unfold = 0.8;
     const c = kit.ground(at, 8);
     kit.face(c, 1);
     kit.windup('icerain', k);
-    // замах: мир темнеет и выцветает, звук глохнет, слышно сердце; огромный круг раскрывается на земле
-    kit.pomp('mythic', c, 'icerain', 'Абсолютный ноль', unfold + hold + 0.3);
+    // windup: the world darkens and fades, sound is muffled, the heart is audible; a huge circle opens on the ground
+    kit.pomp('mythic', c, 'icerain', t('Absolute zero'), unfold + hold + 0.3);
     duck(0.1, unfold + hold, 1.2);
     kit.groundSigil('icerain', c, R, unfold, hold, 0.2);
     sfx.heart(0.3);
     let beat = 0.75, beatLeft = unfold + hold;
     kit.proc((dt) => { beatLeft -= dt; beat -= dt; if (beat <= 0) { beat = 0.75; sfx.heart(0.32); } return beatLeft > 0; });
-    // снег стягивается к центру
+    // snow gathers toward the centre
     let pre = unfold;
     kit.proc((dt) => {
       pre -= dt;
@@ -587,7 +588,7 @@ const absolutezero: Spell = {
       kit.impact('icerain', c, k, 16, 0.8);
       sfx.dome(k);
       fx.flash(c.clone().setY(c.y + 1.5), ICE_B.clone().multiplyScalar(0.4), R * 0.7, 0.4);
-      // купол: полупрозрачная полусфера и сетка граней, вырастает за 0,4 с
+      // dome: a translucent hemisphere and a grid of edges, grows in 0.4 s
       const domeMat = glowMat(C(0.05, 0.12, 0.24), 0.25);
       const wireMat = glowMat(ICE_A.clone().multiplyScalar(0.06), 0.6);
       wireMat.wireframe = true;
@@ -596,13 +597,13 @@ const absolutezero: Spell = {
       dome.add(new THREE.Mesh(geo, domeMat), new THREE.Mesh(geo, wireMat));
       dome.position.copy(c);
       kit.h.scene.add(dome);
-      // каждая цель в куполе вмерзает в свой кристалл
+      // every target in the dome freezes into its own crystal
       const frozen = kit.within(c, R).map((tg) => {
         const cr = crystal(kit, tg.pos.clone(), Math.max(1.6, (tg.topY ?? 1.8) + 0.3), tg.radius * 2 + 0.4);
         kit.h.damage(tg, Math.round(power * 0.5), c, 0);
         return { tg, cr };
       });
-      // снег в куполе почти висит — время стоит
+      // snow in the dome almost hangs — time stands still
       const flakes: { p: THREE.Vector3; v: THREE.Vector3 }[] = Array.from({ length: 60 }, () => {
         const ang = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * R * 0.9;
         return { p: c.clone().add(new THREE.Vector3(Math.cos(ang) * r, rand(0.3, R * 0.6), Math.sin(ang) * r)), v: new THREE.Vector3(rand(-0.05, 0.05), -rand(0.02, 0.08), rand(-0.05, 0.05)) };
@@ -623,7 +624,7 @@ const absolutezero: Spell = {
           fx.shock(c, R * 0.9, ICE_A, 0.5, 0.06);
         }
         if (t < hold) return true;
-        // конец: купол и кристаллы лопаются, урон по всему куполу
+        // end: the dome and crystals burst, damage across the whole dome
         kit.h.scene.remove(dome);
         geo.dispose(); domeMat.dispose(); wireMat.dispose();
         for (const { cr, tg } of frozen) {

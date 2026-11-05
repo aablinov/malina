@@ -8,24 +8,24 @@ import { r1, r2 } from './entities.ts';
 import type { Foe, SimWorld } from './world.ts';
 
 /**
- * Башня обороны — логика (wiki/design-tower-defence.md): сама выбирает цель — того, кто дальше всех прошёл по дороге, —
- * и бьёт по-своему (src/td/towers.ts). Модель, искры и звук — у вида (src/cgame/views/tower-view.ts) по событиям и записи.
- * Снаряды (`bolts`) и лужи (`pools`) — сущности снимка, попадание считает симуляция по времени полёта.
- * Прочность: для охотников на башни башня — осадная приманка (src/decoys.ts); сгрызли — руины; колдунчик замораживает
+ * Defence tower — logic (wiki/design-tower-defence.md): picks its own target — the one furthest along the lane —
+ * and hits in its own way (src/td/towers.ts). Model, sparks and sound belong to the view (src/cgame/views/tower-view.ts), driven by events and the record.
+ * Projectiles (`bolts`) and pools (`pools`) are snapshot entities; the simulation resolves hits by flight time.
+ * Durability: for tower hunters the tower is a siege decoy (src/decoys.ts); gnawed down — ruins; the ice warlock freezes it
  */
 
-/** Угол из [−π, π] */
+/** Angle wrapped into [−π, π] */
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 const _dir = new THREE.Vector3();
 const ZERO = new THREE.Vector3();
-/** Сколько ударов героя разбивают лёд на башне */
+/** How many hero hits break the ice on a tower */
 const ICE_HITS = 2;
 
-/** Снаряд: по прямой (h = 0) или по дуге высотой h; долетел — arrive */
+/** Projectile: straight (h = 0) or along an arc of height h; on arrival — arrive */
 export interface Bolt { id: string; kind: string; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; h: number; homing: Foe | null; arrive: (at: THREE.Vector3) => void }
-/** Горящий враг: тики урона */
+/** Burning enemy: damage ticks */
 interface Burn { foe: Foe; t: number; tick: number; dmg: number; fxT: number }
-/** Лужа смолы: вязнут и горят, пока не высохла */
+/** Tar pool: they get stuck and burn until it dries */
 export interface Pool { id: string; at: THREE.Vector3; t: number; tick: number; r: number }
 
 export class SimTower implements Decoy {
@@ -34,12 +34,12 @@ export class SimTower implements Decoy {
   readonly def: TowerDef;
   readonly pos: THREE.Vector3;
   level = 1;
-  /** Всего вложено малины (постройка и улучшения) — для продажи */
+  /** Total raspberries invested (build and upgrades) — for selling */
   spent: number;
   target: Foe | null = null;
-  /** Поворот стреляющей части к цели */
+  /** Rotation of the firing part towards the target */
   yaw = 0;
-  /** Счётчики для тестов и подписи */
+  /** Counters for tests and the label */
   shots = 0;
   dealt = 0;
   kills = 0;
@@ -50,7 +50,7 @@ export class SimTower implements Decoy {
   hp: number;
   maxHp: number;
   frozen = 0;
-  /** Лёд на башне — цель меча героя, пока башня заморожена */
+  /** Ice on the tower — a target for the hero's sword while the tower is frozen */
   readonly ice: Target;
   onAlarm?: (why: 'hurt' | 'frozen' | 'ruin') => void;
   readonly bolts: Bolt[] = [];
@@ -82,7 +82,7 @@ export class SimTower implements Decoy {
   get dmg(): number { return Math.round(this.def.dmg * UPGRADE_DMG[this.level - 1]); }
   get title(): string { return `${this.def.title} ${['I', 'II', 'III'][this.level - 1]}`; }
   get nextCost(): number | null { return this.level >= MAX_LEVEL ? null : upgradeCost(this.def, this.level + 1); }
-  /** Сколько врагов горит (для тестов) */
+  /** How many enemies are burning (for tests) */
   get burning(): number { return this.burns.length; }
   get pooling(): number { return this.pools.length; }
 
@@ -141,14 +141,14 @@ export class SimTower implements Decoy {
     return true;
   }
 
-  /** Снесена или продана: снаряды и лужи пропадают */
+  /** Demolished or sold: projectiles and pools vanish */
   dispose(): void {
     this.bolts.length = 0;
     this.pools.length = 0;
     this.burns.length = 0;
   }
 
-  // ---------- бой ----------
+  // ---------- combat ----------
   private pick(): Foe | null {
     let best: Foe | null = null, bp = -Infinity;
     const r = this.range;
@@ -164,7 +164,7 @@ export class SimTower implements Decoy {
 
   private inRange(f: Foe): boolean { return f.alive && !f.dead && Math.hypot(f.pos.x - this.pos.x, f.pos.z - this.pos.z) - f.radius <= this.range + 0.5; }
 
-  /** Урон цели от башни; цифра урона — событием `dmg` */
+  /** Damage to the target from the tower; the damage number goes as a `dmg` event */
   private strike(f: Foe, dmg: number, knock: number, point: THREE.Vector3, cls = '', pierce = false): void {
     if (!f.alive || dmg <= 0) return;
     _dir.set(f.pos.x - this.pos.x, 0, f.pos.z - this.pos.z).normalize();
@@ -209,7 +209,7 @@ export class SimTower implements Decoy {
     }
   }
 
-  /** Тяжёлый болт: по прямой через цель до края дальности, бьёт всех в полосе 0,7 м; удар без направления — броню не гасит */
+  /** Heavy bolt: straight through the target to the edge of the range, hits everyone in a 0.7 m strip; a hit without direction — does not block armour */
   private fireBallista(t: Foe): void {
     const dmg = this.dmg, from = this.muzzle(1.3, 1.0);
     const dir = new THREE.Vector3(t.pos.x - this.pos.x, 0, t.pos.z - this.pos.z).normalize();
@@ -229,7 +229,7 @@ export class SimTower implements Decoy {
     }
   }
 
-  /** Ковш смолы по дуге: лужа радиусом 2,2 м на 5 с — в ней вязнут (−50 %) и горят (тик урона раз в 0,5 с) */
+  /** A ladle of tar along an arc: a pool of radius 2.2 m for 5 s — in it they get stuck (−50 %) and burn (a damage tick every 0.5 s) */
   private fireOil(t: Foe): void {
     const from = this.muzzle(1.9, 0.6), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
     this.ev('tower.fire');
@@ -240,7 +240,7 @@ export class SimTower implements Decoy {
     });
   }
 
-  /** Метеорит: в самую плотную толпу в радиусе — с неба, взрыв 4,5 м (урон слабеет к краю, не меньше половины), отброс, поджог */
+  /** Meteor: into the densest crowd within range — from the sky, 4.5 m blast (damage fades towards the edge, no less than half), knockback, sets on fire */
   private fireMeteor(): void {
     const R = 4.5, dmg = this.dmg;
     const foes = this.around(this.pos, this.range);
@@ -262,7 +262,7 @@ export class SimTower implements Decoy {
     });
   }
 
-  /** Молния: в цель и дальше цепью к ближайшему (до 5 м) — 6 врагов, на II — 8, на III — 10; каждый прыжок −8 % урона, оглушение 0,3 с */
+  /** Lightning: into the target and on in a chain to the nearest (up to 5 m) — 6 enemies, 8 at II, 10 at III; each jump −8 % damage, 0.3 s stun */
   private fireStorm(t: Foe): void {
     const n = 4 + this.level * 2, dmg = this.dmg;
     const chain: Foe[] = [t];
@@ -283,7 +283,7 @@ export class SimTower implements Decoy {
     this.ev('tower.fire', { pts });
   }
 
-  /** Вьюга: всем в радиусе урон и −50 % скорости; каждый пятый удар — ледяная волна: урон ×3 и оглушение 1,2 с */
+  /** Blizzard: damage and −50 % speed to everyone within range; every fifth hit is an ice wave: damage ×3 and 1.2 s stun */
   private fireWinter(): void {
     const R = this.range, nova = this.shots % 5 === 0, dmg = nova ? this.dmg * 3 : this.dmg;
     for (const f of this.around(this.pos, R)) {
@@ -294,14 +294,14 @@ export class SimTower implements Decoy {
     this.ev('tower.fire', { nova, r: R });
   }
 
-  /** Болт: летит по прямой к цели, попал — урон */
+  /** Bolt: flies straight at the target, on hit — damage */
   private fireArrow(t: Foe): void {
     const to = this.chest(t), dmg = this.dmg, from = this.muzzle(2.9, 0.5);
     this.ev('tower.fire');
     this.bolt('arrow', from, to, from.distanceTo(to) / 34, 0, null, () => { this.strike(t, dmg, 0.4, to); this.w.emit({ t: 'hit.arrow', x: to.x, y: to.y, z: to.z }); });
   }
 
-  /** Ледяной сгусток: урон и замедление; на III — иней по площади вокруг цели */
+  /** Ice clot: damage and slow; at III — rime over an area around the target */
   private fireFrost(t: Foe): void {
     const to = this.chest(t), dmg = this.dmg, lvl = this.level;
     const from = this.muzzle(2.9 + lvl * 0.2, 0.3);
@@ -315,7 +315,7 @@ export class SimTower implements Decoy {
     });
   }
 
-  /** Камень по дуге: взрыв по площади с отбросом, урон слабеет к краю */
+  /** Rock along an arc: area blast with knockback, damage fades towards the edge */
   private fireSplash(t: Foe): void {
     const dmg = this.dmg, R = 2.4;
     const from = this.muzzle(2.0, -0.3), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
@@ -329,7 +329,7 @@ export class SimTower implements Decoy {
     });
   }
 
-  /** Струя пламени: все в конусе перед жаровней получают урон и горят ещё 3 с */
+  /** Jet of flame: everyone in the cone in front of the brazier takes damage and burns for 3 more s */
   private fireFlame(): void {
     const dmg = this.dmg, R = this.range, yaw = this.yaw;
     const from = this.muzzle(1.6, 0.9);
@@ -343,7 +343,7 @@ export class SimTower implements Decoy {
     }
   }
 
-  /** Сфера: летит к цели по дуге, ослабляет и бьёт; цепью — ещё по соседям (столько, какой уровень) */
+  /** Orb: flies to the target along an arc, weakens and hits; chains on to neighbours (as many as the level) */
   private fireMagic(t: Foe): void {
     const dmg = this.dmg, lvl = this.level, from = this.muzzle(3.5, 0);
     const dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z), up = 1.5 + dist * 0.15;

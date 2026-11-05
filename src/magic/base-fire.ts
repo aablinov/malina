@@ -5,10 +5,11 @@ import { boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
 import type { Spells } from '../spells.ts';
 import type { Target } from '../target.ts';
 import { C, rand, type Spell } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Базовые заклинания огня (wiki/design-spells.md, «Базовые заклинания»): огненная стена, огненный ураган, малый армагеддон.
- * Не слишком сильные, у торговца; анатомия каста как у всех — замах, удар (impact), послевкусие (следы, угли).
+ * Base fire spells (wiki/design-spells.md, "Base spells"): fire wall, fire hurricane, lesser armageddon.
+ * Not too strong, sold by the merchant; cast anatomy as everywhere — windup, hit (impact), aftertaste (traces, embers).
  */
 
 const UNIT = new THREE.BoxGeometry(1, 1, 1);
@@ -18,7 +19,7 @@ const FIRE_ROOT = 220;
 const glowMat = (c: THREE.Color, opacity = 1): THREE.MeshBasicMaterial =>
   new THREE.MeshBasicMaterial({ color: c, toneMapped: false, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
 
-/** Живые цели в полосе вдоль отрезка a–b шириной ±w */
+/** Living targets in the strip along segment a–b of width ±w */
 function inStrip(kit: Spells, a: THREE.Vector3, b: THREE.Vector3, w: number): Target[] {
   const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz;
   return kit.h.targets().filter((t) => {
@@ -28,7 +29,7 @@ function inStrip(kit: Spells, a: THREE.Vector3, b: THREE.Vector3, w: number): Ta
   });
 }
 
-/** Языки пламени над точкой: поднимаются и тают */
+/** Flame tongues above a point: rise and fade */
 function flames(kit: Spells, p: THREE.Vector3, n: number, h = 1): void {
   for (let i = 0; i < n; i++) kit.h.fx.particle({
     pos: p.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(0, 0.3), rand(-0.25, 0.25))),
@@ -38,28 +39,28 @@ function flames(kit: Spells, p: THREE.Vector3, n: number, h = 1): void {
 }
 
 const sfx = {
-  /** Стена встаёт: рёв снизу вверх, удар и аккорд */
+  /** The wall rises: roar from low to high, a hit and a chord */
   wallUp(k: number) {
     boom(120 - k * 30, 40, 0.7, 0.45);
     hiss({ dur: 0.7 + k * 0.3, vol: 0.28, f: 250, f1: 2200, q: 0.5, type: 'lowpass', attack: 0.06, verb: 0.35 });
     [0, 7, 12].forEach((s, i) => voice({ type: 'sawtooth', f: FIRE_ROOT * Math.pow(2, s / 12), dur: 0.8, vol: 0.04, detune: 10, lp: 2400, lp1: 300, delay: i * 0.03, verb: 0.4 }));
   },
-  /** Ровный треск горения — короткий, повторяется тиками */
+  /** Steady crackle of burning — short, repeated in ticks */
   crackle() {
     for (let i = 0; i < 3; i++) hiss({ dur: 0.025, vol: 0.05, f: rand(2500, 5500), q: 3, delay: rnd() * 0.4, verb: 0.1 });
     hiss({ dur: 0.45, vol: 0.05, f: 400, q: 0.6, type: 'lowpass', verb: 0.2 });
   },
-  /** Смерч закрутился: свист вверх, гул */
+  /** The whirlwind spins up: whistle upward, rumble */
   stormUp(k: number) {
     boom(110, 45, 0.6, 0.4);
     hiss({ dur: 1, vol: 0.22 + k * 0.08, f: 300, f1: 1800, q: 1.2, attack: 0.3, verb: 0.4 });
     voice({ type: 'triangle', f: deg(FIRE_ROOT * 2, 0), f1: deg(FIRE_ROOT * 2, 5), dur: 0.6, vol: 0.05, verb: 0.4 });
   },
-  /** Вой вихря — волна шума, повторяется */
+  /** Howl of the vortex — a wave of noise, repeated */
   whirl() { hiss({ dur: 0.65, vol: 0.09, f: 500, f1: 900, q: 2, attack: 0.25, verb: 0.3 }); },
-  /** Шар летит: свист вниз */
+  /** The ball flies: whistle downward */
   fall() { hiss({ dur: 0.35, vol: 0.06, f: 3000, f1: 700, q: 1.5, verb: 0.2 }); },
-  /** Шар упал: удар, треск и нота пентатоники */
+  /** The ball landed: hit, crackle and a pentatonic note */
   ballBoom(i: number) {
     boom(130, 40, 0.35, 0.3);
     hiss({ dur: 0.3, vol: 0.18, f: 1400, f1: 220, q: 0.5, type: 'lowpass', verb: 0.3 });
@@ -67,10 +68,10 @@ const sfx = {
   },
 };
 
-// ---------- огненная стена ----------
+// ---------- fire wall ----------
 
 const firewall: Spell = {
-  school: 'fireball', tier: 'common', title: 'Огненная стена',
+  school: 'fireball', tier: 'common', title: t('Fire wall'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
     const c = kit.ground(at, 8);
@@ -82,7 +83,7 @@ const firewall: Spell = {
     const A = c.clone().addScaledVector(side, -half), B = c.clone().addScaledVector(side, half);
     kit.face(c);
     kit.windup('fireball', k);
-    // замах: по линии будущей стены бежит тлеющая черта
+    // windup: a smouldering line runs along the future wall
     const n = Math.max(6, Math.round(L * 1.6));
     for (let i = 0; i <= n; i++) kit.later((i / n) * 0.28, () => {
       const p = A.clone().lerp(B, i / n);
@@ -93,7 +94,7 @@ const firewall: Spell = {
       kit.pomp('common', c, 'fireball');
       sfx.wallUp(k);
       fx.flash(c.clone().setY(c.y + 1), FIRE_B.clone().multiplyScalar(0.6), L * 0.6, 0.3);
-      // воксельные столбы пламени: ядро и полупрозрачная оболочка, колышутся
+      // voxel flame pillars: core and translucent shell, swaying
       const g = new THREE.Group();
       const mats = [glowMat(FIRE_B.clone().multiplyScalar(0.3), 0.75), glowMat(FIRE_A.clone().multiplyScalar(0.22), 0.45)];
       const cols: { m: THREE.Mesh; base: number; ph: number }[] = [];
@@ -127,7 +128,7 @@ const firewall: Spell = {
           col.m.position.y = c.y + h / 2;
           col.m.rotation.y += dt * 1.5;
         }
-        // языки пламени и марево
+        // flame tongues and heat haze
         for (let i = 0; i < 3 + k * 2; i++) {
           const p = A.clone().lerp(B, rnd());
           if (fall > 0.2) flames(kit, p, 1, 1.2);
@@ -139,7 +140,7 @@ const firewall: Spell = {
         for (const m of mats) m.dispose();
         return false;
       });
-      // послевкусие: выжженная полоса и угли
+      // aftertaste: a scorched strip and embers
       for (let i = 0; i < Math.ceil(L / 1.5); i++) {
         const p = A.clone().lerp(B, (i + 0.5) / Math.ceil(L / 1.5));
         fx.decal(p, kit.tex.scorch(), '#ffffff', 2, dur + 3, false, 0.6);
@@ -149,10 +150,10 @@ const firewall: Spell = {
   },
 };
 
-// ---------- огненный ураган ----------
+// ---------- fire hurricane ----------
 
 const firestorm: Spell = {
-  school: 'fireball', tier: 'common', title: 'Огненный ураган',
+  school: 'fireball', tier: 'common', title: t('Fire hurricane'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
     const R = (a.radius ?? 1.8) + k * 0.6, dur = a.duration ?? 4;
@@ -161,7 +162,7 @@ const firestorm: Spell = {
     if (!Number.isFinite(start.x)) start.copy(hero.pos);
     kit.face(end);
     kit.windup('fireball', k);
-    // замах: угли закручиваются спиралью там, где родится смерч
+    // windup: embers spiral where the whirlwind will be born
     for (let i = 0; i < 24; i++) {
       const ang = (i / 24) * Math.PI * 4, r = R * (1 - i / 24), life = 0.3;
       const from = start.clone().add(new THREE.Vector3(Math.cos(ang) * r * 1.5, 0.1, Math.sin(ang) * r * 1.5));
@@ -171,7 +172,7 @@ const firestorm: Spell = {
       kit.impact('fireball', start, k, 14, 0.35);
       kit.pomp('common', start, 'fireball');
       sfx.stormUp(k);
-      // смерч: стопка вращающихся колец-лент огня, шире кверху
+      // whirlwind: a stack of rotating fire ribbon rings, wider at the top
       const g = new THREE.Group();
       const mats: THREE.MeshBasicMaterial[] = [];
       const rings: { m: THREE.Mesh; y: number; r: number; sp: number }[] = [];
@@ -193,7 +194,7 @@ const firestorm: Spell = {
       let t = 0, tick = 0, howl = 0, trail = 0;
       kit.proc((dt) => {
         t += dt; tick += dt; howl -= dt; trail -= dt;
-        // катится к курсору ≈2,5 м/с, у цели кружит на месте
+        // rolls toward the cursor at ≈2.5 m/s, circles in place at the target
         const travelled = pos.distanceTo(start);
         if (travelled < len) pos.addScaledVector(step, Math.min(2.5 * dt, len - travelled));
         const fy = kit.h.terrain.floorAt(pos.x, pos.z, pos.y + 2);
@@ -203,7 +204,7 @@ const firestorm: Spell = {
         const grow = Math.min(1, t / 0.3), fade = Math.max(0, Math.min(1, (dur - t) / 0.4));
         g.scale.setScalar(Math.max(0.01, grow * fade));
         for (const rg of rings) rg.m.rotation.z += dt * rg.sp;
-        // затягивает частицы с земли и выбрасывает угли сверху
+        // sucks particles up from the ground and throws embers out of the top
         for (let i = 0; i < 3; i++) {
           const ang = rnd() * Math.PI * 2, r = R * rand(1.2, 2);
           const from = pos.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0.1, Math.sin(ang) * r)), life = 0.45;
@@ -211,7 +212,7 @@ const firestorm: Spell = {
           fx.particle({ pos: from, vel: v, life, size: rand(0.05, 0.09), color: rnd() < 0.5 ? FIRE_A : FIRE_B, gravity: 0 });
         }
         if (rnd() < 0.5) fx.particle({ pos: pos.clone().setY(pos.y + 3), vel: new THREE.Vector3(rand(-2, 2), rand(1, 3), rand(-2, 2)), life: 0.7, size: 0.08, color: FIRE_B, gravity: 4 });
-        // колея: редкие следы, чтобы не копилось тёмное пятно
+        // track: sparse traces so no dark stain builds up
         if (trail <= 0 && pos.distanceTo(start) < len) { trail = 0.45; fx.decal(pos, kit.tex.scorch(), '#ffffff', R * 1.2, 3, false, 0.3); }
         if (tick >= 0.3 && t < dur) {
           tick -= 0.3;
@@ -222,7 +223,7 @@ const firestorm: Spell = {
         }
         if (howl <= 0) { howl = 0.55; sfx.whirl(); }
         if (t < dur) return true;
-        // конец: рассыпается кольцом углей
+        // end: scatters into a ring of embers
         fx.burst(pos.clone().setY(pos.y + 1), [FIRE_A, FIRE_B], 24, { speed: 4, up: 3, size: 0.08, life: 0.6, glow: true, gravity: 5 });
         fx.shock(pos, R * 1.5, FIRE_A, 0.4, 0.15);
         kit.h.scene.remove(g);
@@ -234,15 +235,15 @@ const firestorm: Spell = {
   },
 };
 
-// ---------- малый армагеддон ----------
+// ---------- lesser armageddon ----------
 
 const armageddon: Spell = {
-  school: 'fireball', tier: 'common', title: 'Малый армагеддон',
+  school: 'fireball', tier: 'common', title: t('Lesser armageddon'),
   cast(kit, a, power, at, k) {
     const fx = kit.h.fx, hero = kit.h.hero;
     const R = (a.radius ?? 5) + k, dur = a.duration ?? 3, count = 8 + Math.round(k * 6);
     kit.windup('fireball', k);
-    // замах: круг на земле вокруг героя, в небе собираются огоньки
+    // windup: a circle on the ground around the hero, little lights gather in the sky
     kit.groundSigil('fireball', hero.pos.clone(), R, 0.4, dur + 0.2, 0.22);
     for (let i = 0; i < 16; i++) {
       const ang = (i / 16) * Math.PI * 2;
@@ -252,7 +253,7 @@ const armageddon: Spell = {
     let first = true;
     for (let i = 0; i < count; i++) {
       kit.later(0.35 + (i / count) * dur, () => {
-        // каждый 3-й — во врага в круге, ближайшего к курсору (по очереди из двух ближайших), остальные — куда попало
+        // every 3rd — at an enemy in the circle nearest to the cursor (alternating between the two nearest), the rest — anywhere
         const near = i % 3 === 2 ? kit.within(hero.pos, R).filter((t) => !t.prop)
           .sort((u, v) => Math.hypot(u.pos.x - at.x, u.pos.z - at.z) - Math.hypot(v.pos.x - at.x, v.pos.z - at.z)) : [];
         let p: THREE.Vector3;
@@ -267,16 +268,16 @@ const armageddon: Spell = {
   },
 };
 
-/** Огненный шар падает на метку и взрывается маленьким кругом ~1,5 м */
+/** A fireball falls on the mark and explodes in a small circle ~1.5 m */
 function ball(kit: Spells, p: THREE.Vector3, power: number, k: number, i: number, first: boolean): void {
   const fx = kit.h.fx, fall = 0.55, r = 1.5;
-  // тень-метка
+  // shadow mark
   const markMat = glowMat(FIRE_A.clone().multiplyScalar(0.35), 0);
   const mark = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 24), markMat);
   mark.rotation.x = -Math.PI / 2;
   mark.position.copy(p).setY(p.y + 0.05);
   fx.custom(mark, fall, (t) => { markMat.opacity = t * 0.9; mark.scale.setScalar(1.6 - t * 0.6); }, () => { mark.geometry.dispose(); markMat.dispose(); });
-  // сам шар: белое ядро в оранжевой оболочке, хвост искр
+  // the ball itself: white core in an orange shell, tail of sparks
   const coreMat = glowMat(WHITE.clone().multiplyScalar(0.8)), shellMat = glowMat(FIRE_A.clone().multiplyScalar(0.55), 0.6);
   const g = new THREE.Group();
   const core = new THREE.Mesh(UNIT, coreMat), shell = new THREE.Mesh(UNIT, shellMat);
@@ -299,7 +300,7 @@ function ball(kit: Spells, p: THREE.Vector3, power: number, k: number, i: number
     fx.shock(p, r, FIRE_A, 0.3, 0.2);
     kit.h.aoe(p, r, Math.round(power), 0.8, true);
     fx.decal(p, kit.tex.scorch(), '#ffffff', 1.8, 3.5, false, 0.6);
-    // угли на месте ещё секунду
+    // embers stay for another second
     let left = 1.2;
     kit.proc((dt) => { left -= dt; if (rnd() < 0.4) flames(kit, p, 1, 0.8); return left > 0; });
   });

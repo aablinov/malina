@@ -1,25 +1,25 @@
 import type { DecorItem, LevelEntity } from '../level.ts';
 
 /**
- * Библиотека пресетов (wiki/design-prefab-library.md): готовые куски мира — блоки, декор и свет относительно опорной клетки
- * (низ, центр). Запекаются кодом (`npm run prefabs`) в assets/prefabs/*.json, в редакторе — вкладка «Библиотека».
- * Тот же формат у «Моих префабов» редактора (сохранённое выделение), только без категории и размера.
+ * Prefab library (wiki/design-prefab-library.md): ready pieces of the world — blocks, decor and light relative to the anchor cell
+ * (bottom, centre). Baked by code (`npm run prefabs`) into assets/prefabs/*.json; in the editor — the "Library" tab.
+ * The editor's "My prefabs" (a saved selection) use the same format, just without category and size.
  */
 export interface PrefabData {
   id: string;
   title: string;
-  /** [dx, dy, dz, блок, поворот] от опорной клетки */
+  /** [dx, dy, dz, block, rotation] from the anchor cell */
   cells: [number, number, number, string, number][];
   decor: DecorItem[];
   entities: LevelEntity[];
 }
 
 export interface LibraryPrefab extends PrefabData {
-  /** Раздел каталога: природа, руины, поселение… */
+  /** Catalogue section: nature, ruins, settlement… */
   category: string;
   hint?: string;
-  /** Габариты в клетках: ширина (X), высота (Y), глубина (Z) */
+  /** Size in cells: width (X), height (Y), depth (Z) */
   size: [number, number, number];
-  /** Зерно варианта */
+  /** Variant seed */
   seed: number;
 }

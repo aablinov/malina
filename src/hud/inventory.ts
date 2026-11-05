@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { auraLines } from '../aura-offense.ts';
+import { t } from '../i18n/i18n.ts';
 import { iconImg, iconURL } from '../icons.ts';
 import {
   armorHealth, enchantDef, itemDef, PERK_TEXT, powerMult, RARITY, salvageValue, SLOT_TITLE, spentPoints, xpToNext,
@@ -12,30 +13,30 @@ import { RESONANCE, synergiesOf, TEMPER_LOOK, temperOf, WEAPON_SPECIAL } from '.
 import './inventory.css';
 
 /**
- * Инвентарь как в Minecraft Dungeons (wiki/design-inventory.md), под ПК: слева герой в 3D с надетым —
- * ближнее оружие, броня, дальнее, три артефакта, уровень и сила; в центре вкладки и сетка предметов 3 в ряд;
- * справа карточка — сила, редкость, название, свойства, описание, полосы оружия и гнёзда зачарований.
- * Мышь: клик — выбрать, двойной клик или ПКМ — надеть, перетащить на гнездо — надеть туда.
- * Клавиши: I / Esc — закрыть, Q / E — вкладки, стрелки — по сетке, Enter — надеть, X — разобрать.
+ * Inventory like in Minecraft Dungeons (wiki/design-inventory.md), for PC: the hero in 3D on the left with the equipped —
+ * melee weapon, armour, ranged, three artifacts, level and power; tabs and an item grid 3 per row in the centre;
+ * the card on the right — power, rarity, title, traits, description, weapon bars and enchantment slots.
+ * Mouse: click — select, double click or RMB — equip, drag onto a slot — equip there.
+ * Keys: I / Esc — close, Q / E — tabs, arrows — across the grid, Enter — equip, X — salvage.
  */
 
 export type Tab = 'all' | ItemSlot | 'enchanted';
 const TABS: { id: Tab; title: string; icon: string }[] = [
-  { id: 'all', title: 'Все', icon: 'grid' },
-  { id: 'melee', title: 'Ближний бой', icon: 'sword' },
-  { id: 'ranged', title: 'Дальний бой', icon: 'bow' },
-  { id: 'armor', title: 'Броня', icon: 'helmet' },
-  { id: 'artifact', title: 'Артефакты', icon: 'flask' },
-  { id: 'aura', title: 'Ауры', icon: 'a-bastion' },
-  { id: 'enchanted', title: 'Зачарованные', icon: 'spiral' },
+  { id: 'all', title: t('All'), icon: 'grid' },
+  { id: 'melee', title: t('Melee'), icon: 'sword' },
+  { id: 'ranged', title: t('Ranged'), icon: 'bow' },
+  { id: 'armor', title: t('Armour'), icon: 'helmet' },
+  { id: 'artifact', title: t('Artifacts'), icon: 'flask' },
+  { id: 'aura', title: t('Auras'), icon: 'a-bastion' },
+  { id: 'enchanted', title: t('Enchanted'), icon: 'spiral' },
 ];
-/** Значок силы по виду предмета */
+/** Power icon by item kind */
 const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask', aura: 'a-bastion' };
 const ROMAN = ['', 'I', 'II', 'III'];
 const SLOT_ORDER: Record<ItemSlot, number> = { melee: 0, armor: 1, ranged: 2, artifact: 3, aura: 4 };
 const fmt = (v: number, d = 1): string => (Math.round(v * 10 ** d) / 10 ** d).toString().replace('.', ',');
 
-/** Полосы оружия: максимум по стандартному оружию */
+/** Weapon bars: the maximum over the standard weapons */
 const METRIC_MAX = (() => {
   const ms = DEFAULT_WEAPONS.map((w) => weaponMetrics(w));
   return { dps: Math.max(...ms.map((m) => m.dps)), speed: Math.max(...ms.map((m) => 1 / m.comboTime)), area: Math.max(...ms.map((m) => m.coverage)) };
@@ -45,7 +46,7 @@ export class Inventory {
   readonly el: HTMLDivElement;
   private tab: Tab = 'all';
   private sel: string | null = null;
-  /** Открытое гнездо зачарования и выбранный в нём вариант */
+  /** The open enchantment slot and the option chosen in it */
   private enchSlot = -1;
   private enchOpt = -1;
   private confirm = false;
@@ -62,20 +63,20 @@ export class Inventory {
     el.innerHTML = `
       <div class="inv-bg"></div>
       <div class="inv-top">
-        <span title="Малина">${iconImg('berry')}<b data-id="berries"></b></span>
-        <span title="Очки зачарования">${iconImg('spiral')}<b data-id="points"></b></span>
+        <span title="${t('Raspberries')}">${iconImg('berry')}<b data-id="berries"></b></span>
+        <span title="${t('Enchantment points')}">${iconImg('spiral')}<b data-id="points"></b></span>
       </div>
-      <button class="inv-x" data-act="close" title="Закрыть (I, Esc)">✕</button>
+      <button class="inv-x" data-act="close" title="${t('Close (I, Esc)')}">✕</button>
       <section class="inv-hero">
         <canvas class="inv-model"></canvas>
         <div class="inv-eq" data-eq="melee" style="left:2%;top:13%"></div>
         <div class="inv-eq" data-eq="armor" style="left:37%;top:4%"></div>
         <div class="inv-eq" data-eq="ranged" style="left:72%;top:13%"></div>
-        <div class="inv-level" title="Уровень героя: опыт до следующего">
+        <div class="inv-level" title="${t('Hero level: experience to the next')}">
           <svg viewBox="0 0 100 100"><polygon class="ring-bg" points="50,4 90,27 90,73 50,96 10,73 10,27"/><polygon class="ring" data-id="ring" points="50,4 90,27 90,73 50,96 10,73 10,27"/></svg>
-          ${iconImg('spiral', 'inv-level-ico')}<span>Уровень</span><b data-id="level"></b>
+          ${iconImg('spiral', 'inv-level-ico')}<span>${t('Level')}</span><b data-id="level"></b>
         </div>
-        <div class="inv-power" title="Сила: среднее надетого"><div class="inv-power-ico">${iconImg('power')}</div><div><span>Сила</span><b data-id="power"></b></div></div>
+        <div class="inv-power" title="${t('Power: the average of the equipped')}"><div class="inv-power-ico">${iconImg('power')}</div><div><span>${t('Power')}</span><b data-id="power"></b></div></div>
         <div class="inv-eq art" data-eq="art0" style="left:8%;bottom:2%"></div>
         <div class="inv-eq art" data-eq="art1" style="left:37%;bottom:2%"></div>
         <div class="inv-eq art" data-eq="art2" style="left:66%;bottom:2%"></div>
@@ -88,14 +89,14 @@ export class Inventory {
       </section>
       <section class="inv-detail" data-id="detail"></section>
       <footer class="inv-actions">
-        <button data-act="close">Назад <kbd>Esc</kbd></button>
-        <button data-act="equip">Надеть <kbd>Enter</kbd></button>
-        <button data-act="salvage">Разобрать <kbd>X</kbd></button>
-        <span class="inv-hint">ЛКМ — выбрать · двойной клик или ПКМ — надеть · перетащи на гнездо</span>
+        <button data-act="close">${t('Back')} <kbd>Esc</kbd></button>
+        <button data-act="equip">${t('Equip')} <kbd>Enter</kbd></button>
+        <button data-act="salvage">${t('Salvage')} <kbd>X</kbd></button>
+        <span class="inv-hint">${t('LMB — select · double click or RMB — equip · drag onto a slot')}</span>
       </footer>`;
     parent.appendChild(el);
     this.el = el;
-    // фон из крупных «пикселей» разной яркости, как в MCD
+    // background of large "pixels" of varying brightness, like in MCD
     const noise = document.createElement('canvas');
     noise.width = 40; noise.height = 24;
     const g = noise.getContext('2d');
@@ -112,14 +113,14 @@ export class Inventory {
 
   get open(): boolean { return this.el.classList.contains('open'); }
 
-  /** Открыть; tab — сразу на вкладке (лагерь открывает инвентарь с гнезда нужного вида) */
+  /** Open; tab — straight on that tab (the camp opens the inventory from a slot of the needed kind) */
   show(tab?: Tab): void {
     if (this.open) return;
     if (tab) this.tab = tab;
     this.el.classList.add('open');
     this.enchSlot = -1; this.confirm = false;
     if (!this.sel || !this.profile.get(this.sel)) this.sel = this.profile.data.equip.melee;
-    // с вкладки — первым выбран надетый предмет этого вида
+    // from a tab — the equipped item of this kind is selected first
     if (tab) this.sel = this.list()[0]?.uid ?? this.sel;
     this.preview ??= new Preview(this.el.querySelector('canvas') as HTMLCanvasElement, this.T);
     this.preview.start();
@@ -135,7 +136,7 @@ export class Inventory {
 
   toggle(): void { if (this.open) this.hide(); else this.show(); }
 
-  /** Отфильтрованные предметы вкладки: сначала надетые, потом по виду и силе */
+  /** Filtered items of the tab: equipped first, then by kind and power */
   list(): Item[] {
     const p = this.profile;
     return p.data.items.filter((it) => {
@@ -164,7 +165,7 @@ export class Inventory {
     this.render();
   }
 
-  /** Разобрать выбранное (после подтверждения) */
+  /** Salvage the selection (after confirmation) */
   salvageSelected(): void {
     if (!this.sel) return;
     const list = this.list(), i = list.findIndex((x) => x.uid === this.sel);
@@ -176,7 +177,7 @@ export class Inventory {
     this.render();
   }
 
-  /** Клавиши, пока инвентарь открыт; true — съедено */
+  /** Keys while the inventory is open; true — consumed */
   key(e: KeyboardEvent): boolean {
     if (!this.open) return false;
     const list = this.list(), i = list.findIndex((x) => x.uid === this.sel);
@@ -210,7 +211,7 @@ export class Inventory {
 
   private bind(): void {
     const el = this.el;
-    // клики внутри инвентаря не доходят до сцены
+    // clicks inside the inventory do not reach the scene
     for (const ev of ['mousedown', 'mouseup', 'wheel', 'contextmenu'] as const) el.addEventListener(ev, (e) => e.stopPropagation());
     el.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
@@ -250,7 +251,7 @@ export class Inventory {
       const uid = (e.target as HTMLElement).closest<HTMLElement>('.inv-grid [data-uid]')?.dataset.uid;
       if (uid) { this.select(uid); this.equipSelected(); }
     });
-    // перетаскивание: из сетки на гнездо героя
+    // drag and drop: from the grid onto a hero slot
     el.addEventListener('dragstart', (e) => {
       const uid = (e.target as HTMLElement).closest<HTMLElement>('[data-uid]')?.dataset.uid;
       if (!uid || !e.dataTransfer) return;
@@ -292,7 +293,7 @@ export class Inventory {
     d?.classList.remove('flash'); void (d as HTMLElement | null)?.offsetWidth; d?.classList.add('flash');
   }
 
-  // ---------- отрисовка ----------
+  // ---------- rendering ----------
 
   private tile(it: Item, cls = ''): string {
     const d = itemDef(it.def), p = this.profile;
@@ -316,14 +317,14 @@ export class Inventory {
     q('points').textContent = String(D.points);
     q('level').textContent = String(D.level);
     q('power').textContent = String(p.power);
-    // кольцо опыта вокруг шестиугольника уровня
+    // experience ring around the level hexagon
     const ring = q('ring') as unknown as SVGPolygonElement;
     const per = 6 * 46;
     ring.style.strokeDasharray = `${per * (D.xp / xpToNext(D.level))} ${per}`;
     q('tabLabel').textContent = TABS.find((t) => t.id === this.tab)?.title ?? '';
     this.el.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === this.tab));
 
-    // надетое
+    // equipped
     this.el.querySelectorAll<HTMLElement>('[data-eq]').forEach((slot) => {
       const it = p.get(this.eqUid(slot.dataset.eq ?? ''));
       const kind = eqSlot(slot.dataset.eq ?? '');
@@ -331,10 +332,10 @@ export class Inventory {
       slot.title = it ? itemDef(it.def).title : SLOT_TITLE[kind];
     });
 
-    // сетка: пустые клетки до полного ряда и минимум 12, как в MCD
+    // grid: empty cells up to a full row and at least 12, like in MCD
     const list = this.list();
     const cells = Math.max(12, Math.ceil(list.length / 3) * 3);
-    // сетку перестраиваем, только если поменялось содержимое: иначе первый клик двойного заменил бы плитку
+    // the grid is rebuilt only when its content changed: otherwise the first click of a double click would replace the tile
     const html = list.map((it) => this.tile(it)).join('') + '<div class="it empty"></div>'.repeat(cells - list.length);
     if (html !== this.gridHtml) { this.gridHtml = html; q('grid').innerHTML = html; }
     this.el.querySelectorAll<HTMLElement>('.it[data-uid]').forEach((t) => t.classList.toggle('sel', t.dataset.uid === this.sel));
@@ -347,7 +348,7 @@ export class Inventory {
 
   private detail(): string {
     const p = this.profile, it = p.get(this.sel);
-    if (!it) return '<div class="d-empty">Выбери предмет</div>';
+    if (!it) return `<div class="d-empty">${t('Select an item')}</div>`;
     const d = itemDef(it.def), R = RARITY[d.rarity];
     const lines: string[] = [];
     const line = (icon: string, text: string): void => { lines.push(`<li>${iconImg(icon, '', '#d8d4e0')}<span>${text}</span></li>`); };
@@ -358,52 +359,52 @@ export class Inventory {
       if (w) {
         const sharp = 1 + enchantSum(it, 'sharpness') / 100;
         const dm = w.stats.swings.map((s) => Math.round(s.dmg * k * sharp));
-        line('sword', `Урон ${Math.min(...dm)}–${Math.max(...dm)} за удар`);
+        line('sword', t('Damage {min}–{max} per hit', { min: Math.min(...dm), max: Math.max(...dm) }));
         for (const t of d.traits ?? []) line('e-star', t);
         const m = weaponMetrics(w);
         const cur = p.equipped('melee'), cm = cur && cur.uid !== it.uid ? weaponMetrics(getWeapon(itemDef(cur.def).weapon ?? '') ?? w) : null;
         const bar = (name: string, v: number, c: number | null): string =>
           `<div class="d-bar"><span>${name}</span><div><i style="width:${Math.min(100, v * 100)}%"></i>${c !== null ? `<u style="left:${Math.min(100, c * 100)}%"></u>` : ''}</div></div>`;
-        bars = `<div class="d-bars">${bar('Сила', (m.dps * k) / METRIC_MAX.dps / 1.6, cm && cur ? (cm.dps * powerMult(cur.power)) / METRIC_MAX.dps / 1.6 : null)}${bar('Скорость', 1 / m.comboTime / METRIC_MAX.speed, cm ? 1 / cm.comboTime / METRIC_MAX.speed : null)}${bar('Площадь', m.coverage / METRIC_MAX.area, cm ? cm.coverage / METRIC_MAX.area : null)}</div>`;
+        bars = `<div class="d-bars">${bar(t('Power'), (m.dps * k) / METRIC_MAX.dps / 1.6, cm && cur ? (cm.dps * powerMult(cur.power)) / METRIC_MAX.dps / 1.6 : null)}${bar(t('Speed'), 1 / m.comboTime / METRIC_MAX.speed, cm ? 1 / cm.comboTime / METRIC_MAX.speed : null)}${bar(t('Area'), m.coverage / METRIC_MAX.area, cm ? cm.coverage / METRIC_MAX.area : null)}</div>`;
       }
     } else if (d.ranged) {
       const r = d.ranged;
-      line('arrow', `Урон стрелы ${Math.round(r.dmg * k)}${r.shots ? ` × ${r.shots}` : ''}`);
-      line('e-clock', `Выстрел каждые ${fmt(r.cd, 2)} с`);
-      line('e-arrow', `Дальность ${r.range} м`);
+      line('arrow', t('Arrow damage {dmg}', { dmg: `${Math.round(r.dmg * k)}${r.shots ? ` × ${r.shots}` : ''}` }));
+      line('e-clock', t('A shot every {s} s', { s: fmt(r.cd, 2) }));
+      line('e-arrow', t('Range {m} m', { m: r.range }));
     } else if (d.armor) {
-      line('heart', `+${armorHealth(it)} к здоровью`);
+      line('heart', t('+{n} health', { n: armorHealth(it) }));
       for (const pk of d.armor.perks) line('e-star', PERK_TEXT[pk.kind](pk.value));
     } else if (d.aura) {
       for (const [icon, text] of auraLines(d.aura, k, d.icon)) line(icon, text);
     } else if (d.artifact) {
       const a = d.artifact, v = Math.round(a.power * k);
       const what: Record<string, string> = {
-        firework: `Взрыв: ${v} урона в радиусе ${a.radius} м`, totem: `Лечит ${v} здоровья в секунду, ${a.duration} с`,
-        boots: `Скорость ×${fmt(a.power)} на ${a.duration} с`, horn: `${v} урона и отбрасывание в радиусе ${a.radius} м`,
-        lightning: `Молния: ${v} урона трём ближайшим`, harvester: `Взрыв душ: ${v} урона в радиусе ${a.radius} м`,
-        spark: `Молния: ${v} урона и 2 перескока (заряд — до ${Math.round(v * 2.5)} и 5)`,
-        fireball: `Взрыв: ${v} урона в радиусе ${a.radius} м (заряд — до ${Math.round(v * 2.5)})`,
-        icerain: `Сосульки: ${v} урона волной, ${a.duration} с в радиусе ${a.radius} м`,
-        heal: `Лечит ${v} здоровья (заряд — до ${Math.round(v * 2.5)})`,
+        firework: t('Blast: {v} damage within {r} m', { v, r: a.radius ?? '' }), totem: t('Heals {v} health per second, {d} s', { v, d: a.duration ?? '' }),
+        boots: t('Speed ×{k} for {d} s', { k: fmt(a.power), d: a.duration ?? '' }), horn: t('{v} damage and knockback within {r} m', { v, r: a.radius ?? '' }),
+        lightning: t('Lightning: {v} damage to the three nearest', { v }), harvester: t('Soul blast: {v} damage within {r} m', { v, r: a.radius ?? '' }),
+        spark: t('Lightning: {v} damage and 2 jumps (charged — up to {max} and 5)', { v, max: Math.round(v * 2.5) }),
+        fireball: t('Blast: {v} damage within {r} m (charged — up to {max})', { v, r: a.radius ?? '', max: Math.round(v * 2.5) }),
+        icerain: t('Icicles: {v} damage per wave, {d} s within {r} m', { v, d: a.duration ?? '', r: a.radius ?? '' }),
+        heal: t('Heals {v} health (charged — up to {max})', { v, max: Math.round(v * 2.5) }),
       };
       line(d.icon, what[a.kind] ?? (a.info ?? '').replace('{v}', String(v)).replace('{r}', String(a.radius ?? '')).replace('{d}', String(a.duration ?? '')));
-      if (a.charge) line('e-clock', `Держи клавишу — заряд за ${fmt(a.charge)} с`);
-      if (a.souls) line('soul', `Тратит ${a.souls} душ`);
-      line('e-clock', `Перезарядка ${fmt(a.cd * p.stats().artifactCdMult)} с`);
+      if (a.charge) line('e-clock', t('Hold the key — charges in {s} s', { s: fmt(a.charge) }));
+      if (a.souls) line('soul', t('Spends {n} souls', { n: a.souls }));
+      line('e-clock', t('Cooldown {s} s', { s: fmt(a.cd * p.stats().artifactCdMult) }));
     }
     for (const s of it.enchants) if (s.chosen >= 0 && s.tier > 0) { const e = enchantDef(s.options[s.chosen]); line(e.icon, `${e.title} ${ROMAN[s.tier]}: ${e.text(e.tiers[s.tier - 1])}`); }
-    // закалка: спец-удар вида оружия, облик клинка и синергии пар (src/temper.ts)
+    // temper: the weapon category's art, the blade look and pair synergies (src/temper.ts)
     if (d.slot === 'melee') {
       const w = getWeapon(d.weapon ?? ''), tp = temperOf(it);
       if (w) line('e-bolt', `<b>Q — ${WEAPON_SPECIAL[w.category].title}:</b> ${WEAPON_SPECIAL[w.category].text}`);
-      if (tp.length) line('e-blade', `Клинок: ${tp.map((t) => TEMPER_LOOK[t.id].name).join(' · ')}`);
-      for (const x of synergiesOf(tp)) line('e-swirl', `<b>${x.title}</b> (добивающий): ${x.text}`);
+      if (tp.length) line('e-blade', t('Blade: {look}', { look: tp.map((t) => TEMPER_LOOK[t.id].name).join(' · ') }));
+      for (const x of synergiesOf(tp)) line('e-swirl', t('<b>{title}</b> (finisher): {text}', { title: x.title, text: x.text }));
       if (tp.length >= 3) line('e-star', `<b>${RESONANCE.title}:</b> ${RESONANCE.text}`);
     }
 
     const equipped = p.isEquipped(it.uid);
-    const head = `<div class="d-head"><span class="d-pw">${it.power}${iconImg(SLOT_ICON[d.slot], '', '#fff')}</span><span class="d-rar" style="--c:${R.color}">${R.title}</span>${equipped ? '<span class="d-on">Надето</span>' : ''}</div>
+    const head = `<div class="d-head"><span class="d-pw">${it.power}${iconImg(SLOT_ICON[d.slot], '', '#fff')}</span><span class="d-rar" style="--c:${R.color}">${R.title}</span>${equipped ? `<span class="d-on">${t('Equipped')}</span>` : ''}</div>
       <h2 class="d-title">${d.title}</h2>
       <img class="px d-art" src="${iconURL(d.icon)}" alt="">`;
 
@@ -411,21 +412,21 @@ export class Inventory {
     if (this.confirm) {
       const pts = spentPoints(it);
       body = `<div class="d-salvage">
-        <h3>Выручка за разбор</h3>
+        <h3>${t('Salvage yield')}</h3>
         <div class="d-pay">${iconImg('berry')}<b>${salvageValue(it)}</b>${pts ? `${iconImg('spiral')}<b>${pts}</b>` : ''}</div>
-        <div class="d-btns"><button data-act="salvageNo">Отмена <kbd>Esc</kbd></button><button class="ok" data-act="salvageOk">Разобрать <kbd>Enter</kbd></button></div>
+        <div class="d-btns"><button data-act="salvageNo">${t('Cancel')} <kbd>Esc</kbd></button><button class="ok" data-act="salvageOk">${t('Salvage')} <kbd>Enter</kbd></button></div>
       </div>`;
     } else if (this.enchSlot >= 0 && it.enchants[this.enchSlot]) {
       body = this.enchantPanel(it);
     } else {
       body = `<ul class="d-stats">${lines.join('')}</ul><p class="d-desc">${d.description}</p>${bars}`;
     }
-    const slots = d.slot === 'artifact' || d.slot === 'aura' ? '' : `<div class="d-enchtitle">Зачарования</div><div class="d-ench">${[0, 1, 2].map((i) => this.slotGem(it, i)).join('')}</div>`;
-    const unequip = equipped && (d.slot === 'artifact' || d.slot === 'aura') ? '<button class="d-unequip" data-act="unequip">Снять</button>' : '';
+    const slots = d.slot === 'artifact' || d.slot === 'aura' ? '' : `<div class="d-enchtitle">${t('Enchantments')}</div><div class="d-ench">${[0, 1, 2].map((i) => this.slotGem(it, i)).join('')}</div>`;
+    const unequip = equipped && (d.slot === 'artifact' || d.slot === 'aura') ? `<button class="d-unequip" data-act="unequip">${t('Unequip')}</button>` : '';
     return head + body + unequip + slots;
   }
 
-  /** Ромб гнезда зачарования: пусто — три варианта вокруг спирали; выбран — значок и ступень; нет гнезда — серый */
+  /** Enchantment slot diamond: empty — three options around the spiral; chosen — icon and tier; no slot — grey */
   private slotGem(it: Item, i: number): string {
     const s = it.enchants[i];
     if (!s) return '<div class="gem locked"><i></i></div>';
@@ -435,7 +436,7 @@ export class Inventory {
       return `<div class="gem chosen${open}" data-slot="${i}" title="${e.title} ${ROMAN[s.tier]}"><i style="--c:${e.color}">${iconImg(e.icon)}</i><b>${ROMAN[s.tier]}</b></div>`;
     }
     const mini = s.options.map((id, j) => { const e = enchantDef(id); return `<i class="m m${j}${e.powerful ? ' pw' : ''}" style="--c:${e.color}">${iconImg(e.icon)}</i>`; }).join('');
-    return `<div class="gem cluster${open}" data-slot="${i}" title="Пустое гнездо: выбери зачарование">${mini}<span class="gem-sp">${iconImg('spiral')}</span><em>Пустое гнездо</em></div>`;
+    return `<div class="gem cluster${open}" data-slot="${i}" title="${t('Empty slot: choose an enchantment')}">${mini}<span class="gem-sp">${iconImg('spiral')}</span><em>${t('Empty slot')}</em></div>`;
   }
 
   private enchantPanel(it: Item): string {
@@ -446,7 +447,7 @@ export class Inventory {
       const tier = s.chosen === j ? s.tier : 0;
       return `<div class="eo${j === this.enchOpt ? ' on' : ''}${locked ? ' locked' : ''}" data-opt="${j}">
         <i class="eo-gem${e.powerful ? ' pw' : ''}" style="--c:${e.color}">${iconImg(e.icon)}</i>
-        <div><b>${e.title}${e.powerful ? ' <small>мощное</small>' : ''}</b><span class="eo-tiers">${[1, 2, 3].map((t) => `<u class="${t <= tier ? 'got' : ''}">${ROMAN[t]}</u>`).join('')}</span></div>
+        <div><b>${e.title}${e.powerful ? ` <small>${t('powerful')}</small>` : ''}</b><span class="eo-tiers">${[1, 2, 3].map((t) => `<u class="${t <= tier ? 'got' : ''}">${ROMAN[t]}</u>`).join('')}</span></div>
       </div>`;
     }).join('');
     const e = enchantDef(s.options[this.enchOpt] ?? s.options[0]);
@@ -454,13 +455,13 @@ export class Inventory {
     const cost = this.profile.nextCost(it, this.enchSlot, this.enchOpt);
     const tierText = [1, 2, 3].map((t) => `<li class="${t <= cur ? 'got' : t === cur + 1 ? 'next' : ''}"><b>${ROMAN[t]}</b> ${e.text(e.tiers[t - 1])} <i>${iconImg('spiral')}${t + (e.powerful ? 1 : 0)}</i></li>`).join('');
     const btn = cost === null
-      ? `<button disabled>${cur >= 3 ? 'Наивысшая ступень' : 'Гнездо занято другим'}</button>`
-      : `<button class="ok" data-act="enchant"${cost > pts ? ' disabled' : ''}>${cur ? `Улучшить до ${ROMAN[cur + 1]}` : 'Зачаровать'} — ${iconImg('spiral')}${cost}</button>`;
+      ? `<button disabled>${cur >= 3 ? t('Highest tier') : t('Slot taken by another')}</button>`
+      : `<button class="ok" data-act="enchant"${cost > pts ? ' disabled' : ''}>${cur ? t('Upgrade to {tier}', { tier: ROMAN[cur + 1] }) : t('Enchant')} — ${iconImg('spiral')}${cost}</button>`;
     return `<div class="d-enchpanel">
       <div class="eo-list">${rows}</div>
       <div class="eo-info"><h3 style="color:${e.color}">${e.title}</h3><ul>${tierText}</ul>
-        <div class="d-btns"><button data-act="enchBack">Назад <kbd>Esc</kbd></button>${btn}</div>
-        ${cost !== null && cost > pts ? '<p class="eo-warn">Не хватает очков зачарования — их дают за новый уровень, а разбор зачарованных вещей возвращает потраченные</p>' : ''}
+        <div class="d-btns"><button data-act="enchBack">${t('Back')} <kbd>Esc</kbd></button>${btn}</div>
+        ${cost !== null && cost > pts ? `<p class="eo-warn">${t('Not enough enchantment points — a new level grants them, and salvaging enchanted items returns the spent ones')}</p>` : ''}
       </div>
     </div>`;
   }
@@ -470,8 +471,8 @@ const eqSlot = (eq: string): ItemSlot => (eq.startsWith('art') ? 'artifact' : (e
 const enchantSum = (it: Item, id: string): number => it.enchants.reduce((a, s) => a + (s.chosen >= 0 && s.tier > 0 && s.options[s.chosen] === id ? enchantDef(s.options[s.chosen]).tiers[s.tier - 1] : 0), 0);
 
 /**
- * Герой в инвентаре: свой рендер на холсте, медленно поворачивается, тянуть мышью — крутить.
- * Тот же Knight, что в игре, с надетым оружием и бронёй.
+ * The hero in the inventory: its own canvas render, slowly turns, drag with the mouse to rotate.
+ * The same Knight as in the game, with the equipped weapon and armour.
  */
 class Preview {
   private readonly renderer: THREE.WebGLRenderer;

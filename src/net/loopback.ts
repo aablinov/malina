@@ -2,16 +2,16 @@ import type { Rand } from '../rng.ts';
 import type { Transport } from './transport.ts';
 
 /**
- * Петля в памяти: пара связанных транспортов. Без часов кадры доходят сразу (одиночная игра — «listen server»);
- * с часами — через delayMs ± jitterMs, с долей потерь loss и перестановок, по вызову `pump(now)` (тесты канала)
+ * In-memory loopback: a pair of linked transports. Without a clock frames arrive at once (single player — a "listen server");
+ * with a clock — after delayMs ± jitterMs, with a loss share and reordering, on `pump(now)` (channel tests)
  */
 export interface LoopbackOpts {
   clock?: () => number;
   delayMs?: number;
   jitterMs?: number;
-  /** Доля потерянных кадров 0..1 */
+  /** Share of lost frames 0..1 */
   loss?: number;
-  /** Доля кадров, которые приходят позже следующего */
+  /** Share of frames that arrive after the next one */
   reorder?: number;
   rng?: Rand;
 }
@@ -24,7 +24,7 @@ export class LoopbackEnd implements Transport {
   onClose: ((code: number) => void) | null = null;
   peer!: LoopbackEnd;
   closed = false;
-  /** Отправлено и доставлено кадров — для тестов */
+  /** Frames sent and delivered — for tests */
   sent = 0;
   delivered = 0;
   private readonly link: Link;
@@ -63,7 +63,7 @@ class Link {
     if (!this.o.clock) this.drain(Infinity);
   }
 
-  /** Доставить всё, что созрело к now (в порядке срока) */
+  /** Deliver everything due by now (in due order) */
   pump(now: number): void { this.drain(now); }
 
   private drain(now: number): void {

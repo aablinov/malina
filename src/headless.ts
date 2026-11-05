@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import type { FX } from './fx.ts';
 
 /**
- * Безголовый режим (wiki/design-multiplayer.md): те же классы героя, снаряжения и мобов работают на сервере без рендера —
- * three в Node строит группы и меши без DOM, а канвас текстур и `FX` заменяются заглушками.
+ * Headless mode (wiki/design-multiplayer.md): the same hero, gear and mob classes run on the server without rendering —
+ * three in Node builds groups and meshes without a DOM, and the texture canvas and `FX` are replaced by stubs.
  */
 export const hasDom = typeof document !== 'undefined';
 
-/** Холст: настоящий в браузере, в Node — пустышка, у которой любой вызов контекста ничего не делает */
+/** Canvas: real in the browser, in Node — a dummy whose every context call does nothing */
 export function makeCanvas(w: number, h: number): HTMLCanvasElement {
   if (hasDom) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
   const ctx = new Proxy({}, { get: (_t, p) => (p === 'canvas' ? stub : typeof p === 'string' && /^(fillStyle|strokeStyle|lineWidth|font|textAlign|textBaseline|globalAlpha|lineJoin|lineCap|imageSmoothingEnabled)$/.test(p) ? undefined : () => ctx), set: () => true }) as unknown as CanvasRenderingContext2D;
@@ -18,8 +18,8 @@ export function makeCanvas(w: number, h: number): HTMLCanvasElement {
 interface Timed { t: number; dur: number; tick: (k: number) => void; end?: () => void }
 
 /**
- * `FX` без сцены: искры, вспышки и цифры — в никуда, но временные тела (`custom`) и ленты (`streak`) идут по времени,
- * потому что в их обратных вызовах есть игровой урон (фейерверк, метеоры заклинаний); `update(dt)` крутит их
+ * `FX` without a scene: sparks, flashes and numbers go nowhere, but temporary bodies (`custom`) and ribbons (`streak`) run on time,
+ * because their callbacks carry game damage (fireworks, spell meteors); `update(dt)` drives them
  */
 export function nullFx(): FX {
   const timed: Timed[] = [];

@@ -6,15 +6,15 @@ import type { Layer } from './palette.ts';
 import { getDecorShape } from './shapes.ts';
 
 /**
- * Рендер декора: на каждую пару «предмет × слой» — один InstancedMesh, материалы общие с блоками
- * (рентген, разрез, тени, bloom работают одинаково). Соседей у декора нет, поэтому вместо AO — затемнение
- * у земли (для предметов на полу), а яркость чуть гуляет от экземпляра к экземпляру, как jitter у блоков.
- * Изменился декор (level.decorVersion) — sync() пересобирает экземпляры; геометрии кэшируются.
+ * Decor rendering: one InstancedMesh per "item × layer" pair, materials shared with blocks
+ * (x-ray, cut, shadows, bloom work the same). Decor has no neighbours, so instead of AO there is darkening
+ * at the ground (for floor items), and the brightness drifts a little from instance to instance, like the block jitter.
+ * Decor changed (level.decorVersion) — sync() rebuilds the instances; geometries are cached.
  */
 
 export interface DecorLight { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
 
-/** Попадание луча в декор: какой предмет и где */
+/** Ray hit on decor: which item and where */
 export interface DecorHit { item: DecorItem; point: THREE.Vector3; distance: number }
 
 const ATLAS_LAYERS: Layer[] = ['opaque', 'cutout', 'glow'];
@@ -25,7 +25,7 @@ function hash(i: number, s: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-/** Матрица предмета: поворот YXZ вокруг точки опоры, затем сдвиг */
+/** Item matrix: YXZ rotation around the pivot, then translation */
 export function decorMatrix(d: DecorItem, out = new THREE.Matrix4()): THREE.Matrix4 {
   const [x, y, z] = decorEuler(d.rot);
   return out.compose(new THREE.Vector3(...d.pos), new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, 'YXZ')), new THREE.Vector3(1, 1, 1));
@@ -33,10 +33,10 @@ export function decorMatrix(d: DecorItem, out = new THREE.Matrix4()): THREE.Matr
 
 export class DecorRenderer {
   readonly group = new THREE.Group();
-  /** Рисовать только предметы не выше этого y (срез в редакторе) */
+  /** Draw only items not above this y (the cut in the editor) */
   maxY = Infinity;
   lights: DecorLight[] = [];
-  /** Запечённые источники (свечи): в вершины блоков, без PointLight */
+  /** Baked sources (candles): into block vertices, no PointLight */
   baked: DecorLight[] = [];
   private readonly geoms = new Map<string, THREE.BufferGeometry>();
   private meshes: { mesh: THREE.InstancedMesh; items: DecorItem[] }[] = [];
@@ -48,7 +48,7 @@ export class DecorRenderer {
   private readonly mats: Record<Layer, THREE.Material>;
   constructor(level: Level, atlas: Atlas, mats: Record<Layer, THREE.Material>) { this.level = level; this.atlas = atlas; this.mats = mats;}
 
-  /** Геометрия одного слоя предмета: все части этого слоя, UV из атласа (огонь — своя текстура) */
+  /** Geometry of one layer of an item: all parts of this layer, UVs from the atlas (fire has its own texture) */
   geometryOf(def: DecorDef, layer: Layer): THREE.BufferGeometry | null {
     const key = `${def.name}:${layer}`;
     if (this.geoms.has(key)) return this.geoms.get(key)!;
@@ -66,7 +66,7 @@ export class DecorRenderer {
           nrm.push(...t.nrm);
           const u = t.uv[k * 2], v = t.uv[k * 2 + 1];
           uv.push(r ? r.u0 + (r.u1 - r.u0) * u : u, r ? r.v0 + (r.v1 - r.v0) * v : v);
-          // «AO» у земли: низ предмета на полу темнее, как угол у блока
+          // "AO" at the ground: the bottom of an item on the floor is darker, like a block corner
           const ao = def.anchor === 'floor' && layer !== 'glow' ? 0.68 + 0.32 * Math.min(1, y / 0.35) : 1;
           col.push(ao, ao, ao);
         }
@@ -82,7 +82,7 @@ export class DecorRenderer {
     return g;
   }
 
-  /** Пересобрать экземпляры, если декор или срез изменились */
+  /** Rebuild the instances if the decor or the cut changed */
   sync(force = false): void {
     if (!force && this.builtVersion === this.level.decorVersion && this.builtMaxY === this.maxY) return;
     this.builtVersion = this.level.decorVersion;
@@ -126,7 +126,7 @@ export class DecorRenderer {
     }
   }
 
-  /** Луч по декору (для редактора): ближайший предмет */
+  /** Ray over decor (for the editor): the nearest item */
   raycast(ray: THREE.Raycaster): DecorHit | null {
     let best: DecorHit | null = null;
     for (const { mesh, items } of this.meshes) {
@@ -138,7 +138,7 @@ export class DecorRenderer {
     return best;
   }
 
-  /** Сколько экземпляров нарисовано (для тестов) */
+  /** How many instances are drawn (for tests) */
   get instances(): number { return this.meshes.reduce((n, m) => n + m.mesh.count, 0); }
 
   dispose(): void {

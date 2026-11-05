@@ -4,19 +4,20 @@ import { pixelTex } from '../textures.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
 import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit.ts';
 import { HEAL, Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Маги Ордена (wiki/design-mobs.md, семья A): скелет «маг» — мантия без ног, голова иллагера в капюшоне, две руки,
- * предмет (посох, книга). Держат дистанцию, колдуют стоя — пока колдуют, их проще всего ударить.
- * Свет показывает роль: зелёный — лечит, малиновый с огнём — атакует, фиолетовый — призывает.
+ * Mages of the Order (wiki/design-mobs.md, family A): the "mage" skeleton — a robe without legs, an illager head in a hood, two arms,
+ * an item (staff, book). Keep distance, cast standing still — while casting they are easiest to hit.
+ * Light shows the role: green heals, raspberry with fire attacks, violet summons.
  */
 
 const FIRE = C(4, 1.4, 0.3), VIOLET = C(2, 0.7, 3.4);
 
-/** Части мага */
+/** Mage parts */
 interface Rig { robe: THREE.Group; head: THREE.Group; arms: THREE.Group[] }
 
-/** Мантия ступенями (шире к полу), пояс, капюшон, лицо иллагера с носом, светящиеся глаза */
+/** Stepped robe (wider toward the floor), belt, hood, illager face with a nose, glowing eyes */
 function buildMage(m: Mob, body: THREE.Group, robeColor: string, trimColor: string, eye: THREE.Color, seed: number): Rig {
   const robe = m.lam(robeColor, pixelTex(robeColor, 8, seed)), trim = m.lam(trimColor);
   const face = m.lam('#8a9098', pixelTex('#8a9098', 8, seed + 1)), nose = m.lam('#767c84'), brow = m.lam('#3a3a42');
@@ -49,7 +50,7 @@ function buildMage(m: Mob, body: THREE.Group, robeColor: string, trimColor: stri
   return { robe: g, head, arms };
 }
 
-/** Парит, покачиваясь; руки — по позе */
+/** Hovers, swaying; arms by pose */
 function hover(r: Rig, time: number, walk: boolean, dt: number, arms: [number, number]): void {
   const k = Math.min(1, dt * 10);
   r.robe.position.y = 0.04 + Math.sin(time * 2.2) * 0.04;
@@ -57,16 +58,16 @@ function hover(r: Rig, time: number, walk: boolean, dt: number, arms: [number, n
   for (let i = 0; i < 2; i++) r.arms[i].rotation.x += (arms[i] - r.arms[i].rotation.x) * k;
 }
 
-/** 1. Ягодная целительница — лечит лучом раненого союзника, раз в 8 с — кольцо лечения; удар прерывает каст */
+/** 1. Berry Healer — heals a wounded ally with a beam, every 8 s a healing ring; a hit interrupts the cast */
 export class BerryHealer extends Mob {
   readonly kind = 'healer';
-  readonly title = 'Ягодная целительница';
+  readonly title = t('Berry Healer');
   readonly cost = 6;
   readonly radius = 0.48;
   override readonly topY = 2.1;
   private readonly rig: Rig;
   private readonly tip = new THREE.Group();
-  /** Луч: вытянутый светящийся куб от посоха к союзнику */
+  /** Beam: a stretched glowing cube from the staff to the ally */
   private readonly beam: THREE.Mesh;
   private patient: Mob | null = null;
   private castHp = 0;
@@ -78,7 +79,7 @@ export class BerryHealer extends Mob {
     this.keep = 7;
     this.loot = 2;
     this.rig = buildMage(this, this.body, '#3f8f5a', '#c8245a', HEAL, 661);
-    // посох с кустом на верхушке: листья и светящаяся ягода
+    // staff with a bush on top: leaves and a glowing berry
     const wood = this.lam('#7a5232'), leaf = this.lam('#5aa03a');
     const B = this.box.bind(this);
     const arm = this.rig.arms[1];
@@ -114,7 +115,7 @@ export class BerryHealer extends Mob {
   override update(dt: number): void {
     this.ringCd -= dt;
     super.update(dt);
-    // луч виден только в каст лечения
+    // the beam is visible only during the heal cast
     const on = this.state === 'attack' && this.attack === 'heal' && !!this.patient && this.st > 0.3;
     this.beam.visible = on;
     if (on && this.patient) {
@@ -126,14 +127,14 @@ export class BerryHealer extends Mob {
     }
   }
 
-  protected act(name: string, t: number, dt: number): boolean {
+  protected act(name: string, tm: number, dt: number): boolean {
     switch (name) {
       case 'poke':
-        // толчок посохом: круг вокруг себя, отбрасывает
-        if (t - dt <= 0) this.field.markCircle(this.pos.clone(), 1.9, 0.5, () => { if (!this.dead && this.inCircle(this.pos, 1.9)) this.hurt(4, this.pos, 7); });
-        return t > 0.7;
+        // staff shove: a circle around herself, knocks back
+        if (tm - dt <= 0) this.field.markCircle(this.pos.clone(), 1.9, 0.5, () => { if (!this.dead && this.inCircle(this.pos, 1.9)) this.hurt(4, this.pos, 7); });
+        return tm > 0.7;
       case 'ring':
-        if (t - dt <= 0) {
+        if (tm - dt <= 0) {
           if (!this.quiet) voice({ type: 'sine', f: 520, f1: 780, dur: 1, vol: 0.05, verb: 0.6 });
           this.field.markCircle(this.pos.clone(), 5, 1, () => {
             if (this.dead) return;
@@ -142,16 +143,16 @@ export class BerryHealer extends Mob {
           }, HEAL);
           this.ringCd = 8;
         }
-        return t > 1.2;
+        return tm > 1.2;
       default: {
-        // луч: 9 здоровья в секунду, до 2,4 с; ударили — каст сорван, целительница оглушена
-        if (t - dt <= 0) { this.castHp = this.hp; if (!this.quiet) hiss({ dur: 0.5, vol: 0.08, f: 2600, f1: 3400, q: 2, type: 'bandpass', verb: 0.5 }); }
+        // beam: 9 health per second, up to 2.4 s; hit — the cast is broken, the healer is dazed
+        if (tm - dt <= 0) { this.castHp = this.hp; if (!this.quiet) hiss({ dur: 0.5, vol: 0.08, f: 2600, f1: 3400, q: 2, type: 'bandpass', verb: 0.5 }); }
         this.face(dt, 0.5);
         const p = this.patient;
-        if (this.hp < this.castHp) { this.patient = null; this.h.fx.text(this.pos.clone().setY(this.topY + 0.4), 'сорвано!', 'crit'); this.daze(1.2); return false; }
-        if (!p || p.dead || p.hp >= p.maxHp || Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) > 13) { this.patient = null; return t > 0.3; }
-        if (t > 0.3) p.heal(9 * dt);
-        if (t > 2.4) { this.patient = null; return true; }
+        if (this.hp < this.castHp) { this.patient = null; this.h.fx.text(this.pos.clone().setY(this.topY + 0.4), t('interrupted!'), 'crit'); this.daze(1.2); return false; }
+        if (!p || p.dead || p.hp >= p.maxHp || Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) > 13) { this.patient = null; return tm > 0.3; }
+        if (tm > 0.3) p.heal(9 * dt);
+        if (tm > 2.4) { this.patient = null; return true; }
         return false;
       }
     }
@@ -164,10 +165,10 @@ export class BerryHealer extends Mob {
   }
 }
 
-/** 2. Жгучий маг — огненные ягоды дугой на метки; вплотную — отпрыгивает телепортом */
+/** 2. Ember Mage — fire berries in an arc onto marks; up close — teleports away */
 export class EmberMage extends Mob {
   readonly kind = 'pyro';
-  readonly title = 'Жгучий маг';
+  readonly title = t('Ember Mage');
   readonly cost = 6;
   readonly radius = 0.48;
   override readonly topY = 2.4;
@@ -182,7 +183,7 @@ export class EmberMage extends Mob {
     this.loot = 2;
     this.rig = buildMage(this, this.body, '#a3204a', '#e8b84a', FIRE, 671);
     const B = this.box.bind(this);
-    // высокая шапка с камнем, светящиеся ладони, книга
+    // tall hat with a gem, glowing palms, a book
     const hat = this.lam('#7a1236', pixelTex('#7a1236', 8, 673));
     B(this.rig.head, hat, 0.6, 0.36, 0.58, 0, 0.72, -0.03);
     B(this.rig.head, this.shimmer(FIRE, RASP, 0, 2), 0.2, 0.2, 0.04, 0, 0.72, 0.27);
@@ -202,7 +203,7 @@ export class EmberMage extends Mob {
 
   protected act(name: string, t: number, dt: number): boolean {
     if (name === 'blink') {
-      // сжался — вспышка — появился в 6 м от героя
+      // shrank — flash — appeared 6 m from the hero
       if (t >= 0.3 && t - dt < 0.3) {
         const hero = this.h.hero.pos;
         const a = Math.atan2(this.pos.x - hero.x, this.pos.z - hero.z) + rand(-0.8, 0.8);
@@ -215,7 +216,7 @@ export class EmberMage extends Mob {
       this.body.scale.setScalar(t < 0.3 ? 1 - t * 2.5 : Math.min(1, 0.25 + (t - 0.3) * 4));
       return t > 0.5;
     }
-    // залп: три ягоды по меткам у героя
+    // volley: three berries onto marks near the hero
     this.face(dt, 0.7);
     for (let i = 0; i < 3; i++) {
       const at = 0.6 + i * 0.2;
@@ -244,10 +245,10 @@ export class EmberMage extends Mob {
   }
 }
 
-/** 3. Лозовый призыватель — из кругов на полу лезут малинёныши (не больше 6 своих); пока колдует, стоит */
+/** 3. Vine Summoner — berrylings climb out of circles on the floor (no more than 6 of his own); stands still while casting */
 export class VineSummoner extends Mob {
   readonly kind = 'summoner';
-  readonly title = 'Лозовый призыватель';
+  readonly title = t('Vine Summoner');
   readonly cost = 7;
   readonly radius = 0.5;
   override readonly topY = 2.3;
@@ -263,7 +264,7 @@ export class VineSummoner extends Mob {
     this.loot = 3;
     this.rig = buildMage(this, this.body, '#4a2a5a', '#c8245a', VIOLET, 681);
     const B = this.box.bind(this);
-    // корона из костянок над капюшоном и посох-кадило с лозой
+    // a crown of drupelets above the hood and a censer staff with a vine
     this.crown.position.y = 0.66;
     this.rig.head.add(this.crown);
     for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; B(this.crown, this.shimmer(RASP, VIOLET, i, 1.8), 0.12, 0.14, 0.12, Math.sin(a) * 0.2, 0, Math.cos(a) * 0.2); }
@@ -294,7 +295,7 @@ export class VineSummoner extends Mob {
       });
       return t > 0.8;
     }
-    // три круга перед собой — из каждого вылезает малинёныш
+    // three circles in front — a berryling climbs out of each
     if (t - dt <= 0) {
       if (!this.quiet) voice({ type: 'sawtooth', f: 90, f1: 140, dur: 1.4, vol: 0.04, lp: 700, verb: 0.6 });
       const f = this.fwd(), side = new THREE.Vector3(f.z, 0, -f.x);

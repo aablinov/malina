@@ -5,49 +5,50 @@ import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Павшая Звезда — финальный страж (wiki/design-bosses.md, разделы 1–5; схематичное «Сердце Края» / Астель): та самая
- * звезда, в кратере которой выросла первая малина. Реликвия: кристальное ядро из четырёх граней и двух шпилей парит
- * в полутора метрах над полом, вокруг — три кольца кубиков, каждое крутится по своей оси; между гранями светится
- * ягода-сердце, в оглушении грани раскрываются и сердце бьётся крупно. Дрейфует медленно, сыплет звёздной пылью.
- * Фаза 1: луч (заряд → полоса → огромный луч медленно ведёт ±35°, после — перегрев и оглушение), метеоритный дождь
- * у героя (горящие воронки), кольцо из 12 осколков наружу, вблизи — пульс.
- * Превращение на 50 %: «Звезда пробуждается» — тьма, камера назад, кольца раскрываются в нимб, ядро поднимается,
- * пол трескается лучами от центра. Фаза 2: луч ведёт на 180°, метеориты по всей арене, раз в ~14 с «сверхновая» —
- * три кристальных столба-укрытия, ядро сжимается и тянет героя, круг r 10 → взрыв (за столбом — цел), оглушение.
- * Роняет «Луч павшей звезды». Подвижных частей: сердце, четыре грани, три кольца.
+ * Fallen Star — final warden (wiki/design-bosses.md, sections 1–5; a schematic "Heart of the Edge" / Astel): the very
+ * star in whose crater the first raspberries grew. A relic: a crystal core of four facets and two spires hovers
+ * a metre and a half above the floor, three rings of cubes around it, each spinning about its own axis; the berry heart glows
+ * between the facets, when dazed the facets open and the heart beats hard. Drifts slowly, sheds stardust.
+ * Phase 1: a beam (charge → strip → a huge beam slowly sweeps ±35°, afterwards overheat and daze), a meteor shower
+ * at the hero (burning funnels), a ring of 12 shards outward, up close — a pulse.
+ * Transformation at 50 %: "The Star Awakens" — darkness, camera back, the rings open into a halo, the core rises,
+ * the floor cracks in rays from the centre. Phase 2: the beam sweeps 180°, meteors across the whole arena, every ~14 s a "supernova" —
+ * three crystal pillar shelters, the core shrinks and pulls the hero, a circle r 10 → explosion (behind a pillar — unharmed), daze.
+ * Drops "Ray of the Fallen Star". Moving parts: heart, four facets, three rings.
  */
 
 const STAR = C(3.6, 3.6, 4), GOLD = C(4, 3.6, 2.4), PINK = C(4, 1.7, 2.4), EMBER = C(4, 1.6, 0.5);
-/** Центр ядра над корнем тела, м */
+/** Centre of the core above the body root, m */
 const CORE_Y = 1.2;
-/** Луч: длина, ширина, урон за тик 0,2 с */
+/** Beam: length, width, damage per 0.2 s tick */
 const BEAM_LEN = 30, BEAM_W = 2.2, BEAM_DMG = 8;
-/** Сверхновая: радиус, урон, перезарядка */
+/** Supernova: radius, damage, cooldown */
 const NOVA_R = 10, NOVA_DMG = 30, NOVA_CD = 14;
-/** Столбы-укрытия: высота, полуширина (для толчка героя) */
+/** Pillar shelters: height, half-width (for pushing the hero) */
 const PILLAR_H = 3.2, PILLAR_R = 0.75;
 
 const sfx = {
-  /** Заряд луча: восходящий хор и звон */
+  /** Beam charge: a rising choir and a ring */
   charge() { voice({ type: 'sine', f: 392, f1: 1568, dur: 1.6, vol: 0.05, attack: 0.4, verb: 0.8 }); bell(1568, 1.2, 0.03, 0.6, 0.8); },
-  /** Луч: низкий гул и шипение света */
+  /** Beam: a low hum and the hiss of light */
   beam(dur: number) { voice({ type: 'sawtooth', f: 98, f1: 92, dur, vol: 0.06, detune: 12, lp: 1400, verb: 0.6 }); hiss({ dur, vol: 0.14, f: 3000, q: 0.5, type: 'bandpass', attack: 0.05, verb: 0.5 }); boom(90, 30, 0.8, 0.6, 0, 0.6); },
-  /** Метеорит: свист и удар */
+  /** Meteor: whistle and impact */
   impact() { boom(110, 40, 0.35, 0.35); hiss({ dur: 0.3, vol: 0.1, f: 3000, f1: 700, q: 0.8, type: 'bandpass' }); },
-  /** Осколки: стеклянный перезвон */
+  /** Shards: a glassy chime */
   shards() { for (const [f, d] of [[1760, 0], [2349, 0.04], [2637, 0.08]] as const) bell(f, 0.5, 0.035, d, 0.6); },
-  /** Пульс и взрывы: удар снизу */
+  /** Pulse and explosions: a hit from below */
   thump(k = 1) { boom(70, 25, 0.6 * k, 0.5 * k, 0, 0.5); },
-  /** Пробуждение: колокол и низкий хор */
+  /** Awakening: a bell and a low choir */
   awaken() { bell(196, 3, 0.09, 0, 0.9); voice({ type: 'triangle', f: 98, f1: 196, dur: 2.6, vol: 0.06, lp: 800, lp1: 3000, verb: 0.9 }); },
 };
 
 export class FallenStar extends MiniBoss {
   readonly radius = 1.4;
-  readonly title = 'Павшая Звезда';
-  override readonly subtitle = 'сердце упавшей звезды';
+  readonly title = t('Fallen Star');
+  override readonly subtitle = t('heart of a fallen star');
   override readonly topY = 4.6;
   readonly drop = 'starbeam';
   override readonly tier = 'final' as const;
@@ -56,23 +57,23 @@ export class FallenStar extends MiniBoss {
   private readonly rings: THREE.Group[] = [];
   private readonly ringSpin = [0, 0, 0];
   private readonly pillars: THREE.Group[] = [];
-  /** Столб: поднят ли (анимация выезда из пола) */
+  /** Pillar: raised or not (animation of rising out of the floor) */
   private readonly pillarUp = [false, false, false];
-  /** Отложенные действия (метеорит падает чуть раньше, чем вспыхнет метка) */
+  /** Deferred actions (the meteor falls a little before the mark flashes) */
   private readonly later: { t: number; fn: () => void }[] = [];
   private beam: { g: THREE.Group; mats: THREE.Material[] } | null = null;
   private readonly aim = new THREE.Vector3();
   private beamTick = 0;
   private beamSide = 1;
-  /** Луч второй фазы (180°) — запоминается на старте, ярость посреди луча его не ломает */
+  /** Beam of the second phase (180°) — remembered at the start, rage mid-beam does not break it */
   private beamWide = false;
   private beamCd = 3;
   private novaCd = 99;
-  /** Ярость наступила — превращение ждёт своей очереди (не обрывает текущую атаку) */
+  /** Rage has come — the transformation waits its turn (does not cut the current attack short) */
   private wakeUp = false;
-  /** Нимб: 0 — кольца, 1 — раскрытый нимб второй фазы */
+  /** Halo: 0 — rings, 1 — the open halo of the second phase */
   private haloK = 0;
-  /** Обороты колец (заряд луча — быстро) */
+  /** Ring spin (beam charge — fast) */
   private spinK = 1;
 
   constructor(h: BossHooks, home: THREE.Vector3, yaw: number, arena: Rect) {
@@ -90,15 +91,15 @@ export class FallenStar extends MiniBoss {
     const heartM = this.shimmer(RASP, PINK, 0, 3);
     const starM = this.shimmer(STAR, GOLD, 1, 2);
     const B = this.box.bind(this);
-    // шпили сверху и снизу — ромбы, неподвижны относительно тела
+    // spires above and below — diamonds, static relative to the body
     B(this.body, crystal, 0.62, 0.62, 0.62, 0, CORE_Y + 1.0, 0, Math.PI / 4, 0, Math.PI / 4);
     B(this.body, starM, 0.3, 0.3, 0.3, 0, CORE_Y + 1.5, 0, Math.PI / 4, 0, Math.PI / 4);
     B(this.body, crystal, 0.5, 0.5, 0.5, 0, CORE_Y - 0.95, 0, Math.PI / 4, 0, Math.PI / 4);
-    // ягода-сердце в центре: видна в щелях между гранями
+    // berry heart in the centre: visible through the gaps between the facets
     this.heart.position.y = CORE_Y;
     this.body.add(this.heart);
     for (const [x, y, z, k] of [[0, 0, 0, 0.5], [0.22, 0.12, 0, 0.26], [-0.22, 0.12, 0, 0.26], [0, 0.12, 0.22, 0.26], [0, 0.12, -0.22, 0.26], [0, 0.34, 0, 0.2]] as const) B(this.heart, heartM, k, k, k, x, y, z);
-    // четыре грани: кристальная плита и светящаяся кромка; углы между ними открыты
+    // four facets: a crystal plate and a glowing edge; the corners between them are open
     for (let i = 0; i < 4; i++) {
       const g = new THREE.Group();
       g.rotation.order = 'YXZ';
@@ -107,7 +108,7 @@ export class FallenStar extends MiniBoss {
       B(g, edgeM, 0.08, 1.3, 0.34, 0.3, 0, 0.02);
       this.facets.push(g);
     }
-    // три кольца кубиков, у каждого свой наклон и радиус
+    // three rings of cubes, each with its own tilt and radius
     const ringMats = [starM, edgeM, this.shimmer(GOLD, STAR, 2, 1.1)];
     for (let i = 0; i < 3; i++) {
       const g = new THREE.Group();
@@ -120,7 +121,7 @@ export class FallenStar extends MiniBoss {
       }
       this.rings.push(g);
     }
-    // столбы-укрытия для сверхновой: стоят под полом, пока не нужны
+    // pillar shelters for the supernova: stand under the floor until needed
     const pm = new THREE.MeshLambertMaterial({ map: pixelTex('#e8dcc0', 10, 981) });
     const pg = glowMat(GOLD);
     for (let i = 0; i < 3; i++) {
@@ -146,7 +147,7 @@ export class FallenStar extends MiniBoss {
     this.cleanup();
   }
 
-  /** Убрать своё: луч, таймеры, столбы */
+  /** Remove its own: beam, timers, pillars */
   private cleanup(): void {
     this.later.length = 0;
     this.endBeam();
@@ -163,17 +164,17 @@ export class FallenStar extends MiniBoss {
     return rnd() < 0.5 ? 'meteors' : 'shards';
   }
 
-  protected act(name: string, t: number, dt: number): boolean {
-    const fx = this.h.fx, crossed = (at: number) => t >= at && t - dt < at;
+  protected act(name: string, ta: number, dt: number): boolean {
+    const fx = this.h.fx, crossed = (at: number) => ta >= at && ta - dt < at;
     switch (name) {
       case 'beam': {
-        // заряд 1 с (кольца раскручиваются, свет стягивается) → полоса 0,8 с → луч ведёт ±35° (на ярости — 180°)
+        // charge 1 s (the rings spin up, the light gathers) → strip 0.8 s → the beam sweeps ±35° (in rage — 180°)
         if (!this.hitDone) { this.beamWide = this.enraged; }
         const sweep = this.beamWide ? 3 : 2, fire = 1.8;
         if (!this.hitDone) { this.hitDone = true; this.beamCd = 9; this.beamSide = rnd() < 0.5 ? -1 : 1; if (!this.quiet) sfx.charge(); }
-        if (t < 1) {
+        if (ta < 1) {
           this.face(dt, 2);
-          this.spinK = 1 + t * 5;
+          this.spinK = 1 + ta * 5;
           const c = this.core(), a = rand(0, Math.PI * 2), r = rand(1.5, 3);
           fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(-1, 1), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * r * 2, 0, -Math.sin(a) * r * 2), life: 0.45, size: 0.1, color: rnd() < 0.7 ? GOLD : RASP, gravity: 0 });
         }
@@ -192,30 +193,30 @@ export class FallenStar extends MiniBoss {
           fx.shake = Math.max(fx.shake, 0.5);
           if (!this.quiet) sfx.beam(sweep);
         }
-        if (t >= fire && t < fire + sweep && this.beam) {
-          const u = (t - fire) / sweep;
+        if (ta >= fire && ta < fire + sweep && this.beam) {
+          const u = (ta - fire) / sweep;
           const ang = this.beamWide ?this.beamSide * Math.PI * (u * u * (3 - 2 * u)) : this.beamSide * THREE.MathUtils.degToRad(35) * Math.sin(u * Math.PI * 1.5);
           const dir = this.aim.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ang);
           this.yaw = Math.atan2(dir.x, dir.z);
-          this.aimBeam(dir, Math.min(1, (t - fire) * 6, (fire + sweep - t) * 5));
+          this.aimBeam(dir, Math.min(1, (ta - fire) * 6, (fire + sweep - ta) * 5));
           this.beamTick -= dt;
           const from = this.pos.clone().setY(0);
           if (this.beamTick <= 0 && this.inLine(from, dir, BEAM_LEN, BEAM_W)) { this.beamTick = 0.2; this.hurt(BEAM_DMG, from, 3); }
-          // по полу — искры вдоль луча
+          // along the floor — sparks along the beam
           const p = from.addScaledVector(dir, rand(2, BEAM_LEN * 0.6)).setY(0.2);
           fx.particle({ pos: p, vel: new THREE.Vector3(rand(-1, 1), rand(1, 3), rand(-1, 1)), life: 0.4, size: 0.12, color: rnd() < 0.6 ? GOLD : RASP, gravity: 6 });
         }
-        if (t < fire + sweep) return false;
-        // перегрев: грани раскрываются, сердце наружу
+        if (ta < fire + sweep) return false;
+        // overheat: the facets open, the heart exposed
         this.endBeam();
         this.spinK = 1;
         fx.burst(this.core(), [EMBER, GOLD, RASP], 20, { speed: 4, up: 2, size: 0.12, life: 0.7, glow: true, gravity: 3 });
-        fx.text(this.core().setY(this.topY + 0.8), 'перегрев', 'crit');
+        fx.text(this.core().setY(this.topY + 0.8), t('overheat'), 'crit');
         this.daze(this.enraged ? 2 : 2.5);
         return true;
       }
       case 'meteors': {
-        // осколки звезды с неба: у героя (на ярости — по всей арене), каждая воронка горит
+        // star shards from the sky: at the hero (in rage — across the whole arena), every funnel burns
         if (!this.hitDone) {
           this.hitDone = true;
           const n = this.enraged ? 22 : 8, a = this.arena;
@@ -226,16 +227,16 @@ export class FallenStar extends MiniBoss {
             this.meteor(this.clampIn(at, 1), 1.0 + i * (this.enraged ? 0.09 : 0.15), i);
           }
         }
-        return t > (this.enraged ? 2.4 : 1.6);
+        return ta > (this.enraged ? 2.4 : 1.6);
       }
       case 'shards': {
-        // 12 осколков из ядра наружу по лучам; на ярости — вторая волна со сдвигом
+        // 12 shards from the core outward along rays; in rage — a second wave with an offset
         if (!this.hitDone) { this.hitDone = true; this.shardRing(0); }
         if (this.enraged && crossed(0.6)) this.shardRing(Math.PI / 12);
-        return t > (this.enraged ? 1.9 : 1.3);
+        return ta > (this.enraged ? 1.9 : 1.3);
       }
       case 'pulse': {
-        // ядро сжимается и выталкивает кольцо света
+        // the core shrinks and pushes out a ring of light
         if (!this.hitDone) {
           this.hitDone = true;
           const at = this.pos.clone().setY(0);
@@ -247,14 +248,14 @@ export class FallenStar extends MiniBoss {
             if (this.inCircle(at, 4.5)) this.hurt(14, at, 10);
           }, GOLD);
         }
-        return t > 1;
+        return ta > 1;
       }
       case 'awaken': {
-        // превращение: тьма, камера назад, кольца — в нимб, ядро поднимается, пол трескается лучами
+        // transformation: darkness, camera back, the rings — into a halo, the core rises, the floor cracks in rays
         if (!this.hitDone) {
           this.hitDone = true;
           this.wakeUp = false;
-          fx.title('Звезда пробуждается', '#ffd27a');
+          fx.title(t('The Star Awakens'), '#ffd27a');
           fx.darken(2.2);
           fx.zoom = Math.max(fx.zoom, 0.4);
           fx.screenFlash('#ffe0a0', 0.4, 0.5);
@@ -269,23 +270,23 @@ export class FallenStar extends MiniBoss {
             this.markLine(from, dir, 13, 1.2, 0.9, () => this.crack(from, dir), EMBER);
           }
         }
-        if (t < 2.6) return false;
+        if (ta < 2.6) return false;
         this.spinK = 1;
         this.novaCd = 6;
         return true;
       }
       case 'nova': {
-        // сверхновая: столбы из пола → ядро сжимается и тянет героя → круг r 10 → взрыв → оглушение
+        // supernova: pillars out of the floor → the core shrinks and pulls the hero → a circle r 10 → explosion → daze
         const at = this.pos.clone().setY(0);
         if (!this.hitDone) { this.hitDone = true; this.novaCd = NOVA_CD; this.raisePillars(); if (!this.quiet) bell(147, 2.5, 0.08, 0, 0.9); }
         if (crossed(0.6)) this.markCircle(at, NOVA_R, 2.4, () => this.novaBoom(at), RASP);
-        if (t > 0.6 && t < 2.1) {
+        if (ta > 0.6 && ta < 2.1) {
           const hero = this.h.hero.pos, dx = this.pos.x - hero.x, dz = this.pos.z - hero.z, d = Math.hypot(dx, dz);
           if (d > 2) { hero.x += (dx / d) * 1.8 * dt; hero.z += (dz / d) * 1.8 * dt; }
           const c = this.core(), a = rand(0, Math.PI * 2), r = rand(3, 6);
           fx.particle({ pos: c.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(-1.5, 1.5), Math.sin(a) * r)), vel: new THREE.Vector3(-Math.cos(a) * r * 1.5, 0, -Math.sin(a) * r * 1.5), life: 0.6, size: 0.12, color: rnd() < 0.5 ? RASP : GOLD, gravity: 0 });
         }
-        if (t < 3.3) return false;
+        if (ta < 3.3) return false;
         this.later.push({ t: 3.5, fn: () => this.lowerPillars() });
         this.daze(3);
         return true;
@@ -294,10 +295,10 @@ export class FallenStar extends MiniBoss {
     return true;
   }
 
-  /** Центр ядра в мире */
+  /** Centre of the core in the world */
   private core(): THREE.Vector3 { return this.pos.clone().setY(this.body.position.y + CORE_Y); }
 
-  /** Луч: белая сердцевина, золотое и малиновое сияние; длина вдоль локальной +Z */
+  /** Beam: a white core, gold and raspberry glow; length along local +Z */
   private fireBeam(): void {
     this.endBeam();
     const g = new THREE.Group();
@@ -311,7 +312,7 @@ export class FallenStar extends MiniBoss {
     this.beamTick = 0;
   }
 
-  /** Повернуть луч: из ядра чуть вниз, к полу на дальнем конце; k — толщина (вспыхивает и гаснет) */
+  /** Aim the beam: from the core slightly down, to the floor at the far end; k — thickness (flares up and fades) */
   private aimBeam(dir: THREE.Vector3, k: number): void {
     if (!this.beam) return;
     const g = this.beam.g, c = this.core();
@@ -328,7 +329,7 @@ export class FallenStar extends MiniBoss {
     this.beam = null;
   }
 
-  /** Метка и осколок звезды, падающий в неё: урон 16, воронка горит 4 с */
+  /** A mark and a star shard falling into it: damage 16, the funnel burns 4 s */
   private meteor(at: THREE.Vector3, dur: number, i: number): void {
     this.markCircle(at, 1.6, dur, () => {
       const fx = this.h.fx;
@@ -345,7 +346,7 @@ export class FallenStar extends MiniBoss {
     } });
   }
 
-  /** 12 полос от ядра; по ним разлетаются кристальные осколки: урон 12 */
+  /** 12 strips from the core; crystal shards fly along them: damage 12 */
   private shardRing(off: number): void {
     const from = this.pos.clone().setY(0), len = 10, dirs: THREE.Vector3[] = [];
     for (let i = 0; i < 12; i++) { const a = off + (i / 12) * Math.PI * 2; dirs.push(new THREE.Vector3(Math.sin(a), 0, Math.cos(a))); }
@@ -361,7 +362,7 @@ export class FallenStar extends MiniBoss {
     } });
   }
 
-  /** Трещина пола от центра: урон 10 сразу, потом горит 10 с */
+  /** Floor crack from the centre: damage 10 at once, then burns 10 s */
   private crack(from: THREE.Vector3, dir: THREE.Vector3): void {
     if (this.inLine(from, dir, 13, 1.2)) this.hurt(10, from, 4);
     for (let d = 2; d <= 13; d += 1.6) {
@@ -372,7 +373,7 @@ export class FallenStar extends MiniBoss {
     this.h.fx.shake = Math.max(this.h.fx.shake, 0.3);
   }
 
-  /** Три столба вокруг ядра через 120° */
+  /** Three pillars around the core 120° apart */
   private raisePillars(): void {
     const base = rand(0, Math.PI * 2);
     for (let i = 0; i < 3; i++) {
@@ -388,7 +389,7 @@ export class FallenStar extends MiniBoss {
 
   private lowerPillars(): void { for (let i = 0; i < 3; i++) this.pillarUp[i] = false; }
 
-  /** Герой за столбом (дальше столба от ядра, вплотную, не сбоку) */
+  /** Hero behind a pillar (farther from the core than the pillar, right next to it, not to the side) */
   private sheltered(c: THREE.Vector3): boolean {
     const hero = this.h.hero.pos;
     return this.pillars.some((g, i) => {
@@ -400,7 +401,7 @@ export class FallenStar extends MiniBoss {
     });
   }
 
-  /** Взрыв сверхновой: урон 30 всем в круге, кроме укрывшихся */
+  /** Supernova explosion: damage 30 to everyone in the circle except those sheltered */
   private novaBoom(at: THREE.Vector3): void {
     const fx = this.h.fx, c = this.core();
     fx.screenFlash('#ffd8f0', 0.55, 0.5);
@@ -424,7 +425,7 @@ export class FallenStar extends MiniBoss {
     }
     if (this.beam && !(this.state === 'attack' && this.attack === 'beam')) this.endBeam();
     if (this.awake && !this.dead) { this.beamCd -= dt; if (this.enraged && this.attack !== 'nova') this.novaCd -= dt; }
-    // столбы выезжают из пола и уходят обратно; герой сквозь них не проходит
+    // the pillars rise out of the floor and go back; the hero does not pass through them
     const hero = this.h.hero.pos;
     this.pillars.forEach((g, i) => {
       if (!g.visible) return;
@@ -438,19 +439,19 @@ export class FallenStar extends MiniBoss {
   protected animate(dt: number, walk: boolean): void {
     const t = this.time, dead = this.state === 'dead', daze = this.state === 'daze', sleep = this.state === 'sleep';
     const atk = this.state === 'attack' ? this.attack : '';
-    // нимб второй фазы: кольца раскрываются за ядром, ядро поднимается
+    // halo of the second phase: the rings open behind the core, the core rises
     const halo = this.enraged && (atk !== 'awaken' || this.st > 0.4);
     this.haloK = THREE.MathUtils.lerp(this.haloK, halo ? 1 : 0, Math.min(1, dt * 1.5));
     if (atk !== 'beam' && atk !== 'awaken') this.spinK = THREE.MathUtils.lerp(this.spinK, 1, Math.min(1, dt * 2));
-    // парит: во сне низко, в оглушении оседает, на второй фазе выше
+    // hovers: low in sleep, sinks when dazed, higher in the second phase
     if (!dead) {
       const y = sleep ? 0.9 : daze ? 0.7 : 1.5 + this.haloK * 0.9;
       this.body.position.y = THREE.MathUtils.lerp(this.body.position.y, y + Math.sin(t * 1.1) * 0.15, Math.min(1, dt * 3));
       this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, walk ? 0.08 : 0, 0.1);
     }
-    // сверхновая: ядро сжимается до взрыва
+    // supernova: the core shrinks until the explosion
     const nova = atk === 'nova' ? (this.st < 0.6 ? 0 : this.st < 3 ? Math.min(1, (this.st - 0.6) / 1.2) : 0) : 0;
-    // грани: открываются в оглушении, сжимаются в сверхновой, дрожат при заряде луча
+    // facets: open when dazed, shrink in the supernova, tremble on the beam charge
     const open = this.heartOpen ? 1 : 0;
     const shake = atk === 'beam' && this.st < 1.8 ? Math.sin(t * 50) * 0.03 * this.st : 0;
     this.facets.forEach((g, i) => {
@@ -458,7 +459,7 @@ export class FallenStar extends MiniBoss {
       g.position.set(Math.sin(a) * r, CORE_Y, Math.cos(a) * r);
       g.rotation.set(THREE.MathUtils.lerp(g.rotation.x, open * 0.6, 0.15), a, 0);
     });
-    // кольца: каждое по своей оси; в нимбе — встают вертикально за ядром и растут
+    // rings: each about its own axis; in the halo — stand upright behind the core and grow
     const rate = sleep ? 0.2 : this.spinK * (1 - nova * 0.5) + nova * 4;
     this.rings.forEach((g, i) => {
       this.ringSpin[i] += dt * rate * (0.7 + i * 0.35) * (i % 2 ? -1 : 1);
@@ -467,11 +468,11 @@ export class FallenStar extends MiniBoss {
       g.position.set(0, CORE_Y + this.haloK * 0.2, -this.haloK * (0.5 + i * 0.25));
       g.scale.setScalar((1 + this.haloK * (0.4 + i * 0.35)) * (1 - nova * 0.45));
     });
-    // сердце: тихо бьётся; оглушена — крупно, сверхновая — раскаляется
+    // heart: beats quietly; dazed — hard, supernova — glows white-hot
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 4)) * 0.1;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.9 : 1) * (1 + nova * 0.4));
     this.heart.rotation.y += dt * 0.8;
-    // звёздная пыль
+    // stardust
     if (!dead && !sleep && rnd() < 0.5) {
       const a = rand(0, Math.PI * 2), r = rand(1, 2.4) * (1 + this.haloK * 0.6);
       this.h.fx.particle({ pos: this.core().add(new THREE.Vector3(Math.cos(a) * r, rand(-1.4, 1.4), Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(-0.3, 0.2), 0), life: rand(0.6, 1.2), size: rand(0.05, 0.1), color: rnd() < 0.55 ? STAR : rnd() < 0.5 ? GOLD : RASP, gravity: 0 });

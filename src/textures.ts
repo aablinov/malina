@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeCanvas } from './headless.ts';
 import { rng, type Rand } from './rng.ts';
+import { t as tr } from './i18n/i18n.ts';
 
 export { rng, type Rand };
 
@@ -23,7 +24,7 @@ const pick = <T>(arr: readonly T[], r: Rand): T => arr[Math.floor(r() * arr.leng
 
 function ctx2d(c: HTMLCanvasElement): Ctx {
   const g = c.getContext('2d');
-  if (!g) throw new Error('Canvas 2D недоступен');
+  if (!g) throw new Error('Canvas 2D is unavailable');
   return g;
 }
 
@@ -46,35 +47,35 @@ function noiseFill(g: Ctx, s: number, r: Rand, pal: readonly string[], amt = 8):
 }
 
 /**
- * Земля в пастельной гамме Minecraft Dungeons (wiki/style-terrain.md): почти ровная заливка, зерно ±3,
- * несколько крупных мягких пятен — без пиксельного шума, который рябит и выдаёт повтор тайла.
- * Цвета подобраны по скриншотам так, чтобы на экране (солнце + небо + ACES) вышло как там.
+ * Ground in the pastel palette of Minecraft Dungeons (wiki/style-terrain.md): an almost flat fill, grain ±3,
+ * a few large soft spots — no pixel noise, which shimmers and gives away the tile repeat.
+ * Colours are picked from screenshots so that on screen (sun + sky + ACES) it comes out as there.
  */
 const GRASS_BASE = '#6d994e', GRASS_LIGHT = '#7ba558', GRASS_DARK = '#608b46';
 const DIRT_BASE = '#9a6942', DIRT_DARK = '#8a5c39';
 const PATH_BASE = '#c99153', PATH_PRINT = '#d6a466';
-/** Мир: двор (скриншот 10) — калибровка по пикселям, wiki/style-world.md */
+/** World: courtyard (screenshot 10) — calibrated by pixels, wiki/style-world.md */
 const HAY_BASE = '#cda652', HAY_BAND = '#c25a26', HAY_RIM = '#dcbd6c';
 const YARD_BASE = '#c39552', YARD_DASH = '#a7794a', WALL_STONE = '#a1a8b0';
-/** Мир: скалы, вода, мост (скриншоты 11, 12) */
-/** Мир: холмы (скриншоты 13, 15) — крона: тень, середина, свет, блик; сухая трава */
+/** World: cliffs, water, bridge (screenshots 11, 12) */
+/** World: hills (screenshots 13, 15) — canopy: shadow, mid, light, highlight; dry grass */
 const TREE = ['#4c6e2a', '#6a8c37', '#90b04e', '#a8c860'], DRY = ['#cdb862', '#c2ad58', '#d8c472'];
-/** Золотая осень (референсы 2, 3, 8 в wiki/sources/refs-settlements.md): жёлтая и оранжевая лиственницы — тень, середина, свет, блик */
+/** Golden autumn (references 2, 3, 8 in wiki/sources/refs-settlements.md): yellow and orange larches — shadow, mid, light, highlight */
 const GOLD = ['#9c6a1c', '#c8922a', '#e2b43e', '#f2d060'], ORANGE = ['#8a4a18', '#b86a22', '#d8862e', '#eca448'];
-/** Мир: портал (скриншот 14) */
+/** World: portal (screenshot 14) */
 const PORTAL_GOLD = '#efb64a', PORTAL_LIGHT = '#ffe9a0', PORTAL_STONE = '#4c5155', PORTAL_INLAY = '#d9a640', PORTAL_FLOOR = '#b3a693';
 const CLIFF = '#9aa2ab', CLIFF_DARK = '#7b8996', BRIDGE_WOOD = '#c49458', BRIDGE_POST = '#8d6639', RIVER = '#356577', FALLS = '#1f88ab';
 const CRATE_WOOD = '#9a6a4c', CRATE_BAND = '#46414a', CRATE_PAINT = '#e2a936', CHEST_WOOD = '#8f5b35', CART_WOOD = '#a2694a';
-/** Камень: булыжник, кирпич, сланцевый кирпич руин, плиты, мох */
+/** Stone: cobblestone, brick, slate brick of ruins, slabs, moss */
 const STONE_BASE = '#88929d', BRICK_BASE = '#86919c', SLATE_BASE = '#6a8592', TILE_BASE = '#a0a2a2', MOSS = '#6f9a4c';
 const DIRT = [DIRT_BASE, DIRT_BASE, DIRT_DARK];
 
-/** Смешать два цвета #rrggbb: t = 0 — a, 1 — b; результат тоже #rrggbb */
+/** Mix two #rrggbb colours: t = 0 — a, 1 — b; the result is #rrggbb too */
 function mix(a: string, b: string, t: number): string {
   const x = hexToRgb(a), y = hexToRgb(b);
   return '#' + [0, 1, 2].map((i) => Math.round(x[i] + (y[i] - x[i]) * t).toString(16).padStart(2, '0')).join('');
 }
-/** Мягкая заливка: ровный цвет с зерном ±grain и пятна — круги, к краю сходящие на нет (с переносом через край тайла) */
+/** Soft fill: a flat colour with grain ±grain and spots — circles fading out towards the edge (wrapping across the tile edge) */
 function softFill(g: Ctx, s: number, r: Rand, base: string, grain: number, blobs: readonly { col: string; n: number; rad: [number, number]; k: number }[]): void {
   const cells: string[] = [];
   for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) cells.push(base);
@@ -88,7 +89,7 @@ function softFill(g: Ctx, s: number, r: Rand, base: string, grain: number, blobs
   }
   for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(cells[y * s + x], r, grain));
 }
-/** Мягкие пятна поверх уже нарисованного (мох на камне): смешивание с тем, что на холсте */
+/** Soft spots over what is already drawn (moss on stone): blending with what is on the canvas */
 function overlayBlobs(g: Ctx, s: number, r: Rand, col: string, n: number, rad: [number, number], k: number, yBias = 0): void {
   const img = g.getImageData(0, 0, s, s), d = img.data, c = hexToRgb(col);
   for (let i = 0; i < n; i++) {
@@ -104,8 +105,8 @@ function overlayBlobs(g: Ctx, s: number, r: Rand, col: string, n: number, rad: [
   g.putImageData(img, 0, 0);
 }
 /**
- * Мягкая кладка: у каждого кирпича свой тон (±vary к белому / чёрному), верхний ряд кирпича чуть светлее,
- * шов — тот же цвет, темнее на 12 %: кладка читается, но не рябит (Minecraft Dungeons, wiki/style-terrain.md).
+ * Soft masonry: each brick has its own tone (±vary towards white / black), the top row of a brick slightly lighter,
+ * the joint — the same colour, 12 % darker: the masonry reads but does not shimmer (Minecraft Dungeons, wiki/style-terrain.md).
  */
 function softBricks(g: Ctx, s: number, r: Rand, base: string, cellW: number, rows: number, vary = 0.08, seam = 0.12): void {
   const h = s / rows, mortar = mix(base, '#000000', seam);
@@ -122,7 +123,7 @@ function softBricks(g: Ctx, s: number, r: Rand, base: string, cellW: number, row
     }
   }
 }
-/** Булыжник: светлая основа и скруглённые камни, сверху-слева чуть светлее, снизу-справа шов чуть темнее */
+/** Cobblestone: a light base and rounded stones, slightly lighter top-left, the joint slightly darker bottom-right */
 function softCobble(g: Ctx, s: number, r: Rand, base: string, n = 11, size: [number, number] = [2.2, 1.8], grout = 0.1): void {
   softFill(g, s, r, mix(base, '#000000', grout), 2, []);
   for (let i = 0; i < n; i++) {
@@ -137,10 +138,10 @@ function softCobble(g: Ctx, s: number, r: Rand, base: string, n = 11, size: [num
     }
   }
 }
-/** Листва: «листочки» 2 × 2 из пяти тонов, сверху светлее; holes — дырки по краю (вырезная листва) */
+/** Foliage: 2 × 2 "leaflets" in five tones, lighter at the top; holes — gaps along the edge (cut-out foliage) */
 function softLeaves(g: Ctx, s: number, r: Rand, tones: readonly [string, string, string, string], holes: boolean, berries = false): void {
   for (let cy = 0; cy < s; cy += 2) for (let cx = 0; cx < s; cx += 2) {
-    const up = 1 - cy / s; // сверху больше светлых
+    const up = 1 - cy / s; // more light ones at the top
     const v = r() + up * 0.25;
     const col = v < 0.22 ? tones[0] : v < 0.62 ? tones[1] : v < 1.0 ? tones[2] : tones[3];
     for (let y = cy; y < cy + 2; y++) for (let x = cx; x < cx + 2; x++) {
@@ -153,7 +154,7 @@ function softLeaves(g: Ctx, s: number, r: Rand, tones: readonly [string, string,
   }
   if (berries) for (let i = 0; i < 7; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#d8344f'); px(g, x + 1, y, '#f0607a'); }
 }
-/** Тона листвы, откалиброваны по дереву на скриншоте 4 (wiki/style-terrain.md): тень, середина, свет, блик */
+/** Foliage tones, calibrated by the tree on screenshot 4 (wiki/style-terrain.md): shadow, mid, light, highlight */
 const LEAF: [string, string, string, string] = ['#486e37', '#6b8a42', '#839f52', '#9cb063'];
 const BUSH: [string, string, string, string] = ['#466a39', '#627f43', '#76914f', '#8ca25b'];
 
@@ -164,33 +165,33 @@ export interface Textures {
   roof: THREE.Texture; berry: THREE.Texture; awning: THREE.Texture; sign: THREE.Texture; tallGrass: THREE.Texture; flowers: THREE.Texture[];
   face: THREE.Texture; skin: THREE.Texture; hair: THREE.Texture; shirt: THREE.Texture;
   overalls: THREE.Texture; straw: THREE.Texture; square: THREE.Texture; glow: THREE.Texture;
-  /** Текстуры блоков уровня (палитра — src/level/palette.ts) */
+  /** Level block textures (palette — src/level/palette.ts) */
   gravel: THREE.Texture; sand: THREE.Texture; cobble: THREE.Texture; stoneBricks: THREE.Texture;
   stoneBricksMossy: THREE.Texture; stoneBricksCracked: THREE.Texture; stoneBricksOld: THREE.Texture; stoneBricksOldMossy: THREE.Texture; tiles: THREE.Texture;
   planksDark: THREE.Texture; roofDark: THREE.Texture; crate: THREE.Texture; berryBush: THREE.Texture; fern: THREE.Texture;
   hay: THREE.Texture; hayTop: THREE.Texture; ash: THREE.Texture; leavesCut: THREE.Texture; acid: THREE.Texture; hole: THREE.Texture;
   flowerRed: THREE.Texture; flowerBlue: THREE.Texture; flowerWhite: THREE.Texture; flowerYellow: THREE.Texture;
-  /** Служебные блоки плейграунда: серая сетка 1 м (два тона, разметка каждые 5 м) и клетчатые стены */
+  /** Playground utility blocks: a grey 1 m grid (two tones, marks every 5 m) and checkered walls */
   devLight: THREE.Texture; devDark: THREE.Texture; devLightLine: THREE.Texture; devDarkLine: THREE.Texture;
   devLightCorner: THREE.Texture; devDarkCorner: THREE.Texture; devWall: THREE.Texture; devCover: THREE.Texture;
-  /** Дом: штукатурка, кирпич, бетон, окно, ржавые перила; мебель */
+  /** House: plaster, brick, concrete, window, rusty railing; furniture */
   plasterTeal: THREE.Texture; plasterWhite: THREE.Texture; plasterRust: THREE.Texture; brickBrown: THREE.Texture;
   concrete: THREE.Texture; window: THREE.Texture; rustMetal: THREE.Texture;
   fabricRed: THREE.Texture; blanket: THREE.Texture; pillow: THREE.Texture; rug: THREE.Texture; lampShade: THREE.Texture;
   ironDark: THREE.Texture; cabinet: THREE.Texture; bookshelf: THREE.Texture; counterTop: THREE.Texture;
   stoveTop: THREE.Texture; fridge: THREE.Texture; fridgeTop: THREE.Texture;
-  // декор (src/level/decor.ts)
+  // decor (src/level/decor.ts)
   chain: THREE.Texture; cobweb: THREE.Texture; banner: THREE.Texture; bone: THREE.Texture; candle: THREE.Texture;
   mushroomRed: THREE.Texture; mushroomGlow: THREE.Texture; mushroomStem: THREE.Texture; mushroomPink: THREE.Texture; mushroomBlue: THREE.Texture; portalBlue: THREE.Texture; lanternGlass: THREE.Texture; roots: THREE.Texture;
-  // трава поверх блоков: бахрома по краю уступа и мелкие пучки (mesher.ts)
+  // grass over blocks: fringe along the ledge edge and small tufts (mesher.ts)
   grassFringe: THREE.Texture; grassTuft: THREE.Texture; flowerTuft: THREE.Texture;
-  // мир (скриншоты 10–15, wiki/style-world.md): двор
+  // world (screenshots 10–15, wiki/style-world.md): courtyard
   yardFloor: THREE.Texture; wallStone: THREE.Texture; crateBand: THREE.Texture; crateBandTop: THREE.Texture;
   chestWood: THREE.Texture; chestTrim: THREE.Texture; cartWood: THREE.Texture;
-  // скалы, вода, мост (скриншоты 11, 12); river и waterfall — свои текстуры с повтором, не в атласе
+  // cliffs, water, bridge (screenshots 11, 12); river and waterfall are their own repeating textures, not in the atlas
   cliff: THREE.Texture; cliffDark: THREE.Texture; cliffGrassSide: THREE.Texture; foam: THREE.Texture;
   bridgePlank: THREE.Texture; bridgePost: THREE.Texture; river: THREE.Texture; waterfall: THREE.Texture;
-  // холмы (скриншоты 13, 15): пышная листва, сухая трава, ромашки
+  // hills (screenshots 13, 15): lush foliage, dry grass, daisies
   leavesClump: THREE.Texture; leavesPuff: THREE.Texture; dryGrass: THREE.Texture; daisies: THREE.Texture;
   leavesGold: THREE.Texture; leavesOrange: THREE.Texture; leavesGoldPuff: THREE.Texture; leavesOrangePuff: THREE.Texture;
   flowerOrange: THREE.Texture; tilesBroken0: THREE.Texture; tilesBroken1: THREE.Texture; reeds: THREE.Texture; leafLitter: THREE.Texture; barkDead: THREE.Texture;
@@ -198,7 +199,7 @@ export interface Textures {
   crops: THREE.Texture; cropsRipe: THREE.Texture; thatch: THREE.Texture; shingles: THREE.Texture; barrel: THREE.Texture; barrelTop: THREE.Texture; burlap: THREE.Texture; tentCloth: THREE.Texture; stake: THREE.Texture; stakeTop: THREE.Texture;
   snowTop: THREE.Texture; snowSide: THREE.Texture; snowFringe: THREE.Texture; cliffSnowSide: THREE.Texture; ice: THREE.Texture; iceCracked: THREE.Texture; frozenWater: THREE.Texture; leavesSnowCut: THREE.Texture; deadBushSnow: THREE.Texture;
   snowEdge0: THREE.Texture; snowEdge1: THREE.Texture; snowEdge2: THREE.Texture; snowEdge3: THREE.Texture;
-  // джунгли с кристаллами (референс 16): влажная земля с мхом, храмовый камень, кристаллы, лианы
+  // jungle with crystals (reference 16): damp ground with moss, temple stone, crystals, vines
   jungleTop: THREE.Texture; jungleRed: THREE.Texture; mossTeal: THREE.Texture; jungleSide: THREE.Texture; jungleFringe: THREE.Texture; cliffJungleSide: THREE.Texture; mossBlock: THREE.Texture;
   jungleEdge0: THREE.Texture; jungleEdge1: THREE.Texture; jungleEdge2: THREE.Texture; jungleEdge3: THREE.Texture;
   jungleRedEdge0: THREE.Texture; jungleRedEdge1: THREE.Texture; jungleRedEdge2: THREE.Texture; jungleRedEdge3: THREE.Texture;
@@ -207,23 +208,23 @@ export interface Textures {
   leavesJungle: THREE.Texture; leavesJunglePuff: THREE.Texture; logJungleSide: THREE.Texture; logJungleTop: THREE.Texture;
   vine: THREE.Texture; fernBig: THREE.Texture; flowerPink: THREE.Texture; lilyPad: THREE.Texture;
   templeStone: THREE.Texture; templeStoneCarved: THREE.Texture; templeStoneMossy: THREE.Texture; templeStoneTop: THREE.Texture; crystal: THREE.Texture;
-  // портал (скриншот 14)
+  // portal (screenshot 14)
   portal: THREE.Texture; portalFrame: THREE.Texture; portalTrim: THREE.Texture; portalFloor: THREE.Texture;
-  // рваный край между травой и дорожкой (mesher.ts, bleed): 4 варианта маски у каждой
+  // ragged edge between grass and path (mesher.ts, bleed): 4 mask variants for each
   grassEdge0: THREE.Texture; grassEdge1: THREE.Texture; grassEdge2: THREE.Texture; grassEdge3: THREE.Texture;
   pathEdge0: THREE.Texture; pathEdge1: THREE.Texture; pathEdge2: THREE.Texture; pathEdge3: THREE.Texture;
-  /** Вода: 16 × 16, двигается смещением UV */
+  /** Water: 16 × 16, moves by UV offset */
   water: THREE.Texture;
-  // лавовая карта обороны куста (wiki/design-tower-defence.md, раздел 7): пепельная земля, базальт, обожжённая скала, лава
+  // Bush Defence lava map (wiki/design-tower-defence.md, section 7): ash ground, basalt, scorched rock, lava
   ashTop: THREE.Texture; ashSide: THREE.Texture; basalt: THREE.Texture; cliffLava: THREE.Texture; lava: THREE.Texture;
-  /** Огонь: 3 кадра по 16 × 16 друг над другом */
+  /** Fire: 3 frames of 16 × 16 stacked vertically */
   fire: THREE.Texture;
 }
 
-/** Текстура по имени — для атласа блоков */
+/** Texture by name — for the block atlas */
 export function textureByName(T: Textures, name: string): THREE.Texture {
   const t = (T as unknown as Record<string, THREE.Texture | undefined>)[name];
-  if (!t) throw new Error(`Нет текстуры «${name}»`);
+  if (!t) throw new Error(`No texture "${name}"`);
   return t;
 }
 
@@ -233,7 +234,7 @@ export function makeTextures(): Textures {
     { col: GRASS_LIGHT, n: 3, rad: [3, 5], k: 0.7 },
     { col: GRASS_DARK, n: 2, rad: [2.5, 4], k: 0.55 },
   ]), 11);
-  // бок травяного блока: ровная земля, сверху зубчатая полоса травы 3–6 px (низ полосы чуть темнее)
+  // side of a grass block: flat ground, a jagged 3–6 px strip of grass on top (the bottom of the strip slightly darker)
   T.grassSide = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, DIRT_BASE, 3, [{ col: DIRT_DARK, n: 3, rad: [2, 3.5], k: 0.6 }]);
     for (let x = 0; x < s; x++) {
@@ -249,12 +250,12 @@ export function makeTextures(): Textures {
       px(g, x, y + 1, jitter('#70482c', r, 6));
     }
   }, 14);
-  // дорожка: тёплый оранжевый беж, мягкие светлые «следы» ≈ 0,3 м и тёмные пятна (скриншот 1, wiki/style-terrain.md)
+  // path: warm orange beige, soft light "footprints" ≈ 0.3 m and dark spots (screenshot 1, wiki/style-terrain.md)
   T.path = canvasTex(16, (g, s, r) => softFill(g, s, r, PATH_BASE, 1, [
     { col: '#bb864b', n: 2, rad: [3, 5], k: 0.45 },
     { col: PATH_PRINT, n: 3, rad: [2, 2.7], k: 0.6 },
   ]), 15);
-  // камень: светлый голубовато-серый, как ограда на скриншотах, пятна вместо трещин
+  // stone: light bluish grey, like the fence on the screenshots, spots instead of cracks
   T.stone = canvasTex(16, (g, s, r) => softFill(g, s, r, '#a4abb4', 3, [
     { col: '#b3b9c1', n: 3, rad: [2.5, 4], k: 0.6 },
     { col: '#959ca6', n: 2, rad: [2, 3], k: 0.5 },
@@ -299,14 +300,14 @@ export function makeTextures(): Textures {
     g.fillStyle = '#4a321c'; g.fillRect(0, 0, 128, 40);
     g.fillStyle = '#6b4a2b'; g.fillRect(3, 3, 122, 34);
     g.fillStyle = '#ffd25a'; g.font = 'bold 22px Rubik, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('ОРУЖИЕ', 64, 21);
+    g.fillText(tr('WEAPONS'), 64, 21);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
   })();
   T.berry = canvasTex(8, (g, s) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, ((x + y) % 2) ? '#ffffff' : '#c8c8c8');
   }, 24);
 
-  // Трава и цветы (с прозрачностью)
+  // Grass and flowers (with transparency)
   T.tallGrass = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 9; i++) {
       let x = 1 + ((r() * 14) | 0); const h = 6 + ((r() * 9) | 0);
@@ -345,13 +346,13 @@ export function makeTextures(): Textures {
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) px(g, x, y, jitter((x + y) % 3 ? '#e8c35a' : '#cfa43f', r, 8));
   }, 45);
 
-  // ---------- блоки уровня ----------
+  // ---------- level blocks ----------
   T.gravel = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, '#a69d92', 3, [{ col: '#b5ada2', n: 3, rad: [2, 3], k: 0.6 }]);
     for (let i = 0; i < 10; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#8f877d'); px(g, x + 1, y, '#bdb5aa'); }
   }, 50);
   T.sand = canvasTex(16, (g, s, r) => softFill(g, s, r, '#e4d19b', 3, [{ col: '#eedcaa', n: 3, rad: [2.5, 4], k: 0.6 }, { col: '#d6c18a', n: 2, rad: [2, 3], k: 0.5 }]), 51);
-  // ---------- кладка: светлый голубовато-серый камень ограды и руин (скриншоты 1, 3) ----------
+  // ---------- masonry: light bluish grey stone of the fence and ruins (screenshots 1, 3) ----------
   T.cobble = canvasTex(16, (g, s, r) => softCobble(g, s, r, STONE_BASE), 52);
   T.stoneBricks = canvasTex(16, (g, s, r) => softBricks(g, s, r, BRICK_BASE, 8, 4), 53);
   T.stoneBricksMossy = canvasTex(16, (g, s, r) => {
@@ -364,13 +365,13 @@ export function makeTextures(): Textures {
     let x = 3 + ((r() * 10) | 0);
     for (let y = 2; y < s - 2; y++) { px(g, x, y, crack); if (r() < 0.5) x = Math.max(1, Math.min(s - 2, x + (r() < 0.5 ? -1 : 1))); }
   }, 55);
-  // руинный: сланцевый, синее и темнее (колонны руин на скриншоте 3)
+  // ruin: slate, bluer and darker (ruin columns on screenshot 3)
   T.stoneBricksOld = canvasTex(16, (g, s, r) => softBricks(g, s, r, SLATE_BASE, 8, 4, 0.1, 0.14), 56);
   T.stoneBricksOldMossy = canvasTex(16, (g, s, r) => {
     softBricks(g, s, r, SLATE_BASE, 8, 4, 0.1, 0.14);
     overlayBlobs(g, s, r, MOSS, 4, [2, 3.5], 0.85, 1);
   }, 58);
-  // плиты мостовой: крупные, шов сверху-слева светлый, как на полу руин
+  // pavement slabs: large, the top-left joint light, as on the ruins floor
   const tilesPaint = (g: Ctx, _s: number, r: Rand) => {
     for (let ty = 0; ty < 2; ty++) for (let tx = 0; tx < 2; tx++) {
       const t = (r() - 0.5) * 2, col = t > 0 ? mix(TILE_BASE, '#ffffff', t * 0.07) : mix(TILE_BASE, '#000000', -t * 0.06);
@@ -382,7 +383,7 @@ export function makeTextures(): Textures {
     }
   };
   T.tiles = canvasTex(16, tilesPaint, 57);
-  // битые плиты (дорога Лимгрейва, референс 1): одна из четырёх плит выпала — под ней земля, по краю ямы трава
+  // broken slabs (the Limgrave road, reference 1): one of four slabs has fallen out — ground under it, grass along the hole edge
   const tilesBroken = (seed: number, tx: number, ty: number) => canvasTex(16, (g, s, r) => {
     tilesPaint(g, s, r);
     for (let y = ty * 8; y < ty * 8 + 8; y++) for (let x = tx * 8; x < tx * 8 + 8; x++) {
@@ -421,7 +422,7 @@ export function makeTextures(): Textures {
       }
     }
   }, 62, { alpha: true });
-  // тюк сена как на скриншоте 10: ровный жёлтый, по боку две оранжево-красные обвязки, верх со светлой каймой
+  // hay bale as on screenshot 10: flat yellow, two orange-red bands on the side, a light rim on top
   T.hay = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, HAY_BASE, 2, [{ col: '#d9b863', n: 3, rad: [2, 3.5], k: 0.5 }, { col: '#b8933f', n: 2, rad: [1.5, 2.5], k: 0.4 }]);
     for (const y0 of [3, 11]) for (let x = 0; x < s; x++) { px(g, x, y0, jitter(HAY_BAND, r, 3)); px(g, x, y0 + 1, jitter(mix(HAY_BAND, '#000000', 0.12), r, 3)); }
@@ -431,11 +432,11 @@ export function makeTextures(): Textures {
     for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, jitter(HAY_RIM, r, 2)); px(g, k, i, jitter(HAY_RIM, r, 2)); }
     for (const x0 of [3, 11]) for (let y = 0; y < s; y++) px(g, x0, y, jitter(HAY_BAND, r, 3));
   }, 64);
-  // листва кроны: с дырками по краям, чтобы кубы кроны не читались как кубы
+  // canopy foliage: with holes along the edges so the canopy cubes do not read as cubes
   T.leavesCut = canvasTex(16, (g, s, r) => softLeaves(g, s, r, LEAF, true), 68, { alpha: true });
   T.ash = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#3a3835', '#2e2c2a', '#454240'], 6), 65);
-  // лавовая карта: тёмная тёплая земля из пепла и обожжённой глины, базальтовый булыжник, скала в бурых пластах,
-  // лава — жёлто-оранжевая с яркими прожилками (бежит смещением UV, светится эмиссией в mesher.ts)
+  // lava map: dark warm ground of ash and scorched clay, basalt cobblestone, rock in brown layers,
+  // lava — yellow-orange with bright veins (flows by UV offset, glows with emission in mesher.ts)
   T.ashTop = canvasTex(16, (g, s, r) => softFill(g, s, r, '#4e3c35', 3, [{ col: '#5e4a42', n: 3, rad: [2.5, 4], k: 0.6 }, { col: '#3c2d29', n: 2, rad: [2, 3.5], k: 0.55 }]), 191);
   T.ashSide = canvasTex(16, (g, s, r) => softFill(g, s, r, '#40302c', 3, [{ col: '#4c3a34', n: 2, rad: [2, 3], k: 0.5 }]), 192);
   T.basalt = canvasTex(16, (g, s, r) => softCobble(g, s, r, '#4c4a52'), 193);
@@ -476,8 +477,8 @@ export function makeTextures(): Textures {
     for (let f = 0; f < 3; f++) {
       const y0 = f * 16;
       for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-        // языки пламени: внизу широко и ярко, кверху узко
-        const h = 1 - y / 16; // 1 внизу картинки — но канвас рисуется сверху вниз, низ блока = y=15
+        // tongues of flame: wide and bright at the bottom, narrow towards the top
+        const h = 1 - y / 16; // 1 at the bottom of the picture — but the canvas is drawn top-down, block bottom = y=15
         const w = 0.25 + (1 - h) * 0.3 + Math.sin(x * 1.7 + f * 2.1) * 0.08;
         const dx = Math.abs(x - 7.5) / 8;
         if (dx > w + (r() - 0.5) * 0.2 || h > 0.95 - r() * 0.3) continue;
@@ -492,7 +493,7 @@ export function makeTextures(): Textures {
     return t;
   })();
 
-  // служебная сетка плейграунда: ровный тон, линия разметки — 2 px у края (−X: слева; с поворотом — у любого)
+  // playground utility grid: flat tone, the mark line — 2 px at the edge (−X: left; with rotation — any edge)
   const devTile = (tone: string, line: 'none' | 'edge' | 'corner', seed: number) => canvasTex(16, (g, s) => {
     g.fillStyle = tone; g.fillRect(0, 0, s, s);
     g.fillStyle = '#5f6268';
@@ -508,8 +509,8 @@ export function makeTextures(): Textures {
   T.devWall = devChecker('#b9ab90', '#a7987c', 86);
   T.devCover = devChecker('#8e9fb0', '#7d8ea0', 87);
 
-  // ---------- дом ----------
-  /** Пятна: случайные кляксы из соседних пикселей поверх фона */
+  // ---------- house ----------
+  /** Spots: random blots of neighbouring pixels over the background */
   const blots = (g: Ctx, s: number, r: Rand, pal: readonly string[], n: number, len: number) => {
     for (let i = 0; i < n; i++) {
       let x = (r() * s) | 0, y = (r() * s) | 0;
@@ -520,7 +521,7 @@ export function makeTextures(): Textures {
       }
     }
   };
-  // штукатурка: вертикальные полоски «вагонки» и облупленные пятна
+  // plaster: vertical "clapboard" stripes and peeled spots
   T.plasterTeal = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 4 === 3 ? '#4fb194' : pick(['#62c9a8', '#5cc2a1', '#68cfae'], r), r, 5));
     blots(g, s, r, ['#2f8d78', '#348f7c', '#28806c'], 4, 9);
@@ -541,7 +542,7 @@ export function makeTextures(): Textures {
     noiseFill(g, s, r, ['#8d847b', '#857c73', '#958c82', '#7c746c'], 5);
     for (let i = 0; i < 10; i++) px(g, (r() * s) | 0, (r() * s) | 0, '#6a635c');
   }, 94);
-  // окно: тёмная рама и импост, светлое стекло с диагональными бликами
+  // window: dark frame and mullion, light glass with diagonal highlights
   T.window = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
       const frame = x < 2 || y < 2 || x >= s - 2 || y >= s - 2 || x === 7 || x === 8;
@@ -553,7 +554,7 @@ export function makeTextures(): Textures {
     noiseFill(g, s, r, ['#b8521e', '#c8622a', '#a34818', '#d07034'], 8);
     blots(g, s, r, ['#7a3412', '#e08a48'], 4, 4);
   }, 96);
-  // мебель
+  // furniture
   T.fabricRed = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter((x + y) % 2 ? '#8a3a36' : '#9a4440', r, 5));
   }, 97);
@@ -607,15 +608,15 @@ export function makeTextures(): Textures {
   }, 107);
   T.fridgeTop = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#dfe2e5', '#e8eaec'], 3), 108);
 
-  // ---------- декор ----------
-  // цепь: звенья по 4 пикселя, вырезная — между звеньями пусто
+  // ---------- decor ----------
+  // chain: 4-pixel links, cut-out — empty between the links
   T.chain = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 6; x < 10; x++) {
       const k = y % 8, edge = x === 6 || x === 9 || k === 0 || k === 5;
       if (k < 6 && edge) px(g, x, y, jitter(x === 6 || k === 0 ? '#5a5650' : '#3a3632', r, 6));
     }
   }, 120, { alpha: true });
-  // паутина: лучи из угла и дуги, полупрозрачная белая
+  // cobweb: rays from the corner and arcs, translucent white
   T.cobweb = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
       const a = Math.atan2(y, x), d = Math.hypot(x, y);
@@ -623,7 +624,7 @@ export function makeTextures(): Textures {
       if ((ray && d < 15.5) || arc) if (r() < 0.9) px(g, x, y, jitter('#e8ecf0', r, 8));
     }
   }, 121, { alpha: true });
-  // знамя: малиновое полотнище с золотой каймой и ягодой
+  // banner: a raspberry-red cloth with a gold border and a berry
   T.banner = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
       const border = x < 2 || x > 13;
@@ -636,28 +637,28 @@ export function makeTextures(): Textures {
   T.candle = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y < 2 ? '#fff4d0' : pick(['#f2e2b0', '#e8d49a', '#f6e8c0'], r), r, 5));
   }, 124);
-  // шляпки грибов: красная в белый горох (style/ref-02) и светящаяся жёлтая (style/ref-01)
+  // mushroom caps: red with white polka dots (style/ref-02) and glowing yellow (style/ref-01)
   const dots = (base: string, dot: string) => (g: Ctx, s: number, r: Rand) => {
     noiseFill(g, s, r, [base], 6);
     for (const [cx, cy] of [[3, 3], [11, 2], [7, 8], [13, 11], [2, 12], [9, 14]]) { px(g, cx, cy, jitter(dot, r, 4)); px(g, cx + 1, cy, jitter(dot, r, 4)); px(g, cx, cy + 1, jitter(dot, r, 4)); }
   };
   T.mushroomRed = canvasTex(16, dots('#d8262c', '#f6f0e8'), 125);
   T.mushroomGlow = canvasTex(16, dots('#ffc83a', '#fff4b0'), 126);
-  // грибы-светильники кристальной поляны (wiki/design-tower-defence.md, раздел 8): розовые и голубые шляпки, слой glow
+  // lamp mushrooms of the Crystal Glade (wiki/design-tower-defence.md, section 8): pink and blue caps, glow layer
   T.mushroomPink = canvasTex(16, dots('#ff6ac8', '#ffd0f0'), 1126);
   T.mushroomBlue = canvasTex(16, dots('#48c8ff', '#d0f4ff'), 1127);
   T.mushroomStem = canvasTex(16, (g, s, r) => noiseFill(g, s, r, ['#efe6d2', '#e4d8c0', '#f6efe0'], 4), 127);
   T.lanternGlass = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(Math.hypot(x - 7.5, y - 9) < 4 ? '#fff2b0' : '#ffc860', r, 8));
   }, 128);
-  // бахрома: верхние 8 рядов — свисающая зубчатая трава (верхние 2 — сплошь), низ пустой; 16 px на метр, как у блока
+  // fringe: the top 8 rows — hanging jagged grass (the top 2 — solid), the bottom empty; 16 px per metre, like a block
   T.grassFringe = canvasTex(16, (g, s, r) => {
     for (let x = 0; x < s; x++) {
       const len = 2 + Math.floor(r() * 7) - (x % 3 === 1 ? 1 : 0);
       for (let y = 0; y < len; y++) px(g, x, y, jitter(y === len - 1 ? GRASS_DARK : GRASS_BASE, r, 3));
     }
   }, 130, { alpha: true });
-  // пучки: травинки растут от низа картинки, высота 2–8 px; квадрат пучка берёт окно этой полосы
+  // tufts: blades grow from the bottom of the picture, 2–8 px tall; a tuft square takes a window of this strip
   const blades = (g: Ctx, s: number, r: Rand, flowers: readonly string[]) => {
     for (let x = 0; x < s; x++) {
       if (r() < 0.25) continue;
@@ -669,9 +670,9 @@ export function makeTextures(): Textures {
   T.grassTuft = canvasTex(16, (g, s, r) => blades(g, s, r, []), 131, { alpha: true });
   T.flowerTuft = canvasTex(16, (g, s, r) => blades(g, s, r, ['#f6f2ea', '#ffd84a', '#f070a8', '#8ac4ff']), 132, { alpha: true });
   /**
-   * Рваный край: материал «заходит» на соседний блок от нижнего края картинки (это общая грань) на 0–8 px.
-   * Глубина гуляет плавно, ступеньками по 2 px, к концам тайла сходится к 3 px — края соседних тайлов стыкуются;
-   * крайний пиксель — полутон с соседним материалом (мягкость), плюс 1–2 островка поодаль.
+   * Ragged edge: the material "spills" onto the neighbouring block from the bottom edge of the picture (the shared face) by 0–8 px.
+   * The depth wanders smoothly in 2 px steps and converges to 3 px at the tile ends — edges of neighbouring tiles join;
+   * the outermost pixel is a half-tone with the neighbouring material (softness), plus 1–2 islands further away.
    */
   const edgeMask = (base: string, other: string, light: string) => (g: Ctx, s: number, r: Rand) => {
     const p1 = r() * 6.3, p2 = r() * 6.3, amp = 1.6 + r() * 1.6;
@@ -694,13 +695,13 @@ export function makeTextures(): Textures {
   };
   [T.grassEdge0, T.grassEdge1, T.grassEdge2, T.grassEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(GRASS_BASE, PATH_BASE, GRASS_LIGHT), 140 + i, { alpha: true }));
   [T.pathEdge0, T.pathEdge1, T.pathEdge2, T.pathEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(PATH_BASE, GRASS_BASE, PATH_PRINT), 150 + i, { alpha: true }));
-  // корни: тёмная кора с продольными бороздами
+  // roots: dark bark with lengthwise grooves
   T.roots = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 5 === 0 ? '#2e2016' : pick(['#5a3e28', '#4e3522', '#664830'], r), r, 6));
   }, 129);
 
-  // ---------- мир: двор (скриншот 10) ----------
-  // пол двора: утоптанная земля с тёмными штрихами «ёлочкой»
+  // ---------- world: courtyard (screenshot 10) ----------
+  // courtyard floor: trodden ground with dark herringbone strokes
   T.yardFloor = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, YARD_BASE, 2, [{ col: '#cda265', n: 2, rad: [3, 5], k: 0.5 }]);
     for (let row = 0; row < 4; row++) for (let x0 = (row % 2) * 3 - 3; x0 < s; x0 += 6) {
@@ -708,9 +709,9 @@ export function makeTextures(): Textures {
       for (let k = 0; k < len; k++) { const x = x0 + k, y = row * 4 + 1 + (k > 1 ? 1 : 0); if (x >= 0 && x < s) px(g, x, y, jitter(YARD_DASH, r, 3)); }
     }
   }, 160);
-  // камень ограды: крупные скруглённые камни, едва заметные
+  // fence stone: large rounded stones, barely visible
   T.wallStone = canvasTex(16, (g, s, r) => softCobble(g, s, r, WALL_STONE, 5, [3.6, 3.0], 0.06), 161);
-  // ящики склада: дощатые, тёмные железные полосы, пятна жёлтой краски
+  // storage yard crates: planked, dark iron bands, spots of yellow paint
   const crate = (top: boolean) => (g: Ctx, s: number, r: Rand) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 4 === 3 ? mix(CRATE_WOOD, '#000000', 0.14) : CRATE_WOOD, r, 3));
     overlayBlobs(g, s, r, CRATE_PAINT, 3, [1.4, 2.4], 0.9);
@@ -727,8 +728,8 @@ export function makeTextures(): Textures {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(y % 4 === 3 ? mix(CART_WOOD, '#000000', 0.16) : CART_WOOD, r, 3));
   }, 166);
 
-  // ---------- мир: скалы, вода, мост (скриншоты 11, 12) ----------
-  // скала: ровный светлый камень с едва заметными вертикальными пластами
+  // ---------- world: cliffs, water, bridge (screenshots 11, 12) ----------
+  // cliff: flat light stone with barely visible vertical layers
   const strata = (base: string, r: Rand, g: Ctx, s: number) => {
     softFill(g, s, r, base, 2, [{ col: mix(base, '#ffffff', 0.08), n: 2, rad: [3, 5], k: 0.6 }]);
     let x = 0;
@@ -738,7 +739,7 @@ export function makeTextures(): Textures {
   };
   T.cliff = canvasTex(16, (g, s, r) => strata(CLIFF, r, g, s), 170);
   T.cliffDark = canvasTex(16, (g, s, r) => strata(CLIFF_DARK, r, g, s), 171);
-  // обожжённая скала лавовой карты: бурые пласты
+  // scorched rock of the lava map: brown layers
   T.cliffLava = canvasTex(16, (g, s, r) => strata('#5c3e38', r, g, s), 194);
   T.cliffGrassSide = canvasTex(16, (g, s, r) => {
     strata(CLIFF, r, g, s);
@@ -747,10 +748,10 @@ export function makeTextures(): Textures {
       for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? GRASS_DARK : GRASS_BASE, r, 3));
     }
   }, 172);
-  // ---------- снег и лёд (биом «снег», референсы 13, 9) ----------
+  // ---------- snow and ice (the "snow" biome, references 13, 9) ----------
   const SNOW_BASE = '#eef3f8', SNOW_SHADE = '#d9e4ee', SNOW_LIGHT = '#fbfdff', ICE = '#bcdcec';
   T.snowTop = canvasTex(16, (g, s, r) => softFill(g, s, r, SNOW_BASE, 2, [{ col: SNOW_SHADE, n: 3, rad: [2, 4], k: 0.5 }, { col: SNOW_LIGHT, n: 2, rad: [2, 3], k: 0.5 }]), 210);
-  // бок снежной земли: земля, сверху снежная кромка 3–6 px с голубой тенью под ней
+  // side of snowy ground: ground, a 3–6 px snow rim on top with a blue shadow under it
   T.snowSide = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, DIRT_BASE, 3, [{ col: DIRT_DARK, n: 3, rad: [2, 3.5], k: 0.6 }]);
     for (let x = 0; x < s; x++) { const d = 3 + ((r() * 4) | 0); for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? SNOW_SHADE : SNOW_BASE, r, 3)); }
@@ -763,7 +764,7 @@ export function makeTextures(): Textures {
     for (let x = 0; x < s; x++) { const d = 2 + ((r() * 4) | 0); for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? SNOW_SHADE : SNOW_BASE, r, 3)); }
   }, 213);
   [T.snowEdge0, T.snowEdge1, T.snowEdge2, T.snowEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(SNOW_BASE, GRASS_BASE, SNOW_LIGHT), 214 + i, { alpha: true }));
-  // лёд: светло-голубой с белыми трещинами-ломаными; треснутый — трещин больше и темнее
+  // ice: light blue with white zigzag cracks; cracked — more cracks and darker
   const icePaint = (cracks: number, col: string) => (g: Ctx, s: number, r: Rand) => {
     softFill(g, s, r, ICE, 2, [{ col: '#cfe8f4', n: 3, rad: [2, 4], k: 0.5 }, { col: '#a9cfe3', n: 2, rad: [2, 3], k: 0.5 }]);
     for (let i = 0; i < cracks; i++) {
@@ -774,7 +775,7 @@ export function makeTextures(): Textures {
   T.ice = canvasTex(16, icePaint(2, '#f4fbff'), 218);
   T.iceCracked = canvasTex(16, icePaint(5, '#8fb8cf'), 219);
   T.frozenWater = canvasTex(16, (g, s, r) => { icePaint(1, '#f4fbff')(g, s, r); for (let i = 0; i < 3; i++) { const x = (r() * s) | 0, y = (r() * s) | 0; px(g, x, y, '#6aa6c8'); px(g, (x + 1) & 15, y, '#7db3d2'); } }, 220);
-  // хвоя под снегом: тёмная вырезная листва, верхние ряды белые
+  // conifer needles under snow: dark cut-out foliage, the top rows white
   T.leavesSnowCut = canvasTex(16, (g, s, r) => {
     softLeaves(g, s, r, ['#2f4a2a', '#3d5c33', '#4a6b3c', '#587a46'], true);
     for (let y = 0; y < 5; y++) for (let x = 0; x < s; x++) if (r() < (y < 3 ? 0.9 : 0.4)) px(g, x, y, jitter(SNOW_BASE, r, 3));
@@ -783,7 +784,7 @@ export function makeTextures(): Textures {
     for (let i = 0; i < 5; i++) { let x = 3 + ((r() * 10) | 0); const h = 6 + ((r() * 8) | 0); for (let k = 0; k < h; k++) { px(g, x, s - 1 - k, jitter('#6a5440', r, 4)); if (r() < 0.3) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); if (k > h - 3 && r() < 0.7) px(g, x, s - 2 - k, SNOW_BASE); } }
   }, 222, { alpha: true });
   T.foam = canvasTex(16, (g, s, r) => softFill(g, s, r, '#e9edf0', 2, [{ col: '#cfd8df', n: 3, rad: [2, 4], k: 0.7 }, { col: '#ffffff', n: 2, rad: [2, 3], k: 0.6 }]), 173);
-  // настил моста: светлые доски по 4 px со щелями; столб — темнее, продольные волокна
+  // bridge deck: light 4 px planks with gaps; post — darker, lengthwise grain
   T.bridgePlank = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) {
       const tone = mix(BRIDGE_WOOD, ['#ffffff', '#000000'][(y >> 2) % 2], 0.04 + r() * 0.04);
@@ -794,24 +795,24 @@ export function makeTextures(): Textures {
   T.bridgePost = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(x % 5 === 2 ? mix(BRIDGE_POST, '#000000', 0.1) : BRIDGE_POST, r, 3));
   }, 175);
-  // вода реки: глубокая бирюза, светлые штрихи вдоль течения (их ещё гонит шейдер)
+  // river water: deep turquoise, light strokes along the current (the shader also moves them)
   T.river = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, RIVER, 2, [{ col: mix(RIVER, '#ffffff', 0.12), n: 3, rad: [2, 4], k: 0.6 }, { col: mix(RIVER, '#000000', 0.1), n: 2, rad: [2, 3], k: 0.5 }]);
   }, 176);
   T.river.wrapS = T.river.wrapT = THREE.RepeatWrapping;
-  // водопад: вертикальные струи разной яркости, белые разрывы; текстура бежит вниз (mesher.update)
+  // waterfall: vertical streams of varying brightness, white breaks; the texture flows down (mesher.update)
   T.waterfall = canvasTex(16, (g, s, r) => {
     for (let x = 0; x < s; x++) {
       const base = pick([FALLS, FALLS, FALLS, mix(FALLS, '#ffffff', 0.12), mix(FALLS, '#000000', 0.08)], r);
       for (let y = 0; y < s; y++) px(g, x, y, jitter(base, r, 2));
-      // редкие светлые струи — длинные, без пёстрых точек
+      // rare light streams — long, no speckled dots
       if (r() < 0.35) { const y0 = (r() * s) | 0, len = 5 + ((r() * 6) | 0); for (let y = y0; y < y0 + len; y++) px(g, x, y % s, jitter(mix(FALLS, '#ffffff', 0.45), r, 3)); }
     }
   }, 177);
   T.waterfall.wrapS = T.waterfall.wrapT = THREE.RepeatWrapping;
 
-  // ---------- мир: холмы (скриншоты 13, 15) ----------
-  /** Гроздь листьев: лопастный круг, светлый верх, тёмный низ-право — листва «кустится», а не рябит */
+  // ---------- world: hills (screenshots 13, 15) ----------
+  /** Leaf cluster: a lobed circle, light top, dark bottom-right — the foliage "bushes" rather than shimmers */
   const clump = (g: Ctx, r: Rand, cx: number, cy: number, rad: number, tones: readonly string[] = TREE) => {
     for (let y = Math.floor(cy - rad - 1); y <= cy + rad + 1; y++) for (let x = Math.floor(cx - rad - 1); x <= cx + rad + 1; x++) {
       const a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx), d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
@@ -831,25 +832,25 @@ export function makeTextures(): Textures {
     for (let i = 0; i < 3; i++) clump(g, r, 2 + r() * 12, 1 + r() * 6, 1.6, tones);
     for (let i = 0; i < 2; i++) { const x = 2 + ((r() * 12) | 0), y = 2 + ((r() * 12) | 0); px(g, x, y, tones[3]); }
   }, seed, { alpha: true });
-  // «шапки» над гранями: редкие грозди с пустотой по краю — силуэт кроны пушится за пределы куба
+  // "caps" above the faces: sparse clusters with emptiness along the edge — the canopy silhouette fluffs out beyond the cube
   const puffTex = (tones: readonly string[], seed: number) => canvasTex(16, (g, _s, r) => {
     for (let i = 0; i < 7; i++) { const a = r() * Math.PI * 2, d = 3.5 + r() * 3.5; clump(g, r, 8 + Math.cos(a) * d, 8 + Math.sin(a) * d, 1.6 + r() * 1.2, tones); }
   }, seed, { alpha: true });
   T.leavesClump = clumpTex(TREE, 180);
   T.leavesPuff = puffTex(TREE, 181);
-  // золотая осень: та же пышная крона в жёлтом и оранжевом — блок leaves_gold берёт тон по хэшу клетки
+  // golden autumn: the same lush canopy in yellow and orange — the leaves_gold block takes its tone from the cell hash
   T.leavesGold = clumpTex(GOLD, 184);
   T.leavesGoldPuff = puffTex(GOLD, 185);
   T.leavesOrange = clumpTex(ORANGE, 186);
   T.leavesOrangePuff = puffTex(ORANGE, 187);
-  // тростник у воды (референс 14): высокие стебли, у части — бурые початки
+  // reeds by the water (reference 14): tall stalks, some with brown cobs
   T.reeds = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 7; i++) {
       let x = 1 + ((r() * 14) | 0); const h = 10 + ((r() * 6) | 0), col = pick(['#7fa04a', '#9cb45c', '#6f9040'], r), cob = r() < 0.45;
       for (let k = 0; k < h; k++) { px(g, x, s - 1 - k, jitter(cob && k > h - 4 ? '#6b4a2a' : col, r, 3)); if (r() < 0.12) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); }
     }
   }, 188, { alpha: true });
-  // опавшие листья: пятно из листочков 2 × 2 золотых и бурых тонов, с пустотами
+  // fallen leaves: a patch of 2 × 2 leaflets in golden and brown tones, with gaps
   T.leafLitter = canvasTex(16, (g, s, r) => {
     for (let cy = 0; cy < s; cy += 2) for (let cx = 0; cx < s; cx += 2) {
       if (r() < 0.45) continue;
@@ -857,14 +858,14 @@ export function makeTextures(): Textures {
       for (let y = cy; y < cy + 2; y++) for (let x = cx; x < cx + 2; x++) if (r() < 0.85) px(g, x, y, jitter(col, r, 4));
     }
   }, 189, { alpha: true });
-  // глина горшков (руины, референсы 8, 10): тёплая терракота с мягкими пятнами
+  // pot clay (ruins, references 8, 10): warm terracotta with soft spots
   T.clay = canvasTex(16, (g, s, r) => softFill(g, s, r, '#b5744c', 3, [{ col: '#c4845a', n: 2, rad: [2, 4], k: 0.5 }, { col: '#a2653f', n: 2, rad: [2, 3], k: 0.5 }]), 191);
-  // плющ на стене: тонкие стебли и листочки 2 × 2, пустоты между ними
+  // ivy on a wall: thin stems and 2 × 2 leaflets, gaps between them
   T.ivy = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 3; i++) { let x = 2 + ((r() * 12) | 0); for (let y = 0; y < s; y++) { px(g, x, y, jitter('#4a6a2e', r, 3)); if (r() < 0.3) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); } }
     for (let i = 0; i < 14; i++) { const x = (r() * 15) | 0, y = (r() * 15) | 0, col = pick(['#5f8a3a', '#6f9c44', '#4f7a30'], r); for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) px(g, x + dx, y + dy, jitter(col, r, 4)); }
   }, 192, { alpha: true });
-  // поселение (партия 4): ростки на грядке в двух стадиях, солома крыш, тёмная черепица, бочка, мешковина, палаточная ткань
+  // settlement (batch 4): sprouts on a bed in two stages, roof thatch, dark roof tiles, barrel, burlap, tent cloth
   T.crops = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 6; i++) { const x = 1 + ((r() * 14) | 0), h = 4 + ((r() * 4) | 0); for (let k = 0; k < h; k++) px(g, x, s - 1 - k, jitter('#6fa23c', r, 5)); px(g, x - 1, s - h, '#86b84a'); px(g, x + 1, s - h + 1, '#86b84a'); }
   }, 193, { alpha: true });
@@ -901,26 +902,26 @@ export function makeTextures(): Textures {
   T.tentCloth = canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(Math.floor(y / 4) % 2 ? '#b89a6e' : '#8c3b2e', r, 5));
   }, 200);
-  // кол частокола: тёмная кора с затёсами у верха (лагерь, референс 1); верх — светлый срез
+  // palisade stake: dark bark with notches near the top (camp, reference 1); the top is a light cut
   T.stake = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, '#6b4e34', 3, [{ col: '#7a5a3c', n: 2, rad: [2, 4], k: 0.5 }]);
     for (let x = 0; x < s; x += 4) for (let y = 0; y < s; y++) if (r() < 0.7) px(g, x, y, jitter('#523a26', r, 3));
     for (let y = 0; y < 5; y++) for (let x = 0; x < s; x++) if (r() < 0.6) px(g, x, y, jitter('#c9a46a', r, 6));
   }, 201);
   T.stakeTop = canvasTex(16, (g, s, r) => softFill(g, s, r, '#d2b07a', 3, [{ col: '#bf9a62', n: 2, rad: [2, 3], k: 0.5 }]), 202);
-  // кора мёртвого дерева: серо-бурая, продольные тёмные борозды
+  // dead tree bark: grey-brown, lengthwise dark grooves
   T.barkDead = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, '#5e5046', 3, [{ col: '#6a5c50', n: 2, rad: [2, 4], k: 0.5 }]);
     for (let x = 0; x < s; x += 3 + ((r() * 2) | 0)) for (let y = 0; y < s; y++) if (r() < 0.8) px(g, x, y, jitter('#4a3e34', r, 3));
   }, 190);
-  // сухая трава: высокие светло-жёлтые стебли (поле на скриншоте 15)
+  // dry grass: tall light yellow stalks (the field on screenshot 15)
   T.dryGrass = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 10; i++) {
       let x = 1 + ((r() * 14) | 0); const h = 6 + ((r() * 9) | 0), col = pick(DRY, r);
       for (let k = 0; k < h; k++) { px(g, x, s - 1 - k, jitter(k > h - 3 ? mix(col, '#ffffff', 0.15) : col, r, 3)); if (r() < 0.2) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); }
     }
   }, 182, { alpha: true });
-  // ромашки: низкие стебельки и белые цветки с жёлтой серединкой
+  // daisies: low stems and white flowers with a yellow centre
   T.daisies = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 6; i++) {
       const x = 1 + ((r() * 13) | 0), h = 3 + ((r() * 5) | 0);
@@ -931,8 +932,8 @@ export function makeTextures(): Textures {
     }
   }, 183, { alpha: true });
 
-  // ---------- мир: портал (скриншот 14) ----------
-  // сияние: золото с мягкими вертикальными струями и светлыми пятнами (анимацию добавляет шейдер слоя portal)
+  // ---------- world: portal (screenshot 14) ----------
+  // radiance: gold with soft vertical streams and light spots (the portal layer shader adds the animation)
   T.portal = canvasTex(16, (g, s, r) => {
     for (let x = 0; x < s; x++) {
       const k = 0.5 + 0.5 * Math.sin(x * 0.9 + r() * 0.6);
@@ -940,8 +941,8 @@ export function makeTextures(): Textures {
     }
     overlayBlobs(g, s, r, PORTAL_LIGHT, 3, [2, 3.5], 0.6);
   }, 190);
-  // рама: тёмный камень, по краю фаска светлее, в середине — квадратный узор
-  // синий портал — логово на кристальной поляне: та же волна слоя portal, цвет холодный
+  // frame: dark stone, a lighter chamfer along the edge, a square pattern in the middle
+  // blue portal — the lair on the Crystal Glade: the same portal layer wave, a cold colour
   T.portalBlue = canvasTex(16, (g, s, r) => {
     for (let x = 0; x < s; x++) {
       const k = 0.5 + 0.5 * Math.sin(x * 0.9 + r() * 0.6);
@@ -954,14 +955,14 @@ export function makeTextures(): Textures {
     for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, mix(PORTAL_STONE, '#ffffff', 0.12)); px(g, k, i, mix(PORTAL_STONE, '#000000', 0.15)); }
     for (let i = 4; i < 12; i++) for (const k of [4, 11]) { px(g, i, k, mix(PORTAL_STONE, '#000000', 0.08)); px(g, k, i, mix(PORTAL_STONE, '#000000', 0.08)); }
   }, 191);
-  // перемычка: тот же камень с золотой инкрустацией-меандром
+  // lintel: the same stone with a gold meander inlay
   T.portalTrim = canvasTex(16, (g, s, r) => {
     softFill(g, s, r, PORTAL_STONE, 2, []);
     for (let x = 0; x < s; x++) { px(g, x, 2, PORTAL_INLAY); px(g, x, 13, PORTAL_INLAY); }
     for (let x = 0; x < s; x += 4) for (let y = 5; y <= 10; y++) px(g, x + (y < 8 ? 0 : 2), y, PORTAL_INLAY);
     for (let x = 0; x < s; x += 4) { px(g, x + 1, 5, PORTAL_INLAY); px(g, x + 3, 10, PORTAL_INLAY); }
   }, 192);
-  // пол у портала: светлые тёплые плиты, на него заходит трава (natural)
+  // floor by the portal: light warm slabs, grass spills onto it (natural)
   T.portalFloor = canvasTex(16, (g, _s, r) => {
     for (let ty = 0; ty < 2; ty++) for (let tx = 0; tx < 2; tx++) {
       const t = (r() - 0.5) * 2, col = t > 0 ? mix(PORTAL_FLOOR, '#ffffff', t * 0.06) : mix(PORTAL_FLOOR, '#000000', -t * 0.05);
@@ -972,10 +973,10 @@ export function makeTextures(): Textures {
     }
   }, 193);
 
-  // ---------- джунгли с кристаллами (биом «джунгли», референс 16 в wiki/sources/refs-settlements.md) ----------
-  // земля: тёмная влажная, мох пятнами и по кромке; храмовый камень — бирюзово-серый с мхом в швах; кристаллы — бирюза под bloom
-  // земля как на референсе — мозаика ровных блоков (раскладка пятнами по шуму — jungleGroundAt в kit.ts): оранжевая земля,
-  // тёмно-красная земля, бирюзовый мох; у каждого — ровная заливка с мягкими пятнами, без мелкого шума
+  // ---------- jungle with crystals (the "jungle" biome, reference 16 in wiki/sources/refs-settlements.md) ----------
+  // ground: dark and damp, moss in spots and along the rim; temple stone — turquoise grey with moss in the joints; crystals — turquoise under bloom
+  // ground as on the reference — a mosaic of flat blocks (laid out in patches by noise — jungleGroundAt in kit.ts): orange ground,
+  // dark red ground, turquoise moss; each a flat fill with soft spots, no fine noise
   const JUNGLE_BASE = '#b4663e', JUNGLE_DARK = '#9e5634', JUNGLE_LIGHT = '#c67c52', JUNGLE_RED = '#843e2c', MOSS_J = '#3e9a82', MOSS_LIGHT = '#56b498', TEMPLE = '#5c7a7a', CRYSTAL = '#2fb4ac', CRYSTAL_LIGHT = '#8cece4';
   const JUNGLE_LEAF = ['#1f6a4e', '#2f8e5c', '#49b070', '#7fd48a'];
   T.jungleTop = canvasTex(16, (g, s, r) => softFill(g, s, r, JUNGLE_BASE, 2, [{ col: JUNGLE_DARK, n: 2, rad: [2, 3.5], k: 0.5 }, { col: JUNGLE_LIGHT, n: 2, rad: [2.5, 4], k: 0.5 }]), 230);
@@ -995,14 +996,14 @@ export function makeTextures(): Textures {
   }, 233);
   const MOSS_G = '#5f9a44', MOSS_G_LIGHT = '#7fb858';
   T.mossBlock = canvasTex(16, (g, s, r) => softFill(g, s, r, MOSS_G, 3, [{ col: MOSS_G_LIGHT, n: 3, rad: [2, 4], k: 0.6 }, { col: '#4a7f36', n: 2, rad: [2, 3], k: 0.5 }]), 234);
-  // рваный край у каждого блока земли джунглей: заходит на любого природного соседа, полутон на кромке — смесь с общим средним тоном,
-  // оба соседа заходят друг на друга — стык мозаики мягкий (mesher.ts, bleed)
+  // ragged edge on every jungle ground block: spills onto any natural neighbour, the half-tone on the rim is a mix with the common average tone,
+  // both neighbours spill onto each other — the mosaic seam is soft (mesher.ts, bleed)
   const JUNGLE_MID = mix(JUNGLE_BASE, MOSS_J, 0.5);
   [T.jungleEdge0, T.jungleEdge1, T.jungleEdge2, T.jungleEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(JUNGLE_BASE, JUNGLE_MID, JUNGLE_LIGHT), 236 + i, { alpha: true }));
   [T.jungleRedEdge0, T.jungleRedEdge1, T.jungleRedEdge2, T.jungleRedEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(JUNGLE_RED, mix(JUNGLE_RED, JUNGLE_BASE, 0.5), mix(JUNGLE_RED, '#ffffff', 0.1)), 256 + i, { alpha: true }));
   [T.mossTealEdge0, T.mossTealEdge1, T.mossTealEdge2, T.mossTealEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(MOSS_J, JUNGLE_MID, MOSS_LIGHT), 260 + i, { alpha: true }));
   [T.mossEdge0, T.mossEdge1, T.mossEdge2, T.mossEdge3] = [0, 1, 2, 3].map((i) => canvasTex(16, edgeMask(MOSS_G, mix(MOSS_G, JUNGLE_BASE, 0.5), MOSS_G_LIGHT), 264 + i, { alpha: true }));
-  // крупная бирюзово-зелёная листва, в «шапках» — розовые цветы
+  // large turquoise-green foliage, pink flowers in the "caps"
   T.leavesJungle = clumpTex(JUNGLE_LEAF, 240);
   T.leavesJunglePuff = canvasTex(16, (g, _s, r) => {
     for (let i = 0; i < 7; i++) { const a = r() * Math.PI * 2, d = 3.5 + r() * 3.5; clump(g, r, 8 + Math.cos(a) * d, 8 + Math.sin(a) * d, 1.6 + r() * 1.2, JUNGLE_LEAF); }
@@ -1017,7 +1018,7 @@ export function makeTextures(): Textures {
     for (let i = 0; i < s; i++) for (const k of [0, s - 1]) { px(g, i, k, '#3e2c1e'); px(g, k, i, '#3e2c1e'); }
     for (let k = 2; k < 7; k += 2) for (let i = k; i < s - k; i++) { px(g, i, k, '#6e5234'); px(g, i, s - 1 - k, '#6e5234'); px(g, k, i, '#6e5234'); px(g, s - 1 - k, i, '#6e5234'); }
   }, 243);
-  // лиана: два стебля во всю высоту с листочками; большой папоротник — широкие перистые листья; розовый цветок; кувшинка
+  // vine: two full-height stems with leaflets; big fern — wide pinnate leaves; pink flower; water lily
   T.vine = canvasTex(16, (g, s, r) => {
     for (let i = 0; i < 2; i++) { let x = 3 + i * 8 + ((r() * 3) | 0); for (let y = 0; y < s; y++) { px(g, x, y, jitter('#3f6a2a', r, 3)); if (r() < 0.25) x = Math.max(0, Math.min(15, x + (r() < 0.5 ? -1 : 1))); if (r() < 0.35) { const d = r() < 0.5 ? -1 : 1; px(g, x + d, y, jitter('#5f9a44', r, 4)); px(g, x + 2 * d, y, jitter('#7fb858', r, 4)); } } }
   }, 244, { alpha: true });
@@ -1037,7 +1038,7 @@ export function makeTextures(): Textures {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 7 && !(x > 8 && y > 8 && Math.abs(x - y) < 2)) px(g, x, y, jitter(d > 5.5 ? '#3f8a44' : '#5fae52', r, 4)); }
     px(g, 6, 6, '#f06ab0'); px(g, 7, 5, '#ff9ed0'); px(g, 5, 7, '#ff9ed0');
   }, 247, { alpha: true });
-  // храмовый камень: кладка 8 × 4 бирюзово-серого камня, мох в швах; резной — меандр, как перемычка портала; мшистый — мох пятнами
+  // temple stone: 8 × 4 masonry of turquoise grey stone, moss in the joints; carved — a meander, like the portal lintel; mossy — moss in spots
   const templeSeams = (g: Ctx, s: number, r: Rand) => { for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) if ((y % 4 === 0 || (x + (y >= 4 && y < 8 || y >= 12 ? 4 : 0)) % 8 === 0) && r() < 0.35) px(g, x, y, jitter(MOSS_J, r, 4)); };
   T.templeStone = canvasTex(16, (g, s, r) => { softBricks(g, s, r, TEMPLE, 8, 4, 0.08, 0.16); templeSeams(g, s, r); }, 250);
   T.templeStoneTop = canvasTex(16, (g, s, r) => {
@@ -1054,7 +1055,7 @@ export function makeTextures(): Textures {
     templeSeams(g, s, r);
   }, 252);
   T.templeStoneMossy = canvasTex(16, (g, s, r) => { softBricks(g, s, r, TEMPLE, 8, 4, 0.08, 0.16); templeSeams(g, s, r); overlayBlobs(g, s, r, MOSS_J, 4, [2, 3.5], 0.8, 1); }, 253);
-  // кристалл: бирюза с вертикальными светлыми гранями-струями; слой glow не тонмапится — светится под bloom
+  // crystal: turquoise with vertical light stream-like facets; the glow layer is not tone-mapped — glows under bloom
   T.crystal = canvasTex(16, (g, s, r) => {
     for (let x = 0; x < s; x++) {
       const k = 0.5 + 0.5 * Math.sin(x * 1.3 + r() * 0.5);
@@ -1080,7 +1081,7 @@ export function makeTextures(): Textures {
   return T;
 }
 
-/** Пиксельная текстура 16 × 16 из одного цвета с шумом — для снаряжения героя */
+/** A 16 × 16 pixel texture of one colour with noise — for the hero's gear */
 export function pixelTex(base: string, amt = 8, seed = 1): THREE.CanvasTexture {
   return canvasTex(16, (g, s, r) => {
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, jitter(base, r, amt));
@@ -1088,8 +1089,8 @@ export function pixelTex(base: string, amt = 8, seed = 1): THREE.CanvasTexture {
 }
 
 /**
- * Шахматная клетка: cells × cells клеток по px пикселей, два тона.
- * line — цвет рамки по краю тайла (разметка каждые N метров), если задан.
+ * Checkerboard: cells × cells cells of px pixels each, two tones.
+ * line — the colour of the frame along the tile edge (marks every N metres), if set.
  */
 export function checkerTex(a: string, b: string, cells: number, px0 = 16, line?: string): THREE.CanvasTexture {
   const size = cells * px0;

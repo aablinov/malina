@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import type { Target } from '../target.ts';
 import { pixelTex } from '../textures.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Соломенные чучела плейграунда — цели для меча: неподвижные и на рельсе.
- * Каждое считает урон каждого удара и средний урон в секунду за последние 3 с.
+ * Straw training dummies of the playground — targets for the sword: static ones and one on a rail.
+ * Each counts the damage of every hit and the average damage per second over the last 3 s.
  */
 
 const DPS_WINDOW = 3;
@@ -46,7 +47,7 @@ export class Dummy implements Target {
   private readonly label: HTMLDivElement;
   private labelText = '';
 
-  // рельс
+  // rail
   railSpeed = 2;
   private railDir = 1;
   railA = 0;
@@ -63,7 +64,7 @@ export class Dummy implements Target {
     this.group.add(this.body);
     const straw = mats.straw.clone(), sack = mats.sack.clone();
     this.flashMats.push(straw, sack);
-    // кол, соломенное тело с перевязками, руки-палка, голова-мешок с вышитым лицом
+    // pole, straw body with rope bands, stick arms, sack head with an embroidered face
     box(this.body, 0.12, 0.9, 0.12, mats.pole, 0, 0.5, 0);
     box(this.body, 0.56, 0.66, 0.38, straw, 0, 1.12, 0);
     for (const y of [0.88, 1.36]) box(this.body, 0.6, 0.06, 0.42, mats.rope, 0, y, 0);
@@ -72,7 +73,7 @@ export class Dummy implements Target {
     box(this.body, 0.46, 0.44, 0.42, sack, 0, 1.68, 0);
     for (const x of [-0.1, 0.1]) box(this.body, 0.07, 0.07, 0.02, mats.stitch, x, 1.72, 0.215);
     box(this.body, 0.2, 0.04, 0.02, mats.stitch, 0, 1.58, 0.215);
-    // мишень на груди
+    // target on the chest
     box(this.body, 0.3, 0.3, 0.02, mats.white, 0, 1.12, 0.2);
     box(this.body, 0.2, 0.2, 0.025, mats.ring, 0, 1.12, 0.205);
     box(this.body, 0.08, 0.08, 0.03, mats.white, 0, 1.12, 0.21);
@@ -93,7 +94,7 @@ export class Dummy implements Target {
     this.wobbleV.y += dir.z * k;
   }
 
-  /** Время симуляции — DPS не зависит от замедления времени */
+  /** Simulation time — DPS does not depend on time slow-down */
   private simTime = 0;
   private readonly simLog: { t: number; d: number }[] = [];
 
@@ -116,7 +117,7 @@ export class Dummy implements Target {
       if (this.pos.x > this.railB) { this.pos.x = this.railB; this.railDir = -1; }
       if (this.pos.x < this.railA) { this.pos.x = this.railA; this.railDir = 1; }
     }
-    // качание от ударов: пружина
+    // wobble from hits: a spring
     this.wobbleV.addScaledVector(this.wobble, -60 * dt);
     this.wobbleV.multiplyScalar(Math.exp(-6 * dt));
     this.wobble.addScaledVector(this.wobbleV, dt);
@@ -126,7 +127,7 @@ export class Dummy implements Target {
     for (const m of this.flashMats) m.emissive.setScalar(this.flashT > 0 ? 0.7 : 0);
   }
 
-  /** Подпись над чучелом */
+  /** Label above the dummy */
   drawLabel(camera: THREE.Camera, w: number, h: number): void {
     const v = this.pos.clone().setY(2.25).project(camera);
     const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
@@ -135,10 +136,10 @@ export class Dummy implements Target {
     this.label.style.transform = `translate(${((v.x * 0.5 + 0.5) * w).toFixed(1)}px,${((-v.y * 0.5 + 0.5) * h).toFixed(1)}px) translate(-50%,-100%)`;
     const parts: string[] = [];
     if (this.name) parts.push(`<i>${this.name}</i>`);
-    if (this.kind === 'rail') parts.push(`<i>${this.railSpeed} м/с</i>`);
-    if (this.hits) parts.push(`<b>${fmt(this.lastHit)}</b> · Σ ${fmt(this.total)} · ${this.dps.toFixed(1)}/с`);
-    const t = parts.join('<br>');
-    if (t !== this.labelText) { this.labelText = t; this.label.innerHTML = t; }
+    if (this.kind === 'rail') parts.push(`<i>${t('{v} m/s', { v: this.railSpeed })}</i>`);
+    if (this.hits) parts.push(t('<b>{hit}</b> · Σ {total} · {dps}/s', { hit: fmt(this.lastHit), total: fmt(this.total), dps: this.dps.toFixed(1) }));
+    const text = parts.join('<br>');
+    if (text !== this.labelText) { this.labelText = text; this.label.innerHTML = text; }
   }
 }
 

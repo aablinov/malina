@@ -7,9 +7,9 @@ import { RoomError, type Conn, type RoomManager } from './rooms.ts';
 import { checkClientMsg } from './validate.ts';
 
 /**
- * WebSocket-соединения: первое сообщение — `hello` с токеном, дальше разбор `ClientMsg` и передача в менеджер комнат.
- * Лимиты: размер — `maxPayload` (ws закроет сам), частота — NET_LIMITS.perSecond, две секунды с превышением подряд —
- * закрыть с CLOSE.flood. Бой идёт по отдельному WebSocket `/game` (server/game/game-hub.ts)
+ * WebSocket connections: the first message is `hello` with a token, then `ClientMsg` parsing and hand-off to the room manager.
+ * Limits: size — `maxPayload` (ws closes on its own), rate — NET_LIMITS.perSecond, two consecutive seconds over the limit —
+ * close with CLOSE.flood. The battle runs over a separate WebSocket `/game` (server/game/game-hub.ts)
  */
 const HELLO_MS = 15_000;
 
@@ -17,11 +17,11 @@ class Client implements Conn {
   readonly playerId: string;
   readonly name: string;
   readonly ws: WebSocket;
-  /** Счётчики текущей секунды */
+  /** Counters of the current second */
   windowStart = 0;
   count = 0;
   strikes = 0;
-  /** Последнее сообщение чата — не чаще NET_LIMITS.chatMs */
+  /** Last chat message — no more often than NET_LIMITS.chatMs */
   chatAt = -Infinity;
 
   constructor(ws: WebSocket, playerId: string, name: string) { this.ws = ws; this.playerId = playerId; this.name = name; }
@@ -36,7 +36,7 @@ export class Hub {
   private readonly d: HubDeps;
   private readonly now: () => number;
   private readonly online = new Map<string, Client>();
-  /** Сервер останавливается: закрытия соединений уже не трогают комнаты (база закрывается следом) */
+  /** Server is shutting down: connection closes no longer touch rooms (the database closes right after) */
   private closing = false;
 
   constructor(deps: HubDeps) {
@@ -46,10 +46,10 @@ export class Hub {
     this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => this.greet(ws, req));
   }
 
-  /** Игрок на связи (для друзей) */
+  /** Player is online (for friends) */
   isOnline(playerId: string): boolean { return this.online.has(playerId); }
 
-  /** Сколько игроков на связи */
+  /** How many players are online */
   get size(): number { return this.online.size; }
 
   close(): void {
@@ -68,7 +68,7 @@ export class Hub {
       const p = this.d.auth.check(msg.token);
       if (!p) { ws.close(CLOSE.auth, 'token'); return; }
       this.d.players.touch(p.id, this.now());
-      // тот же игрок с другой вкладки — старое соединение закрыть
+      // same player from another tab — close the old connection
       const old = this.online.get(p.id);
       if (old) { this.d.rooms.detach(old); old.ws.close(CLOSE.replaced, 'replaced'); }
       const c = new Client(ws, p.id, p.name);
@@ -94,7 +94,7 @@ export class Hub {
       return;
     }
     const msg = parse(raw);
-    if (!msg) { c.send({ t: 'error', code: 'bad-message', text: 'Непонятное сообщение' }); return; }
+    if (!msg) { c.send({ t: 'error', code: 'bad-message', text: 'Unrecognised message' }); return; }
     try {
       this.dispatch(c, msg);
     } catch (e) {

@@ -5,20 +5,21 @@ import { C, rand, RASP } from '../bosses/kit.ts';
 import { decoyList, type Decoy } from '../decoys.ts';
 import { HpBar } from '../td/hpbar.ts';
 import { Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Мини-боссы обороны куста (wiki/design-tower-defence.md, раздел 11): каждую третью волну один идёт вместе со стаей.
- * Крупные, с полоской здоровья над головой, с большой наградой; у каждого своё умение на марше — раз в несколько секунд,
- * не сходя с дороги: великан топает по башням рядом, королева слизней роняет слизней, снежный шаман морозит башни вокруг.
+ * Bush Defence mini-bosses (wiki/design-tower-defence.md, section 11): every third wave one marches along with the pack.
+ * Large, with a health bar over the head, with a big reward; each has its own ability on the march — once every few seconds,
+ * without leaving the road: the giant stomps on nearby towers, the slime queen drops slimes, the snow shaman freezes towers around.
  */
 
 const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x += (x - o.rotation.x) * k; };
 const ICE = C(1.6, 3.0, 4);
 
-/** Общее мини-босса: полоска здоровья, умение на марше раз в every секунд */
+/** Shared by mini-bosses: health bar, ability on the march once every `every` seconds */
 abstract class TdChief extends Mob {
   readonly cost = 10;
-  /** Сколько раз применил умение (для тестов) */
+  /** How many times the ability was used (for tests) */
   casts = 0;
   protected abstract readonly every: number;
   private castCd = 3;
@@ -30,7 +31,7 @@ abstract class TdChief extends Mob {
     this.group.add(this.bar.group);
   }
 
-  /** Умение на марше; false — сейчас некуда (попробует чуть позже) */
+  /** Ability on the march; false — nothing to use it on now (will try a bit later) */
   protected abstract ability(): boolean;
 
   override update(dt: number): void {
@@ -43,19 +44,19 @@ abstract class TdChief extends Mob {
   }
 
   protected override die(): void { super.die(); this.bar.set(0, false); }
-  /** Мини-босса не оглушить (сердце зимы, грозовой шпиль бьют только уроном) */
-  override stun(): void { /* не оглушается */ }
+  /** A mini-boss cannot be stunned (heart of winter, storm spire hit with damage only) */
+  override stun(): void { /* not stunnable */ }
 
-  /** Целые башни в радиусе r */
+  /** Intact towers within radius r */
   protected towersNear(r: number): Decoy[] {
     return decoyList().filter((d) => d.siege && d.alive && Math.hypot(d.pos.x - this.pos.x, d.pos.z - this.pos.z) < r);
   }
 }
 
-/** Малиновый великан — танк: 600 здоровья, 1,3 м/с; раз в 6 с на марше топот — башням в 4 м по 40, герою 18 */
+/** Raspberry Giant — tank: 600 health, 1.3 m/s; every 6 s on the march a stomp — 40 to towers within 4 m, 18 to the hero */
 export class RaspberryBrute extends TdChief {
   readonly kind = 'chief_brute';
-  readonly title = 'Малиновый великан';
+  readonly title = t('Raspberry Giant');
   readonly radius = 0.95;
   override readonly topY = 3.1;
   protected readonly every = 6;
@@ -72,7 +73,7 @@ export class RaspberryBrute extends TdChief {
     this.loot = 25;
     const berry = this.lam('#c8245a', pixelTex('#c8245a', 12, 1101)), deep = this.lam('#8a1040'), leaf = this.lam('#5aa03a', pixelTex('#5aa03a', 10, 1102)), eye = this.shimmer(C(3.4, 2.6, 0.8), C(3.4, 1.6, 0.4), 0, 2);
     const B = this.box.bind(this);
-    // громадная ягода-туловище из долек, листья-наплечники, кулаки-ягоды
+    // a huge berry torso of drupelets, leaf pauldrons, berry fists
     B(this.body, berry, 1.6, 1.5, 1.3, 0, 1.75, 0);
     for (const [x, y, z] of [[0.7, 2.1, 0.5], [-0.7, 1.5, 0.5], [0.2, 2.4, -0.55], [-0.5, 2.2, 0.62], [0.6, 1.3, -0.6]] as const) B(this.body, deep, 0.36, 0.36, 0.36, x, y, z);
     B(this.body, leaf, 1.9, 0.18, 0.7, 0, 2.6, 0, 0, 0, 0.1);
@@ -96,7 +97,7 @@ export class RaspberryBrute extends TdChief {
     this.place();
   }
 
-  /** Топот: красный круг 4 м, через 0,8 с — удар по башням и герою */
+  /** Stomp: a red 4 m circle, after 0.8 s — a hit on towers and the hero */
   protected ability(): boolean {
     if (!this.towersNear(5).length) return false;
     this.slam(4, 0.8);
@@ -111,7 +112,7 @@ export class RaspberryBrute extends TdChief {
       this.h.fx.burst(at.clone().setY(0.3), ['#c8245a', '#8a5a34', RASP], 24, { speed: 5, up: 3, size: 0.12, life: 0.6, gravity: 8 });
       this.h.fx.shake = Math.max(this.h.fx.shake, 0.5);
       if (!this.quiet) boom(60, 30, 0.6, 0.5);
-      // кукла клиента (src/cgame/net-battle.ts) бьёт для вида: башни ломает сервер
+      // the client puppet (src/cgame/net-battle.ts) hits for show: the server breaks towers
       if (!this.puppet) for (const d of decoyList()) if (d.siege && d.alive && Math.hypot(d.pos.x - at.x, d.pos.z - at.z) < r + 0.75) d.hurt(40 * this.dmgMult, at);
       if (this.inCircle(at, r)) this.hurt(18, at, 6);
     });
@@ -135,10 +136,10 @@ export class RaspberryBrute extends TdChief {
   }
 }
 
-/** Королева слизней: 450 здоровья, 1,5 м/с прыжками; раз в 6 с роняет среднего слизня, он идёт той же дорогой; пала — три средних */
+/** Slime Queen: 450 health, 1.5 m/s in hops; every 6 s drops a medium slime that follows the same road; fell — three medium ones */
 export class SlimeQueen extends TdChief {
   readonly kind = 'chief_slime';
-  readonly title = 'Королева слизней';
+  readonly title = t('Slime Queen');
   readonly radius = 0.9;
   override readonly topY = 2.4;
   protected readonly every = 6;
@@ -159,7 +160,7 @@ export class SlimeQueen extends TdChief {
     B(this.jelly, jam, 2.0, 1.6, 2.0, 0, 0.8, 0);
     B(this.jelly, core, 0.7, 0.7, 0.7, 0, 0.75, 0);
     for (const x of [-0.4, 0.4]) B(this.jelly, eye, 0.24, 0.3, 0.04, x, 1.05, 1.0);
-    // корона: обод и четыре зубца с камнем
+    // crown: a rim and four prongs with a gem
     B(this.jelly, gold, 1.0, 0.18, 1.0, 0, 1.7, 0);
     for (const [x, z] of [[0.4, 0.4], [-0.4, 0.4], [0.4, -0.4], [-0.4, -0.4]]) B(this.jelly, gold, 0.16, 0.36, 0.16, x, 1.92, z);
     B(this.jelly, gem, 0.2, 0.2, 0.06, 0, 1.75, 0.52);
@@ -213,10 +214,10 @@ export class SlimeQueen extends TdChief {
   }
 }
 
-/** Снежный шаман: 380 здоровья, 1,7 м/с; раз в 10 с вьюга — все башни в 9 м замерзают на 4 с (шпиль — нет) */
+/** Snow Shaman: 380 health, 1.7 m/s; every 10 s a blizzard — all towers within 9 m freeze for 4 s (not the spire) */
 export class SnowShaman extends TdChief {
   readonly kind = 'chief_frost';
-  readonly title = 'Снежный шаман';
+  readonly title = t('Snow Shaman');
   readonly radius = 0.7;
   override readonly topY = 2.8;
   protected readonly every = 10;
@@ -234,7 +235,7 @@ export class SnowShaman extends TdChief {
     const robe = this.lam('#3a5a9a', pixelTex('#3a5a9a', 10, 1121)), fur = this.lam('#eef6ff', pixelTex('#eef6ff', 8, 1122)), face = this.lam('#a8d8f0'), wood = this.lam('#6a4a2a');
     const eye = this.shimmer(ICE, C(3.6, 3.8, 4), 0, 2.4), crystal = this.shimmer(ICE, C(3.4, 3.6, 4), 1, 1.6);
     const B = this.box.bind(this);
-    // шуба до пят с меховым воротом, борода-сосулька, рогатый капюшон
+    // a floor-length fur coat with a fur collar, an icicle beard, a horned hood
     B(this.body, robe, 1.2, 1.4, 1.0, 0, 1.2, 0);
     B(this.body, fur, 1.3, 0.2, 1.1, 0, 0.5, 0);
     B(this.body, fur, 1.3, 0.35, 1.1, 0, 1.95, 0);

@@ -5,11 +5,11 @@ import { additive, additiveSprite } from './loot-look.ts';
 import { markShared } from './fx.ts';
 
 /**
- * Круги каста (wiki/design-spells.md, раздел 5): у каждой школы свой узор из слоёв — кольцо с засечками, квадраты и ромбы,
- * гексаграмма, снежинка, языки пламени, цветок, кольцо символов. Слои вращаются в разные стороны с разной скоростью
- * и раскрываются ступенями по заряду (0, ¼, ½, ¾): новый слой «щёлкает» — выскакивает крупнее и садится на место.
- * С третьей ступени вокруг героя кружат светящиеся символы, с четвёртой — встаёт стена света.
- * Текстуры белые, рисуются кодом один раз; цвет — в материале.
+ * Cast circles (wiki/design-spells.md, section 5): each school has its own pattern of layers — a ring with ticks, squares and diamonds,
+ * a hexagram, a snowflake, tongues of flame, a flower, a ring of symbols. The layers rotate in different directions at different speeds
+ * and unfold in stages by charge (0, ¼, ½, ¾): a new layer "clicks" — pops out larger and settles into place.
+ * From the third stage glowing symbols circle the hero, from the fourth a wall of light rises.
+ * Textures are white, drawn by code once; the colour is in the material.
  */
 
 export type SigilSchool = 'spark' | 'fireball' | 'icerain' | 'heal' | 'star' | 'void' | 'earth' | 'arcane' | 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns'
@@ -24,7 +24,7 @@ const poly = (g: CanvasRenderingContext2D, c: number, r: number, n: number, rot 
   for (let i = 0; i <= n; i++) { const a = rot + (i / n) * TAU; g[i ? 'lineTo' : 'moveTo'](c + Math.cos(a) * r, c + Math.sin(a) * r); }
   g.stroke();
 };
-/** Знак-руна из 2–4 отрезков, детерминированно от seed, в квадрате ±h */
+/** A rune sign of 2–4 segments, deterministic from seed, within a ±h square */
 const glyph = (g: CanvasRenderingContext2D, x: number, y: number, h: number, seed: number): void => {
   let s = seed * 9301 + 49297;
   const r = (): number => { s = (s * 16807) % 2147483647; return s / 2147483647; };
@@ -35,7 +35,7 @@ const glyph = (g: CanvasRenderingContext2D, x: number, y: number, h: number, see
   if (r() < 0.5) { g.beginPath(); g.arc(x + snap() * 0.6, y + snap() * 0.6, h * 0.18, 0, TAU); g.fill(); }
 };
 
-/** Узоры слоёв: c — центр холста, r — радиус узора, w — базовая толщина линии */
+/** Layer patterns: c — canvas centre, r — pattern radius, w — base line width */
 const DRAW: Record<string, Draw> = {
   ticks(g, c, r, w) {
     g.lineWidth = w * 2.2; circle(g, c, c, r);
@@ -59,7 +59,7 @@ const DRAW: Record<string, Draw> = {
   square(g, c, r, w) {
     g.lineWidth = w * 1.6; poly(g, c, r, 4, Math.PI / 4);
     g.lineWidth = w * 0.8; poly(g, c, r * 0.86, 4, Math.PI / 4);
-    // перекрестье из углов и кружки на углах
+    // a cross from the corners and circles at the corners
     for (let i = 0; i < 4; i++) { const a = Math.PI / 4 + (i / 4) * TAU; g.lineWidth = w * 1.2; circle(g, c + Math.cos(a) * r, c + Math.sin(a) * r, r * 0.08); }
     g.lineWidth = w * 0.6; poly(g, c, r * 0.6, 4, 0);
   },
@@ -141,7 +141,7 @@ const DRAW: Record<string, Draw> = {
     for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i / 5) * TAU; circle(g, c + Math.cos(a) * r, c + Math.sin(a) * r, r * 0.07); }
   },
   rays(g, c, r, w) {
-    // солнце: 16 лучей-клиньев, длинные и короткие через один
+    // sun: 16 wedge rays, long and short alternating
     g.lineWidth = w; circle(g, c, c, r * 0.55);
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * TAU, l = i % 2 ? 0.8 : 1, b = 0.06;
@@ -151,7 +151,7 @@ const DRAW: Record<string, Draw> = {
     }
   },
   spiral(g, c, r, w) {
-    // три рукава спирали — воронка душ
+    // three spiral arms — a funnel of souls
     g.lineWidth = w * 1.4;
     for (let k = 0; k < 3; k++) {
       g.beginPath();
@@ -168,7 +168,7 @@ const DRAW: Record<string, Draw> = {
     for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; g.beginPath(); g.moveTo(c + Math.cos(a) * r * 0.42, c + Math.sin(a) * r * 0.42); g.lineTo(c + Math.cos(a) * r * 0.55, c + Math.sin(a) * r * 0.55); g.stroke(); }
   },
   stones(g, c, r, w) {
-    // кольцо из угловатых камней-блоков
+    // a ring of angular stone blocks
     g.lineWidth = w * 0.8; circle(g, c, c, r * 0.86);
     for (let i = 0; i < 14; i++) {
       const a = (i / 14) * TAU, x = c + Math.cos(a) * r * 0.86, y = c + Math.sin(a) * r * 0.86, h = r * (i % 2 ? 0.06 : 0.09);
@@ -179,7 +179,7 @@ const DRAW: Record<string, Draw> = {
     }
   },
   cracks(g, c, r, w) {
-    // трещины от центра с изломами
+    // cracks from the centre with kinks
     g.lineCap = 'round';
     let seed = 11;
     const rr = (): number => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
@@ -192,7 +192,7 @@ const DRAW: Record<string, Draw> = {
     g.lineWidth = w; circle(g, c, c, r * 0.2);
   },
   blades(g, c, r, w) {
-    // венец из мечей остриём наружу
+    // a crown of swords pointing outward
     g.lineWidth = w * 0.8; circle(g, c, c, r * 0.6);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU;
@@ -204,7 +204,7 @@ const DRAW: Record<string, Draw> = {
     }
   },
   portal(g, c, r, w) {
-    // портал призыва: вложенные овалы-витки, будто воронка вглубь земли
+    // summoning portal: nested oval coils, like a funnel into the earth
     for (let i = 0; i < 4; i++) {
       const k = 1 - i * 0.2;
       g.lineWidth = w * (1.8 - i * 0.3);
@@ -218,7 +218,7 @@ const DRAW: Record<string, Draw> = {
     }
   },
   paws(g, c, r, w) {
-    // венок из отпечатков лап — стая
+    // a wreath of paw prints — the pack
     g.lineWidth = w * 0.8; circle(g, c, c, r * 0.86);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU, x = c + Math.cos(a) * r * 0.86, y = c + Math.sin(a) * r * 0.86, h = r * 0.05;
@@ -229,7 +229,7 @@ const DRAW: Record<string, Draw> = {
     }
   },
   drops(g, c, r, w) {
-    // кольцо капель малинового сока остриём к центру
+    // a ring of raspberry juice drops pointing to the centre
     g.lineWidth = w * 0.8; circle(g, c, c, r * 0.9);
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * TAU, x = c + Math.cos(a) * r * 0.9, y = c + Math.sin(a) * r * 0.9, h = r * 0.09;
@@ -241,7 +241,7 @@ const DRAW: Record<string, Draw> = {
     }
   },
   fangs(g, c, r, w) {
-    // клыки-когти внутрь: кровавая пасть
+    // fang-claws inward: a bloody maw
     g.lineWidth = w; circle(g, c, c, r);
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * TAU, l = i % 2 ? 0.22 : 0.34, b = 0.09;
@@ -251,7 +251,7 @@ const DRAW: Record<string, Draw> = {
     }
   },
   thorns(g, c, r, w) {
-    // лоза волной по кругу и шипы наружу и внутрь
+    // a vine waving around the circle with thorns outward and inward
     g.lineWidth = w * 1.6; g.beginPath();
     for (let i = 0; i <= 120; i++) { const a = (i / 120) * TAU, rr = r * (0.9 + Math.sin(a * 10) * 0.035); g[i ? 'lineTo' : 'moveTo'](c + Math.cos(a) * rr, c + Math.sin(a) * rr); }
     g.stroke();
@@ -289,7 +289,7 @@ const layerTex = (key: string): THREE.Texture => {
   texCache.set(key, t);
   return t;
 };
-/** Прогрев: нарисовать и отдать все текстуры кругов заранее (src/fx-zoo.ts), чтобы первый каст не рисовал 512² на лету */
+/** Warm-up: draw and return all circle textures in advance (src/fx-zoo.ts), so the first cast does not draw 512² on the fly */
 export function sigilTextures(): THREE.Texture[] {
   const out = Object.keys(DRAW).map(layerTex);
   out.push(wallTex());
@@ -297,7 +297,7 @@ export function sigilTextures(): THREE.Texture[] {
   return out;
 }
 let wallT: THREE.Texture | null = null;
-/** Стена света: вертикальные лучи разной яркости, к верху тают (повторяется по кругу) */
+/** Wall of light: vertical rays of varying brightness fading towards the top (repeats around the circle) */
 const wallTex = (): THREE.Texture => {
   if (wallT) return wallT;
   const cv = makeCanvas(128, 64);
@@ -328,7 +328,7 @@ const glyphSprite = (i: number): THREE.Texture => {
   return glyphTex[i];
 };
 
-/** Слой: узор, доля радиуса, скорость вращения (рад/с, знак — направление), ступень появления, поворот, второй цвет */
+/** Layer: pattern, radius fraction, rotation speed (rad/s, sign — direction), appearance stage, rotation, second colour */
 interface Layer { key: string; r: number; speed: number; at: number; rot?: number; alt?: boolean }
 
 const STYLE: Record<SigilSchool, Layer[]> = {
@@ -356,7 +356,7 @@ const STYLE: Record<SigilSchool, Layer[]> = {
     { key: 'diamonds', r: 1.16, speed: 0.3, at: 0.5, alt: true },
     { key: 'runes', r: 0.42, speed: 1, at: 0.75 },
   ],
-  // школы заклинаний с боссов (src/magic/)
+  // schools of the boss spells (src/magic/)
   star: [
     { key: 'ticks', r: 1, speed: 0.25, at: 0 },
     { key: 'rays', r: 0.8, speed: -0.35, at: 0.25, alt: true },
@@ -397,7 +397,7 @@ const STYLE: Record<SigilSchool, Layer[]> = {
     { key: 'square', r: 0.45, speed: -1, at: 0.5, rot: Math.PI / 4, alt: true },
     { key: 'runes', r: 0.86, speed: 0.5, at: 0.75 },
   ],
-  // ауры (src/auras.ts): тусклый круг под героем — слои ступеней 0–1, вспышка раскрывает все
+  // auras (src/auras.ts): a dim circle under the hero — layers of stages 0–1, the flare unfolds all
   pact: [
     { key: 'ticks', r: 1, speed: 0.2, at: 0 },
     { key: 'hexagram', r: 0.7, speed: -0.3, at: 0.25, alt: true },
@@ -429,7 +429,7 @@ const STYLE: Record<SigilSchool, Layer[]> = {
     { key: 'square', r: 0.55, speed: 0.4, at: 0.5, rot: Math.PI / 4 },
     { key: 'diamonds', r: 1.16, speed: -0.2, at: 0.75, alt: true },
   ],
-  // наступательные ауры (src/aura-offense.ts)
+  // offensive auras (src/aura-offense.ts)
   inferno: [
     { key: 'ticks', r: 1, speed: -0.5, at: 0 },
     { key: 'flames', r: 1.16, speed: 0.6, at: 0.25, alt: true },
@@ -485,7 +485,7 @@ const STYLE: Record<SigilSchool, Layer[]> = {
 
 interface Item { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; layer: Layer; t: number }
 
-/** Геометрии общие на все круги: единичная плоскость (размер — scale) и стена света */
+/** Geometries shared by all circles: a unit plane (size — scale) and the wall of light */
 let layerG: THREE.PlaneGeometry | null = null, wallG: THREE.CylinderGeometry | null = null;
 const LAYER_GEO = (): THREE.PlaneGeometry => layerG ??= markShared(new THREE.PlaneGeometry(1, 1));
 const WALL_GEO = (): THREE.CylinderGeometry => wallG ??= markShared(new THREE.CylinderGeometry(0.98, 1, 1.5, 48, 1, true));
@@ -500,7 +500,7 @@ export class Sigil {
   private time = 0;
   private fade = 1;
 
-  /** R — радиус круга, м; a, b — два цвета слоёв (ярче единицы — светятся) */
+  /** R — circle radius, m; a, b — the two layer colours (brighter than one — they glow) */
   private readonly R: number;
   constructor(school: SigilSchool, R: number, a: THREE.Color, b: THREE.Color, glow = 0.4) { this.R = R;
     STYLE[school].forEach((layer, i) => {
@@ -515,7 +515,7 @@ export class Sigil {
       this.group.add(mesh);
       this.items.push({ mesh, mat, layer, t: -1 });
     });
-    // символы по кругу на высоте — с третьей ступени
+    // symbols around the circle at height — from the third stage
     for (let i = 0; i < 8; i++) {
       const s = new THREE.Sprite(additiveSprite(glyphSprite(i % 6), (i % 2 ? a : b).clone().multiplyScalar(glow * 1.4), 0));
       s.scale.setScalar(0.32);
@@ -523,7 +523,7 @@ export class Sigil {
       this.group.add(s);
       this.glyphs.push(s);
     }
-    // стена света по краю — с четвёртой
+    // a wall of light at the edge — from the fourth
     this.wallMat = additive(wallTex(), a.clone().multiplyScalar(glow * 0.5), 0);
     this.wall = new THREE.Mesh(WALL_GEO(), this.wallMat);
     this.wall.position.y = 0.75;
@@ -532,11 +532,11 @@ export class Sigil {
     this.group.scale.setScalar(R);
   }
 
-  /** Ступень, до которой раскрылся круг (−1 — ещё ничего) */
+  /** Stage the circle has unfolded to (−1 — nothing yet) */
   get stage(): number { return this.stageN; }
 
   /**
-   * k — заряд 0..1. Возвращает номер новой ступени, если она только что раскрылась, иначе −1
+   * k — charge 0..1. Returns the number of the new stage if it has just unfolded, otherwise −1
    */
   update(dt: number, k: number, full = false): number {
     this.time += dt;
@@ -549,7 +549,7 @@ export class Sigil {
       if (it.t < 0 && L.at * 4 <= this.stageN) { it.t = 0; it.mesh.visible = true; }
       if (it.t < 0) continue;
       it.t += dt;
-      // «щелчок»: выскочил крупнее и ярче, сел на место
+      // "click": popped out larger and brighter, settled into place
       const e = Math.min(1, it.t / 0.28), pop = 1 + 0.45 * (1 - e) * (1 - e);
       it.mesh.scale.setScalar(pop * (1 + k * 0.08));
       it.mesh.rotation.z += dt * L.speed * (1 + k * 1.5);
@@ -575,7 +575,7 @@ export class Sigil {
     return opened;
   }
 
-  /** Каст: круг вспыхивает, расходится и тает; уходит под управление FX */
+  /** Cast: the circle flashes, spreads and fades; goes under FX control */
   burst(fx: FX, dur = 0.45): void {
     const g = this.group, s0 = g.scale.x;
     const mats = [...this.items.map((i) => i.mat), ...this.glyphs.map((s) => s.material), this.wallMat];
@@ -586,7 +586,7 @@ export class Sigil {
     }, () => this.dispose());
   }
 
-  /** Плавно погасить на месте (за fadeOut секунд через update) */
+  /** Fade out smoothly in place (over fadeOut seconds via update) */
   setFade(v: number): void { this.fade = v; }
 
   dispose(): void {

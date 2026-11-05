@@ -15,11 +15,12 @@ import { temperOf, type TemperSlot } from './temper.ts';
 import { WeaponArts } from './weapon-arts.ts';
 import type { HudBuff, HudState } from './hud/hud.ts';
 import type { GearAction } from './net/protocol.ts';
+import { t } from './i18n/i18n.ts';
 
 /**
- * Снаряжение в бою (wiki/design-inventory.md): надетое из профиля (src/items.ts) превращается в числа и действия —
- * оружие героя и множители удара, здоровье брони, стрелы на ПКМ, артефакты на 1/2/3, зелье на E, души, опыт и уровни,
- * жизни, закалка и спец-удар (Q) — src/weapon-arts.ts. Сцена сообщает о попаданиях и вызывает действия; что задело — решают цели (Target).
+ * Gear in battle (wiki/design-inventory.md): what is equipped in the profile (src/items.ts) turns into numbers and actions —
+ * the hero's weapon and strike multipliers, armour health, arrows on RMB, artifacts on 1/2/3, potion on E, souls, XP and levels,
+ * lives, temper and the weapon art (Q) — src/weapon-arts.ts. The scene reports hits and calls actions; what was hit is decided by the targets (Target).
  */
 
 export interface GearHooks {
@@ -28,12 +29,12 @@ export interface GearHooks {
   hero: Knight;
   terrain: Terrain;
   targets(): Target[];
-  /** Взрыв артефакта поджигает бочки и бьёт ящики */
+  /** An artifact explosion ignites barrels and hits crates */
   blast?(at: THREE.Vector3, r: number, dmg: number): void;
   sound(k: 'shoot' | 'potion' | 'level' | 'boom' | 'horn' | 'zap' | 'totem' | 'dash' | 'souls' | 'empty' | 'hit'): void;
   toast(s: string): void;
   banner(html: string): void;
-  /** Без звука (сцену ведёт тест) */
+  /** No sound (a test drives the scene) */
   quiet?(): boolean;
 }
 
@@ -54,7 +55,7 @@ export class Gear {
   stats!: GearStats;
   lives = LIVES;
   potionT = 0;
-  /** Перезарядка артефактов: осталось и полная */
+  /** Artifact cooldowns: remaining and full */
   readonly artT: [number, number][] = [[0, 1], [0, 1], [0, 1]];
   private shotT = 0;
   private speedT = 0;
@@ -62,26 +63,26 @@ export class Gear {
   private soulAcc = 0;
   private readonly arrows: Arrow[] = [];
   private readonly totems: Totem[] = [];
-  /** Заклинания: заряд и каст (src/spells.ts) */
+  /** Spells: charge and cast (src/spells.ts) */
   readonly spells: Spells;
-  /** Закалка оружия и спец-удар (src/weapon-arts.ts) */
+  /** Weapon temper and the weapon art (src/weapon-arts.ts) */
   readonly arts: WeaponArts;
-  /** Закалка для отладки (панель F1) поверх зачарований надетого: только вид, синергии и спец-удар */
+  /** Debug temper (F1 panel) on top of the equipped item's enchantments: look, synergies and weapon art only */
   temperOverride: TemperSlot[] | null = null;
-  /** Аура в четвёртом гнезде (src/auras.ts) */
+  /** Aura in the fourth slot (src/auras.ts) */
   readonly auras: Auras;
-  /** Здоровье на прошлом кадре: упало — героя ударили (для «Бастиона» и шипов) */
+  /** Health on the previous frame: dropped — the hero was hit (for "Bastion" and thorns) */
   private lastHp = 0;
   private buffSpeed = 1;
   private weaponId = '';
   private armorId = '-';
   private bowId = '-';
-  /** ?weapon=… из адреса — оружие для отладки поверх надетого */
+  /** ?weapon=… from the URL — a debug weapon on top of the equipped one */
   weaponOverride: WeaponDef | null = null;
-  /** Попадания стрел (для тестов) */
+  /** Arrow hits (for tests) */
   arrowHits = 0;
   arrowsShot = 0;
-  /** Сетевой бой (src/cgame/net-battle.ts): действие сработало — уходит серверу, тот повторит его снаряжением героя и перешлёт остальным */
+  /** Network battle (src/cgame/net-battle.ts): an action fired — it goes to the server, which repeats it with the hero's gear and relays it to the others */
   onAction?: (a: GearAction) => void;
 
   private readonly h: GearHooks;
@@ -118,11 +119,11 @@ export class Gear {
     h.hero.hp = h.hero.maxHp;
   }
 
-  /** Надетое → герой: оружие, здоровье, скорость, перекат */
+  /** Equipped → hero: weapon, health, speed, dodge roll */
   apply(): void {
     const hero = this.h.hero;
     this.stats = this.profile.stats();
-    // аура: множители урона, крита, перезарядки и душ; «Бастион» — меньше получаемого урона
+    // aura: multipliers of damage, crit, cooldown and souls; "Bastion" — less damage taken
     const au = this.auras;
     au.set(this.profile.aura());
     this.stats.meleeMult *= au.dmgMult; this.stats.rangedMult *= au.dmgMult; this.stats.artifactMult *= au.dmgMult;
@@ -130,7 +131,7 @@ export class Gear {
     this.stats.artifactCdMult *= au.cdMult;
     this.stats.soulsMult *= au.soulsMult;
     hero.dmgTakenMul = au.damageTaken;
-    // усиления от заклинаний (облик титана): урон, получаемый урон, скорость, размер героя
+    // buffs from spells (titan form): damage, damage taken, speed, hero size
     let bm = 1, bt = 1, bs = 1, sc = 1;
     for (const b of this.spells.buffs) { bm *= b.melee ?? 1; bt *= b.taken ?? 1; bs *= b.speed ?? 1; sc = Math.max(sc, b.scale ?? 1); }
     this.stats.meleeMult *= bm; hero.dmgTakenMul *= bt; this.buffSpeed = bs;
@@ -145,25 +146,25 @@ export class Gear {
       hero.maxHp = max;
       hero.hp = Math.min(max, Math.max(1, Math.round(max * k)));
     }
-    // вид: броня на теле и лук в левой руке
+    // look: armour on the body and the bow in the left hand
     const a = this.profile.equipped('armor'), r = this.profile.equipped('ranged');
     const ak = a?.def ?? '', rk = r?.def ?? '';
     if (ak !== this.armorId) { this.armorId = ak; hero.setArmor(a ? itemDef(a.def).armor?.look ?? null : null); }
     if (rk !== this.bowId) { this.bowId = rk; hero.setBow(r ? itemDef(r.def).ranged?.look ?? null : null); }
-    // пока заряжаешь заклинание — идёшь вдвое медленнее
+    // while charging a spell you walk at half speed
     hero.speedMul = this.stats.speedMult * this.buffSpeed * (this.speedT > 0 ? this.speedK : 1) * (this.spells?.charging ? 0.5 : 1);
     hero.rollCdMul = this.stats.rollCdMult;
   }
 
-  /** Оружие поправили в редакторе: заново применить, если оно надето */
+  /** The weapon was edited in the editor: re-apply if it is equipped */
   refreshWeapon(w: WeaponDef): void { if (w.id === this.weaponId) { applyWeapon(w); this.h.hero.setWeapon(w); this.arts.set(w, []); this.apply(); } }
 
-  // ---------- ближний бой ----------
+  // ---------- melee ----------
 
-  /** Урон удара по цели: сила оружия, острота, крит, огонь */
+  /** Strike damage on a target: weapon power, sharpness, crit, fire */
   meleeDamage(base: number): { dmg: number; crit: boolean; fire: number } {
     const s = this.stats;
-    // «Сердце звезды» (синергия крита и вампиризма): следующие удары — гарантированный крит
+    // "Heart of the Star" (crit + leeching synergy): the next strikes are guaranteed crits
     const forced = this.arts.forcedCrits > 0;
     if (forced) this.arts.forcedCrits--;
     const crit = forced || (s.critChance > 0 && rnd() < s.critChance);
@@ -171,14 +172,14 @@ export class Gear {
     return { dmg: Math.round(base * s.meleeMult * (crit ? 3 : 1)) + fire, crit, fire };
   }
 
-  /** Q: спец-удар оружия, если шкала полна */
+  /** Q: the weapon art, if the meter is full */
   special(aim: THREE.Vector3): boolean {
     if (this.arts.special(aim)) { this.onAction?.({ k: 'special', at: [aim.x, aim.z] }); return true; }
-    if (!this.arts.ready && !this.h.hero.down) { this.h.toast(`${this.arts.specialTitle}: шкала ${Math.floor(this.arts.meter * 100)} % — бей врагов`); this.h.sound('empty'); }
+    if (!this.arts.ready && !this.h.hero.down) { this.h.toast(t('{title}: meter {pct} % — hit enemies', { title: this.arts.specialTitle, pct: Math.floor(this.arts.meter * 100) })); this.h.sound('empty'); }
     return false;
   }
 
-  /** Попали по цели (мечом, стрелой, артефактом): души, опыт, вампиризм, шкала ауры; at — где цель */
+  /** Hit a target (sword, arrow, artifact): souls, XP, leeching, aura meter; at — where the target is */
   onHit(dmg: number, melee: boolean, at?: THREE.Vector3, target?: Target): void {
     const s = this.stats, hero = this.h.hero;
     if (melee && target) for (const b of this.spells.buffs) b.onMelee?.(target, dmg);
@@ -194,17 +195,17 @@ export class Gear {
     const ups = this.profile.addXp(n);
     if (ups > 0) {
       const lv = this.profile.data.level;
-      this.h.banner(`Уровень ${lv}<small>+${ups} ${ups === 1 ? 'очко' : 'очка'} зачарования — открой инвентарь (I)</small>`);
+      this.h.banner(ups === 1 ? t('Level {lv}<small>+1 enchantment point — open the inventory (I)</small>', { lv }) : t('Level {lv}<small>+{ups} enchantment points — open the inventory (I)</small>', { lv, ups }));
       this.h.sound('level');
       this.h.fx.burst(this.h.hero.pos.clone().setY(this.h.hero.pos.y + 1), [new THREE.Color(2.4, 1.2, 3.4), new THREE.Color(3.2, 2.6, 1)], 26, { speed: 3, up: 4, size: 0.08, life: 0.9, glow: true, gravity: 2 });
     }
   }
 
-  // ---------- зелье ----------
+  // ---------- potion ----------
 
   potion(): boolean {
     const hero = this.h.hero;
-    if (this.potionT > 0 || hero.down) { if (this.potionT > 0) this.h.toast(`Зелье будет готово через ${Math.ceil(this.potionT)} с`); return false; }
+    if (this.potionT > 0 || hero.down) { if (this.potionT > 0) this.h.toast(t('The potion will be ready in {n} s', { n: Math.ceil(this.potionT) })); return false; }
     const heal = Math.round(hero.maxHp * 0.6 * this.stats.potionMult);
     const before = hero.hp;
     hero.hp = Math.min(hero.maxHp, hero.hp + heal);
@@ -216,16 +217,16 @@ export class Gear {
     return true;
   }
 
-  // ---------- стрелы ----------
+  // ---------- arrows ----------
 
-  /** Выстрел к точке; держишь ПКМ — стреляет с паузой лука */
+  /** A shot at a point; holding RMB shoots at the bow's pace */
   shoot(at: THREE.Vector3): boolean {
     const r = this.profile.equipped('ranged');
     if (!r || this.shotT > 0 || this.h.hero.down) return false;
     const def = itemDef(r.def).ranged;
     if (!def) return false;
     const P = this.profile.data, s = this.stats, hero = this.h.hero;
-    if (P.arrows <= 0) { this.h.toast('Стрелы кончились — ищи связки в сундуках'); this.h.sound('empty'); this.shotT = 0.5; return false; }
+    if (P.arrows <= 0) { this.h.toast(t('Out of arrows — look for bundles in chests')); this.h.sound('empty'); this.shotT = 0.5; return false; }
     this.shotT = def.cd * s.rangedCdMult;
     const from = hero.pos.clone().setY(hero.pos.y + 1.1);
     const yaw = Math.atan2(at.x - from.x, at.z - from.z);
@@ -264,7 +265,7 @@ export class Gear {
       let dead = (a.left -= step) <= 0;
       const wall = terrain.wallHit(a.pos.x, a.pos.z, to.x, to.z, a.pos.y);
       if (wall) { to.set(wall.x, a.pos.y, wall.z); dead = true; fx.burst(to, ['#c8b890', '#8a7a5a'], 5, { speed: 1.5, up: 1.5, size: 0.06, life: 0.3 }); }
-      // попадание: цель ближе радиуса к отрезку пути на этом шаге
+      // hit: the target is within its radius of the path segment on this step
       for (const t of this.h.targets()) {
         if (!t.alive || a.hit.has(t)) continue;
         if (a.pos.y < t.pos.y - 0.2 || a.pos.y > t.pos.y + (t.topY ?? 1.9)) continue;
@@ -287,10 +288,10 @@ export class Gear {
     }
   }
 
-  // ---------- артефакты: гнёзда 1/2/3, заклинания (src/spells.ts, реестр src/magic/registry.ts) и обычные ----------
+  // ---------- artifacts: slots 1/2/3, spells (src/spells.ts, registry src/magic/registry.ts) and plain ones ----------
 
   /**
-   * Клавиша 1/2/3 нажата: заклинание с зарядом начинает заряжаться (каст — когда отпустят), остальное срабатывает сразу
+   * Key 1/2/3 pressed: a chargeable spell starts charging (cast on release), everything else fires at once
    */
   pressArtifact(i: number, at: THREE.Vector3): boolean {
     const a = this.artifactAt(i)?.a;
@@ -303,7 +304,7 @@ export class Gear {
     return true;
   }
 
-  /** Клавиша отпущена: сотворить заряжаемое заклинание с набранным зарядом */
+  /** Key released: cast the charged spell with the charge gathered */
   releaseArtifact(i: number, at: THREE.Vector3): boolean {
     const c = this.spells.charging;
     if (!c || c.slot !== i) return false;
@@ -312,21 +313,21 @@ export class Gear {
     return this.useArtifact(i, at, c.k);
   }
 
-  /** R: вспышка ауры (шкала полна) */
+  /** R: aura flare (meter full) */
   flareAura(): boolean {
     const au = this.auras;
-    if (!au.kind) { this.h.toast('Гнездо ауры пустое — надень ауру в инвентаре (I)'); return false; }
+    if (!au.kind) { this.h.toast(t('The aura slot is empty — equip an aura in the inventory (I)')); return false; }
     if (au.flareT > 0) return false;
-    if (!au.ready) { this.h.toast(`Шкала ауры: ${Math.floor((au.meter / AURA_METER) * 100)} % — бей врагов, чтобы заполнить`); this.h.sound('empty'); return false; }
+    if (!au.ready) { this.h.toast(t('Aura meter: {pct} % — hit enemies to fill it', { pct: Math.floor((au.meter / AURA_METER) * 100) })); this.h.sound('empty'); return false; }
     const ok = au.flare();
     if (ok) this.onAction?.({ k: 'aura' });
     return ok;
   }
 
-  /** Бросить заряд без каста (окно открылось, фокус ушёл) */
+  /** Drop the charge without casting (a window opened, focus was lost) */
   cancelCast(): void { if (this.spells.charging) { this.spells.cancel(); this.apply(); this.onAction?.({ k: 'cancel' }); } }
 
-  /** Артефакт в гнезде i (0..2): характеристики и урон (лечение) с учётом силы предмета; гнездо пустое — null */
+  /** Artifact in slot i (0..2): stats and damage (healing) with item power; empty slot — null */
   private artifactAt(i: number): { a: ArtifactStats; power: number } | null {
     const it = this.profile.artifacts()[i];
     const a = it ? itemDef(it.def).artifact : undefined;
@@ -334,15 +335,15 @@ export class Gear {
   }
 
   /**
-   * Сработать сразу; charge 0..1 — заряд заклинания (клик по слоту и тесты — без удержания).
-   * Общее для всех: гнездо, перезарядка, герой на ногах, плата душами; дальше заклинание творит реестр, обычный артефакт — plain
+   * Fire at once; charge 0..1 — spell charge (clicking the slot and tests — without holding).
+   * Common to all: slot, cooldown, hero on his feet, soul cost; then the registry casts a spell, a plain artifact goes to plain
    */
   useArtifact(i: number, at: THREE.Vector3, charge = 0): boolean {
     const art = this.artifactAt(i);
-    if (!art) { this.h.toast(`Гнездо ${i + 1} пустое — надень артефакт в инвентаре (I)`); return false; }
+    if (!art) { this.h.toast(t('Slot {n} is empty — equip an artifact in the inventory (I)', { n: i + 1 })); return false; }
     const { a, power } = art;
     if (this.artT[i][0] > 0 || this.h.hero.down) return false;
-    if (a.souls && this.profile.data.souls < a.souls) { this.h.toast(`Нужно ${a.souls} душ`); this.h.sound('empty'); return false; }
+    if (a.souls && this.profile.data.souls < a.souls) { this.h.toast(t('{n} souls needed', { n: a.souls })); this.h.sound('empty'); return false; }
     if (a.souls) this.profile.data.souls -= a.souls;
     const spell = spellOf(a.kind);
     if (spell) this.spells.cast(spell, a, power, at, charge);
@@ -354,14 +355,14 @@ export class Gear {
   }
 
   /**
-   * Повторить действие героя другого игрока (сетевой бой: сервер — src/game/match.ts, у других игроков — вид): перезарядки, души и шкалы — его,
-   * поэтому здесь их не проверяем — открываем и делаем
+   * Repeat another player's hero action (network battle: the server — src/game/match.ts, for other players — the view): cooldowns, souls and meters are his,
+   * so we do not check them here — we open and perform
    */
   perform(a: GearAction): void {
     const y = this.h.hero.pos.y;
     switch (a.k) {
       case 'art':
-        // заряжал у себя — у нас заряд тоже шёл: отпустить и сотворить
+        // he was charging on his side — our charge was running too: release and cast
         if (this.spells.charging?.slot === a.i) { this.spells.release(); this.apply(); }
         this.artT[a.i][0] = 0;
         this.profile.data.souls = MAX_SOULS;
@@ -379,7 +380,7 @@ export class Gear {
     }
   }
 
-  /** Обычный артефакт без каста: power — урон или лечение с силой предмета; сапоги берут множитель скорости как есть */
+  /** A plain artifact without a cast: power — damage or healing with item power; the boots take the speed multiplier as is */
   private plain(kind: PlainArtifactKind, a: ArtifactStats, power: number, at: THREE.Vector3): void {
     const R = a.radius ?? 3, me = this.h.hero.pos.clone();
     switch (kind) {
@@ -406,8 +407,8 @@ export class Gear {
   }
 
   /**
-   * Взрыв магии: вспышки, светящиеся искры и кольца — без дыма и обломков fx.explosion
-   * (тёмные кубики дыма у заклинаний выглядели чёрными квадратами)
+   * Magic explosion: flashes, glowing sparks and rings — without the smoke and debris of fx.explosion
+   * (the dark smoke cubes of spells looked like black squares)
    */
   private magicBoom(at: THREE.Vector3, r: number, a: THREE.Color, b: THREE.Color): void {
     const fx = this.h.fx, c = at.clone().setY(at.y + 0.6);
@@ -419,7 +420,7 @@ export class Gear {
     fx.shake = Math.max(fx.shake, 0.5);
   }
 
-  /** Урон по площади вокруг c (без героя); blast — поджечь бочки */
+  /** Area damage around c (not the hero); blast — ignite barrels */
   private aoe(c: THREE.Vector3, r: number, dmg: number, knock: number, blast: boolean): number {
     let n = 0;
     for (const t of this.h.targets()) {
@@ -497,16 +498,16 @@ export class Gear {
       this.h.fx.text(t.pos.clone().setY(1.1), String(v), 'crit');
       this.onHit(v, false, t.pos);
     }
-    if (!near.length) this.h.toast('Рядом нет целей для молнии');
+    if (!near.length) this.h.toast(t('No targets nearby for the lightning'));
     this.h.sound('zap');
   }
 
-  // ---------- цикл ----------
+  // ---------- loop ----------
 
-  /** Жизнь потеряна (герой упал) */
+  /** A life lost (the hero fell) */
   onDown(): void {
     this.lives--;
-    if (this.lives <= 0) { this.lives = LIVES; this.h.banner('Все жизни потеряны<small>Плейграунд: жизни восстановлены</small>'); }
+    if (this.lives <= 0) { this.lives = LIVES; this.h.banner(t('All lives lost<small>Playground: lives restored</small>')); }
   }
 
   update(dt: number, rmb: boolean, aim: THREE.Vector3): void {
@@ -539,22 +540,22 @@ export class Gear {
     this.lastHp = hero.hp;
   }
 
-  /** Числа для HUD */
+  /** Numbers for the HUD */
   hudState(): HudState {
     const hero = this.h.hero;
     const arts = this.profile.artifacts();
     const buffs: HudBuff[] = [];
-    if (this.speedT > 0) buffs.push({ icon: 'boots', name: 'Скорость', t: this.speedT, color: '#3a8ad8' });
-    for (const t of this.totems) if (Math.hypot(hero.pos.x - t.pos.x, hero.pos.z - t.pos.z) < t.r) { buffs.push({ icon: 'totem', name: 'Исцеление', t: t.t, color: '#3a9a4a' }); break; }
-    if (this.stats.multishot > 0) buffs.push({ icon: 'e-multi', name: 'Мультивыстрел', count: Math.round(this.stats.multishot * 100), color: '#3a9a4a' });
-    if (this.stats.infinity > 0) buffs.push({ icon: 'e-inf', name: 'Бесконечность', color: '#7a5cff' });
-    if (this.stats.regen > 0) buffs.push({ icon: 'e-leaf', name: 'Восстановление', color: '#3a9a4a' });
-    if (hero.god) buffs.push({ icon: 'champion', name: 'Бессмертие', color: '#c08a2a' });
+    if (this.speedT > 0) buffs.push({ icon: 'boots', name: t('Speed'), t: this.speedT, color: '#3a8ad8' });
+    for (const tm of this.totems) if (Math.hypot(hero.pos.x - tm.pos.x, hero.pos.z - tm.pos.z) < tm.r) { buffs.push({ icon: 'totem', name: t('Healing'), t: tm.t, color: '#3a9a4a' }); break; }
+    if (this.stats.multishot > 0) buffs.push({ icon: 'e-multi', name: t('Multishot'), count: Math.round(this.stats.multishot * 100), color: '#3a9a4a' });
+    if (this.stats.infinity > 0) buffs.push({ icon: 'e-inf', name: t('Infinity'), color: '#7a5cff' });
+    if (this.stats.regen > 0) buffs.push({ icon: 'e-leaf', name: t('Regeneration'), color: '#3a9a4a' });
+    if (hero.god) buffs.push({ icon: 'champion', name: t('Immortality'), color: '#c08a2a' });
     const aura = this.profile.aura(), au = this.auras;
     const syn = this.arts.synergies;
     for (const x of syn) buffs.push({ icon: 'e-swirl', name: x.title, color: '#c08a2a' });
-    if (syn.length >= 3) buffs.push({ icon: 'e-star', name: 'Резонанс', color: '#d8a020' });
-    if (this.arts.forcedCrits > 0) buffs.push({ icon: 'e-star', name: 'Звёздный крит', count: this.arts.forcedCrits, color: '#c08a2a' });
+    if (syn.length >= 3) buffs.push({ icon: 'e-star', name: t('Resonance'), color: '#d8a020' });
+    if (this.arts.forcedCrits > 0) buffs.push({ icon: 'e-star', name: t('Star crit'), count: this.arts.forcedCrits, color: '#c08a2a' });
     if (aura && au.kind && au.flareT > 0) buffs.push({ icon: itemDef(aura.def).icon, name: `${itemDef(aura.def).title} ×3`, t: au.flareT, color: AURA_COLOR[au.kind] });
     return {
       hp: hero.hp, maxHp: hero.maxHp, lives: this.lives,
@@ -572,7 +573,7 @@ export class Gear {
   }
 }
 
-/** HDR-цвет → CSS: ярчайшая составляющая — 1 */
+/** HDR colour → CSS: the brightest component becomes 1 */
 function cssColor(c: THREE.Color): string {
   const k = 1 / Math.max(c.r, c.g, c.b, 1e-3);
   return `#${c.clone().multiplyScalar(k).getHexString()}`;
@@ -589,8 +590,8 @@ function disposeGroup(g: THREE.Object3D): void {
 }
 
 /**
- * Трофей на полу, как в MCD, только ярче: крупная иконка над крутящейся звездой лучей, столб света цвета редкости
- * (у уникальных — выше и с золотом), ореол и расходящиеся по земле кольца-«сонар». Искры и вспышки даёт Props по userData.
+ * Loot on the floor, as in MCD but brighter: a large icon above a spinning star of rays, a pillar of light in the rarity colour
+ * (uniques — taller and with gold), a halo and "sonar" rings spreading over the ground. Sparks and flashes are given by Props via userData.
  */
 export function itemLootMesh(it: { def: string }): THREE.Group {
   const d = itemDef(it.def);
@@ -608,9 +609,9 @@ export function itemLootMesh(it: { def: string }): THREE.Group {
   const halo = new THREE.Sprite(additiveSprite(glowTex(), c.clone().multiplyScalar(0.9), 0.8));
   halo.position.y = 0.55;
   halo.scale.setScalar(1.6);
-  // цвет редкости, но с белой сердцевиной — даже серое «обычное» видно издалека
+  // rarity colour, but with a white core — even a grey "common" is visible from afar
   const beam = lightBeam(c.clone().lerp(new THREE.Color('#fff'), 0.25).multiplyScalar(2.4 + rarity * 0.6), 5.5 + rarity * 1.5, 1.4 + rarity * 0.3);
-  // второй, золотой столб у уникальных
+  // a second, golden pillar for uniques
   const gold = rarity === 2 ? lightBeam(new THREE.Color(3, 2.2, 0.6), 4, 1.6) : null;
   const floor = groundGlow(c.clone().multiplyScalar(1.2), 2 + rarity * 0.4);
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), additive(glowTex(), c.clone().multiplyScalar(2.4)));
@@ -626,7 +627,7 @@ export function itemLootMesh(it: { def: string }): THREE.Group {
     tick: (t, grounded) => {
       const dt = Math.min(0.1, Math.max(0, t - last));
       last = t;
-      // столб вырастает, когда трофей лёг; в полёте его нет
+      // the pillar grows once the loot has landed; none while in flight
       rise = grounded ? Math.min(1, rise + dt * 2.5) : 0;
       ground.visible = rise > 0;
       ground.position.y = 0.02 - g.position.y;
@@ -649,7 +650,7 @@ export function itemLootMesh(it: { def: string }): THREE.Group {
   return g;
 }
 
-/** Связка стрел на полу */
+/** A bundle of arrows on the floor */
 export function arrowsLootMesh(): THREE.Group {
   const g = new THREE.Group();
   const shaft = new THREE.MeshLambertMaterial({ color: '#a8774a' }), tip = new THREE.MeshLambertMaterial({ color: '#c6d0dc' }), band = new THREE.MeshLambertMaterial({ color: '#c03a3a' });

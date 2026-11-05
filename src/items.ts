@@ -1,40 +1,41 @@
 import { rng, type Rand } from './rng.ts';
+import { t } from './i18n/i18n.ts';
 
 /**
- * Предметы, снаряжение и прокачка в духе Minecraft Dungeons (wiki/design-inventory.md).
- * Четыре вида предметов: ближнее оружие (модель и удары — src/weapons.ts), дальнее, броня, артефакты.
- * У предмета — сила (power): от неё растут урон, здоровье брони и сила артефакта. Прокачка — зачарования:
- * у предмета 1–3 гнезда (по редкости), в гнезде три варианта на выбор; выбранный качается до III за очки
- * зачарования (1 очко за уровень героя). Разбор предмета возвращает потраченные очки и даёт малину.
- * Здесь только данные и правила — без DOM и three: HUD и инвентарь (src/hud/) и сцена (src/dev/gear.ts) читают отсюда.
+ * Items, gear and progression in the spirit of Minecraft Dungeons (wiki/design-inventory.md).
+ * Four kinds of items: melee weapons (model and strikes — src/weapons.ts), ranged, armour, artifacts.
+ * An item has power: damage, armour health and artifact strength grow from it. Progression is enchantments:
+ * an item has 1–3 slots (by rarity), each slot offers three options; the chosen one is upgraded up to III with enchantment
+ * points (1 point per hero level). Salvaging an item returns the spent points and gives raspberries.
+ * Only data and rules here — no DOM and no three: the HUD and inventory (src/hud/) and the scene (src/dev/gear.ts) read from here.
  */
 
 export type ItemSlot = 'melee' | 'ranged' | 'armor' | 'artifact' | 'aura';
 export type Rarity = 'common' | 'rare' | 'unique';
 
-export const SLOT_TITLE: Record<ItemSlot, string> = { melee: 'Ближний бой', ranged: 'Дальний бой', armor: 'Броня', artifact: 'Артефакты', aura: 'Ауры' };
-/** Редкость: подпись и цвет рамки, как в Minecraft Dungeons */
+export const SLOT_TITLE: Record<ItemSlot, string> = { melee: t('Melee'), ranged: t('Ranged'), armor: t('Armour'), artifact: t('Artifacts'), aura: t('Auras') };
+/** Rarity: label and frame colour, as in Minecraft Dungeons */
 export const RARITY: Record<Rarity, { title: string; color: string; salvage: number; slots: number }> = {
-  common: { title: 'Обычное', color: '#a7abb3', salvage: 1, slots: 1 },
-  rare: { title: 'Редкое', color: '#3fd67a', salvage: 2, slots: 2 },
-  unique: { title: 'Уникальное', color: '#f59a23', salvage: 4, slots: 3 },
+  common: { title: t('Common'), color: '#a7abb3', salvage: 1, slots: 1 },
+  rare: { title: t('Rare'), color: '#3fd67a', salvage: 2, slots: 2 },
+  unique: { title: t('Unique'), color: '#f59a23', salvage: 4, slots: 3 },
 };
 
-// ---------- каталог ----------
+// ---------- catalog ----------
 
-/** Заклинания с боссов (src/magic/, wiki/design-spells.md, раздел 3) */
+/** Boss spells (src/magic/, wiki/design-spells.md, section 3) */
 export type BossSpellKind =
   | 'meteor' | 'flameserpent' | 'ashcrown' | 'icetomb' | 'frostridge' | 'absolutezero'
   | 'thunderspear' | 'thunderleap' | 'stormcloud' | 'starfall' | 'starbeam' | 'judgement'
   | 'deadchoir' | 'gravitywell' | 'skullscythe' | 'fallenguards'
   | 'rift' | 'raspberrybush' | 'titanform' | 'bladephalanx' | 'blink'
-  // базовые: огонь, призыв, малиновая кровь, свет — у торговца (src/magic/base-*.ts)
+  // base ones: fire, summoning, raspberry blood, light — sold by the merchant (src/magic/base-*.ts)
   | 'firewall' | 'firestorm' | 'armageddon' | 'wolves' | 'elemental' | 'golem' | 'bloodclaws' | 'bloodswarm' | 'bloodblade' | 'blindflash';
-/** Стартовые заклинания (src/magic/starters.ts) */
+/** Starter spells (src/magic/starters.ts) */
 export type StarterSpellKind = 'spark' | 'fireball' | 'icerain' | 'heal';
-/** Любое заклинание — есть в реестре SPELLS (src/magic/registry.ts) */
+/** Any spell — present in the SPELLS registry (src/magic/registry.ts) */
 export type SpellKind = StarterSpellKind | BossSpellKind;
-/** Артефакты без каста: срабатывают в src/gear.ts */
+/** Artifacts without a cast: they fire in src/gear.ts */
 export type PlainArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning';
 export type ArtifactKind = PlainArtifactKind | SpellKind;
 export type PerkKind = 'souls' | 'artifactDmg' | 'cooldown' | 'meleeDmg' | 'rangedDmg' | 'speed' | 'potion' | 'roll' | 'arrows';
@@ -42,79 +43,79 @@ export type PerkKind = 'souls' | 'artifactDmg' | 'cooldown' | 'meleeDmg' | 'rang
 export interface Perk { kind: PerkKind; value: number }
 
 export const PERK_TEXT: Record<PerkKind, (v: number) => string> = {
-  souls: (v) => `+${v}% собранных душ`,
-  artifactDmg: (v) => `+${v}% урона артефактов`,
-  cooldown: (v) => `−${v}% перезарядки артефактов`,
-  meleeDmg: (v) => `+${v}% урона в ближнем бою`,
-  rangedDmg: (v) => `+${v}% урона стрел`,
-  speed: (v) => `+${v}% скорости движения`,
-  potion: (v) => `+${v}% лечения зельем`,
-  roll: (v) => `−${v}% перезарядки переката`,
-  arrows: (v) => `+${v} стрел в связке`,
+  souls: (v) => t('+{v}% souls gathered', { v }),
+  artifactDmg: (v) => t('+{v}% artifact damage', { v }),
+  cooldown: (v) => t('−{v}% artifact cooldown', { v }),
+  meleeDmg: (v) => t('+{v}% melee damage', { v }),
+  rangedDmg: (v) => t('+{v}% arrow damage', { v }),
+  speed: (v) => t('+{v}% movement speed', { v }),
+  potion: (v) => t('+{v}% potion healing', { v }),
+  roll: (v) => t('−{v}% dodge roll cooldown', { v }),
+  arrows: (v) => t('+{v} arrows per bundle', { v }),
 };
 
 export interface RangedStats {
-  /** Урон стрелы при силе 1 */
+  /** Arrow damage at power 1 */
   dmg: number;
-  /** Пауза между выстрелами, с */
+  /** Pause between shots, s */
   cd: number;
-  /** Скорость стрелы, м/с */
+  /** Arrow speed, m/s */
   speed: number;
-  /** Дальность, м */
+  /** Range, m */
   range: number;
-  /** Стрел за выстрел (веер) */
+  /** Arrows per shot (fan) */
   shots?: number;
   knock: number;
 }
 
-/** Как броня выглядит на герое (Knight.setArmor): цвета и детали */
+/** How armour looks on the hero (Knight.setArmor): colours and details */
 export interface ArmorLook {
-  /** Нагрудник и рукава */
+  /** Breastplate and sleeves */
   body: string;
-  /** Пояс, ворот, кант */
+  /** Belt, collar, trim */
   trim: string;
-  /** Наплечники */
+  /** Pauldrons */
   pauldron?: string;
-  /** Головной убор: капюшон, шлем, шапка, волчья голова */
+  /** Headgear: hood, helmet, cap, wolf head */
   head?: { kind: 'hood' | 'helmet' | 'cap' | 'wolf'; color: string; accent?: string };
-  /** Подол ниже пояса (роба) */
+  /** Skirt below the belt (robe) */
   skirt?: string;
-  /** Цвет плаща */
+  /** Cape colour */
   cape?: string;
-  /** Светящийся камень на груди */
+  /** Glowing stone on the chest */
   glow?: string;
 }
 
-/** Как лук выглядит в руке при выстреле (Knight.setBow) */
+/** How the bow looks in the hand when shooting (Knight.setBow) */
 export interface BowLook { kind: 'bow' | 'crossbow'; wood: string; string: string; glow?: string; size?: number }
 
 export interface ArtifactStats {
   kind: ArtifactKind;
-  /** Перезарядка, с */
+  /** Cooldown, s */
   cd: number;
-  /** Урон или лечение при силе 1 */
+  /** Damage or healing at power 1 */
   power: number;
-  /** Радиус действия, м */
+  /** Effect radius, m */
   radius?: number;
-  /** Длительность эффекта, с */
+  /** Effect duration, s */
   duration?: number;
-  /** Сколько душ тратит */
+  /** Souls it spends */
   souls?: number;
-  /** Заклинание: время полного заряда, с (держать клавишу — сильнее) */
+  /** Spell: full charge time, s (hold the key — stronger) */
   charge?: number;
-  /** Строка свойств в карточке: {v} — сила с учётом предмета, {r} — радиус, {d} — длительность */
+  /** Property line on the card: {v} — power with the item, {r} — radius, {d} — duration */
   info?: string;
 }
 
-/** Ауры (wiki/design-spells.md, раздел 4): действуют всегда, по шкале — вспышка ×3 */
+/** Auras (wiki/design-spells.md, section 4): always on, the meter gives a flare ×3 */
 export type AuraKind = 'pact' | 'bastion' | 'rage' | 'clarity' | 'thorns' | OffenseKind;
-/** Наступательные ауры (src/aura-offense.ts): сами бьют врагов вокруг героя */
+/** Offensive auras (src/aura-offense.ts): strike enemies around the hero on their own */
 export type OffenseKind = 'inferno' | 'frost' | 'storm' | 'halo' | 'shade' | 'quake' | 'blades';
 export interface AuraStats {
   kind: AuraKind;
-  /** Сила эффекта, % при силе предмета 1; у наступательных — урон за раз (у «Голодной тени» — % ослабления) */
+  /** Effect strength, % at item power 1; for offensive ones — damage per tick (for "Hungry Shade" — % of weakening) */
   value: number;
-  /** Радиус: союзники в нём получают эффект, м */
+  /** Radius: allies inside get the effect, m */
   radius: number;
 }
 
@@ -123,135 +124,135 @@ export interface ItemDef {
   slot: ItemSlot;
   title: string;
   rarity: Rarity;
-  /** Иконка из src/icons.ts */
+  /** Icon from src/icons.ts */
   icon: string;
   description: string;
-  /** Ближний бой: id оружия в src/weapons.ts */
+  /** Melee: weapon id in src/weapons.ts */
   weapon?: string;
   ranged?: RangedStats & { look: BowLook };
-  /** Броня: здоровье при силе 1, особые свойства и вид на герое */
+  /** Armour: health at power 1, special perks and the look on the hero */
   armor?: { health: number; perks: Perk[]; look: ArmorLook };
   artifact?: ArtifactStats;
   aura?: AuraStats;
   /**
-   * Заклинание (wiki/design-spells.md): стартовое; 'shop' — обычное, продаёт торговец за малину; 'boss' — редкое и выше, только с боссов.
-   * В сундуки и в случайный товар не попадает
+   * Spell (wiki/design-spells.md): starter; 'shop' — common, the merchant sells it for raspberries; 'boss' — rare and above, boss drops only.
+   * Never appears in chests or in random stock
    */
   spell?: 'starter' | 'shop' | 'boss';
-  /** Особые свойства оружия (строки как в MCD: «Широкие удары») */
+  /** Special weapon traits (lines as in MCD: "Wide strikes") */
   traits?: string[];
 }
 
 const A = (kind: ArtifactKind, cd: number, power: number, more: Partial<ArtifactStats> = {}): ArtifactStats => ({ kind, cd, power, ...more });
 
 export const ITEMS: readonly ItemDef[] = [
-  // ближний бой — модели и удары в src/weapons.ts
-  { id: 'sword', slot: 'melee', weapon: 'sword', title: 'Меч стража', rarity: 'common', icon: 'sword', description: 'Надёжный клинок, с которым начинается любой поход.', traits: ['Комбо из трёх ударов'] },
-  { id: 'axe', slot: 'melee', weapon: 'axe', title: 'Топор лесоруба', rarity: 'common', icon: 'axe', description: 'Рубит и дрова, и тех, кто прячется за ними.', traits: ['Сильное отбрасывание'] },
-  { id: 'mace', slot: 'melee', weapon: 'mace', title: 'Булава', rarity: 'common', icon: 'mace', description: 'Шипы на шаре делают каждое слово весомее.', traits: ['Большая ударная волна'] },
-  { id: 'spear', slot: 'melee', weapon: 'spear', title: 'Копьё', rarity: 'common', icon: 'spear', description: 'Держит врагов на почтительном расстоянии.', traits: ['Длинные выпады'] },
-  { id: 'claymore', slot: 'melee', weapon: 'claymore', title: 'Клеймор', rarity: 'rare', icon: 'claymore', description: 'Двуручный меч, выкованный для тех, кто не отступает.', traits: ['Широкие удары', 'Сильное отбрасывание'] },
-  { id: 'dagger', slot: 'melee', weapon: 'dagger', title: 'Кинжал тени', rarity: 'rare', icon: 'dagger', description: 'Быстрый, как мысль, и тихий, как тень.', traits: ['Быстрые удары', 'Частые криты'] },
-  { id: 'hammer', slot: 'melee', weapon: 'hammer', title: 'Великий молот', rarity: 'rare', icon: 'hammer', description: 'Каждый удар отзывается гулом в камне.', traits: ['Огромная ударная волна'] },
-  { id: 'scythe', slot: 'melee', weapon: 'scythe', title: 'Коса жнеца', rarity: 'unique', icon: 'scythe', description: 'Говорят, коса сама выбирает, кого жать.', traits: ['Очень широкие взмахи', 'Круговой вихрь'] },
-  { id: 'katana', slot: 'melee', weapon: 'katana', title: 'Катана', rarity: 'rare', icon: 'katana', description: 'Тонкий изогнутый клинок: режет раньше, чем враг поймёт, что бой начался.', traits: ['Быстрые длинные разрезы', 'Частые криты'] },
-  { id: 'nagakiba', slot: 'melee', weapon: 'nagakiba', title: 'Нагакиба', rarity: 'unique', icon: 'nagakiba', description: 'Катана длиной с шест для сушки белья. Носить неудобно, зато враги кончаются ещё на подходе.', traits: ['Дальность больше копья', 'Двуручная'] },
-  { id: 'dragonslayer', slot: 'melee', weapon: 'dragonslayer', title: 'Убийца драконов', rarity: 'unique', icon: 'dragonslayer', description: 'Слишком большой, слишком толстый, слишком тяжёлый и слишком грубый. Настоящая груда железа.', traits: ['Самый сильный удар', 'Очень медленный'] },
-  { id: 'pontiff', slot: 'melee', weapon: 'pontiff', title: 'Клинки понтифика', rarity: 'unique', icon: 'pontiff', description: 'Пламя в правой руке, звёздный свет в левой. Понтифик Маливин не любил ждать.', traits: ['Парное оружие', 'Огонь и свет по очереди'] },
-  { id: 'staff', slot: 'melee', weapon: 'staff', title: 'Посох звездочёта', rarity: 'rare', icon: 'staff', description: 'Кристалл на навершии помнит каждую звезду, на которую смотрел хозяин.', traits: ['Дальние удары', 'Большая волна'] },
-  { id: 'halberd', slot: 'melee', weapon: 'halberd', title: 'Алебарда стражи', rarity: 'rare', icon: 'halberd', description: 'Стража Малины держит ворота именно такими.', traits: ['Длинное древко', 'Широкая дуга'] },
-  { id: 'rapier', slot: 'melee', weapon: 'rapier', title: 'Рапира дуэлянта', rarity: 'common', icon: 'rapier', description: 'Укол, ещё укол — и вежливый поклон.', traits: ['Молниеносные уколы', 'Частые криты'] },
-  { id: 'knuckles', slot: 'melee', weapon: 'knuckles', title: 'Кастеты кузнеца', rarity: 'common', icon: 'knuckles', description: 'Кузнец ковал их для себя — на случай, если молот далеко.', traits: ['Парное оружие', 'Самые быстрые удары'] },
-  // дальний бой
-  { id: 'bow', slot: 'ranged', title: 'Лук', rarity: 'common', icon: 'bow', description: 'Простой лук из гибкого тиса.', ranged: { dmg: 8, cd: 0.55, speed: 26, range: 20, knock: 0.3, look: { kind: 'bow', wood: '#8a5a32', string: '#e8e2d0' } } },
-  { id: 'longbow', slot: 'ranged', title: 'Длинный лук', rarity: 'rare', icon: 'longbow', description: 'Стрелы летят дальше и бьют сильнее, но тетиву тянуть дольше.', ranged: { dmg: 14, cd: 0.85, speed: 34, range: 28, knock: 0.5, look: { kind: 'bow', wood: '#4f7a3a', string: '#e8e2d0', size: 1.25 } } },
-  { id: 'crossbow', slot: 'ranged', title: 'Арбалет', rarity: 'common', icon: 'crossbow', description: 'Тяжёлый болт сбивает с ног.', ranged: { dmg: 12, cd: 0.95, speed: 30, range: 22, knock: 1.2, look: { kind: 'crossbow', wood: '#6a4024', string: '#d8d2c0' } } },
-  { id: 'twinbow', slot: 'ranged', title: 'Звёздный лук', rarity: 'unique', icon: 'starbow', description: 'Каждый выстрел — веер из трёх светящихся стрел.', ranged: { dmg: 7, cd: 0.6, speed: 30, range: 22, shots: 3, knock: 0.3, look: { kind: 'bow', wood: '#2f8fd0', string: '#ffffff', glow: '#5ad8ff' } } },
-  // броня
-  { id: 'tunic', slot: 'armor', title: 'Куртка странника', rarity: 'common', icon: 'tunic', description: 'Тёплая, удобная и с карманом для малины.', armor: { health: 20, perks: [{ kind: 'potion', value: 25 }], look: { body: '#5e8f46', trim: '#7a5230' } } },
-  { id: 'soulrobe', slot: 'armor', title: 'Роба душ', rarity: 'common', icon: 'soulrobe', description: 'В особом свете души, вплетённые в ткань, мерцают силой.', armor: { health: 30, perks: [{ kind: 'souls', value: 50 }, { kind: 'artifactDmg', value: 50 }], look: { body: '#4a4f8a', trim: '#6b72b8', skirt: '#454a82', head: { kind: 'hood', color: '#3d4278' }, cape: '#2e3160', glow: '#7ae0ff' } } },
-  { id: 'wolf', slot: 'armor', title: 'Волчья броня', rarity: 'common', icon: 'wolf', description: 'Шкура старого вожака всё ещё помнит лес.', armor: { health: 35, perks: [{ kind: 'potion', value: 50 }], look: { body: '#9a9ea6', trim: '#5e6269', pauldron: '#c9ccd2', head: { kind: 'wolf', color: '#9a9ea6', accent: '#c9ccd2' }, cape: '#6f747c' } } },
-  { id: 'mercenary', slot: 'armor', title: 'Доспех наёмника', rarity: 'common', icon: 'mercenary', description: 'Плотная кожа с заклёпками, проверенная в сотне стычек.', armor: { health: 40, perks: [{ kind: 'meleeDmg', value: 15 }], look: { body: '#8a5a32', trim: '#c03a3a', pauldron: '#6a4024', head: { kind: 'cap', color: '#6a4024' }, cape: '#a8302e' } } },
-  { id: 'scale', slot: 'armor', title: 'Чешуйчатый доспех', rarity: 'rare', icon: 'scale', description: 'Тысяча пластин звенит на каждом шагу.', armor: { health: 50, perks: [{ kind: 'meleeDmg', value: 20 }, { kind: 'roll', value: 25 }], look: { body: '#5f8f7a', trim: '#2f4a3e', pauldron: '#8fc0a6', skirt: '#456b5a', head: { kind: 'helmet', color: '#5f8f7a', accent: '#8fc0a6' } } } },
-  { id: 'champion', slot: 'armor', title: 'Доспех чемпиона', rarity: 'unique', icon: 'champion', description: 'Сияющие латы того, кто выстоял на арене сто дней.', armor: { health: 65, perks: [{ kind: 'cooldown', value: 25 }, { kind: 'arrows', value: 10 }, { kind: 'meleeDmg', value: 10 }], look: { body: '#d6dbe2', trim: '#f2b632', pauldron: '#e8ecf2', head: { kind: 'helmet', color: '#d6dbe2', accent: '#f2b632' }, cape: '#c42a3a', glow: '#ff3a5a' } } },
-  // артефакты
-  { id: 'firework', slot: 'artifact', title: 'Огненная стрела', rarity: 'common', icon: 'firework', description: 'Ракета летит к курсору и взрывается снопом искр.', artifact: A('firework', 9, 30, { radius: 3 }) },
-  { id: 'totem', slot: 'artifact', title: 'Тотем исцеления', rarity: 'common', icon: 'totem', description: 'Ставит тотем, который лечит всех рядом.', artifact: A('totem', 22, 6, { radius: 3.5, duration: 8 }) },
-  { id: 'boots', slot: 'artifact', title: 'Сапоги скорости', rarity: 'common', icon: 'boots', description: 'Короткий рывок скорости.', artifact: A('boots', 4, 1.6, { duration: 2 }) },
-  { id: 'horn', slot: 'artifact', title: 'Рог ветра', rarity: 'rare', icon: 'horn', description: 'Порыв ветра отбрасывает всех вокруг.', artifact: A('horn', 8, 6, { radius: 5 }) },
-  { id: 'lightning', slot: 'artifact', title: 'Молниевый куб', rarity: 'rare', icon: 'lightning', description: 'Молния бьёт по трём ближайшим врагам.', artifact: A('lightning', 12, 28, { radius: 9 }) },
-  // заклинания — src/spells.ts
-  { id: 'spark', slot: 'artifact', spell: 'starter', title: 'Искра', rarity: 'common', icon: 'spark', description: 'Молния с неба бьёт в цель и перескакивает на соседей. Держи клавишу — перескоков больше.', artifact: A('spark', 4, 18, { radius: 12, charge: 0.9 }) },
-  { id: 'fireball', slot: 'artifact', spell: 'starter', title: 'Огненный шар', rarity: 'common', icon: 'fireball', description: 'Шар пламени летит к курсору и взрывается. Держи клавишу — шар растёт.', artifact: A('fireball', 6, 26, { radius: 2.2, charge: 1.1 }) },
-  { id: 'icerain', slot: 'artifact', spell: 'starter', title: 'Ледяной дождь', rarity: 'common', icon: 'icerain', description: 'Сосульки падают с неба на место у курсора. Держи клавишу — зона шире.', artifact: A('icerain', 10, 7, { radius: 3, duration: 2, charge: 1 }) },
-  { id: 'heal', slot: 'artifact', spell: 'starter', title: 'Слабое лечение', rarity: 'common', icon: 'heal', description: 'Листья и лепестки малины затягивают раны. Держи клавишу — лечит сильнее.', artifact: A('heal', 12, 22, { radius: 4, charge: 0.8 }) },
-  // ауры — src/auras.ts; как заклинания, падают только с боссов
-  { id: 'pact', slot: 'aura', spell: 'boss', title: 'Кровавый пакт', rarity: 'unique', icon: 'a-pact', description: 'Каждый удар возвращает герою часть отнятой жизни: красные нити тянутся от ран врага.', aura: { kind: 'pact', value: 8, radius: 8 } },
-  { id: 'bastion', slot: 'aura', spell: 'boss', title: 'Бастион', rarity: 'unique', icon: 'a-bastion', description: 'Вокруг кружат щиты-руны и принимают часть ударов на себя.', aura: { kind: 'bastion', value: 20, radius: 8 } },
-  { id: 'rage', slot: 'aura', spell: 'boss', title: 'Ярость', rarity: 'unique', icon: 'a-rage', description: 'Оружие тлеет, удары бьют сильнее и чаще бывают сокрушительными.', aura: { kind: 'rage', value: 15, radius: 8 } },
-  { id: 'clarity', slot: 'aura', spell: 'boss', title: 'Ясность', rarity: 'unique', icon: 'a-clarity', description: 'Голубые огоньки ускоряют мысль: заклинания и артефакты перезаряжаются быстрее, души липнут к рукам.', aura: { kind: 'clarity', value: 25, radius: 8 } },
-  { id: 'thorns', slot: 'aura', spell: 'boss', title: 'Терновый венец', rarity: 'unique', icon: 'a-thorns', description: 'Колючие лозы под ногами хлещут каждого, кто бьёт героя вблизи.', aura: { kind: 'thorns', value: 30, radius: 8 } },
-  // наступательные ауры — src/aura-offense.ts
-  { id: 'inferno', slot: 'aura', spell: 'boss', title: 'Горнило', rarity: 'unique', icon: 'a-inferno', description: 'Вокруг героя тлеет кольцо углей и жжёт каждого, кто подойдёт.', aura: { kind: 'inferno', value: 3, radius: 8 } },
-  { id: 'frost', slot: 'aura', spell: 'boss', title: 'Стужа', rarity: 'unique', icon: 'a-frost', description: 'Иней стелется по земле: враги рядом мёрзнут и вязнут в холоде.', aura: { kind: 'frost', value: 2, radius: 8 } },
-  { id: 'storm', slot: 'aura', spell: 'boss', title: 'Грозовой венец', rarity: 'unique', icon: 'a-storm', description: 'По доспеху бегут искры, а молния сама находит врага и перескакивает дальше.', aura: { kind: 'storm', value: 8, radius: 8 } },
-  { id: 'halo', slot: 'aura', spell: 'boss', title: 'Карающий ореол', rarity: 'unique', icon: 'a-halo', description: 'Золотой нимб над головой: каждый четвёртый удар зовёт луч с неба.', aura: { kind: 'halo', value: 12, radius: 8 } },
-  { id: 'shade', slot: 'aura', spell: 'boss', title: 'Голодная тень', rarity: 'unique', icon: 'a-shade', description: 'Тень у ног слабит врагов рядом, а во вспышке тянет из них жизнь.', aura: { kind: 'shade', value: 15, radius: 8 } },
-  { id: 'quake', slot: 'aura', spell: 'boss', title: 'Каменная поступь', rarity: 'unique', icon: 'a-quake', description: 'Земля под героем вздрагивает и раз в несколько секунд отбрасывает врагов.', aura: { kind: 'quake', value: 10, radius: 8 } },
-  { id: 'blades', slot: 'aura', spell: 'boss', title: 'Вихрь клинков', rarity: 'unique', icon: 'a-blades', description: 'Призрачные мечи кружат вокруг героя и режут всех, кого заденут.', aura: { kind: 'blades', value: 4, radius: 8 } },
-  // заклинания — src/magic/; редкость: обычное → common (продаёт торговец), редкое → rare, легендарное и мифическое → unique (с боссов)
-  { id: 'meteor', slot: 'artifact', spell: 'boss', title: 'Небесный молот', rarity: 'rare', icon: 'meteor', description: 'С неба падает пылающий камень: кратер, оглушение и горящая земля.', artifact: A('meteor', 14, 70, { radius: 3.5, charge: 1.2, info: 'Метеор: {v} урона в радиусе {r} м' }) },
-  { id: 'flameserpent', slot: 'artifact', spell: 'boss', title: 'Пламенный змей', rarity: 'unique', icon: 'flameserpent', description: 'Огненный змей ползёт по земле, петляет между врагами и оставляет горящую колею.', artifact: A('flameserpent', 18, 22, { radius: 1.6, duration: 3.5, charge: 1.2, info: 'Змей: {v} урона за касание, {d} с' }) },
-  { id: 'ashcrown', slot: 'artifact', spell: 'shop', title: 'Пепельная корона', rarity: 'common', icon: 'ashcrown', description: 'Кольцо огня волной расходится от героя и отбрасывает всех.', artifact: A('ashcrown', 8, 24, { radius: 5, charge: 0.8, info: 'Волна огня: {v} урона до {r} м' }) },
-  { id: 'icetomb', slot: 'artifact', spell: 'boss', title: 'Ледяная гробница', rarity: 'rare', icon: 'icetomb', description: 'Враг вмерзает в кристалл, а через миг кристалл разлетается веером осколков.', artifact: A('icetomb', 14, 60, { radius: 3.5, duration: 2, charge: 1, info: 'Гробница: {v} урона, осколки до {r} м' }) },
-  { id: 'frostridge', slot: 'artifact', spell: 'shop', title: 'Морозный гребень', rarity: 'common', icon: 'frostridge', description: 'Веер ледяных шипов вырастает из земли и подбрасывает врагов.', artifact: A('frostridge', 7, 26, { radius: 7, charge: 0.9, info: 'Шипы: {v} урона, веер на {r} м' }) },
-  { id: 'absolutezero', slot: 'artifact', spell: 'boss', title: 'Абсолютный ноль', rarity: 'unique', icon: 'absolutezero', description: 'Купол стужи: внутри время почти стоит, враги покрываются льдом и замирают.', artifact: A('absolutezero', 30, 40, { radius: 8, duration: 4, charge: 1.6, info: 'Купол: {v} урона волнами, {d} с в радиусе {r} м' }) },
-  { id: 'thunderspear', slot: 'artifact', spell: 'boss', title: 'Копьё громовержца', rarity: 'rare', icon: 'thunderspear', description: 'Копьё молнии растёт в руке и пронзает всю линию.', artifact: A('thunderspear', 9, 55, { radius: 18, charge: 1.2, info: 'Копьё: {v} урона по линии {r} м' }) },
-  { id: 'thunderleap', slot: 'artifact', spell: 'boss', title: 'Громовой прыжок', rarity: 'unique', icon: 'thunderleap', description: 'Герой взлетает и бьёт в землю: цепные молнии во все стороны.', artifact: A('thunderleap', 14, 45, { radius: 4.5, charge: 1, info: 'Удар: {v} урона в радиусе {r} м и молнии' }) },
-  { id: 'stormcloud', slot: 'artifact', spell: 'shop', title: 'Грозовая туча', rarity: 'common', icon: 'stormcloud', description: 'Над героем висит туча и сама бьёт ближайших врагов.', artifact: A('stormcloud', 16, 16, { radius: 7, duration: 8, charge: 0.8, info: 'Туча: {v} урона за молнию, {d} с' }) },
-  { id: 'starfall', slot: 'artifact', spell: 'boss', title: 'Звездопад', rarity: 'unique', icon: 'starfall', description: 'Звёзды падают с неба по всей зоне, а герой парит в столбе света.', artifact: A('starfall', 22, 18, { radius: 6, duration: 5, charge: 1.2, info: 'Звёзды: {v} урона каждая, {d} с в радиусе {r} м' }) },
-  { id: 'starbeam', slot: 'artifact', spell: 'boss', title: 'Луч павшей звезды', rarity: 'unique', icon: 'starbeam', description: 'Огромный луч из рук: герой медленно ведёт им за курсором.', artifact: A('starbeam', 30, 30, { radius: 16, duration: 3, charge: 1.6, info: 'Луч: {v} урона за касание, {d} с, длина {r} м' }) },
-  { id: 'judgement', slot: 'artifact', spell: 'boss', title: 'Небесный суд', rarity: 'unique', icon: 'judgement', description: 'Столп света бьёт врагов, лечит союзников и поднимает павших.', artifact: A('judgement', 24, 60, { radius: 4, charge: 1.3, info: 'Суд: {v} урона и лечения в радиусе {r} м' }) },
-  { id: 'deadchoir', slot: 'artifact', spell: 'boss', title: 'Хор мёртвых', rarity: 'rare', icon: 'deadchoir', description: 'Призрачные руки тянутся из земли, держат врагов и утаскивают вниз.', artifact: A('deadchoir', 14, 14, { radius: 4, duration: 3, charge: 1, info: 'Руки: {v} урона волнами, {d} с в радиусе {r} м' }) },
-  { id: 'gravitywell', slot: 'artifact', spell: 'boss', title: 'Гравитационный колодец', rarity: 'unique', icon: 'gravitywell', description: 'Чёрная сфера стягивает врагов, а потом схлопывается и выбрасывает их.', artifact: A('gravitywell', 20, 70, { radius: 6, duration: 2, charge: 1.2, info: 'Колодец: тянет {d} с, взрыв {v} урона' }) },
-  { id: 'skullscythe', slot: 'artifact', spell: 'shop', title: 'Коса-череп', rarity: 'common', icon: 'skullscythe', description: 'Летящий череп: врагу — урон, герою — немного жизни.', artifact: A('skullscythe', 5, 30, { radius: 14, charge: 0.7, info: 'Череп: {v} урона, дальность {r} м' }) },
-  { id: 'fallenguards', slot: 'artifact', spell: 'boss', title: 'Павшие стражи', rarity: 'rare', icon: 'fallenguards', description: 'Три призрачных рыцаря выходят из порталов и сражаются рядом.', artifact: A('fallenguards', 30, 12, { duration: 15, souls: 50, charge: 1.2, info: 'Стражи: {v} урона за удар, {d} с' }) },
-  { id: 'rift', slot: 'artifact', spell: 'boss', title: 'Разлом', rarity: 'rare', icon: 'rift', description: 'Трещина бежит вперёд, из неё вырастают каменные шипы.', artifact: A('rift', 10, 40, { radius: 10, charge: 1, info: 'Разлом: {v} урона по линии {r} м' }) },
-  // базовые заклинания — src/magic/base-*.ts; не слишком сильные, все у торговца
-  { id: 'firewall', slot: 'artifact', spell: 'shop', title: 'Огненная стена', rarity: 'common', icon: 'firewall', description: 'Поперёк пути к курсору встаёт стена огня и жжёт всех, кто в ней или идёт сквозь. Держи клавишу — стена длиннее и жарче.', artifact: A('firewall', 10, 8, { radius: 5, duration: 4, charge: 1, info: 'Стена {r} м: {v} урона каждые 0,5 с, {d} с' }) },
-  { id: 'firestorm', slot: 'artifact', spell: 'shop', title: 'Огненный ураган', rarity: 'common', icon: 'firestorm', description: 'Огненный смерч медленно катится к курсору, затягивает и замедляет врагов.', artifact: A('firestorm', 12, 6, { radius: 1.8, duration: 4, charge: 1, info: 'Смерч: {v} урона каждые 0,3 с, −30 % скорости, {d} с' }) },
-  { id: 'armageddon', slot: 'artifact', spell: 'shop', title: 'Малый армагеддон', rarity: 'common', icon: 'armageddon', description: 'Три секунды вокруг героя падают огненные шары.', artifact: A('armageddon', 16, 14, { radius: 5, duration: 3, charge: 1.1, info: 'Дождь шаров: {v} урона каждый, круг {r} м, {d} с' }) },
-  { id: 'wolves', slot: 'artifact', spell: 'shop', title: 'Стая волков', rarity: 'common', icon: 'wolves', description: 'Из порталов выбегают волки и гонят ближайших врагов; укус замедляет. Держи клавишу — волков трое.', artifact: A('wolves', 20, 8, { duration: 12, charge: 1, info: 'Волки: {v} урона за укус, {d} с' }) },
-  { id: 'elemental', slot: 'artifact', spell: 'shop', title: 'Малый элементаль', rarity: 'common', icon: 'elemental', description: 'Рядом парит элементаль и стреляет огоньками; стихия меняется по очереди — огонь, лёд, молния.', artifact: A('elemental', 22, 10, { radius: 6, duration: 15, charge: 1, info: 'Элементаль: {v} урона за огонёк, {d} с' }) },
-  { id: 'golem', slot: 'artifact', spell: 'shop', title: 'Каменный голем', rarity: 'common', icon: 'golem', description: 'Медленный каменный голем бьёт кулаком в землю и держит врагов на себе.', artifact: A('golem', 28, 18, { radius: 2, duration: 18, charge: 1.1, info: 'Голем: {v} урона по кругу {r} м, оглушение, {d} с' }) },
-  { id: 'bloodclaws', slot: 'artifact', spell: 'shop', title: 'Малиновые когти', rarity: 'common', icon: 'bloodclaws', description: 'Перед героем из земли вырываются три когтя малинового пламени. Стоит здоровья, копит кровотечение.', artifact: A('bloodclaws', 5, 22, { radius: 3, charge: 0.8, info: 'Когти: {v} урона, кровотечение; цена — 6 % здоровья' }) },
-  { id: 'bloodswarm', slot: 'artifact', spell: 'shop', title: 'Рой малинок', rarity: 'common', icon: 'bloodswarm', description: 'Поток крошечных малиновых мушек конусом жалит и копит кровотечение. Стоит здоровья.', artifact: A('bloodswarm', 6, 4, { radius: 5, duration: 1.5, charge: 0.8, info: 'Рой: {v} урона за укус, {d} с; цена — 8 % здоровья' }) },
-  { id: 'bloodblade', slot: 'artifact', spell: 'shop', title: 'Малиновый клинок', rarity: 'common', icon: 'bloodblade', description: 'Оружие покрывается малиновым соком: удары сильнее и копят кровотечение. Стоит здоровья.', artifact: A('bloodblade', 25, 10, { duration: 15, charge: 1, info: 'Клинок: +{v}% урона мечом и кровотечение, {d} с; цена — 10 % здоровья' }) },
-  { id: 'blindflash', slot: 'artifact', spell: 'shop', title: 'Ослепляющая вспышка', rarity: 'common', icon: 'blindflash', description: 'Вспышка света вокруг героя: урон, отброс и оглушение рядовых врагов (боссов — нет).', artifact: A('blindflash', 14, 12, { radius: 4, duration: 1.5, charge: 0.9, info: 'Вспышка: {v} урона в радиусе {r} м, оглушение {d} с' }) },
-  { id: 'raspberrybush', slot: 'artifact', spell: 'shop', title: 'Малиновый куст', rarity: 'common', icon: 'raspberrybush', description: 'Колючий куст держит врагов, а потом лопается ягодами, которые лечат.', artifact: A('raspberrybush', 12, 20, { radius: 3, duration: 4, charge: 0.9, info: 'Куст: {v} урона колючками, лечит ягодами' }) },
-  { id: 'titanform', slot: 'artifact', spell: 'boss', title: 'Облик титана', rarity: 'unique', icon: 'titanform', description: 'Герой становится огромным каменным великаном: удары трясут землю.', artifact: A('titanform', 40, 60, { duration: 10, charge: 1.5, info: 'Титан: +{v}% урона, −50% получаемого, {d} с' }) },
-  { id: 'bladephalanx', slot: 'artifact', spell: 'boss', title: 'Фаланга клинков', rarity: 'rare', icon: 'bladephalanx', description: 'Над головой веером раскрываются семь призрачных мечей и летят по очереди.', artifact: A('bladephalanx', 10, 20, { radius: 14, charge: 1, info: 'Клинки: 7 × {v} урона' }) },
-  { id: 'blink', slot: 'artifact', spell: 'boss', title: 'Разрыв', rarity: 'rare', icon: 'blink', description: 'Рывок сквозь пространство: взрыв там, где исчез, и там, где появился.', artifact: A('blink', 8, 45, { radius: 8, charge: 0.8, info: 'Разрыв: {v} урона дважды, рывок до {r} м' }) },
-  { id: 'harvester', slot: 'artifact', title: 'Жнец душ', rarity: 'unique', icon: 'harvester', description: 'Высвобождает собранные души взрывом вокруг героя.', artifact: A('harvester', 3, 45, { radius: 4, souls: 40 }) },
+  // melee — models and strikes in src/weapons.ts
+  { id: 'sword', slot: 'melee', weapon: 'sword', title: t('Warden sword'), rarity: 'common', icon: 'sword', description: t('A trusty blade every journey begins with.'), traits: [t('Three-hit combo')] },
+  { id: 'axe', slot: 'melee', weapon: 'axe', title: t('Woodcutter axe'), rarity: 'common', icon: 'axe', description: t('Chops firewood and whoever hides behind it.'), traits: [t('Strong knockback')] },
+  { id: 'mace', slot: 'melee', weapon: 'mace', title: t('Mace'), rarity: 'common', icon: 'mace', description: t('The spikes on the ball give every word more weight.'), traits: [t('Big shockwave')] },
+  { id: 'spear', slot: 'melee', weapon: 'spear', title: t('Spear'), rarity: 'common', icon: 'spear', description: t('Keeps enemies at a respectful distance.'), traits: [t('Long lunges')] },
+  { id: 'claymore', slot: 'melee', weapon: 'claymore', title: t('Claymore'), rarity: 'rare', icon: 'claymore', description: t('A two-handed sword forged for those who never retreat.'), traits: [t('Wide strikes'), t('Strong knockback')] },
+  { id: 'dagger', slot: 'melee', weapon: 'dagger', title: t('Shadow dagger'), rarity: 'rare', icon: 'dagger', description: t('Fast as a thought and quiet as a shadow.'), traits: [t('Fast strikes'), t('Frequent crits')] },
+  { id: 'hammer', slot: 'melee', weapon: 'hammer', title: t('Great hammer'), rarity: 'rare', icon: 'hammer', description: t('Every blow echoes through the stone.'), traits: [t('Huge shockwave')] },
+  { id: 'scythe', slot: 'melee', weapon: 'scythe', title: t('Reaper scythe'), rarity: 'unique', icon: 'scythe', description: t('They say the scythe chooses whom to reap.'), traits: [t('Very wide sweeps'), t('Spinning whirl')] },
+  { id: 'katana', slot: 'melee', weapon: 'katana', title: t('Katana'), rarity: 'rare', icon: 'katana', description: t('A thin curved blade: it cuts before the enemy realises the fight has begun.'), traits: [t('Quick long cuts'), t('Frequent crits')] },
+  { id: 'nagakiba', slot: 'melee', weapon: 'nagakiba', title: t('Nagakiba'), rarity: 'unique', icon: 'nagakiba', description: t('A katana as long as a laundry pole. Awkward to carry, but enemies run out before they get close.'), traits: [t('Outreaches the spear'), t('Two-handed')] },
+  { id: 'dragonslayer', slot: 'melee', weapon: 'dragonslayer', title: t('Dragonslayer'), rarity: 'unique', icon: 'dragonslayer', description: t('Too big, too thick, too heavy and too rough. A proper heap of iron.'), traits: [t('Strongest strike'), t('Very slow')] },
+  { id: 'pontiff', slot: 'melee', weapon: 'pontiff', title: t('Pontiff blades'), rarity: 'unique', icon: 'pontiff', description: t('Flame in the right hand, starlight in the left. Pontiff Malivin did not like to wait.'), traits: [t('Dual weapon'), t('Fire and light in turn')] },
+  { id: 'staff', slot: 'melee', weapon: 'staff', title: t('Stargazer staff'), rarity: 'rare', icon: 'staff', description: t('The crystal on its head remembers every star its owner has gazed at.'), traits: [t('Long-reach strikes'), t('Big wave')] },
+  { id: 'halberd', slot: 'melee', weapon: 'halberd', title: t('Guard halberd'), rarity: 'rare', icon: 'halberd', description: t('The guards of Malina hold the gates with exactly these.'), traits: [t('Long shaft'), t('Wide arc')] },
+  { id: 'rapier', slot: 'melee', weapon: 'rapier', title: t('Duellist rapier'), rarity: 'common', icon: 'rapier', description: t('A thrust, another thrust — and a polite bow.'), traits: [t('Lightning thrusts'), t('Frequent crits')] },
+  { id: 'knuckles', slot: 'melee', weapon: 'knuckles', title: t('Blacksmith knuckles'), rarity: 'common', icon: 'knuckles', description: t('The blacksmith forged them for himself — in case the hammer is out of reach.'), traits: [t('Dual weapon'), t('Fastest strikes')] },
+  // ranged
+  { id: 'bow', slot: 'ranged', title: t('Bow'), rarity: 'common', icon: 'bow', description: t('A simple bow of supple yew.'), ranged: { dmg: 8, cd: 0.55, speed: 26, range: 20, knock: 0.3, look: { kind: 'bow', wood: '#8a5a32', string: '#e8e2d0' } } },
+  { id: 'longbow', slot: 'ranged', title: t('Longbow'), rarity: 'rare', icon: 'longbow', description: t('Arrows fly farther and hit harder, but the string takes longer to draw.'), ranged: { dmg: 14, cd: 0.85, speed: 34, range: 28, knock: 0.5, look: { kind: 'bow', wood: '#4f7a3a', string: '#e8e2d0', size: 1.25 } } },
+  { id: 'crossbow', slot: 'ranged', title: t('Crossbow'), rarity: 'common', icon: 'crossbow', description: t('A heavy bolt knocks enemies off their feet.'), ranged: { dmg: 12, cd: 0.95, speed: 30, range: 22, knock: 1.2, look: { kind: 'crossbow', wood: '#6a4024', string: '#d8d2c0' } } },
+  { id: 'twinbow', slot: 'ranged', title: t('Star bow'), rarity: 'unique', icon: 'starbow', description: t('Every shot is a fan of three glowing arrows.'), ranged: { dmg: 7, cd: 0.6, speed: 30, range: 22, shots: 3, knock: 0.3, look: { kind: 'bow', wood: '#2f8fd0', string: '#ffffff', glow: '#5ad8ff' } } },
+  // armour
+  { id: 'tunic', slot: 'armor', title: t('Wanderer jacket'), rarity: 'common', icon: 'tunic', description: t('Warm, comfortable, with a pocket for raspberries.'), armor: { health: 20, perks: [{ kind: 'potion', value: 25 }], look: { body: '#5e8f46', trim: '#7a5230' } } },
+  { id: 'soulrobe', slot: 'armor', title: t('Soul robe'), rarity: 'common', icon: 'soulrobe', description: t('In a certain light the souls woven into the cloth shimmer with power.'), armor: { health: 30, perks: [{ kind: 'souls', value: 50 }, { kind: 'artifactDmg', value: 50 }], look: { body: '#4a4f8a', trim: '#6b72b8', skirt: '#454a82', head: { kind: 'hood', color: '#3d4278' }, cape: '#2e3160', glow: '#7ae0ff' } } },
+  { id: 'wolf', slot: 'armor', title: t('Wolf armour'), rarity: 'common', icon: 'wolf', description: t('The pelt of an old pack leader still remembers the forest.'), armor: { health: 35, perks: [{ kind: 'potion', value: 50 }], look: { body: '#9a9ea6', trim: '#5e6269', pauldron: '#c9ccd2', head: { kind: 'wolf', color: '#9a9ea6', accent: '#c9ccd2' }, cape: '#6f747c' } } },
+  { id: 'mercenary', slot: 'armor', title: t('Mercenary armour'), rarity: 'common', icon: 'mercenary', description: t('Thick riveted leather, proven in a hundred skirmishes.'), armor: { health: 40, perks: [{ kind: 'meleeDmg', value: 15 }], look: { body: '#8a5a32', trim: '#c03a3a', pauldron: '#6a4024', head: { kind: 'cap', color: '#6a4024' }, cape: '#a8302e' } } },
+  { id: 'scale', slot: 'armor', title: t('Scale armour'), rarity: 'rare', icon: 'scale', description: t('A thousand plates ring with every step.'), armor: { health: 50, perks: [{ kind: 'meleeDmg', value: 20 }, { kind: 'roll', value: 25 }], look: { body: '#5f8f7a', trim: '#2f4a3e', pauldron: '#8fc0a6', skirt: '#456b5a', head: { kind: 'helmet', color: '#5f8f7a', accent: '#8fc0a6' } } } },
+  { id: 'champion', slot: 'armor', title: t('Champion armour'), rarity: 'unique', icon: 'champion', description: t('The shining plate of one who stood a hundred days in the arena.'), armor: { health: 65, perks: [{ kind: 'cooldown', value: 25 }, { kind: 'arrows', value: 10 }, { kind: 'meleeDmg', value: 10 }], look: { body: '#d6dbe2', trim: '#f2b632', pauldron: '#e8ecf2', head: { kind: 'helmet', color: '#d6dbe2', accent: '#f2b632' }, cape: '#c42a3a', glow: '#ff3a5a' } } },
+  // artifacts
+  { id: 'firework', slot: 'artifact', title: t('Fire arrow'), rarity: 'common', icon: 'firework', description: t('A rocket flies to the cursor and bursts in a shower of sparks.'), artifact: A('firework', 9, 30, { radius: 3 }) },
+  { id: 'totem', slot: 'artifact', title: t('Healing totem'), rarity: 'common', icon: 'totem', description: t('Plants a totem that heals everyone nearby.'), artifact: A('totem', 22, 6, { radius: 3.5, duration: 8 }) },
+  { id: 'boots', slot: 'artifact', title: t('Boots of speed'), rarity: 'common', icon: 'boots', description: t('A short burst of speed.'), artifact: A('boots', 4, 1.6, { duration: 2 }) },
+  { id: 'horn', slot: 'artifact', title: t('Wind horn'), rarity: 'rare', icon: 'horn', description: t('A gust of wind knocks back everyone around.'), artifact: A('horn', 8, 6, { radius: 5 }) },
+  { id: 'lightning', slot: 'artifact', title: t('Lightning cube'), rarity: 'rare', icon: 'lightning', description: t('Lightning strikes the three nearest enemies.'), artifact: A('lightning', 12, 28, { radius: 9 }) },
+  // spells — src/spells.ts
+  { id: 'spark', slot: 'artifact', spell: 'starter', title: t('Spark'), rarity: 'common', icon: 'spark', description: t('Lightning from the sky strikes the target and jumps to its neighbours. Hold the key — more jumps.'), artifact: A('spark', 4, 18, { radius: 12, charge: 0.9 }) },
+  { id: 'fireball', slot: 'artifact', spell: 'starter', title: t('Fireball'), rarity: 'common', icon: 'fireball', description: t('A ball of flame flies to the cursor and explodes. Hold the key — the ball grows.'), artifact: A('fireball', 6, 26, { radius: 2.2, charge: 1.1 }) },
+  { id: 'icerain', slot: 'artifact', spell: 'starter', title: t('Ice rain'), rarity: 'common', icon: 'icerain', description: t('Icicles fall from the sky onto the spot at the cursor. Hold the key — wider area.'), artifact: A('icerain', 10, 7, { radius: 3, duration: 2, charge: 1 }) },
+  { id: 'heal', slot: 'artifact', spell: 'starter', title: t('Minor healing'), rarity: 'common', icon: 'heal', description: t('Raspberry leaves and petals close wounds. Hold the key — heals more.'), artifact: A('heal', 12, 22, { radius: 4, charge: 0.8 }) },
+  // auras — src/auras.ts; like spells, boss drops only
+  { id: 'pact', slot: 'aura', spell: 'boss', title: t('Blood Pact'), rarity: 'unique', icon: 'a-pact', description: t('Every strike returns part of the stolen life to the hero: red threads stretch from the enemy\'s wounds.'), aura: { kind: 'pact', value: 8, radius: 8 } },
+  { id: 'bastion', slot: 'aura', spell: 'boss', title: t('Bastion'), rarity: 'unique', icon: 'a-bastion', description: t('Rune shields circle around and take part of the blows upon themselves.'), aura: { kind: 'bastion', value: 20, radius: 8 } },
+  { id: 'rage', slot: 'aura', spell: 'boss', title: t('Rage'), rarity: 'unique', icon: 'a-rage', description: t('The weapon smoulders, strikes hit harder and are crushing more often.'), aura: { kind: 'rage', value: 15, radius: 8 } },
+  { id: 'clarity', slot: 'aura', spell: 'boss', title: t('Clarity'), rarity: 'unique', icon: 'a-clarity', description: t('Blue lights quicken the mind: spells and artifacts recharge faster, souls cling to the hands.'), aura: { kind: 'clarity', value: 25, radius: 8 } },
+  { id: 'thorns', slot: 'aura', spell: 'boss', title: t('Crown of Thorns'), rarity: 'unique', icon: 'a-thorns', description: t('Thorny vines underfoot lash everyone who strikes the hero up close.'), aura: { kind: 'thorns', value: 30, radius: 8 } },
+  // offensive auras — src/aura-offense.ts
+  { id: 'inferno', slot: 'aura', spell: 'boss', title: t('Furnace'), rarity: 'unique', icon: 'a-inferno', description: t('A ring of embers smoulders around the hero and burns anyone who comes near.'), aura: { kind: 'inferno', value: 3, radius: 8 } },
+  { id: 'frost', slot: 'aura', spell: 'boss', title: t('Deep Frost'), rarity: 'unique', icon: 'a-frost', description: t('Rime spreads over the ground: enemies nearby freeze and bog down in the cold.'), aura: { kind: 'frost', value: 2, radius: 8 } },
+  { id: 'storm', slot: 'aura', spell: 'boss', title: t('Storm Crown'), rarity: 'unique', icon: 'a-storm', description: t('Sparks run over the armour, and lightning finds an enemy on its own and jumps onward.'), aura: { kind: 'storm', value: 8, radius: 8 } },
+  { id: 'halo', slot: 'aura', spell: 'boss', title: t('Punishing Halo'), rarity: 'unique', icon: 'a-halo', description: t('A golden halo above the head: every fourth strike calls a beam from the sky.'), aura: { kind: 'halo', value: 12, radius: 8 } },
+  { id: 'shade', slot: 'aura', spell: 'boss', title: t('Hungry Shade'), rarity: 'unique', icon: 'a-shade', description: t('The shadow at the feet weakens enemies nearby, and in the flare it drains their life.'), aura: { kind: 'shade', value: 15, radius: 8 } },
+  { id: 'quake', slot: 'aura', spell: 'boss', title: t('Stone Tread'), rarity: 'unique', icon: 'a-quake', description: t('The ground under the hero shudders and every few seconds knocks enemies back.'), aura: { kind: 'quake', value: 10, radius: 8 } },
+  { id: 'blades', slot: 'aura', spell: 'boss', title: t('Whirl of Blades'), rarity: 'unique', icon: 'a-blades', description: t('Ghostly swords circle around the hero and cut everyone they touch.'), aura: { kind: 'blades', value: 4, radius: 8 } },
+  // spells — src/magic/; rarity: common → common (the merchant sells it), rare → rare, legendary and mythic → unique (boss drops)
+  { id: 'meteor', slot: 'artifact', spell: 'boss', title: t('Sky Hammer'), rarity: 'rare', icon: 'meteor', description: t('A blazing rock falls from the sky: a crater, a stun and burning ground.'), artifact: A('meteor', 14, 70, { radius: 3.5, charge: 1.2, info: t('Meteor: {v} damage within {r} m') }) },
+  { id: 'flameserpent', slot: 'artifact', spell: 'boss', title: t('Flame Serpent'), rarity: 'unique', icon: 'flameserpent', description: t('A fiery serpent crawls along the ground, weaves between enemies and leaves a burning trail.'), artifact: A('flameserpent', 18, 22, { radius: 1.6, duration: 3.5, charge: 1.2, info: t('Serpent: {v} damage per touch, {d} s') }) },
+  { id: 'ashcrown', slot: 'artifact', spell: 'shop', title: t('Ash Crown'), rarity: 'common', icon: 'ashcrown', description: t('A ring of fire spreads out from the hero as a wave and knocks everyone back.'), artifact: A('ashcrown', 8, 24, { radius: 5, charge: 0.8, info: t('Fire wave: {v} damage up to {r} m') }) },
+  { id: 'icetomb', slot: 'artifact', spell: 'boss', title: t('Ice Tomb'), rarity: 'rare', icon: 'icetomb', description: t('The enemy freezes into a crystal, and a moment later the crystal bursts in a fan of shards.'), artifact: A('icetomb', 14, 60, { radius: 3.5, duration: 2, charge: 1, info: t('Tomb: {v} damage, shards up to {r} m') }) },
+  { id: 'frostridge', slot: 'artifact', spell: 'shop', title: t('Frost Ridge'), rarity: 'common', icon: 'frostridge', description: t('A fan of ice spikes grows out of the ground and tosses enemies up.'), artifact: A('frostridge', 7, 26, { radius: 7, charge: 0.9, info: t('Spikes: {v} damage, fan of {r} m') }) },
+  { id: 'absolutezero', slot: 'artifact', spell: 'boss', title: t('Absolute Zero'), rarity: 'unique', icon: 'absolutezero', description: t('A dome of frost: inside, time nearly stands still, enemies ice over and freeze in place.'), artifact: A('absolutezero', 30, 40, { radius: 8, duration: 4, charge: 1.6, info: t('Dome: {v} damage in waves, {d} s within {r} m') }) },
+  { id: 'thunderspear', slot: 'artifact', spell: 'boss', title: t('Thunderer Spear'), rarity: 'rare', icon: 'thunderspear', description: t('A spear of lightning grows in the hand and pierces the whole line.'), artifact: A('thunderspear', 9, 55, { radius: 18, charge: 1.2, info: t('Spear: {v} damage along a {r} m line') }) },
+  { id: 'thunderleap', slot: 'artifact', spell: 'boss', title: t('Thunder Leap'), rarity: 'unique', icon: 'thunderleap', description: t('The hero leaps up and slams the ground: chain lightning in every direction.'), artifact: A('thunderleap', 14, 45, { radius: 4.5, charge: 1, info: t('Slam: {v} damage within {r} m plus lightning') }) },
+  { id: 'stormcloud', slot: 'artifact', spell: 'shop', title: t('Storm Cloud'), rarity: 'common', icon: 'stormcloud', description: t('A cloud hangs over the hero and strikes the nearest enemies on its own.'), artifact: A('stormcloud', 16, 16, { radius: 7, duration: 8, charge: 0.8, info: t('Cloud: {v} damage per bolt, {d} s') }) },
+  { id: 'starfall', slot: 'artifact', spell: 'boss', title: t('Starfall'), rarity: 'unique', icon: 'starfall', description: t('Stars fall from the sky across the whole area while the hero hovers in a pillar of light.'), artifact: A('starfall', 22, 18, { radius: 6, duration: 5, charge: 1.2, info: t('Stars: {v} damage each, {d} s within {r} m') }) },
+  { id: 'starbeam', slot: 'artifact', spell: 'boss', title: t('Fallen Star Beam'), rarity: 'unique', icon: 'starbeam', description: t('A huge beam from the hands: the hero slowly sweeps it after the cursor.'), artifact: A('starbeam', 30, 30, { radius: 16, duration: 3, charge: 1.6, info: t('Beam: {v} damage per touch, {d} s, length {r} m') }) },
+  { id: 'judgement', slot: 'artifact', spell: 'boss', title: t('Heavenly Judgement'), rarity: 'unique', icon: 'judgement', description: t('A pillar of light strikes enemies, heals allies and raises the fallen.'), artifact: A('judgement', 24, 60, { radius: 4, charge: 1.3, info: t('Judgement: {v} damage and healing within {r} m') }) },
+  { id: 'deadchoir', slot: 'artifact', spell: 'boss', title: t('Choir of the Dead'), rarity: 'rare', icon: 'deadchoir', description: t('Ghostly hands reach out of the ground, hold enemies and drag them down.'), artifact: A('deadchoir', 14, 14, { radius: 4, duration: 3, charge: 1, info: t('Hands: {v} damage in waves, {d} s within {r} m') }) },
+  { id: 'gravitywell', slot: 'artifact', spell: 'boss', title: t('Gravity Well'), rarity: 'unique', icon: 'gravitywell', description: t('A black sphere pulls enemies in, then collapses and flings them out.'), artifact: A('gravitywell', 20, 70, { radius: 6, duration: 2, charge: 1.2, info: t('Well: pulls for {d} s, burst of {v} damage') }) },
+  { id: 'skullscythe', slot: 'artifact', spell: 'shop', title: t('Skull Scythe'), rarity: 'common', icon: 'skullscythe', description: t('A flying skull: damage to the enemy, a little life to the hero.'), artifact: A('skullscythe', 5, 30, { radius: 14, charge: 0.7, info: t('Skull: {v} damage, range {r} m') }) },
+  { id: 'fallenguards', slot: 'artifact', spell: 'boss', title: t('Fallen Guards'), rarity: 'rare', icon: 'fallenguards', description: t('Three ghostly knights step out of portals and fight alongside.'), artifact: A('fallenguards', 30, 12, { duration: 15, souls: 50, charge: 1.2, info: t('Guards: {v} damage per strike, {d} s') }) },
+  { id: 'rift', slot: 'artifact', spell: 'boss', title: t('Rift'), rarity: 'rare', icon: 'rift', description: t('A crack runs forward and stone spikes grow out of it.'), artifact: A('rift', 10, 40, { radius: 10, charge: 1, info: t('Rift: {v} damage along a {r} m line') }) },
+  // base spells — src/magic/base-*.ts; not too strong, all sold by the merchant
+  { id: 'firewall', slot: 'artifact', spell: 'shop', title: t('Fire Wall'), rarity: 'common', icon: 'firewall', description: t('A wall of fire rises across the path to the cursor and burns everyone in it or passing through. Hold the key — longer and hotter.'), artifact: A('firewall', 10, 8, { radius: 5, duration: 4, charge: 1, info: t('Wall of {r} m: {v} damage every 0.5 s, {d} s') }) },
+  { id: 'firestorm', slot: 'artifact', spell: 'shop', title: t('Fire Hurricane'), rarity: 'common', icon: 'firestorm', description: t('A fiery twister rolls slowly to the cursor, pulling in and slowing enemies.'), artifact: A('firestorm', 12, 6, { radius: 1.8, duration: 4, charge: 1, info: t('Twister: {v} damage every 0.3 s, −30 % speed, {d} s') }) },
+  { id: 'armageddon', slot: 'artifact', spell: 'shop', title: t('Minor Armageddon'), rarity: 'common', icon: 'armageddon', description: t('For three seconds fireballs rain down around the hero.'), artifact: A('armageddon', 16, 14, { radius: 5, duration: 3, charge: 1.1, info: t('Rain of fireballs: {v} damage each, {r} m circle, {d} s') }) },
+  { id: 'wolves', slot: 'artifact', spell: 'shop', title: t('Wolf Pack'), rarity: 'common', icon: 'wolves', description: t('Wolves run out of portals and chase the nearest enemies; a bite slows. Hold the key — three wolves.'), artifact: A('wolves', 20, 8, { duration: 12, charge: 1, info: t('Wolves: {v} damage per bite, {d} s') }) },
+  { id: 'elemental', slot: 'artifact', spell: 'shop', title: t('Minor Elemental'), rarity: 'common', icon: 'elemental', description: t('An elemental hovers nearby and shoots wisps; the element cycles — fire, ice, lightning.'), artifact: A('elemental', 22, 10, { radius: 6, duration: 15, charge: 1, info: t('Elemental: {v} damage per wisp, {d} s') }) },
+  { id: 'golem', slot: 'artifact', spell: 'shop', title: t('Stone Golem'), rarity: 'common', icon: 'golem', description: t('A slow stone golem pounds the ground with its fist and keeps enemies on itself.'), artifact: A('golem', 28, 18, { radius: 2, duration: 18, charge: 1.1, info: t('Golem: {v} damage in a {r} m circle, stun, {d} s') }) },
+  { id: 'bloodclaws', slot: 'artifact', spell: 'shop', title: t('Raspberry Claws'), rarity: 'common', icon: 'bloodclaws', description: t('Three claws of raspberry flame burst out of the ground in front of the hero. Costs health, builds up bleeding.'), artifact: A('bloodclaws', 5, 22, { radius: 3, charge: 0.8, info: t('Claws: {v} damage, bleeding; costs 6 % health') }) },
+  { id: 'bloodswarm', slot: 'artifact', spell: 'shop', title: t('Berry Swarm'), rarity: 'common', icon: 'bloodswarm', description: t('A cone-shaped stream of tiny raspberry midges stings and builds up bleeding. Costs health.'), artifact: A('bloodswarm', 6, 4, { radius: 5, duration: 1.5, charge: 0.8, info: t('Swarm: {v} damage per sting, {d} s; costs 8 % health') }) },
+  { id: 'bloodblade', slot: 'artifact', spell: 'shop', title: t('Raspberry Blade'), rarity: 'common', icon: 'bloodblade', description: t('The weapon is coated in raspberry juice: strikes hit harder and build up bleeding. Costs health.'), artifact: A('bloodblade', 25, 10, { duration: 15, charge: 1, info: t('Blade: +{v}% sword damage and bleeding, {d} s; costs 10 % health') }) },
+  { id: 'blindflash', slot: 'artifact', spell: 'shop', title: t('Blinding Flash'), rarity: 'common', icon: 'blindflash', description: t('A flash of light around the hero: damage, knockback and a stun for regular enemies (not bosses).'), artifact: A('blindflash', 14, 12, { radius: 4, duration: 1.5, charge: 0.9, info: t('Flash: {v} damage within {r} m, stun {d} s') }) },
+  { id: 'raspberrybush', slot: 'artifact', spell: 'shop', title: t('Raspberry Bush'), rarity: 'common', icon: 'raspberrybush', description: t('A thorny bush holds enemies, then bursts into berries that heal.'), artifact: A('raspberrybush', 12, 20, { radius: 3, duration: 4, charge: 0.9, info: t('Bush: {v} damage from thorns, heals with berries') }) },
+  { id: 'titanform', slot: 'artifact', spell: 'boss', title: t('Titan Form'), rarity: 'unique', icon: 'titanform', description: t('The hero becomes a huge stone giant: strikes shake the earth.'), artifact: A('titanform', 40, 60, { duration: 10, charge: 1.5, info: t('Titan: +{v}% damage, −50% damage taken, {d} s') }) },
+  { id: 'bladephalanx', slot: 'artifact', spell: 'boss', title: t('Blade Phalanx'), rarity: 'rare', icon: 'bladephalanx', description: t('Seven ghostly swords fan out above the head and fly one after another.'), artifact: A('bladephalanx', 10, 20, { radius: 14, charge: 1, info: t('Blades: 7 × {v} damage') }) },
+  { id: 'blink', slot: 'artifact', spell: 'boss', title: t('Tear'), rarity: 'rare', icon: 'blink', description: t('A dash through space: an explosion where you vanished and where you appeared.'), artifact: A('blink', 8, 45, { radius: 8, charge: 0.8, info: t('Tear: {v} damage twice, dash up to {r} m') }) },
+  { id: 'harvester', slot: 'artifact', title: t('Soul Reaper'), rarity: 'unique', icon: 'harvester', description: t('Releases the gathered souls in a burst around the hero.'), artifact: A('harvester', 3, 45, { radius: 4, souls: 40 }) },
 ];
 
-/** Стартовые заклинания (wiki/design-spells.md, раздел 2) */
+/** Starter spells (wiki/design-spells.md, section 2) */
 export const STARTER_SPELLS = ['fireball', 'spark', 'heal', 'icerain'] as const;
 export const AURAS = ['pact', 'bastion', 'rage', 'clarity', 'thorns', 'inferno', 'frost', 'storm', 'halo', 'shade', 'quake', 'blades'] as const;
-/** Заклинания, которые продаёт торговец (обычные) */
+/** Spells the merchant sells (common) */
 export const SHOP_SPELLS = (): string[] => ITEMS.filter((d) => d.spell === 'shop').map((d) => d.id);
-/** Заклинания с боссов — пока боссов нет, лежат в инвентаре с начала */
+/** Boss spells — while there are no bosses, they are in the inventory from the start */
 const BOSS_SPELL_IDS = (): string[] => ITEMS.filter((d) => d.spell === 'boss' && d.slot === 'artifact').map((d) => d.id);
-/** Базовые заклинания (src/magic/base-*.ts): продаёт торговец, а в плейграунде они у героя с начала */
+/** Base spells (src/magic/base-*.ts): the merchant sells them, and in the playground the hero has them from the start */
 export const BASE_SPELLS = ['firewall', 'firestorm', 'armageddon', 'wolves', 'elemental', 'golem', 'bloodclaws', 'bloodswarm', 'bloodblade', 'blindflash'];
 
 export const itemDef = (id: string): ItemDef => {
   const d = ITEMS.find((x) => x.id === id);
-  if (!d) throw new Error(`Нет предмета ${id}`);
+  if (!d) throw new Error(`No item ${id}`);
   return d;
 };
 
-// ---------- зачарования ----------
+// ---------- enchantments ----------
 
 export type EnchantId =
   | 'sharpness' | 'critical' | 'leeching' | 'knockback' | 'swirling' | 'fireAspect' | 'soulSiphon' | 'smiting'
@@ -262,56 +263,56 @@ export interface EnchantDef {
   id: EnchantId;
   title: string;
   slot: Exclude<ItemSlot, 'artifact' | 'aura'>;
-  /** Мощное: дороже на 1 очко за ступень, выпадает только на уникальных */
+  /** Powerful: 1 point more per tier, rolls only on uniques */
   powerful?: boolean;
-  /** Значение на ступенях I, II, III */
+  /** Value at tiers I, II, III */
   tiers: [number, number, number];
-  /** Иконка и цвет ромба */
+  /** Icon and diamond colour */
   icon: string;
   color: string;
   text: (v: number) => string;
 }
 
 export const ENCHANTS: readonly EnchantDef[] = [
-  { id: 'sharpness', slot: 'melee', title: 'Острота', tiers: [10, 20, 30], icon: 'e-blade', color: '#5ab8ff', text: (v) => `+${v}% урона в ближнем бою` },
-  { id: 'critical', slot: 'melee', title: 'Критический удар', tiers: [10, 15, 20], icon: 'e-star', color: '#ffcf3a', text: (v) => `${v}% шанс нанести тройной урон` },
-  { id: 'leeching', slot: 'melee', title: 'Вампиризм', tiers: [4, 8, 12], icon: 'e-drop', color: '#e2304a', text: (v) => `Удар лечит на ${v}% от урона` },
-  { id: 'knockback', slot: 'melee', title: 'Отбрасывание', tiers: [30, 60, 90], icon: 'e-fist', color: '#c08a5a', text: (v) => `+${v}% к отбрасыванию` },
-  { id: 'swirling', slot: 'melee', title: 'Вихрь', tiers: [15, 30, 45], icon: 'e-swirl', color: '#7ae0d0', text: (v) => `Ударная волна добивающего шире на ${v}%` },
-  { id: 'fireAspect', slot: 'melee', title: 'Огненный аспект', tiers: [3, 6, 9], icon: 'e-flame', color: '#ff7a2a', text: (v) => `Поджигает цель: +${v} урона огнём` },
-  { id: 'soulSiphon', slot: 'melee', title: 'Вытягивание душ', tiers: [1, 2, 3], icon: 'soul', color: '#5ae0ff', text: (v) => `+${v} души за удар` },
-  { id: 'smiting', slot: 'melee', title: 'Сокрушение', powerful: true, tiers: [15, 30, 45], icon: 'e-bolt', color: '#c27aff', text: (v) => `${v}% шанс, что любой удар даст ударную волну` },
-  { id: 'power', slot: 'ranged', title: 'Сила', tiers: [20, 35, 50], icon: 'e-arrow', color: '#5ab8ff', text: (v) => `+${v}% урона стрел` },
-  { id: 'multishot', slot: 'ranged', title: 'Мультивыстрел', tiers: [20, 35, 50], icon: 'e-multi', color: '#5ad86a', text: (v) => `${v}% шанс выпустить ещё 2 стрелы` },
-  { id: 'infinity', slot: 'ranged', title: 'Бесконечность', tiers: [25, 50, 75], icon: 'e-inf', color: '#a77aff', text: (v) => `${v}% шанс не потратить стрелу` },
-  { id: 'accelerate', slot: 'ranged', title: 'Ускорение', tiers: [10, 20, 30], icon: 'e-clock', color: '#ffcf3a', text: (v) => `Стреляет на ${v}% чаще` },
-  { id: 'punch', slot: 'ranged', title: 'Отдача', tiers: [50, 100, 150], icon: 'e-fist', color: '#c08a5a', text: (v) => `+${v}% к отбрасыванию стрел` },
-  { id: 'piercing', slot: 'ranged', title: 'Пронзание', powerful: true, tiers: [1, 2, 3], icon: 'e-pierce', color: '#c27aff', text: (v) => `Стрела пробивает ${v} ${v === 1 ? 'цель' : 'цели'}` },
-  { id: 'health', slot: 'armor', title: 'Крепость', tiers: [10, 20, 30], icon: 'heart', color: '#e2304a', text: (v) => `+${v} к здоровью` },
-  { id: 'cooldown', slot: 'armor', title: 'Перезарядка', tiers: [10, 18, 25], icon: 'e-clock', color: '#ffcf3a', text: (v) => `−${v}% перезарядки артефактов` },
-  { id: 'soulGather', slot: 'armor', title: 'Сборщик душ', tiers: [25, 50, 75], icon: 'soul', color: '#5ae0ff', text: (v) => `+${v}% собранных душ` },
-  { id: 'potionBoost', slot: 'armor', title: 'Лекарь', tiers: [20, 40, 60], icon: 'potion', color: '#ff5a7a', text: (v) => `Зелье лечит на ${v}% больше` },
-  { id: 'acrobat', slot: 'armor', title: 'Акробат', tiers: [15, 30, 45], icon: 'roll', color: '#5ab8ff', text: (v) => `−${v}% перезарядки переката` },
-  { id: 'regen', slot: 'armor', title: 'Восстановление', powerful: true, tiers: [1, 2, 3], icon: 'e-leaf', color: '#5ad86a', text: (v) => `+${v} здоровья в секунду` },
+  { id: 'sharpness', slot: 'melee', title: t('Sharpness'), tiers: [10, 20, 30], icon: 'e-blade', color: '#5ab8ff', text: (v) => t('+{v}% melee damage', { v }) },
+  { id: 'critical', slot: 'melee', title: t('Critical Hit'), tiers: [10, 15, 20], icon: 'e-star', color: '#ffcf3a', text: (v) => t('{v}% chance to deal triple damage', { v }) },
+  { id: 'leeching', slot: 'melee', title: t('Leeching'), tiers: [4, 8, 12], icon: 'e-drop', color: '#e2304a', text: (v) => t('A strike heals for {v}% of the damage', { v }) },
+  { id: 'knockback', slot: 'melee', title: t('Knockback'), tiers: [30, 60, 90], icon: 'e-fist', color: '#c08a5a', text: (v) => t('+{v}% knockback', { v }) },
+  { id: 'swirling', slot: 'melee', title: t('Swirling'), tiers: [15, 30, 45], icon: 'e-swirl', color: '#7ae0d0', text: (v) => t('Finisher shockwave is {v}% wider', { v }) },
+  { id: 'fireAspect', slot: 'melee', title: t('Fire Aspect'), tiers: [3, 6, 9], icon: 'e-flame', color: '#ff7a2a', text: (v) => t('Sets the target on fire: +{v} fire damage', { v }) },
+  { id: 'soulSiphon', slot: 'melee', title: t('Soul Siphon'), tiers: [1, 2, 3], icon: 'soul', color: '#5ae0ff', text: (v) => t('+{v} souls per strike', { v }) },
+  { id: 'smiting', slot: 'melee', title: t('Smiting'), powerful: true, tiers: [15, 30, 45], icon: 'e-bolt', color: '#c27aff', text: (v) => t('{v}% chance that any strike makes a shockwave', { v }) },
+  { id: 'power', slot: 'ranged', title: t('Power'), tiers: [20, 35, 50], icon: 'e-arrow', color: '#5ab8ff', text: (v) => t('+{v}% arrow damage', { v }) },
+  { id: 'multishot', slot: 'ranged', title: t('Multishot'), tiers: [20, 35, 50], icon: 'e-multi', color: '#5ad86a', text: (v) => t('{v}% chance to fire 2 extra arrows', { v }) },
+  { id: 'infinity', slot: 'ranged', title: t('Infinity'), tiers: [25, 50, 75], icon: 'e-inf', color: '#a77aff', text: (v) => t('{v}% chance not to spend an arrow', { v }) },
+  { id: 'accelerate', slot: 'ranged', title: t('Accelerate'), tiers: [10, 20, 30], icon: 'e-clock', color: '#ffcf3a', text: (v) => t('Shoots {v}% faster', { v }) },
+  { id: 'punch', slot: 'ranged', title: t('Punch'), tiers: [50, 100, 150], icon: 'e-fist', color: '#c08a5a', text: (v) => t('+{v}% arrow knockback', { v }) },
+  { id: 'piercing', slot: 'ranged', title: t('Piercing'), powerful: true, tiers: [1, 2, 3], icon: 'e-pierce', color: '#c27aff', text: (v) => (v === 1 ? t('An arrow pierces 1 target') : t('An arrow pierces {v} targets', { v })) },
+  { id: 'health', slot: 'armor', title: t('Fortitude'), tiers: [10, 20, 30], icon: 'heart', color: '#e2304a', text: (v) => t('+{v} health', { v }) },
+  { id: 'cooldown', slot: 'armor', title: t('Cooldown'), tiers: [10, 18, 25], icon: 'e-clock', color: '#ffcf3a', text: (v) => t('−{v}% artifact cooldown', { v }) },
+  { id: 'soulGather', slot: 'armor', title: t('Soul Gatherer'), tiers: [25, 50, 75], icon: 'soul', color: '#5ae0ff', text: (v) => t('+{v}% souls gathered', { v }) },
+  { id: 'potionBoost', slot: 'armor', title: t('Healer'), tiers: [20, 40, 60], icon: 'potion', color: '#ff5a7a', text: (v) => t('The potion heals {v}% more', { v }) },
+  { id: 'acrobat', slot: 'armor', title: t('Acrobat'), tiers: [15, 30, 45], icon: 'roll', color: '#5ab8ff', text: (v) => t('−{v}% dodge roll cooldown', { v }) },
+  { id: 'regen', slot: 'armor', title: t('Regeneration'), powerful: true, tiers: [1, 2, 3], icon: 'e-leaf', color: '#5ad86a', text: (v) => t('+{v} health per second', { v }) },
 ];
 
 export const enchantDef = (id: EnchantId): EnchantDef => {
   const d = ENCHANTS.find((e) => e.id === id);
-  if (!d) throw new Error(`Нет зачарования ${id}`);
+  if (!d) throw new Error(`No enchantment ${id}`);
   return d;
 };
 
-/** Цена ступени tier (1..3): обычное — tier очков, мощное — tier + 1 */
+/** Cost of tier (1..3): regular — tier points, powerful — tier + 1 */
 export const enchantCost = (e: EnchantDef, tier: number): number => tier + (e.powerful ? 1 : 0);
 
-// ---------- экземпляры ----------
+// ---------- instances ----------
 
 export interface EnchantSlot {
-  /** Три варианта на выбор */
+  /** Three options to choose from */
   options: EnchantId[];
-  /** Выбранный вариант (индекс в options) или −1 */
+  /** Chosen option (index in options) or −1 */
   chosen: number;
-  /** Ступень 0..3 */
+  /** Tier 0..3 */
   tier: number;
 }
 
@@ -320,7 +321,7 @@ export interface Item {
   def: string;
   power: number;
   enchants: EnchantSlot[];
-  /** Ещё не смотрели в инвентаре — жёлтый уголок */
+  /** Not yet looked at in the inventory — yellow corner */
   isNew?: boolean;
 }
 
@@ -329,7 +330,7 @@ export interface Equipment {
   ranged: string | null;
   armor: string | null;
   artifacts: [string | null, string | null, string | null];
-  /** Четвёртое гнездо — аура */
+  /** Fourth slot — aura */
   aura: string | null;
 }
 
@@ -337,9 +338,9 @@ export interface ProfileData {
   version: 1;
   level: number;
   xp: number;
-  /** Свободные очки зачарования */
+  /** Free enchantment points */
   points: number;
-  /** Малина — валюта, как изумруды в MCD */
+  /** Raspberries — the currency, like emeralds in MCD */
   berries: number;
   souls: number;
   arrows: number;
@@ -348,9 +349,9 @@ export interface ProfileData {
   equip: Equipment;
 }
 
-/** Множитель от силы предмета: +6% за единицу */
+/** Multiplier from item power: +6% per unit */
 export const powerMult = (power: number): number => 1 + (power - 1) * 0.06;
-/** Опыт до следующего уровня */
+/** XP to the next level */
 export const xpToNext = (level: number): number => 40 + (level - 1) * 20;
 export const MAX_SOULS = 100;
 export const MAX_ARROWS = 200;
@@ -358,7 +359,7 @@ export const ARROW_BUNDLE = 12;
 
 const hash = (s: string): number => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
 
-/** Гнёзда зачарований: по редкости, в каждом три разных варианта; на уникальном один вариант — мощный */
+/** Enchantment slots: by rarity, three different options in each; on a unique one option is powerful */
 export function rollEnchantSlots(def: ItemDef, r: Rand): EnchantSlot[] {
   if (def.slot === 'artifact' || def.slot === 'aura') return [];
   const pool = ENCHANTS.filter((e) => e.slot === def.slot);
@@ -374,7 +375,7 @@ export function rollEnchantSlots(def: ItemDef, r: Rand): EnchantSlot[] {
   return out;
 }
 
-/** Очки, вложенные в предмет */
+/** Points invested in the item */
 export function spentPoints(it: Item): number {
   let n = 0;
   for (const s of it.enchants) {
@@ -385,18 +386,18 @@ export function spentPoints(it: Item): number {
   return n;
 }
 
-/** Цены лавок (src/hud/shop.ts): перековка, стрелы, обычное заклинание; остальное — по характеристикам (src/prices.ts) */
+/** Shop prices (src/hud/shop.ts): reforging, arrows, a common spell; everything else — by stats (src/prices.ts) */
 export const PRICE = {
   arrows: 20,
   reforge: (power: number): number => 30 + power * 15,
-  /** Обычное заклинание у торговца */
+  /** A common spell at the merchant */
   spell: (power: number): number => 110 + power * 12,
 };
 
-/** Малина за разбор */
+/** Raspberries for salvaging */
 export const salvageValue = (it: Item): number => Math.round((8 + it.power * 5) * RARITY[itemDef(it.def).rarity].salvage);
 
-/** Значение зачарования на предмете (сумма по гнёздам), 0 — нет */
+/** Enchantment value on the item (sum over slots), 0 — none */
 export function enchantValue(it: Item | null | undefined, id: EnchantId): number {
   if (!it) return 0;
   let v = 0;
@@ -404,14 +405,14 @@ export function enchantValue(it: Item | null | undefined, id: EnchantId): number
   return v;
 }
 
-/** Числа предмета для карточки: здоровье брони, урон стрелы и артефакта с учётом силы */
+/** Item numbers for the card: armour health, arrow and artifact damage with power */
 export function armorHealth(it: Item): number { return Math.round((itemDef(it.def).armor?.health ?? 0) * powerMult(it.power)); }
 
-// ---------- профиль героя ----------
+// ---------- hero profile ----------
 
 const KEY = 'malina.profile';
 
-/** Сводка снаряжения — её читает сцена */
+/** Gear summary — the scene reads it */
 export interface GearStats {
   meleeMult: number;
   critChance: number;
@@ -454,12 +455,12 @@ export class Profile {
     if (loaded) this.addStarterSpells();
   }
 
-  /** Сохранения до заклинаний: стартовые четыре — в инвентарь, свободные гнёзда занять ими */
+  /** Saves from before spells: the four starters go to the inventory, free slots are filled with them */
   private addStarterSpells(): void {
     const have = new Set(this.data.items.map((i) => i.def));
     const add = STARTER_SPELLS.filter((d) => !have.has(d));
-    // пока боссов нет — ауры и заклинания с боссов кладём в инвентарь, чтобы их можно было примерить
-    // плейграунд: всё оружие ближнего боя — в инвентаре, новое оружие тоже доходит до старых сохранений
+    // while there are no bosses — auras and boss spells go to the inventory so they can be tried on
+    // playground: all melee weapons are in the inventory, new weapons reach old saves too
     const extra = [...AURAS, ...BOSS_SPELL_IDS(), ...BASE_SPELLS, ...ITEMS.filter((d) => d.slot === 'melee').map((d) => d.id)].filter((d) => !have.has(d));
     if (!add.length && !extra.length) return;
     for (const d of add) {
@@ -468,10 +469,10 @@ export class Profile {
       if (free >= 0) this.data.equip.artifacts[free] = it.uid;
     }
     for (const d of extra) this.add(d, itemDef(d).rarity === 'unique' ? 3 : itemDef(d).rarity === 'rare' ? 2 : 1);
-    if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* закрытое хранилище */ }
+    if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* closed storage */ }
   }
 
-  /** Стартовый набор: экипировка новичка и сундук трофеев, чтобы было что примерить и зачаровать */
+  /** Starter kit: a beginner's equipment and a chest of loot, so there is something to try on and enchant */
   static starter(): ProfileData {
     const p = new Profile({ version: 1, level: 1, xp: 0, points: 3, berries: 250, souls: 0, arrows: 40, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null], aura: null } }, false);
     const eq = (def: string, power: number): string => p.add(def, power, false).uid;
@@ -490,9 +491,9 @@ export class Profile {
   }
 
   /**
-   * Набор обороны куста (wiki/design-tower-defence.md, раздел 12): в бой — как новый герой, всё силы 1 — меч стража,
-   * куртка странника, лук и три стартовых заклинания, без ауры; остальное покупается у маркитанта за малину боя.
-   * Своё снаряжение героя откладывается на время боя и возвращается в лагере (src/menu/session.ts)
+   * Bush Defence kit (wiki/design-tower-defence.md, section 12): into battle as a new hero, everything at power 1 — warden sword,
+   * wanderer jacket, bow and the three starter spells, no aura; the rest is bought from the sutler for battle raspberries.
+   * The hero's own gear is set aside for the battle and returned in the camp (src/menu/session.ts)
    */
   tdKit(): void {
     const D = this.data;
@@ -509,25 +510,25 @@ export class Profile {
       if (!raw) return null;
       const d = JSON.parse(raw) as ProfileData;
       if (d.version !== 1 || !Array.isArray(d.items)) return null;
-      // предметы, которых больше нет в каталоге, выбрасываем
+      // items no longer in the catalog are dropped
       d.items = d.items.filter((i) => ITEMS.some((x) => x.id === i.def));
       return d;
     } catch { return null; }
   }
 
   save(): void {
-    if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* закрытое хранилище */ }
+    if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* closed storage */ }
     for (const f of this.listeners) f();
   }
 
   onChange(f: () => void): () => void { this.listeners.add(f); return () => { this.listeners.delete(f); }; }
 
-  /** Начать заново со стартового набора */
+  /** Start over with the starter kit */
   reset(): void { this.data = Profile.starter(); this.save(); }
 
   get(uid: string | null | undefined): Item | null { return uid ? this.data.items.find((i) => i.uid === uid) ?? null : null; }
 
-  /** Новый предмет в инвентарь */
+  /** New item into the inventory */
   add(def: string, power: number, isNew = true): Item {
     const d = itemDef(def);
     const uid = `i${++this.data.seq}`;
@@ -536,17 +537,17 @@ export class Profile {
     return it;
   }
 
-  /** Случайный трофей около силы героя: обычные чаще, уникальные редко. В инвентарь — через add, когда подобрали */
+  /** Random loot around the hero's power: commons more often, uniques rarely. Into the inventory via add once picked up */
   rollLoot(r: Rand = this.rand, slots?: ItemSlot[]): { def: string; power: number } {
     const x = r();
     const rarity: Rarity = x < 0.06 ? 'unique' : x < 0.32 ? 'rare' : 'common';
-    // заклинания выпадают только из боссов — не из сундуков и не у торговцев
+    // spells drop from bosses only — not from chests and not from merchants
     const of = (rr: Rarity): ItemDef[] => ITEMS.filter((d) => d.rarity === rr && !d.spell && (!slots || slots.includes(d.slot)));
     const pool = of(rarity).length ? of(rarity) : of('common');
     return { def: pool[Math.floor(r() * pool.length)].id, power: Math.max(1, this.power + Math.floor(r() * 3) - 1) };
   }
 
-  /** Купить за малину: false — не хватает */
+  /** Buy with raspberries: false — not enough */
   pay(price: number): boolean {
     if (this.data.berries < price) return false;
     this.data.berries -= price;
@@ -554,7 +555,7 @@ export class Profile {
     return true;
   }
 
-  /** Перековка у кузнеца: +1 к силе предмета */
+  /** Reforging at the blacksmith: +1 item power */
   reforge(uid: string, price: number): boolean {
     const it = this.get(uid);
     if (!it || !this.pay(price)) return false;
@@ -571,7 +572,7 @@ export class Profile {
     return e.melee === uid || e.ranged === uid || e.armor === uid || e.artifacts.includes(uid) || e.aura === uid;
   }
 
-  /** Надеть; артефакт — в гнездо at или в первое свободное (нет свободного — вместо первого) */
+  /** Equip; an artifact goes to slot at or to the first free one (none free — replaces the first) */
   equip(uid: string, at?: number): boolean {
     const it = this.get(uid);
     if (!it) return false;
@@ -589,14 +590,14 @@ export class Profile {
     return true;
   }
 
-  /** Снять артефакт из гнезда (оружие и броню снять нельзя — только заменить) */
+  /** Unequip an artifact from its slot (weapons and armour cannot be unequipped — only replaced) */
   unequipArtifact(i: number): void { this.data.equip.artifacts[i] = null; this.save(); }
 
-  /** Надетая аура */
+  /** Equipped aura */
   aura(): Item | null { return this.get(this.data.equip.aura); }
   unequipAura(): void { this.data.equip.aura = null; this.save(); }
 
-  /** Разобрать: малина и потраченные очки назад. Надетое не разбирается */
+  /** Salvage: raspberries and the spent points back. Equipped items cannot be salvaged */
   salvage(uid: string): { berries: number; points: number } | null {
     const it = this.get(uid);
     if (!it || this.isEquipped(uid)) return null;
@@ -608,7 +609,7 @@ export class Profile {
     return res;
   }
 
-  /** Цена следующего шага в гнезде (выбор варианта = ступень I) или null — нельзя */
+  /** Cost of the next step in the slot (choosing an option = tier I) or null — not allowed */
   nextCost(it: Item, slot: number, option: number): number | null {
     const s = it.enchants[slot];
     if (!s) return null;
@@ -617,7 +618,7 @@ export class Profile {
     return enchantCost(enchantDef(s.options[option]), s.tier + 1);
   }
 
-  /** Выбрать вариант в гнезде или поднять его ступень */
+  /** Choose an option in the slot or raise its tier */
   enchant(uid: string, slot: number, option: number): boolean {
     const it = this.get(uid);
     if (!it) return false;
@@ -631,7 +632,7 @@ export class Profile {
     return true;
   }
 
-  /** Опыт; возвращает, сколько уровней взято (каждый — очко зачарования) */
+  /** XP; returns how many levels were gained (each — an enchantment point) */
   addXp(n: number): number {
     const d = this.data;
     d.xp += n;
@@ -645,7 +646,7 @@ export class Profile {
   addBerries(n: number): void { this.data.berries += n; this.save(); }
   addArrows(n: number): void { this.data.arrows = Math.min(MAX_ARROWS, this.data.arrows + n); this.save(); }
 
-  /** Сила героя: среднее оружия, брони, лука и артефактов (как в MCD) */
+  /** Hero power: the average of weapon, armour, bow and artifacts (as in MCD) */
   get power(): number {
     const p = (it: Item | null): number => it?.power ?? 0;
     const arts = this.artifacts().filter((x): x is Item => !!x);

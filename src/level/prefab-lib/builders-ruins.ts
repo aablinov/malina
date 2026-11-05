@@ -1,30 +1,30 @@
 import type { BuildCtx, Builder } from './build.ts';
 
 /**
- * Партия «Руины» (wiki/design-prefab-library.md, раздел C; референсы 1, 3, 4, 8, 9, 10 в wiki/sources/refs-settlements.md):
- * арки и акведук, обломки стен, колонны, капелла с колокольней, круглая башня, площадка со статуями, алтарь, кладбище, чаши.
- * Кладка — руинный кирпич `bricks_old` (со ступенями, полублоком и стенкой), у подножия мшистый и треснутый; вокруг щебень,
- * кирпичи, горшки, кости, плющ на стенах, трава в швах.
+ * The "Ruins" batch (wiki/design-prefab-library.md, section C; references 1, 3, 4, 8, 9, 10 in wiki/sources/refs-settlements.md):
+ * arches and an aqueduct, wall fragments, columns, a chapel with a bell tower, a round tower, a platform with statues, an altar, a graveyard, bowls.
+ * Masonry is the ruin brick `bricks_old` (with stairs, slab and wall), mossy and cracked at the foot; rubble,
+ * bricks, pots, bones around, ivy on the walls, grass in the joints.
  */
 
 const pick = <T,>(c: BuildCtx, list: T[]): T => list[Math.floor(c.rnd() * list.length)];
 const yaw = (c: BuildCtx): number => Math.floor(c.rnd() * 360);
 
-/** Материал кладки руин: полный блок, низ (мшистый), треснутый, ступени, полублок — для руинного кирпича, песчаника, храмового камня */
+/** Ruin masonry material: full block, bottom (mossy), cracked, stairs, slab — for ruin brick, sandstone, temple stone */
 export interface Mat { full: string; low: string; cracked: string; stairs: string; slab: string }
 export const RUIN: Mat = { full: 'bricks_old', low: 'bricks_mossy', cracked: 'bricks_cracked', stairs: 'bricks_old_stairs', slab: 'bricks_old_slab' };
-/** Кирпич кладки: у земли чаще мшистый и треснутый, выше — руинный */
+/** Masonry brick: mossy and cracked more often near the ground, ruin brick higher up */
 const brick = (c: BuildCtx, y: number, m: Mat = RUIN): string => {
   const v = c.rnd();
   if (y === 0) return v < 0.25 ? m.low : v < 0.35 ? m.cracked : m.full;
   return v < 0.08 ? m.cracked : m.full;
 };
-/** Столб кладки высотой h с рваным верхом: иногда полублок или ступень сверху */
+/** A masonry pillar of height h with a ragged top: sometimes a slab or stairs on top */
 export function pillar(c: BuildCtx, x: number, z: number, h: number, ragged = true, m: Mat = RUIN): void {
   for (let y = 0; y < h; y++) c.L.set(x, y, z, brick(c, y, m));
   if (ragged) { const v = c.rnd(); if (v < 0.35) c.L.set(x, h, z, m.slab); else if (v < 0.5) c.L.set(x, h, z, m.stairs, Math.floor(c.rnd() * 4)); }
 }
-/** Стена по отрезку клеток с гуляющей высотой hMin..hMax и рваным верхом */
+/** A wall along a run of cells with uneven height hMin..hMax and a ragged top */
 export function wallRun(c: BuildCtx, cells: [number, number][], hMin: number, hMax: number, m: Mat = RUIN): void {
   let h = hMin + Math.floor(c.rnd() * (hMax - hMin + 1));
   for (const [x, z] of cells) {
@@ -33,23 +33,23 @@ export function wallRun(c: BuildCtx, cells: [number, number][], hMin: number, hM
   }
 }
 /**
- * Настенный декор на грани клетки (x, y, z): face — куда смотрит грань ('+z' | '-z' | '+x' | '-x').
- * Рыск как у блоков: 0 — смотрит к +Z, 90 — к −X, 180 — к −Z, 270 — к +X.
+ * Wall decor on a face of cell (x, y, z): face — which way the face looks ('+z' | '-z' | '+x' | '-x').
+ * Yaw as for blocks: 0 — looks towards +Z, 90 — −X, 180 — −Z, 270 — +X.
  */
 export function onWall(c: BuildCtx, name: string, x: number, y: number, z: number, face: '+z' | '-z' | '+x' | '-x'): void {
   const [dx, dz, rot] = face === '+z' ? [0, 0.5, 0] : face === '-z' ? [0, -0.5, 180] : face === '+x' ? [0.5, 0, 270] : [-0.5, 0, 90];
   c.dec(name, x + dx, y, z + dz, rot, [x, Math.floor(y), z]);
 }
-/** Арка шириной 1 между столбами x0 и x1 (= x0 + 2) с перемычкой на высоте h и зубцами сверху */
+/** An arch 1 wide between pillars x0 and x1 (= x0 + 2) with a lintel at height h and merlons on top */
 export function arch(c: BuildCtx, x0: number, z: number, h: number, collapsed = false, m: Mat = RUIN): void {
   pillar(c, x0, z, h, false, m); pillar(c, x0 + 2, z, h, false, m);
   if (collapsed) { c.dec('rubble', x0 + 1, 0, z + 1, yaw(c)); c.dec('bricks_loose', x0 + 1, 0, z, yaw(c)); return; }
   for (let x = x0; x <= x0 + 2; x++) c.L.set(x, h, z, brick(c, h, m));
-  // пята арки: ступени под перемычкой лицом внутрь проёма
+  // arch springers: stairs under the lintel facing into the opening
   c.L.set(x0, h - 1, z, m.stairs, 0); c.L.set(x0 + 2, h - 1, z, m.stairs, 2);
   for (let x = x0; x <= x0 + 2; x++) { const v = c.rnd(); if (v < 0.4) c.L.set(x, h + 1, z, m.slab); else if (v < 0.6) c.L.set(x, h + 1, z, brick(c, h + 1, m)); }
 }
-/** Пол из плит с выпавшими и заросшими местами в прямоугольнике */
+/** A tile floor with missing and overgrown spots in a rectangle */
 export function ruinFloor(c: BuildCtx, x0: number, z0: number, x1: number, z1: number): void {
   for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
     const v = c.rnd();
@@ -61,7 +61,7 @@ const scatter = (c: BuildCtx, items: [string, number, number][]): void => { for 
 
 export const RUINS: Builder[] = [
   {
-    id: 'ruin_arch', title: 'Арка', category: 'руины', hint: 'проём 1 × 3 в руинном кирпиче, зубцы сверху, плющ и щебень', variants: 2,
+    id: 'ruin_arch', title: 'Arch', category: 'ruins', hint: 'a 1 × 3 opening in ruin brick, merlons on top, ivy and rubble', variants: 2,
     build(c) {
       arch(c, -1, 0, 3);
       onWall(c, 'ivy', pick(c, [-1, 1]), 2.5, 0, '+z');
@@ -70,7 +70,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_arcade', title: 'Акведук', category: 'руины', hint: '4 арки вдоль X высотой 4, один пролёт обрушен', variants: 2,
+    id: 'ruin_arcade', title: 'Aqueduct', category: 'ruins', hint: '4 arches along X 4 high, one span collapsed', variants: 2,
     build(c) {
       const broken = pick(c, [1, 2]);
       for (let i = 0; i < 4; i++) arch(c, -6 + i * 3, 0, 4, i === broken);
@@ -81,7 +81,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_wall_window', title: 'Стена с окном', category: 'руины', hint: 'обломок 5 × 3 с арочным окном, плющ, горшки у подножия', variants: 2,
+    id: 'ruin_wall_window', title: 'Wall with a window', category: 'ruins', hint: 'a 5 × 3 fragment with an arched window, ivy, pots at the foot', variants: 2,
     build(c) {
       wallRun(c, [[-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0]], 2, 3);
       c.L.set(0, 1, 0, 'air'); c.L.set(0, 2, 0, 'air');
@@ -93,7 +93,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_corner', title: 'Угол стены', category: 'руины', hint: 'две стены 4 × 3 под углом, высота спадает от угла; внутри горшки и череп', variants: 2,
+    id: 'ruin_corner', title: 'Wall corner', category: 'ruins', hint: 'two 4 × 3 walls at an angle, height falling away from the corner; pots and a skull inside', variants: 2,
     build(c) {
       for (let i = 0; i <= 3; i++) { pillar(c, i, 0, Math.max(1, 3 - Math.floor(i / 1.5)), i > 0); pillar(c, 0, i, Math.max(1, 3 - Math.floor(i / 1.5)), i > 0); }
       onWall(c, 'ivy', 1, 1.5, 0, '+z');
@@ -102,7 +102,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_column_row', title: 'Ряд колонн', category: 'руины', hint: '8 м вдоль X: обломки и упавшие колонны на плитах', variants: 2,
+    id: 'ruin_column_row', title: 'Column row', category: 'ruins', hint: '8 m along X: stumps and fallen columns on tiles', variants: 2,
     build(c) {
       ruinFloor(c, -4, -1, 3, 1);
       for (let i = 0; i < 4; i++) {
@@ -115,18 +115,18 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_chapel', title: 'Капелла', category: 'руины', hint: 'неф без крыши 6 × 7 и колокольня 3 × 3 высотой 8; вариант 1 — дерево внутри, 2 — алтарь и башня обрушена', variants: 2,
+    id: 'ruin_chapel', title: 'Chapel', category: 'ruins', hint: 'a roofless 6 × 7 nave and a 3 × 3 bell tower 8 high; variant 1 has a tree inside, 2 an altar and a collapsed tower', variants: 2,
     build(c) {
       const whole = c.seed === 1;
       ruinFloor(c, -4, -3, 4, 3);
-      // неф: стены по периметру x −4..1, z −3..3, высота 2–3; вход с −X, окна по длинным стенам
+      // nave: walls around the perimeter x −4..1, z −3..3, height 2–3; entrance from −X, windows in the long walls
       const ring: [number, number][] = [];
       for (let x = -4; x <= 1; x++) { ring.push([x, -3]); ring.push([x, 3]); }
       for (let z = -2; z <= 2; z++) ring.push([-4, z]);
       wallRun(c, ring, 2, 3);
       for (let y = 0; y <= 3; y++) c.L.set(-4, y, 0, 'air');
       for (const z of [-3, 3]) for (const x of [-2, 0]) { c.L.set(x, 1, z, 'air'); c.L.set(x, 2, z, 'air'); c.L.set(x, 3, z, 'bricks_old_slab'); }
-      // колокольня x 2..4, z −1..1: полая, окна арками на высоте 5–6
+      // bell tower x 2..4, z −1..1: hollow, arched windows at height 5–6
       const top = whole ? 8 : 5;
       for (let x = 2; x <= 4; x++) for (let z = -1; z <= 1; z++) {
         if (x === 3 && z === 0) continue;
@@ -135,8 +135,8 @@ export const RUINS: Builder[] = [
         if (whole && (x !== 3 && z !== 0)) c.L.set(x, top, z, 'bricks_old_slab');
       }
       for (const [x, z] of [[3, -1], [3, 1], [4, 0]]) { c.L.set(x, 5, z, 'air'); c.L.set(x, 6, z, 'air'); if (whole) c.L.set(x, 7, z, 'bricks_old_slab'); }
-      c.L.set(2, 1, 0, 'air'); c.L.set(2, 2, 0, 'air'); // проход из нефа в башню
-      // внутри: дерево или алтарь
+      c.L.set(2, 1, 0, 'air'); c.L.set(2, 2, 0, 'air'); // passage from the nave into the tower
+      // inside: a tree or an altar
       if (whole) {
         for (let k = 0; k < 2; k++) c.L.set(-1, k, 0, 'log');
         for (const [dx, dy, dz] of [[0, 2, 0], [1, 2, 0], [-1, 2, 0], [0, 2, 1], [0, 2, -1], [0, 3, 0], [1, 3, 0], [0, 3, 1], [0, 4, 0]]) c.L.set(-1 + dx, dy, dz, 'leaves_gold');
@@ -155,7 +155,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_tower_round', title: 'Башня круглая', category: 'руины', hint: 'полая башня 5 × 5 высотой до 8, верх обломан, вход с −X', variants: 2,
+    id: 'ruin_tower_round', title: 'Round tower', category: 'ruins', hint: 'a hollow 5 × 5 tower up to 8 high, broken top, entrance from −X', variants: 2,
     build(c) {
       const cells: [number, number][] = [];
       for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) if (Math.abs(x) + Math.abs(z) >= 2 && Math.abs(x) + Math.abs(z) <= 3) cells.push([x, z]);
@@ -174,7 +174,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_platform_statues', title: 'Площадка со статуями', category: 'руины', hint: 'плиты 8 × 6 на блок выше, лестница с −X, две статуи в капюшонах', variants: 2,
+    id: 'ruin_platform_statues', title: 'Platform with statues', category: 'ruins', hint: '8 × 6 of tiles one block up, stairs from −X, two hooded statues', variants: 2,
     build(c) {
       for (let x = -3; x <= 4; x++) for (let z = -2; z <= 3; z++) {
         c.L.set(x, -1, z, 'bricks_old');
@@ -190,7 +190,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_altar', title: 'Алтарь', category: 'руины', hint: 'плита со свечами и запечённым золотым светом, чаша и череп — «место благодати»', variants: 2,
+    id: 'ruin_altar', title: 'Altar', category: 'ruins', hint: 'a slab with candles and baked golden light, a bowl and a skull — a "place of grace"', variants: 2,
     build(c) {
       for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) c.L.set(x, -1, z, c.rnd() < 0.75 ? 'tiles' : 'tiles_broken');
       c.L.set(0, 0, 0, 'bricks_old_slab');
@@ -202,7 +202,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'graveyard_small', title: 'Кладбище', category: 'руины', hint: '6 × 6: надгробия трёх форм, кресты, мёртвое дерево, свечи у могилы', variants: 2,
+    id: 'graveyard_small', title: 'Graveyard', category: 'ruins', hint: '6 × 6: gravestones of three shapes, crosses, a dead tree, candles by a grave', variants: 2,
     build(c) {
       const graves: [number, number][] = [[-2, -2], [0, -2], [2, -2], [-2, 1], [1, 1], [-1, 3]];
       for (const [x, z] of graves) c.dec(pick(c, ['gravestone', 'gravestone', 'gravestone_wide', 'gravestone_fallen', 'grave_cross']), x, 0, z, 180 + Math.floor(c.rnd() * 30 - 15));
@@ -213,7 +213,7 @@ export const RUINS: Builder[] = [
     },
   },
   {
-    id: 'ruin_bowls', title: 'Чаши и горшки', category: 'руины', hint: 'каменная чаша и глиняные горшки у обломка кладки', variants: 2,
+    id: 'ruin_bowls', title: 'Bowls and pots', category: 'ruins', hint: 'a stone bowl and clay pots by a masonry fragment', variants: 2,
     build(c) {
       c.dec('stone_bowl', 0, 0, 0, yaw(c));
       c.dec('pot_clay', 1, 0, 1, yaw(c));

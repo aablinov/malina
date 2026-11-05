@@ -2,25 +2,25 @@ import { iconCanvas } from '../icons.ts';
 import type { Level } from '../level/level.ts';
 
 /**
- * Карта с туманом войны в духе Diablo и Minecraft Dungeons (wiki/design-inventory.md, «Карта»):
- * открывается там, где герой прошёл; проходимое — тёмно-синяя заливка с белым пиксельным контуром, как в MCD.
- * Рисуется в изометрии камеры (поворот на 45° и сжатие по вертикали): верх экрана — туда же, куда смотрит игра.
- * Три вида: мини-карта в углу, прозрачная карта поверх игры (Tab, как в Diablo II) и полная карта (M).
+ * Map with fog of war in the spirit of Diablo and Minecraft Dungeons (wiki/design-inventory.md, "Map"):
+ * it opens where the hero has walked; walkable — a dark blue fill with a white pixel outline, like in MCD.
+ * Drawn in the camera's isometry (45° rotation and vertical squash): the top of the screen is where the game looks.
+ * Three views: the mini-map in the corner, the translucent map over the game (Tab, like Diablo II) and the full map (M).
  *
- * Клетка — колонна блоков: «пол», если на неё можно встать (верх выше соседей меньше чем на 1,5 м), «вода», иначе «стена».
- * Хранится тайлами 32 × 32 клетки (регион мира, src/world/regions.ts): карта растёт вместе с миром, тайл
- * создаётся, когда регион впервые появляется, а разведка тайла сохраняется и восстанавливается (base64).
+ * A cell is a column of blocks: "floor" if one can stand on it (its top is less than 1.5 m above the neighbours), "water", otherwise "wall".
+ * Stored as tiles of 32 × 32 cells (a world region, src/world/regions.ts): the map grows with the world, a tile
+ * is created when the region first appears, and the tile's exploration is saved and restored (base64).
  */
 
-export interface MapMarker { x: number; z: number; icon: string; /** Серый (сундук уже открыт) */ dim?: boolean; /** Виден и без разведки */ always?: boolean }
+export interface MapMarker { x: number; z: number; icon: string; /** Grey (the chest is already opened) */ dim?: boolean; /** Visible without exploration */ always?: boolean }
 export interface MapView { x: number; z: number; yaw: number }
 
 const FLOOR = 1, WATER = 2, WALL = 3;
-/** Пикселей холста на клетку */
+/** Canvas pixels per cell */
 const S = 6;
-/** Клеток в тайле */
+/** Cells per tile */
 const T = 32;
-/** Сжатие по вертикали: камера смотрит сверху под ≈ 44° */
+/** Vertical squash: the camera looks down at ≈ 44° */
 const SQUASH = 0.7;
 const C = Math.SQRT1_2;
 const FILL = '#2c3a50', WATER_FILL = '#2c4f74', EDGE = '#f2f4f8';
@@ -40,7 +40,7 @@ export class AutoMap {
   private readonly tiles = new Map<string, Tile>();
   private readonly icons = new Map<string, HTMLCanvasElement>();
 
-  /** level — чтобы читать колонны; для статичной карты тайлы создаются сразу на всех границах */
+  /** level — to read the columns; for a static map the tiles are created at once over the whole bounds */
   private readonly level: Level;
   constructor(level: Level, whole = true) { this.level = level;
     if (!whole) return;
@@ -49,7 +49,7 @@ export class AutoMap {
     for (let tz = Math.floor(b.minZ / T); tz <= Math.floor(b.maxZ / T); tz++) for (let tx = Math.floor(b.minX / T); tx <= Math.floor(b.maxX / T); tx++) this.addTile(tx, tz);
   }
 
-  /** Тайл региона (rx, rz): создать и прочитать колонны уровня; уже есть — пересчитать проходимость заново */
+  /** Region tile (rx, rz): create and read the level columns; if it exists — recompute walkability */
   addTile(tx: number, tz: number): Tile {
     const key = tileKey(tx, tz);
     let t = this.tiles.get(key);
@@ -60,12 +60,12 @@ export class AutoMap {
       this.tiles.set(key, t);
     }
     this.classify(t);
-    // у соседей край этого тайла был «пустотой» — пересчитать их контуры
+    // for the neighbours this tile's edge was "void" — recompute their outlines
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = this.tiles.get(tileKey(tx + dx, tz + dz)); if (n) this.classify(n); }
     return t;
   }
 
-  /** Верх колонны (x, z) и вода ли это; −Infinity — пусто */
+  /** Top of column (x, z) and whether it is water; −Infinity — empty */
   private column(x: number, z: number): [number, boolean] {
     const L = this.level, b = L.getBounds();
     if (!b) return [-Infinity, false];
@@ -82,7 +82,7 @@ export class AutoMap {
 
   private classify(t: Tile): void {
     const x0 = t.tx * T, z0 = t.tz * T;
-    // колонны с полем в одну клетку вокруг — чтобы сравнивать с соседями через край тайла
+    // columns with a one-cell margin around — to compare with neighbours across the tile edge
     const W = T + 2;
     const top = new Float32Array(W * W), water = new Uint8Array(W * W);
     for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) { const [h, wet] = this.column(x0 + i - 1, z0 + j - 1); top[j * W + i] = h; water[j * W + i] = wet ? 1 : 0; }
@@ -96,13 +96,13 @@ export class AutoMap {
       t.kind[z * T + x] = kind;
       if (kind !== WALL) t.walkable++;
     }
-    // уже разведанное перерисовать по новой классификации
+    // repaint what is already explored with the new classification
     t.opened = 0;
     t.g.clearRect(0, 0, T * S, T * S); t.lg.clearRect(0, 0, T * S, T * S);
     for (let z = 0; z < T; z++) for (let x = 0; x < T; x++) if (t.seen[z * T + x] && this.open(t, x, z)) { t.opened++; this.paint(t, x, z); }
   }
 
-  /** Доля разведанного, 0..1 */
+  /** Explored share, 0..1 */
   get explored(): number {
     let w = 0, o = 0;
     for (const t of this.tiles.values()) { w += t.walkable; o += t.opened; }
@@ -121,7 +121,7 @@ export class AutoMap {
     return k === FLOOR || k === WATER;
   }
 
-  /** Открыть клетки в радиусе r вокруг точки; true — открылось новое */
+  /** Reveal cells within radius r around a point; true — something new was revealed */
   reveal(x: number, z: number, r = 13): boolean {
     const cx = Math.round(x), cz = Math.round(z);
     let any = false;
@@ -138,7 +138,7 @@ export class AutoMap {
     return any;
   }
 
-  /** Открыть всё (для проверки) */
+  /** Reveal everything (for testing) */
   revealAll(): void {
     for (const t of this.tiles.values()) for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) {
       const k = j * T + i;
@@ -151,7 +151,7 @@ export class AutoMap {
     return !!t && t.seen[(zz - t.tz * T) * T + (xx - t.tx * T)] === 1;
   }
 
-  /** Разведка тайла как строка (base64 битов), чтобы сохранить; undefined — ничего не разведано */
+  /** Tile exploration as a string (base64 bits) to save; undefined — nothing explored */
   seenOf(tx: number, tz: number): string | undefined {
     const t = this.tiles.get(tileKey(tx, tz));
     if (!t || !t.opened && !t.seen.some((v) => v)) return undefined;
@@ -160,7 +160,7 @@ export class AutoMap {
     return btoa(String.fromCharCode(...bytes));
   }
 
-  /** Восстановить разведку тайла из seenOf */
+  /** Restore tile exploration from seenOf */
   restoreSeen(tx: number, tz: number, packed: string): void {
     const t = this.tiles.get(tileKey(tx, tz));
     if (!t) return;
@@ -171,7 +171,7 @@ export class AutoMap {
     }
   }
 
-  /** Клетка: заливка и белый контур там, где сосед — стена или пустота */
+  /** Cell: fill and a white outline where the neighbour is a wall or void */
   private paint(t: Tile, i: number, j: number): void {
     const g = t.g, k = t.kind[j * T + i], px = i * S, py = j * S;
     g.fillStyle = k === WATER ? WATER_FILL : FILL;
@@ -184,20 +184,20 @@ export class AutoMap {
       if (!this.open(t, i, j - 1)) c.fillRect(px, py, S, L);
       if (!this.open(t, i, j + 1)) c.fillRect(px, py + S - L, S, L);
     }
-    // редкие белые ромбики по полу, как камешки на карте MCD
+    // rare white diamonds on the floor, like pebbles on the MCD map
     const gx = t.tx * T + i, gz = t.tz * T + j;
     if (k === FLOOR && (((gx * 73856093) ^ (gz * 19349663)) % 61 + 61) % 61 === 0) { g.fillRect(px + 2, py + 1, 2, 1); g.fillRect(px + 1, py + 2, 4, 2); g.fillRect(px + 2, py + 4, 2, 1); }
   }
 
-  /** Мир → экран: центр (cx, cy), k пикселей на клетку, вокруг точки (ox, oz) */
+  /** World → screen: centre (cx, cy), k pixels per cell, around point (ox, oz) */
   static project(x: number, z: number, ox: number, oz: number, cx: number, cy: number, k: number): [number, number] {
     const u = (x - ox) * k, v = (z - oz) * k;
     return [cx + (u * C - v * C), cy + (u * C + v * C) * SQUASH];
   }
 
   /**
-   * Нарисовать карту на холсте ctx: центр вида (ox, oz) → точка (cx, cy), k пикселей на клетку.
-   * alpha — прозрачность; lines — только контур поверх едва заметной заливки (Tab, как в Diablo II).
+   * Draw the map on canvas ctx: view centre (ox, oz) → point (cx, cy), k pixels per cell.
+   * alpha — opacity; lines — outline only over a barely visible fill (Tab, like Diablo II).
    */
   draw(ctx: CanvasRenderingContext2D, ox: number, oz: number, cx: number, cy: number, k: number, hero: MapView, markers: MapMarker[], alpha = 1, lines = false): void {
     ctx.save();
@@ -208,7 +208,7 @@ export class AutoMap {
     ctx.rotate(Math.PI / 4);
     ctx.scale(k / S, k / S);
     ctx.translate(-(ox + 0.5) * S, -(oz + 0.5) * S);
-    // тайлы, которые могут попасть в холст: радиус вида в клетках с запасом на поворот
+    // tiles that may land on the canvas: the view radius in cells with a margin for the rotation
     const reach = Math.hypot(ctx.canvas.width, ctx.canvas.height) / k + T;
     for (const t of this.tiles.values()) {
       if (!t.opened) continue;
@@ -219,7 +219,7 @@ export class AutoMap {
       else ctx.drawImage(t.art, px, pz);
     }
     ctx.restore();
-    // значки и герой — в экранных координатах, не сжимаются
+    // markers and the hero — in screen coordinates, not squashed
     const sz = Math.max(14, Math.min(26, k * 2.2));
     for (const m of markers) {
       if (!m.always && !this.isSeen(m.x, m.z)) continue;
@@ -245,7 +245,7 @@ export class AutoMap {
     ctx.restore();
   }
 
-  /** Подобрать k, чтобы разведанное (или вся карта) влезло в w × h */
+  /** Pick k so the explored area (or the whole map) fits into w × h */
   fit(w: number, h: number): { ox: number; oz: number; k: number } {
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (const t of this.tiles.values()) for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) if (t.seen[j * T + i] && this.open(t, i, j)) {
@@ -257,7 +257,7 @@ export class AutoMap {
       if (x0 === Infinity) { x0 = x1 = z0 = z1 = 0; }
     }
     const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2;
-    // размах повёрнутого прямоугольника: по ширине (dx + dz)·C, по высоте (dx + dz)·C·SQUASH
+    // extent of the rotated rectangle: width (dx + dz)·C, height (dx + dz)·C·SQUASH
     const dx = x1 - x0 + 2, dz = z1 - z0 + 2, span = (dx + dz) * C;
     return { ox, oz, k: Math.min(w / span, h / (span * SQUASH)) * 0.92 };
   }

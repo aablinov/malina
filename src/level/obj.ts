@@ -1,22 +1,22 @@
 /**
- * Разбор Wavefront OBJ в форму блока.
- * Поддерживаются v / vt / vn / usemtl / f (треугольники и четырёхугольники, индексы v/vt/vn).
- * Форма живёт в кубе 0..1; грань, лежащая целиком на границе куба и смотрящая наружу,
- * помечается направлением (cull) — мешер прячет её, если сосед с той стороны непрозрачный.
+ * Parsing a Wavefront OBJ into a block shape.
+ * Supported: v / vt / vn / usemtl / f (triangles and quads, v/vt/vn indices).
+ * The shape lives in the 0..1 cube; a face lying entirely on the cube boundary and facing outwards
+ * is marked with a direction (cull) — the mesher hides it if the neighbour on that side is opaque.
  */
 
-/** Направления: 0 +X, 1 +Z, 2 −X, 3 −Z, 4 +Y, 5 −Y */
+/** Directions: 0 +X, 1 +Z, 2 −X, 3 −Z, 4 +Y, 5 −Y */
 export const DIRS: readonly (readonly [number, number, number])[] = [[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1], [0, 1, 0], [0, -1, 0]];
 
 export interface Tri {
-  /** Слот текстуры (usemtl) */
+  /** Texture slot (usemtl) */
   group: string;
-  /** 3 вершины × xyz */
+  /** 3 vertices × xyz */
   pos: number[];
-  /** 3 вершины × uv */
+  /** 3 vertices × uv */
   uv: number[];
   nrm: [number, number, number];
-  /** Направление границы куба, на которой лежит грань, или −1 */
+  /** Direction of the cube boundary the face lies on, or −1 */
   cull: number;
 }
 
@@ -80,16 +80,16 @@ export function parseObj(name: string, text: string): Shape {
       default: break;
     }
   }
-  if (!tris.length) throw new Error(`OBJ «${name}»: нет граней`);
+  if (!tris.length) throw new Error(`OBJ "${name}": no faces`);
   return { name, tris, groups: [...groups] };
 }
 
-/** Повернуть форму вокруг оси Y на rot × 90° вокруг центра блока */
+/** Rotate a shape around the Y axis by rot × 90° around the block centre */
 export function rotateShape(s: Shape, rot: number): Shape {
   rot = ((rot % 4) + 4) % 4;
   if (rot === 0) return s;
   const rp = (x: number, z: number): [number, number] => {
-    // k = 1: (x, z) → (1 − z, x), то есть +X переходит в +Z
+    // k = 1: (x, z) → (1 − z, x), i.e. +X turns into +Z
     for (let k = 0; k < rot; k++) { const nx = 1 - z; z = x; x = nx; }
     return [x, z];
   };

@@ -1,8 +1,8 @@
 import type { LevelJSON } from './level.ts';
 
 /**
- * Встроенные карты: всё из assets/maps/ вшивается в сборку.
- * Комнаты-заготовки подземелья лежат в assets/maps/rooms/.
+ * Built-in maps: everything from assets/maps/ is baked into the build.
+ * Dungeon room templates live in assets/maps/rooms/.
  */
 const all = import.meta.glob('../../assets/maps/**/*.json', { eager: true, import: 'default' }) as Record<string, LevelJSON>;
 

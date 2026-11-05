@@ -5,50 +5,51 @@ import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, wrap, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Золотой страж — мини-босс (wiki/design-bosses.md, раздел 2): всадник Ордена в золотых латах на бело-золотом коне под
- * малиновой попоной, в руке алебарда, на левой руке круглый щит, заросший малиновой лозой. Атаки: таран по полосе через
- * всю арену (врезался в стену — конь спотыкается, оглушён, герб-ягода на груди коня открыт); круговой взмах алебардой;
- * «фаланга» — веер из семи призрачных мечей, летят по одному, каждый со своей нотой пентатоники — вместе аккорд.
- * Щит: удар спереди (±60°) — урон ×0,3. Роняет «Фалангу клинков».
- * Подвижных частей: конь, голова коня, передняя пара ног, задняя пара ног, всадник, алебарда, герб (+ семь мечей отдельно).
+ * Golden Warden — mini-boss (wiki/design-bosses.md, section 2): a rider of the Order in golden armour on a white-and-gold horse under
+ * a raspberry caparison, a halberd in hand, a round shield overgrown with raspberry vine on the left arm. Attacks: a charge along a strip across
+ * the whole arena (crashed into a wall — the horse stumbles, dazed, the berry emblem on the horse's chest open); a circular halberd sweep;
+ * "phalanx" — a fan of seven ghostly swords, they fly one by one, each with its own pentatonic note — a chord together.
+ * Shield: a hit from the front (±60°) — damage ×0.3. Drops "Phalanx of Blades".
+ * Moving parts: horse, horse head, front pair of legs, hind pair of legs, rider, halberd, emblem (+ seven swords separately).
  */
 
 const GOLD = C(4, 3, 1), SPECTRAL = C(2.6, 3, 4), DUST = ['#c8b890', '#9a8f70'];
-/** Корень аккорда мечей: соль первой октавы */
+/** Root of the sword chord: G4 */
 const ROOT = 392;
 const LANCE_LEN = 16, LANCE_W = 2.4, LANCE_SPEED = 15;
 const BLADES = 7, BLADE_GAP = 0.18, BLADE_FLY = 0.45, BLADE_R = 1.1;
 
 const sfx = {
-  /** Копыта: два глухих удара */
+  /** Hooves: two dull thuds */
   hoof() { boom(95, 45, 0.16, 0.22); boom(80, 40, 0.14, 0.18, 0.07); },
-  /** Ржание: пила с вибрато вниз */
+  /** Neigh: a saw with vibrato going down */
   neigh() {
     for (let i = 0; i < 4; i++) voice({ type: 'sawtooth', f: 620 - i * 60, f1: 480 - i * 70, dur: 0.16, vol: 0.035, delay: i * 0.12, detune: 25, lp: 2400, verb: 0.4 });
     hiss({ dur: 0.6, vol: 0.08, f: 2400, f1: 900, q: 0.8, verb: 0.3 });
   },
-  /** Щит: металлический звон, обертоны не кратные */
+  /** Shield: metallic ring, non-harmonic overtones */
   clink() { for (const [f, d] of [[1240, 0], [1870, 0.005], [2630, 0.01]] as const) voice({ type: 'triangle', f, dur: 0.35, vol: 0.035, delay: d, verb: 0.35 }); hiss({ dur: 0.08, vol: 0.12, f: 5000, q: 1.2 }); },
-  /** Взмах алебарды: свист */
+  /** Halberd sweep: whistle */
   swing() { hiss({ dur: 0.45, vol: 0.25, f: 600, f1: 2600, q: 1.4 }); },
-  /** Таран пошёл: рог и топот */
+  /** Charge begins: horn and hoofbeats */
   charge() { voice({ type: 'sawtooth', f: 196, f1: 262, dur: 0.6, vol: 0.05, lp: 1400, verb: 0.5 }); boom(70, 35, 0.5, 0.5); },
-  /** Врезался в стену */
+  /** Crashed into a wall */
   crash() { boom(65, 22, 1, 0.9, 0, 0.5); hiss({ dur: 0.7, vol: 0.25, f: 1800, f1: 200, q: 0.5, type: 'lowpass' }); this.clink(); },
-  /** Меч сорвался: своя ступень пентатоники, колокольчики складываются в аккорд */
+  /** A sword broke loose: its own pentatonic step, the bells build up into a chord */
   note(i: number) { bell(deg(ROOT, i), 1.6, 0.05, 0, 0.6); pluck(deg(ROOT / 2, i), 0.04); },
-  /** Меч вонзился */
+  /** A sword stuck in */
   stab() { boom(160, 70, 0.18, 0.2); hiss({ dur: 0.15, vol: 0.1, f: 3000, f1: 800, q: 0.9 }); },
 };
 
-/** Призрачный меч фаланги: висит в веере → летит по прямой в метку */
+/** Ghostly sword of the phalanx: hangs in the fan → flies straight into the mark */
 interface Blade { g: THREE.Group; phase: 'off' | 'hover' | 'fly'; t: number; from: THREE.Vector3; to: THREE.Vector3 }
 
 export class GoldenRider extends MiniBoss {
   readonly radius = 1.6;
-  readonly title = 'Золотой страж';
+  readonly title = t('Golden Warden');
   override readonly topY = 3.9;
   readonly drop = 'bladephalanx';
   private readonly horse = new THREE.Group();
@@ -86,7 +87,7 @@ export class GoldenRider extends MiniBoss {
     const glow = this.shimmer(GOLD, RASP, 2, 2);
     const B = this.box.bind(this);
     this.body.add(this.horse);
-    // конь: корпус, латы на крупе и груди, малиновая попона по бокам, хвост
+    // horse: body, armour on the croup and chest, raspberry caparison at the sides, tail
     B(this.horse, coat, 1.3, 1.1, 2.6, 0, 1.75, 0);
     B(this.horse, gold, 1.36, 0.5, 0.7, 0, 1.95, 1.0);
     B(this.horse, gold, 1.36, 0.45, 0.8, 0, 2.05, -0.95);
@@ -95,12 +96,12 @@ export class GoldenRider extends MiniBoss {
       B(this.horse, gold, 0.1, 0.12, 2.2, s * 0.71, 1.12, 0);
     }
     B(this.horse, dark, 0.25, 0.9, 0.25, 0, 1.5, -1.4, -0.4);
-    // герб Ордена на груди коня — ягода из кубиков: сердце, по нему ×2, когда конь споткнулся
+    // emblem of the Order on the horse's chest — a berry of cubes: the heart, ×2 on it when the horse has stumbled
     this.emblem.position.set(0, 1.6, 1.34);
     this.horse.add(this.emblem);
     for (const [x, y, k] of [[0, 0, 0.32], [0.21, 0.18, 0.22], [-0.21, 0.18, 0.22], [0.21, -0.18, 0.22], [-0.21, -0.18, 0.22], [0, 0.34, 0.18], [0, -0.34, 0.18]] as const) B(this.emblem, heart, k, k, 0.12, x, y, 0);
     B(this.emblem, gold, 0.14, 0.2, 0.1, 0, 0.54, 0);
-    // голова: шея, морда в золотом налобнике, грива, глаза
+    // head: neck, muzzle in a golden chanfron, mane, eyes
     this.head.position.set(0, 2.1, 1.2);
     this.horse.add(this.head);
     B(this.head, coat, 0.6, 1.0, 0.6, 0, 0.45, 0.15, 0.45);
@@ -109,13 +110,13 @@ export class GoldenRider extends MiniBoss {
     B(this.head, gold, 0.12, 0.35, 0.12, 0, 1.45, 0.4);
     B(this.head, cloth, 0.16, 0.9, 0.3, 0, 0.75, -0.1, 0.45);
     for (const s of [-1, 1]) B(this.head, glowMat(GOLD), 0.06, 0.08, 0.12, s * 0.28, 1.02, 0.75);
-    // ноги парами: каждая пара — одна часть, качается в галопе
+    // legs in pairs: each pair is one part, swings in the gallop
     for (const [g, z] of [[this.legsF, 0.95], [this.legsB, -0.95]] as const) {
       g.position.set(0, 1.3, z);
       this.horse.add(g);
       for (const s of [-1, 1]) { B(g, coat, 0.32, 1.15, 0.32, s * 0.38, -0.6, 0); B(g, gold, 0.36, 0.2, 0.36, s * 0.38, -1.15, 0); }
     }
-    // всадник: латы, шлем с плюмажем, на левой руке (+x) — щит с лозой и ягодами
+    // rider: armour, helmet with a plume, on the left arm (+x) — a shield with vine and berries
     this.rider.position.set(0, 2.3, -0.15);
     this.body.add(this.rider);
     B(this.rider, gold, 0.8, 0.9, 0.55, 0, 0.55, 0);
@@ -132,7 +133,7 @@ export class GoldenRider extends MiniBoss {
     B(shield, gold, 0.14, 1.0, 0.7, 0);
     B(shield, glow, 0.16, 0.24, 0.24, 0.02, 0, 0);
     for (const [y, z] of [[0.35, -0.3], [0.1, 0.38], [-0.3, -0.15], [-0.4, 0.3]] as const) { B(shield, vine, 0.18, 0.12, 0.42, 0.04, y, z, 0.6); B(shield, berry, 0.14, 0.14, 0.14, 0.1, y + 0.08, z); }
-    // алебарда: опора у центра всадника, древко справа (−x); порядок YXZ — наклон, потом вращение
+    // halberd: pivot at the rider's centre, the shaft to the right (−x); order YXZ — tilt, then rotation
     this.halberd.position.set(0, 0.7, 0);
     this.halberd.rotation.order = 'YXZ';
     this.rider.add(this.halberd);
@@ -140,7 +141,7 @@ export class GoldenRider extends MiniBoss {
     B(this.halberd, steel, 0.08, 0.55, 0.7, -0.7, 1.75, 0.3);
     B(this.halberd, steel, 0.08, 0.5, 0.08, -0.7, 2.3, 0);
     B(this.halberd, glow, 0.1, 0.1, 0.5, -0.7, 1.75, 0.3);
-    // семь призрачных мечей — в сцене, спрятаны до «фаланги»
+    // seven ghostly swords — in the scene, hidden until the "phalanx"
     for (let i = 0; i < BLADES; i++) {
       const g = new THREE.Group();
       const m = this.shimmer(SPECTRAL, i % 2 ? GOLD : RASP, i * 0.6, 4);
@@ -158,8 +159,8 @@ export class GoldenRider extends MiniBoss {
   protected override cry(): void { if (!this.quiet) { sfx.neigh(); boom(70, 30, 0.8, 0.4, 0.1, 0.5); } }
 
   /**
-   * Щит: удар, пока герой спереди (±60°), — урон ×0,3. Только удары с толчком (меч, стрелы, заклинания); зоны и служебный
-   * урон без толчка щит не ловит. Оглушённый страж щит опустил.
+   * Shield: a hit while the hero is in front (±60°) — damage ×0.3. Only hits with knockback (sword, arrows, spells); zones and service
+   * damage without knockback the shield does not catch. A dazed warden has lowered the shield.
    */
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void {
     if (this.awake && !this.dead && this.state !== 'daze' && knock > 0) {
@@ -167,7 +168,7 @@ export class GoldenRider extends MiniBoss {
       if (Math.abs(wrap(Math.atan2(hero.x - this.pos.x, hero.z - this.pos.z) - this.yaw)) < Math.PI / 3) {
         dmg *= 0.3;
         const at = this.pos.clone().addScaledVector(this.fwd(), 0.9).setY(this.topY - 1);
-        this.h.fx.text(at.clone().setY(at.y + 0.6), 'щит', '');
+        this.h.fx.text(at.clone().setY(at.y + 0.6), t('shield'), '');
         this.h.fx.burst(at, [GOLD, '#fff2c0'], 8, { speed: 4, up: 2, size: 0.07, life: 0.3, glow: true, gravity: 8 });
         if (!this.quiet) sfx.clink();
       }
@@ -185,7 +186,7 @@ export class GoldenRider extends MiniBoss {
     const fx = this.h.fx;
     switch (name) {
       case 'lance': {
-        // встал на дыбы, полоса через арену → галоп насквозь; упёрся в стену — споткнулся, оглушён
+        // reared up, a strip across the arena → gallop straight through; ran into a wall — stumbled, dazed
         const AIM = 0.7;
         if (!this.hitDone) {
           this.hitDone = true;
@@ -202,7 +203,7 @@ export class GoldenRider extends MiniBoss {
         const nx = this.pos.x + this.lanceDir.x * step, nz = this.pos.z + this.lanceDir.z * step;
         const wall = nx < a.x0 + R || nx > a.x1 - R || nz < a.z0 + R || nz > a.z1 - R;
         if (!wall) { this.move(this.lanceDir, step); this.lanceRun += step; }
-        // копьё и грудь коня: полоса перед стражем
+        // the spear and the horse's chest: a strip in front of the warden
         if (!this.lanceHit && this.inLine(this.pos.clone().addScaledVector(this.lanceDir, -this.radius), this.lanceDir, this.radius * 2 + 1.6, LANCE_W)) {
           this.lanceHit = true;
           this.hurt(20, this.pos, 10);
@@ -221,7 +222,7 @@ export class GoldenRider extends MiniBoss {
         return false;
       }
       case 'sweep': {
-        // алебарда в сторону — круг; на исходе полный оборот
+        // halberd to the side — a circle; at the end a full turn
         if (!this.hitDone) { this.hitDone = true; this.markCircle(this.pos, 3.5, 0.6, () => undefined); }
         if (t >= 0.6 && t - dt < 0.6) {
           if (!this.quiet) sfx.swing();
@@ -232,7 +233,7 @@ export class GoldenRider extends MiniBoss {
         return t > 1.05;
       }
       case 'blades': {
-        // веер мечей над всадником; по одному срываются в героя, у каждого своя нота
+        // a fan of swords above the rider; one by one they break loose at the hero, each with its own note
         if (!this.hitDone) {
           this.hitDone = true;
           for (const b of this.blades) { b.phase = 'hover'; b.t = 0; b.g.visible = true; }
@@ -257,7 +258,7 @@ export class GoldenRider extends MiniBoss {
 
   private hideBlades(): void { for (const b of this.blades) { b.phase = 'off'; b.g.visible = false; } }
 
-  /** Мечи: висят веером над всадником, летят по прямой, вонзаются */
+  /** Swords: hang in a fan above the rider, fly straight, stick in */
   private tickBlades(dt: number): void {
     const up = new THREE.Vector3(0, 1, 0), side = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     const center = this.pos.clone().setY(this.flyY + this.body.position.y + 4.4).addScaledVector(this.fwd(), -0.3);
@@ -291,7 +292,7 @@ export class GoldenRider extends MiniBoss {
     const t = this.time, S = this.st;
     const charging = this.state === 'attack' && this.attack === 'lance' && S >= 0.7;
     const rearing = this.state === 'attack' && this.attack === 'lance' && S < 0.7;
-    // галоп: ноги парами вразнобой, корпус качается, голова кивает, на каждом такте — топот и пыль
+    // gallop: leg pairs out of step, the body sways, the head nods, hoofbeats and dust on every beat
     if (walk || charging) {
       const was = this.gait % 1;
       this.gait += dt * (charging ? 3.2 : 2.1) * this.speedK;
@@ -311,9 +312,9 @@ export class GoldenRider extends MiniBoss {
       this.horse.rotation.x *= 0.85;
       this.head.rotation.x = Math.sin(t * 1.5) * 0.06;
     }
-    // на дыбы перед тараном: корпус назад, передние ноги вперёд
+    // rears up before the charge: body back, front legs forward
     if (rearing) { const k = Math.sin(Math.min(1, S / 0.7) * Math.PI); this.horse.rotation.x = -0.45 * k; this.legsF.rotation.x = -0.9 * k; this.body.position.y = 0.4 * k; }
-    // алебарда: в покое — вверх; таран — наперевес; взмах — вбок и полный оборот
+    // halberd: at rest — up; charge — levelled; sweep — sideways and a full turn
     const hb = this.halberd.rotation;
     if (this.state === 'attack' && this.attack === 'lance') hb.set(Math.min(1, S / 0.6) * 1.35, 0, 0);
     else if (this.state === 'attack' && this.attack === 'sweep') {
@@ -321,10 +322,10 @@ export class GoldenRider extends MiniBoss {
       hb.set(0, spin, 1.35 * wind);
     } else if (this.state === 'attack' && this.attack === 'blades') hb.set(-0.3, 0, -0.25);
     else { hb.x *= 0.85; hb.y = wrap(hb.y) * 0.85; hb.z *= 0.85; }
-    // всадник: качается в седле, при «фаланге» поднимает голову
+    // rider: sways in the saddle, raises the head on the "phalanx"
     this.rider.rotation.x = this.state === 'attack' && this.attack === 'blades' ? -0.15 : -this.horse.rotation.x * 0.5;
     this.rider.position.y = 2.3 + (this.state === 'sleep' ? 0 : Math.sin(t * 2) * 0.03);
-    // оглушён: конь припал на передние ноги, всадник обмяк, герб бьётся крупно
+    // dazed: the horse dropped onto its front legs, the rider slumped, the emblem beats hard
     if (this.state === 'daze') { this.horse.rotation.x = 0.22; this.legsF.rotation.x = 0.5; this.head.rotation.x = 0.4; this.rider.rotation.x = 0.35; }
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.emblem.scale.setScalar(beat * (this.heartOpen ? 1.4 : 1));

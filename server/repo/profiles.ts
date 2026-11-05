@@ -3,8 +3,8 @@ import type { Db } from '../db.ts';
 export interface ProfileRow { version: number; data: unknown }
 
 /**
- * Профили героев: `ProfileData` (src/items.ts) целиком в JSON. version растёт на каждую запись —
- * оптимистичная блокировка: кто писал по старой версии, получает конфликт и свежий профиль
+ * Hero profiles: `ProfileData` (src/items.ts) whole as JSON. version grows on every write —
+ * optimistic locking: whoever writes against an old version gets a conflict and the fresh profile
  */
 export class Profiles {
   private readonly db: Db;
@@ -15,7 +15,7 @@ export class Profiles {
     return r ? { version: r.version, data: JSON.parse(r.data) } : null;
   }
 
-  /** Записать, если версия совпала (0 — профиля ещё нет). Вернёт новую версию или null при конфликте */
+  /** Write if the version matches (0 — no profile yet). Returns the new version or null on conflict */
   put(playerId: string, expected: number, data: unknown, now: number): number | null {
     const json = JSON.stringify(data);
     if (expected === 0) {

@@ -1,6 +1,6 @@
 # Main menu
 
-Version 1.2 of 2026-11-03: friends and room chat in the camp, joining a running battle (section 4). Version 1.1 of 2026-11-02: multiplayer — the camp panel works with the server (section 4, [design-multiplayer.md](design-multiplayer.md)). Version 1.0 of 2026-10-31: start screen, camp (gear and Bush Defence map selection), settings, pause and battle result, multiplayer stubs. The model is the Minecraft Dungeons menu (hero screen with gear slots, tabs on top, online lobby by the campfire). Inventory — [design-inventory.md](design-inventory.md), maps — [design-tower-defence.md](design-tower-defence.md).
+Version 1.3 of 2026-11-05: language picker on the first visit and a Language row in Settings (section 6). Version 1.2 of 2026-11-03: friends and room chat in the camp, joining a running battle (section 4). Version 1.1 of 2026-11-02: multiplayer — the camp panel works with the server (section 4, [design-multiplayer.md](design-multiplayer.md)). Version 1.0 of 2026-10-31: start screen, camp (gear and Bush Defence map selection), settings, pause and battle result, multiplayer stubs. The model is the Minecraft Dungeons menu (hero screen with gear slots, tabs on top, online lobby by the campfire). Inventory — [design-inventory.md](design-inventory.md), maps — [design-tower-defence.md](design-tower-defence.md).
 
 ## 1. Routing
 
@@ -44,3 +44,7 @@ The same camp, opened straight on the "Map" tab, with a panel on the right model
 ## 5. Tests
 
 `tests/menu.spec.ts`: start → single player → equip the axe by double-click through the inventory → map `td2` → battle (12 waves, treasury 350, axe equipped) → pause → "Exit to camp", the hero's raspberries are intact; multiplayer without a server — "Server unavailable", start disabled (with a server — `tests/net.spec.ts`); a defence victory marks the map completed.
+
+## 6. Language
+
+The interface is bilingual (English, Russian). On the first visit, before the start screen, the menu shows a language picker (`.mm-lang`: logo, the prompt in both languages, two big buttons; ↑ ↓ Enter like the start screen; `window.__menu.screen === 'lang'` while it is shown). The choice is saved with `setLang()` into localStorage `malina.lang` and the page reloads: strings are resolved when modules load (`t()` in `src/i18n/i18n.ts`, dictionary `src/i18n/ru.ts`), so one page load runs in one language. Settings have a "Language" row that saves and reloads the same way; the language is not part of the `Settings` object. A game page opened directly (`?map=…`) without a stored choice follows the browser language; Node and tests get English. Tests set `localStorage['malina.lang'] = 'en'` before the page scripts run, otherwise the picker covers the start screen.

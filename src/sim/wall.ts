@@ -8,9 +8,9 @@ import type { TdWall } from '../td/types.ts';
 import type { SimWorld } from './world.ts';
 
 /**
- * Стена или ворота замка — осада (раздел 9): приманка с taunt; здоровье кончилось — пролом: блоки стены в воздух с обломками,
- * препятствия врагов пересчитываются, дорога продолжается внутрь (`SimTd.breach`). Ворота — створки без блоков: закрытые —
- * препятствие для врагов. Починка возвращает здоровье и блоки. Ниже половины здоровья кирпичи трескаются
+ * Castle wall or gate — siege (section 9): a decoy with taunt; health gone — a breach: wall blocks fly up as debris,
+ * enemy obstacles are recomputed, the lane continues inward (`SimTd.breach`). A gate is leaves without blocks: closed —
+ * an obstacle for enemies. Repair restores health and blocks. Below half health the bricks crack
  */
 interface Cell { x: number; y: number; z: number; name: string; rot: number }
 
@@ -27,12 +27,12 @@ export class SimWall implements Decoy {
   readonly maxHp: number;
   dead = false;
   cracked = false;
-  /** Всего получено урона и сколько раз чинили (для тестов) */
+  /** Total damage taken and how many times repaired (for tests) */
   taken = 0;
   repairs = 0;
   onBreak?: () => void;
   onRepair?: () => void;
-  /** Препятствие для врагов (только у целых ворот) */
+  /** Obstacle for enemies (only an intact gate has one) */
   readonly solid: Obstacle | null;
   private readonly cells: Cell[] = [];
   private readonly w: SimWorld;
@@ -62,12 +62,12 @@ export class SimWall implements Decoy {
     } else this.solid = null;
   }
 
-  /** Короткий id из карты (`meta.td.walls`) */
+  /** Short id from the map (`meta.td.walls`) */
   get wallId(): string { return this.spec.id; }
   get alive(): boolean { return !this.dead; }
-  /** Доля здоровья */
+  /** Health fraction */
   get k(): number { return Math.max(0, this.hp / this.maxHp); }
-  /** Герой у стены: в 2,5 м от прямоугольника (в том числе на самой стене сверху) */
+  /** Hero at the wall: within 2.5 m of the rectangle (including on top of the wall itself) */
   near(p: THREE.Vector3): boolean {
     const s = this.spec;
     const dx = Math.max(s.x0 - 0.5 - p.x, 0, p.x - s.x1 - 0.5), dz = Math.max(s.z0 - 0.5 - p.z, 0, p.z - s.z1 - 0.5);
@@ -117,7 +117,7 @@ export class SimWall implements Decoy {
     if (was) this.onRepair?.();
   }
 
-  /** Зеркало сетевого боя: состояние со снимка сервера — блоки пролома и починки повторяются на своём уровне, без событий */
+  /** Mirror of a network battle: state from the server snapshot — breach and repair blocks are replayed on the local level, without events */
   mirror(hp: number, dead: boolean, cracked: boolean): void {
     if (dead && !this.dead) {
       this.dead = true;

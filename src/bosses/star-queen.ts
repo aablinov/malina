@@ -5,49 +5,50 @@ import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss, type Minion } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Королева Звёздного Сада — легендарный босс этажа (wiki/design-bosses.md, разделы 1–4; схематичная «Ренналла»):
- * высокая королева Ордена в ступенчатом платье цвета ночи с золотой каймой, без ног — парит над полом; на голове
- * корона из белых звёзд и малиновых зёрнышек, в правой руке — посох со звездой, за спиной — огромная малиновая «луна»
- * из кубиков, переливается золотом и малиной. На груди светится ягода-сердце. Держится далеко.
- * Атаки: звездопад по меткам у героя (на ярости гуще), комета посохом по полосе (на ярости — веер из трёх),
- * ученики — три светящихся подмастерья и щит из света: пока жив хоть один, урон не проходит (сильный удар щит
- * пробивает); погиб последний — щит лопается, королева оглушена, сердце открыто. На ярости — «ночь»: луна растёт,
- * звёзды сыплются на всю арену, кроме светлого круга в её тени; после ночи обессилена.
- * Роняет «Звездопад», аура — «Ясность». Подвижных частей: платье, голова, два рукава, посох, луна, сердце, щит.
+ * Queen of the Star Garden — legendary floor boss (wiki/design-bosses.md, sections 1–4; a schematic "Rennala"):
+ * a tall queen of the Order in a stepped night-coloured dress with a gold hem, no legs — hovers above the floor; on her head
+ * a crown of white stars and raspberry seeds, in her right hand a staff with a star, behind her back a huge raspberry "moon"
+ * of cubes, shimmering gold and raspberry. The berry heart glows on her chest. Keeps far away.
+ * Attacks: a starfall on marks at the hero (denser in rage), a comet from the staff along a strip (in rage — a fan of three),
+ * apprentices — three glowing pupils and a shield of light: while at least one lives, damage does not pass (a strong hit breaks
+ * the shield); the last one died — the shield bursts, the queen is dazed, heart open. In rage — "night": the moon grows,
+ * stars rain on the whole arena except the bright circle in her shadow; after the night exhausted.
+ * Drops "Starfall", aura — "Clarity". Moving parts: dress, head, two sleeves, staff, moon, heart, shield.
  */
 
 const STAR = C(3.6, 3.6, 4), GOLD = C(4, 3.6, 2.4), PINK = C(4, 1.7, 2.4), SKY = C(1.2, 1.8, 4);
 const SAFE_COL = C(1.6, 3.6, 2.2);
-/** Радиус светлого круга в «ночи» и длительность дождя */
+/** Radius of the bright circle in the "night" and the rain duration */
 const SAFE = 3.4, NIGHT = 4.2;
-/** Щит: запас прочности от прямых ударов и предельное время */
+/** Shield: durability reserve against direct hits and the time limit */
 const SHIELD_HP = 400, SHIELD_MAX = 12;
 
 const sfx = {
-  /** Звезда родилась: высокий перезвон */
+  /** A star is born: a high chime */
   twinkle(i: number) { bell(1320 + (i % 4) * 330, 0.5, 0.03, 0, 0.7); },
-  /** Звезда упала: глухой удар и искры */
+  /** A star fell: a dull thud and sparks */
   impact() { boom(120, 50, 0.3, 0.3); hiss({ dur: 0.25, vol: 0.1, f: 3500, f1: 900, q: 0.8, type: 'bandpass' }); },
-  /** Комета: свист сверху вниз и раскат */
+  /** Comet: a whistle from top to bottom and a roll of thunder */
   comet() { hiss({ dur: 0.5, vol: 0.2, f: 5000, f1: 600, q: 0.7, type: 'bandpass', verb: 0.6 }); boom(90, 35, 0.6, 0.5, 0.3, 0.5); },
-  /** Ученики: хор из трёх голосов */
+  /** Apprentices: a choir of three voices */
   choir() { for (const [f, d] of [[392, 0], [494, 0.1], [587, 0.2]] as const) voice({ type: 'triangle', f, dur: 1.2, vol: 0.04, delay: d, verb: 0.8 }); },
-  /** Щит лопнул: стеклянный звон */
+  /** The shield burst: a glassy ring */
   shatter() { for (const [f, d] of [[1760, 0], [2217, 0.03], [2637, 0.06], [1319, 0.1]] as const) bell(f, 0.6, 0.04, d, 0.7); hiss({ dur: 0.5, vol: 0.18, f: 6000, f1: 2000, q: 0.6, type: 'highpass', verb: 0.6 }); },
-  /** Ночь: низкий гул и колокол */
+  /** Night: a low hum and a bell */
   night() { bell(130, 2.5, 0.08, 0, 0.9); voice({ type: 'sawtooth', f: 65, f1: 98, dur: 2.5, vol: 0.05, lp: 600, lp1: 1800, verb: 0.8 }); },
 };
 
 export class StarQueen extends MiniBoss {
   readonly radius = 1.1;
-  readonly title = 'Королева Звёздного Сада';
-  override readonly subtitle = 'легендарная стража малины';
+  readonly title = t('Queen of the Star Garden');
+  override readonly subtitle = t('legendary raspberry guardian');
   override readonly topY = 4.6;
   readonly drop = 'starfall';
   override readonly tier = 'boss' as const;
-  /** Ауры на выбор после победы, шанс % — звёздный сад: ясность, клинки, холод ночи */
+  /** Auras to choose from after the victory, chance % — the star garden: clarity, blades, cold of the night */
   override readonly auras = [['clarity', 40], ['blades', 30], ['frost', 30]] as const;
   private readonly head = new THREE.Group();
   private readonly arms: THREE.Group[] = [];
@@ -57,7 +58,7 @@ export class StarQueen extends MiniBoss {
   private readonly star = new THREE.Group();
   private readonly bubble: THREE.Mesh;
   private readonly bubbleMat = glowMat(SKY.clone().multiplyScalar(0.35), 0.35, true);
-  /** Отложенные действия (звезда падает чуть позже, чем легла метка) */
+  /** Deferred actions (the star falls a little later than the mark was laid) */
   private readonly later: { t: number; fn: () => void }[] = [];
   private students: Minion[] = [];
   private shield = false;
@@ -88,18 +89,18 @@ export class StarQueen extends MiniBoss {
     const heartM = this.shimmer(RASP, PINK, 0, 3);
     const starM = this.shimmer(STAR, GOLD, 0.5, 2.2);
     const B = this.box.bind(this);
-    // платье: четыре ступени, уже кверху; по краю каждой — золотая кайма
+    // dress: four steps, narrower towards the top; a gold hem along the edge of each
     const tiers = [[1.8, 0.6, 0.3], [1.45, 0.6, 0.9], [1.1, 0.6, 1.5], [0.85, 0.65, 2.1]] as const;
     for (const [w, hh, y] of tiers) {
       B(this.body, y < 1 ? deep : gown, w, hh, w * 0.85, 0, y, 0);
       B(this.body, gold, w + 0.04, 0.07, w * 0.85 + 0.04, 0, y - hh / 2 + 0.04, 0);
     }
     B(this.body, gold, 0.95, 0.12, 0.8, 0, 2.45, 0);
-    // ягода-сердце на груди
+    // berry heart on the chest
     this.heart.position.set(0, 2.1, 0.4);
     this.body.add(this.heart);
     for (const [x, y, z, k] of [[0, 0, 0, 0.24], [0.13, 0.07, 0, 0.15], [-0.13, 0.07, 0, 0.15], [0, 0.07, 0.12, 0.15], [0, -0.1, 0.04, 0.15], [0, 0.2, 0, 0.13]] as const) B(this.heart, heartM, k, k, k, x, y, z);
-    // голова, высокий ворот и корона: белые звёзды через одну с малиновыми зёрнышками
+    // head, tall collar and crown: white stars alternating with raspberry seeds
     this.head.position.set(0, 2.55, 0);
     this.body.add(this.head);
     B(this.head, gown, 0.75, 0.35, 0.3, 0, 0.3, -0.3);
@@ -110,7 +111,7 @@ export class StarQueen extends MiniBoss {
       const a = (i / 10) * Math.PI * 2, big = i % 2 === 0;
       B(this.head, big ? starM : heartM, big ? 0.1 : 0.12, big ? 0.28 : 0.12, big ? 0.1 : 0.12, Math.sin(a) * 0.3, big ? 0.78 : 0.7, Math.cos(a) * 0.3);
     }
-    // рукава-колокола; манжеты золотые
+    // bell sleeves; gold cuffs
     for (const s of [-1, 1]) {
       const g = new THREE.Group();
       g.position.set(s * 0.6, 2.35, 0);
@@ -120,7 +121,7 @@ export class StarQueen extends MiniBoss {
       B(g, gold, 0.46, 0.06, 0.48, 0, -1.0, 0);
       this.arms.push(g);
     }
-    // посох со звездой: держит правой рукой, шарнир — у кисти
+    // staff with a star: held in the right hand, the hinge at the wrist
     this.staff.position.set(-0.75, 1.4, 0.3);
     this.body.add(this.staff);
     B(this.staff, wood, 0.1, 2.8, 0.1, 0, 0.3, 0);
@@ -129,7 +130,7 @@ export class StarQueen extends MiniBoss {
     this.staff.add(this.star);
     B(this.star, starM, 0.32, 0.32, 0.32, 0, 0, 0, 0, 0, Math.PI / 4);
     for (const [x, y] of [[0, 0.3], [0, -0.3], [0.3, 0], [-0.3, 0]]) B(this.star, starM, 0.1, 0.1, 0.1, x, y, 0);
-    // луна за спиной: плоский диск кубиков-зёрнышек, свет бежит по нему кольцами
+    // the moon behind her back: a flat disc of seed cubes, light runs over it in rings
     this.moon.position.set(0, 2.9, -0.75);
     this.body.add(this.moon);
     const ring = [0, 1, 2].map((i) => this.shimmer(GOLD, RASP, i * 1.2, 1.1));
@@ -138,7 +139,7 @@ export class StarQueen extends MiniBoss {
       if (r > 4.3) continue;
       B(this.moon, ring[Math.floor(r) % 3], 0.36, 0.36, 0.14, ix * 0.37, iy * 0.37, (ix + iy) % 2 ? 0 : -0.06);
     }
-    // щит учеников: светлый пузырь вокруг
+    // the apprentices' shield: a bright bubble around
     this.bubble.position.y = 2.1;
     this.bubble.visible = false;
     this.group.add(this.bubble);
@@ -164,11 +165,11 @@ export class StarQueen extends MiniBoss {
     this.h.fx.screenFlash('#a0b8ff', 0.25, 0.3);
   }
 
-  /** Пока жив ученик — щит держит удар (кроме оглушения); сильный удар щит пробивает */
+  /** While an apprentice lives the shield holds the hit (except in daze); a strong hit breaks the shield */
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void {
     if (this.shield && this.state !== 'daze' && this.awake && !this.dead) {
       this.shieldHp -= dmg;
-      this.h.fx.text(point.clone().setY(point.y + 0.6), 'щит');
+      this.h.fx.text(point.clone().setY(point.y + 0.6), t('shield'));
       this.h.fx.flash(point.clone(), SKY, 0.8, 0.12);
       if (this.shieldHp <= 0) this.dropShield(false);
       return;
@@ -186,7 +187,7 @@ export class StarQueen extends MiniBoss {
     const fx = this.h.fx;
     switch (name) {
       case 'starfall': {
-        // метки одна за другой: первая — под героем, остальные вокруг; звёзды падают по очереди
+        // marks one after another: the first under the hero, the rest around; the stars fall in turn
         if (!this.hitDone) {
           this.hitDone = true;
           const n = this.enraged ? 14 : 8;
@@ -198,7 +199,7 @@ export class StarQueen extends MiniBoss {
         return t > 1.6;
       }
       case 'comet': {
-        // посох вперёд — полоса к герою (на ярости — веер из трёх) — по ней летит комета
+        // staff forward — a strip to the hero (in rage — a fan of three) — a comet flies along it
         if (!this.hitDone) {
           this.hitDone = true;
           this.aim.copy(this.heroAt()).sub(this.pos).setY(0);
@@ -214,7 +215,7 @@ export class StarQueen extends MiniBoss {
         return t > 1.5;
       }
       case 'students': {
-        // хор — из звёзд выходят три ученика, королеву окутывает щит
+        // choir — three apprentices step out of the stars, the shield wraps the queen
         if (!this.hitDone) { this.hitDone = true; this.studentsCd = 20; if (!this.quiet) sfx.choir(); }
         for (let i = 0; i < 3; i++) {
           const at = 0.4 + i * 0.2;
@@ -231,7 +232,7 @@ export class StarQueen extends MiniBoss {
         return t > 1.4;
       }
       case 'night': {
-        // луна растёт, звёзды сыплются на всю арену; светло лишь в её тени
+        // the moon grows, stars rain on the whole arena; it is bright only in her shadow
         if (!this.hitDone) {
           this.hitDone = true;
           this.nightCd = 22;
@@ -261,7 +262,7 @@ export class StarQueen extends MiniBoss {
     return true;
   }
 
-  /** Метка, а под конец — звезда, что падает в неё сверху: урон 14 */
+  /** A mark and, at the end, a star that falls into it from above: damage 14 */
   private fallingStar(at: THREE.Vector3, dur: number, r: number, i: number): void {
     this.markCircle(at, r, dur, () => {
       const fx = this.h.fx;
@@ -278,7 +279,7 @@ export class StarQueen extends MiniBoss {
     } });
   }
 
-  /** Комета летит по полосе: урон 20 */
+  /** The comet flies along the strip: damage 20 */
   private comet(from: THREE.Vector3, dir: THREE.Vector3): void {
     const fx = this.h.fx;
     if (!this.quiet) sfx.comet();
@@ -294,7 +295,7 @@ export class StarQueen extends MiniBoss {
     if (this.inLine(from, dir, 18, 1.6)) this.hurt(20, from, 6);
   }
 
-  /** Светлый круг под королевой: туда звёзды не падают */
+  /** Bright circle under the queen: stars do not fall there */
   private safeRing(): void {
     const at = this.pos.clone();
     const fill = new THREE.MeshBasicMaterial({ color: SAFE_COL.clone().multiplyScalar(0.25), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
@@ -311,14 +312,14 @@ export class StarQueen extends MiniBoss {
     }, () => { fill.dispose(); edgeM.dispose(); fillG.dispose(); edgeG.dispose(); });
   }
 
-  /** Щит гаснет: ученики пали — королева оглушена (главное окно урона); пробит или истёк — без оглушения */
+  /** The shield fades: the apprentices fell — the queen is dazed (the main damage window); broken or expired — no daze */
   private dropShield(stun: boolean): void {
     if (!this.shield) return;
     this.shield = false;
     const fx = this.h.fx, c = this.pos.clone().setY(2.1);
     fx.burst(c, [SKY, STAR, RASP], 30, { speed: 6, up: 2, size: 0.14, life: 0.8, glow: true, gravity: 4 });
     fx.shock(this.pos.clone().setY(0.1), 3, SKY, 0.4, 0.15);
-    fx.text(c.clone().setY(this.topY + 0.6), 'щит разбит', 'crit');
+    fx.text(c.clone().setY(this.topY + 0.6), t('shield shattered'), 'crit');
     if (!this.quiet) sfx.shatter();
     if (stun && !this.dead) this.daze(2.5);
   }
@@ -342,41 +343,41 @@ export class StarQueen extends MiniBoss {
     const t = this.time, S = this.st, dead = this.state === 'dead', daze = this.state === 'daze';
     if (this.awake) { this.studentsCd -= dt; this.nightCd -= dt; }
     const atk = this.state === 'attack' ? this.attack : '';
-    // парит ~1 м над полом, медленно покачивается; в оглушении оседает ниже
+    // hovers ~1 m above the floor, sways slowly; sinks lower when dazed
     if (!dead) {
       this.body.position.y = THREE.MathUtils.lerp(this.body.position.y, (daze ? 0.35 : 1) + Math.sin(t * 1.3) * 0.15, 0.08);
       this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, daze ? 0.25 : walk ? 0.08 : 0, 0.1);
     }
-    // голова: поникла во сне и в оглушении, в ночи — запрокинута
+    // head: drooping in sleep and in daze, thrown back in the night
     this.head.rotation.x = this.state === 'sleep' || daze ? 0.4 : atk === 'night' ? -0.4 : Math.sin(t * 0.8) * 0.05;
-    // рукава: в звездопаде и ночи — воздеты, на учениках — разведены, на комете правый тянется вперёд
+    // sleeves: raised in the starfall and the night, spread on the apprentices, the right one reaches forward on the comet
     const up = atk === 'starfall' || atk === 'night';
     this.arms.forEach((g, i) => {
       const s = i ? 1 : -1, right = i === 0;
       const rx = up ? -2.6 + Math.sin(S * 6 + i) * 0.15 : atk === 'comet' && right ? (S < 0.5 ? -0.4 : -1.4) : atk === 'students' ? -1.2 : daze ? 0.15 : -0.25;
       g.rotation.set(rx, 0, s * (atk === 'students' ? 0.8 : 0.12));
     });
-    // посох: в комете — выпад вперёд звездой, в звездопаде — вскинут
+    // staff: on the comet — a lunge forward with the star, in the starfall — raised
     const srx = atk === 'comet' ? (S < 0.5 ? -0.3 : 1.25) : up ? -0.2 : daze ? 0.5 : 0.08;
     this.staff.rotation.x = THREE.MathUtils.lerp(this.staff.rotation.x, srx, 0.2);
     this.staff.position.y = THREE.MathUtils.lerp(this.staff.position.y, up ? 2.0 : atk === 'comet' && S > 0.5 ? 1.8 : 1.4, 0.15);
     this.star.rotation.z += dt * 2;
     this.star.scale.setScalar(1 + Math.max(0, Math.sin(t * 5)) * 0.15 + (atk === 'comet' && S < 0.9 ? S * 0.6 : 0));
-    // луна: медленно вращается; в ночи растёт, потом опадает
+    // moon: rotates slowly; grows in the night, then subsides
     if (atk !== 'night') this.moonK = THREE.MathUtils.lerp(this.moonK, 1, 0.03);
     this.moon.scale.setScalar(this.moonK);
     this.moon.rotation.z += dt * 0.15;
-    // сердце: тихо бьётся, оглушена — крупно
+    // heart: beats quietly, dazed — hard
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 4)) * 0.1;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.9 : 1));
-    // щит: дышит и мерцает
+    // shield: breathes and flickers
     this.bubble.visible = this.shield && !dead;
     if (this.shield) {
       this.bubble.rotation.y += dt * 0.6;
       this.bubble.scale.setScalar(1 + Math.sin(t * 3) * 0.03);
       this.bubbleMat.opacity = 0.28 + Math.sin(t * 7) * 0.06;
     }
-    // звёздные искры вокруг
+    // star sparks around
     if (!dead && this.state !== 'sleep' && rnd() < 0.4) {
       const a = rand(0, Math.PI * 2), r = rand(0.8, 1.8) * this.moonK;
       this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(1, 4.2) + this.body.position.y * 0.5, Math.sin(a) * r)), vel: new THREE.Vector3(0, rand(0.1, 0.4), 0), life: rand(0.5, 1), size: rand(0.05, 0.1), color: rnd() < 0.6 ? STAR : rnd() < 0.5 ? GOLD : RASP, gravity: 0 });

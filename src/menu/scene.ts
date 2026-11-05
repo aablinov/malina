@@ -6,13 +6,13 @@ import { getWeapon } from '../weapons.ts';
 import { pixelRatio, type Settings } from './settings.ts';
 
 /**
- * Фон меню (wiki/design-main-menu.md): ночной лагерь у костра, как на экране выбора героя в Minecraft Dungeons —
- * поляна из блоков, костёр с искрами, ящики и бочка, бирюзовая дымка; у огня стоит герой в надетом снаряжении.
- * Камера плывёт между видами: «старт» — герой справа от центра у костра, «лагерь» — крупно слева, рядом с гнёздами.
+ * Menu background (wiki/design-main-menu.md): a night camp by a fire, like the hero selection screen in Minecraft Dungeons —
+ * a glade of blocks, a campfire with sparks, crates and a barrel, a turquoise haze; the hero stands by the fire in the equipped gear.
+ * The camera glides between views: "start" — the hero right of centre by the fire, "lobby" — large on the left, next to the slots.
  */
 export type MenuView = 'start' | 'lobby';
 
-/** Где стоит герой: справа от костра */
+/** Where the hero stands: right of the fire */
 const HERO_X = 2.2;
 const VIEWS: Record<MenuView, { pos: THREE.Vector3; look: THREE.Vector3 }> = {
   start: { pos: new THREE.Vector3(-0.6, 4.6, 10.5), look: new THREE.Vector3(-1.2, 0.9, 0) },
@@ -52,7 +52,7 @@ export class MenuScene {
     this.scene.background = sky;
     this.scene.fog = new THREE.Fog(sky, 14, 34);
 
-    // ночь: голубое небо сверху, лунный свет сбоку, тёплый костёр в центре
+    // night: blue sky above, moonlight from the side, a warm fire in the centre
     this.scene.add(new THREE.HemisphereLight('#5fb8d0', '#16202a', 0.9));
     const moon = new THREE.DirectionalLight('#9fd8ff', 0.9);
     moon.position.set(-8, 12, 6);
@@ -85,7 +85,7 @@ export class MenuScene {
     canvas.addEventListener('pointerup', () => { this.drag = null; });
   }
 
-  /** Поляна 22 × 16 блоков: трава, кое-где земля и тропинка к костру; край уходит в дымку */
+  /** Glade of 22 × 16 blocks: grass, some dirt and a path to the fire; the edge fades into the haze */
   private buildGround(T: Textures): void {
     const box = new THREE.BoxGeometry(1, 1, 1);
     const grass = [T.grassSide, T.grassSide, T.grassTop, T.dirt, T.grassSide, T.grassSide].map((map) => new THREE.MeshLambertMaterial({ map }));
@@ -99,7 +99,7 @@ export class MenuScene {
       m.receiveShadow = true;
       this.scene.add(m);
     }
-    // пучки травы: два скрещённых квада
+    // grass tufts: two crossed quads
     const tuft = new THREE.MeshLambertMaterial({ map: T.tallGrass, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
     const quad = new THREE.PlaneGeometry(0.9, 0.9);
     for (let i = 0; i < 70; i++) {
@@ -114,7 +114,7 @@ export class MenuScene {
     }
   }
 
-  /** Костёр из брёвен с языками огня, ящики, бочка, пни — лагерь героя */
+  /** Campfire of logs with tongues of flame, crates, a barrel, stumps — the hero's camp */
   private buildCamp(T: Textures): void {
     const log = new THREE.MeshLambertMaterial({ map: T.logSide });
     const logGeo = new THREE.BoxGeometry(1.3, 0.22, 0.22);
@@ -145,7 +145,7 @@ export class MenuScene {
       this.flames.push(f);
       this.scene.add(f);
     }
-    // ящики и бочка за спиной, как на складе лагеря
+    // crates and a barrel behind the back, like the camp storage yard
     const crate = new THREE.MeshLambertMaterial({ map: T.crate });
     const planks = new THREE.MeshLambertMaterial({ map: T.planksDark });
     const props: [THREE.BufferGeometry, THREE.Material, number, number, number, number][] = [
@@ -177,7 +177,7 @@ export class MenuScene {
 
   setView(v: MenuView): void { this.view = v; }
 
-  /** Надеть на героя то, что надето в профиле: оружие, броня, лук */
+  /** Dress the hero in what the profile has equipped: weapon, armour, bow */
   dress(p: Profile): void {
     const m = p.equipped('melee');
     const w = m ? getWeapon(itemDef(m.def).weapon ?? '') : undefined;
@@ -199,13 +199,13 @@ export class MenuScene {
       this.time += dt;
       this.fit();
       this.animateFire(dt);
-      // камера плывёт к виду и чуть покачивается
+      // the camera glides to the view and sways slightly
       const v = VIEWS[this.view], k = 1 - Math.exp(-dt * 2.5);
       this.camPos.lerp(v.pos, k);
       this.camLook.lerp(v.look, k);
       this.camera.position.copy(this.camPos).add(new THREE.Vector3(Math.sin(this.time * 0.3) * 0.15, Math.sin(this.time * 0.2) * 0.08, 0));
       this.camera.lookAt(this.camLook);
-      // герой: у костра смотрит в огонь, в лагере медленно поворачивается к камере (тянуть мышью — крутить)
+      // the hero: by the fire looks into the flames, in the camp slowly turns to the camera (drag with the mouse to rotate)
       if (this.view === 'start') this.yaw += (-Math.PI / 2 + 0.6 - this.yaw) * k;
       else if (this.drag === null) this.yaw += dt * 0.3;
       input.aim.set(HERO_X + Math.sin(this.yaw) * 5, 0, Math.cos(this.yaw) * 5);

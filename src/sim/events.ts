@@ -1,7 +1,7 @@
 /**
- * События симуляции — аналог entityState.event в Quake 3: всё, что вид должен показать (искры, цифры, звук, тряска),
- * симуляция кладёт в `world.events` плоской записью, снимок уносит их клиенту, `src/cgame/effects.ts` играет.
- * `t` — тип, `id` — сущность (башня `t3`, стена `w:gate`), `x y z` — где. Остальные поля — по типу (см. таблицу в effects.ts)
+ * Simulation events — the analogue of entityState.event in Quake 3: everything the view must show (sparks, numbers, sound, shake)
+ * the simulation puts into `world.events` as a flat record, the snapshot carries them to the client, `src/cgame/effects.ts` plays them.
+ * `t` — type, `id` — entity (tower `t3`, wall `w:gate`), `x y z` — where. The other fields depend on the type (see the table in effects.ts)
  */
 export interface SimEvent {
   t: string;

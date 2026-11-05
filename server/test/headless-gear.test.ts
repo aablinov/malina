@@ -6,10 +6,10 @@ import { ITEMS, MAX_SOULS } from '../../src/items.ts';
 import { headlessBattle } from './headless-helpers.ts';
 
 /**
- * Снаряжение на безголовом сервере: каждое заклинание и артефакт, каждая аура и спец-удар каждого оружия творятся в Node
- * без DOM (`document` там нет — любая забытая текстура или холст уронила бы матч, как руны в src/sigils.ts)
+ * Gear on the headless server: every spell and artifact, every aura and every weapon's weapon art is cast in Node
+ * without DOM (`document` is absent there — any forgotten texture or canvas would crash the match, like the sigils in src/sigils.ts)
  */
-test('все артефакты и заклинания творятся на сервере без DOM', () => {
+test('all artifacts and spells are cast on the server without DOM', () => {
   const b = headlessBattle('td', 3);
   const at = b.hero.pos.clone().add(new THREE.Vector3(3, 0, 0));
   for (let i = 0; i < 4; i++) b.pack.spawn('berryling', at.clone().add(new THREE.Vector3(i * 0.8, 0, 0.5)));
@@ -32,7 +32,7 @@ test('все артефакты и заклинания творятся на с
   assert.deepEqual(failed, []);
 });
 
-test('все ауры вспыхивают и все спец-удары оружия идут на сервере без DOM', () => {
+test('all auras flare and all weapon arts run on the server without DOM', () => {
   const b = headlessBattle('td', 4);
   const at = b.hero.pos.clone().add(new THREE.Vector3(2.5, 0, 0));
   for (let i = 0; i < 3; i++) b.pack.spawn('berryling', at.clone().add(new THREE.Vector3(i * 0.7, 0, 0)));
@@ -53,7 +53,7 @@ test('все ауры вспыхивают и все спец-удары ору�
       const it = b.profile.add(d.id, 1);
       b.profile.equip(it.uid);
       b.gear.arts.meter = 1;
-      assert.ok(b.gear.special(at), `${d.id}: спец-удар начался`);
+      assert.ok(b.gear.special(at), `${d.id}: weapon art started`);
       for (let k = 0; k < 60 * 3; k++) { b.input.aim.copy(at); b.step(); }
     } catch (e) { failed.push(`${d.id}: ${e instanceof Error ? e.message : String(e)}`); }
   }

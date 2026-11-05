@@ -4,7 +4,7 @@ import type { EntityState } from '../../net/snapshot.ts';
 import type { PoolEnt } from '../../sim/entities.ts';
 import { FIRE, TAR } from './colors.ts';
 
-/** Лужа смолы котла (`pool<n>`): чёрный круг на земле, тает по остатку времени `t`, над ней дымок и язычки огня */
+/** Tar pool from the cauldron (`pool<n>`): a black circle on the ground, melts with the remaining time `t`, smoke and tongues of flame above it */
 export class PoolView {
   private readonly mesh: THREE.Mesh;
   private readonly mat: THREE.MeshBasicMaterial;

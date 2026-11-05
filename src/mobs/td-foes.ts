@@ -4,20 +4,21 @@ import { pixelTex } from '../textures.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
 import { C, rand, RASP } from '../bosses/kit.ts';
 import { Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Враги обороны куста (wiki/design-tower-defence.md, раздел 5): рождены под дороги и башни, героя почти не замечают.
- * Гонец — быстрый и хрупкий, проскакивает мимо медленных башен; таран — кора спереди гасит урон, катапульта и обелиск
- * с тыла или цепью; мотылёк — летит над заборами и препятствиями напрямик, слаб к инею.
+ * Bush Defence foes (wiki/design-tower-defence.md, section 5): born for roads and towers, they barely notice the hero.
+ * The courier is fast and fragile, slips past slow towers; the battering ram — bark in front absorbs damage, catapult and obelisk
+ * from behind or by chain; the moth flies straight over fences and obstacles, weak to frost.
  */
 
 const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x += (x - o.rotation.x) * k; };
 const FROST_ORB = C(1.6, 3.0, 4);
 
-/** 32. Ягодный гонец — бегун: ягода с мешком на длинных ножках, 5,5 м/с, 14 здоровья; у куста щиплет понемногу */
+/** 32. Berry Courier — runner: a berry with a sack on long legs, 5.5 m/s, 14 health; nibbles at the bush bit by bit */
 export class BerryRunner extends Mob {
   readonly kind = 'runner';
-  readonly title = 'Ягодный гонец';
+  readonly title = t('Berry Courier');
   readonly cost = 1;
   readonly radius = 0.32;
   override readonly topY = 1.1;
@@ -40,7 +41,7 @@ export class BerryRunner extends Mob {
     for (const [x, y, z] of [[0.22, 0.66, 0.08], [-0.22, 0.66, 0.08], [0, 0.9, -0.12], [0.14, 0.52, 0.16]] as const) B(this.bob, deep, 0.14, 0.14, 0.14, x, y, z);
     B(this.bob, leaf, 0.3, 0.05, 0.12, 0, 0.96, 0, 0, 0.5, 0.2);
     B(this.bob, stem, 0.05, 0.12, 0.05, 0, 1.0, 0);
-    // мешок за спиной — крадёт малину с куста
+    // sack on the back — steals raspberries from the bush
     B(this.bob, sack, 0.34, 0.4, 0.26, 0, 0.7, -0.3, 0.15, 0, 0);
     B(this.bob, this.lam('#7a5232'), 0.04, 0.3, 0.04, 0.16, 0.86, -0.1, 0.4, 0, -0.5);
     for (const x of [-0.1, 0.1]) B(this.bob, eye, 0.08, 0.1, 0.03, x, 0.78, 0.22);
@@ -79,10 +80,10 @@ export class BerryRunner extends Mob {
   }
 }
 
-/** 33. Лозовый таран — тяжёлый: кабан из брёвен и лозы с корой-щитом на лбу; спереди урон ×0,35, 160 здоровья, 1,6 м/с */
+/** 33. Vine Battering Ram — heavy: a boar of logs and vine with a bark shield on the forehead; damage from the front ×0.35, 160 health, 1.6 m/s */
 export class VineRam extends Mob {
   readonly kind = 'ram';
-  readonly title = 'Лозовый таран';
+  readonly title = t('Vine Battering Ram');
   readonly cost = 6;
   readonly radius = 0.7;
   override readonly topY = 1.6;
@@ -100,14 +101,14 @@ export class VineRam extends Mob {
     const log = this.lam('#6a4a2a', pixelTex('#6a4a2a', 12, 971)), bark = this.lam('#4a3018', pixelTex('#4a3018', 10, 972));
     const vine = this.lam('#4a8a2a', pixelTex('#4a8a2a', 10, 973)), berry = this.shimmer(RASP, C(3.4, 1.2, 0.6), 0, 1.5), moss = this.lam('#7aa848');
     const B = this.box.bind(this);
-    // тело — связка брёвен, обвитая лозой
+    // body — a bundle of logs wrapped in vine
     B(this.body, log, 0.9, 0.8, 1.5, 0, 0.9, 0);
     B(this.body, log, 0.7, 0.3, 1.5, 0, 1.4, 0);
     for (const z of [-0.5, -0.1, 0.3]) B(this.body, vine, 0.96, 0.1, 0.12, 0, 1.0 + (z + 0.5) * 0.3, z);
     for (const z of [-0.4, 0.2]) B(this.body, vine, 0.12, 0.86, 0.12, 0.44, 0.9, z);
     B(this.body, moss, 0.5, 0.1, 0.9, 0.1, 1.58, -0.2);
     for (let i = 0; i < 4; i++) B(this.body, berry, 0.14, 0.14, 0.14, Math.sin(i * 1.9) * 0.4, 1.3 + (i % 2) * 0.3, -0.5 + i * 0.3);
-    // голова — пень с корой-щитом вперёд и двумя корнями-бивнями
+    // head — a stump with a bark shield forward and two root tusks
     this.head.position.set(0, 0.95, 0.8);
     this.body.add(this.head);
     B(this.head, bark, 0.8, 0.7, 0.5, 0, 0, 0.1);
@@ -125,7 +126,7 @@ export class VineRam extends Mob {
     this.place();
   }
 
-  /** Кора на лбу: удар навстречу взгляду гасится */
+  /** Bark on the forehead: a hit coming head-on is absorbed */
   protected override guard(dir: THREE.Vector3): number {
     const f = this.fwd();
     return dir.x * f.x + dir.z * f.z < -0.3 ? 0.35 : 1;
@@ -154,17 +155,17 @@ export class VineRam extends Mob {
     const a = walk ? s * 0.4 : 0;
     lerpTo(this.legs[0], a, k); lerpTo(this.legs[3], a, k);
     lerpTo(this.legs[1], -a, k); lerpTo(this.legs[2], -a, k);
-    // замах назад — и удар головой вниз
+    // rear back — and a downward headbutt
     const butt = this.state === 'attack' ? (this.st < 0.7 ? 0.5 * Math.min(1, this.st / 0.5) : -0.5) : 0;
     lerpTo(this.head, butt, this.state === 'attack' && this.st > 0.7 ? 1 : k);
     this.body.rotation.z = walk ? s * 0.05 : 0;
   }
 }
 
-/** 34. Пыльцевой мотылёк — летун: крылья с малиновыми глазками, летит напрямик над заборами и ямами; 22 здоровья; пыльца у куста */
+/** 34. Pollen Moth — flyer: wings with raspberry eyespots, flies straight over fences and pits; 22 health; pollen at the bush */
 export class PollenMoth extends Mob {
   readonly kind = 'moth';
-  readonly title = 'Пыльцевой мотылёк';
+  readonly title = t('Pollen Moth');
   readonly cost = 2;
   readonly radius = 0.45;
   override readonly topY = 2.0;
@@ -219,27 +220,27 @@ export class PollenMoth extends Mob {
   protected animate(_dt: number, walk: boolean): void {
     const f = Math.sin(this.time * 24) * 0.7;
     this.wings[0].rotation.z = f; this.wings[1].rotation.z = -f;
-    // парит на высоте, покачиваясь; в оглушении падает ниже
+    // hovers at height, swaying; drops lower when stunned
     this.flyY = (this.state === 'daze' ? 0.5 : 1.3) + Math.sin(this.time * 3) * 0.15;
     this.body.rotation.x = walk ? 0.2 : 0;
     this.body.rotation.z = Math.sin(this.time * 1.7) * 0.1;
   }
 }
 
-// ---------- вторая карта: кристальная поляна (wiki/design-tower-defence.md, раздел 8) ----------
+// ---------- second map: Crystal Glade (wiki/design-tower-defence.md, section 8) ----------
 
 const CRYSTAL = C(1.6, 3.2, 3.4), SPORE = C(2.2, 1.2, 3.4), RAINBOW = [C(3.4, 1.2, 1.2), C(3.4, 2.8, 1.0), C(1.2, 3.4, 1.4), C(1.2, 1.8, 3.4), C(2.8, 1.2, 3.4)];
-// тела — в сдержанных тонах (ниже порога bloom), яркие HDR-цвета только в искрах и глазах
+// bodies in restrained tones (below the bloom threshold), bright HDR colours only in sparks and eyes
 const GEM = C(0.45, 0.95, 1.05), GEM_LIGHT = C(0.7, 1.3, 1.4), CAP = C(0.8, 0.4, 1.05), CAP_LIGHT = C(1.1, 0.7, 1.35);
 
-/** 35. Кристальный панцирник — жук в кристальной скорлупе: первые 6 ударов панцирь гасит целиком (трещина за удар), потом разлетается; 90 здоровья, 2,2 м/с */
+/** 35. Crystal Shellback — a beetle in a crystal shell: the shell absorbs the first 6 hits entirely (a crack per hit), then shatters; 90 health, 2.2 m/s */
 export class CrystalShellback extends Mob {
   readonly kind = 'shellback';
-  readonly title = 'Кристальный панцирник';
+  readonly title = t('Crystal Shellback');
   readonly cost = 5;
   readonly radius = 0.6;
   override readonly topY = 1.3;
-  /** Сколько ударов ещё выдержит панцирь */
+  /** How many more hits the shell can take */
   shell = 6;
   private readonly shellMesh = new THREE.Group();
   private readonly shards: THREE.Mesh[] = [];
@@ -260,7 +261,7 @@ export class CrystalShellback extends Mob {
     B(this.body, pale, 0.5, 0.3, 0.5, 0, 0.5, 0.75);
     for (const x of [-0.14, 0.14]) B(this.body, eye, 0.08, 0.08, 0.04, x, 0.6, 1.0);
     for (const x of [-0.2, 0.2]) B(this.body, pale, 0.04, 0.04, 0.5, x, 0.7, 1.1, -0.6, 0, 0);
-    // панцирь — гроздь кристаллов на спине; с каждым ударом один пропадает
+    // shell — a cluster of crystals on the back; one vanishes with each hit
     this.body.add(this.shellMesh);
     for (let i = 0; i < 6; i++) {
       const a = i * 1.05, r = 0.25 + (i % 2) * 0.12;
@@ -284,7 +285,7 @@ export class CrystalShellback extends Mob {
       this.shell--;
       const m = this.shards[this.shell];
       if (m) m.visible = false;
-      this.h.fx.text(point.clone().setY(point.y + 0.5), this.shell ? 'панцирь' : 'треснул', '');
+      this.h.fx.text(point.clone().setY(point.y + 0.5), this.shell ? t('shell') : t('cracked'), '');
       this.h.fx.burst(point, [CRYSTAL, '#ffffff'], this.shell ? 5 : 20, { speed: 3, up: 3, size: 0.08, life: 0.4, glow: true, gravity: 8 });
       if (!this.quiet) boom(this.shell ? 1200 : 700, 400, 0.1, 0.14);
       if (!this.shell) { this.shellMesh.visible = false; this.h.fx.flash(this.pos.clone().setY(1), CRYSTAL, 2, 0.2); }
@@ -320,14 +321,14 @@ export class CrystalShellback extends Mob {
   }
 }
 
-/** 36. Споровик — ходячий гриб: рядом с ним соседи лечатся (3 в секунду в 3 м), а лопнув — облако спор лечит всех вокруг на 30 %; 40 здоровья, 2,6 м/с */
+/** 36. Sporeling — a walking mushroom: neighbours near it heal (3 per second within 3 m), and when it bursts a spore cloud heals everyone around by 30 %; 40 health, 2.6 m/s */
 export class Sporeling extends Mob {
   readonly kind = 'sporeling';
-  readonly title = 'Споровик';
+  readonly title = t('Sporeling');
   readonly cost = 3;
   readonly radius = 0.4;
   override readonly topY = 1.3;
-  /** Всего отлечено соседям (для тестов) */
+  /** Total healed to neighbours (for tests) */
   given = 0;
   private readonly cap = new THREE.Group();
   private readonly legs: THREE.Group[];
@@ -363,7 +364,7 @@ export class Sporeling extends Mob {
   override update(dt: number): void {
     super.update(dt);
     if (this.dead || this.state === 'spawn') return;
-    // споры: соседи в 3 м лечатся понемногу
+    // spores: neighbours within 3 m heal bit by bit
     for (const m of this.mh.allies()) {
       if (m === this || m.dead || m.hp >= m.maxHp) continue;
       if (Math.hypot(m.pos.x - this.pos.x, m.pos.z - this.pos.z) < 3) { const v = Math.min(3 * dt, m.maxHp - m.hp); m.heal(v); this.given += v; }
@@ -371,7 +372,7 @@ export class Sporeling extends Mob {
     if (rnd() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.4, 0.4), 1.2, rand(-0.4, 0.4))), vel: new THREE.Vector3(rand(-0.4, 0.4), 0.6, rand(-0.4, 0.4)), life: 1, size: 0.07, color: SPORE, gravity: -0.1 }, false);
   }
 
-  /** Лопнул: облако спор — все соседи в 3,5 м лечатся на 30 % */
+  /** Burst: spore cloud — all neighbours within 3.5 m heal by 30 % */
   protected override die(): void {
     super.die();
     this.h.fx.flash(this.pos.clone().setY(1), SPORE, 2.5, 0.3);
@@ -410,14 +411,14 @@ export class Sporeling extends Mob {
   }
 }
 
-/** 37. Радужный скакун — заяц-огонёк: каждые 3 с на марше прыгает на 5 м вперёд по дороге (иней его не держит), оставляя радужный след; 30 здоровья */
+/** 37. Rainbow Hopper — a hare of light: every 3 s on the march hops 5 m forward along the road (frost does not hold it), leaving a rainbow trail; 30 health */
 export class RainbowHopper extends Mob {
   readonly kind = 'hopper';
-  readonly title = 'Радужный скакун';
+  readonly title = t('Rainbow Hopper');
   readonly cost = 2;
   readonly radius = 0.35;
   override readonly topY = 1.0;
-  /** Сколько раз прыгнул (для тестов) */
+  /** How many times it hopped (for tests) */
   hops = 0;
   private hopCd = 1.5;
   private hopT = 0;
@@ -452,7 +453,7 @@ export class RainbowHopper extends Mob {
     this.place();
   }
 
-  /** Прыжок: на 5 м вперёд по точкам дороги, точки по пути пройдены */
+  /** Hop: 5 m forward along the road points, points on the way count as passed */
   private hop(): void {
     const r = this.march;
     if (!r) return;
@@ -507,22 +508,22 @@ export class RainbowHopper extends Mob {
   }
 }
 
-// ---------- третья карта: осада замка (wiki/design-tower-defence.md, раздел 9) ----------
+// ---------- third map: castle siege (wiki/design-tower-defence.md, section 9) ----------
 
 const POWDER = C(3.4, 1.0, 0.3), FUSE = C(3.4, 3.0, 1.2);
 
 /**
- * 38. Пнёвый подрывник — ходячий пень в коре-броне с бочонком ягодного пороха на спине: броня гасит ×0,3 любой удар,
- * кроме пробивающего (стенная баллиста); героя не замечает — идёт к стене, у неё поджигает фитиль (1,6 с) и взрывается:
- * стене 160, героям в 3 м — 30, своим в 2,5 м — 40. Пал раньше — взрывается там, где пал. 120 здоровья, 1,5 м/с
+ * 38. Stump Sapper — a walking stump in bark armour with a keg of berry powder on its back: the armour reduces any hit to ×0.3,
+ * except a piercing one (wall ballista); ignores the hero — walks to the wall, lights the fuse there (1.6 s) and explodes:
+ * 160 to the wall, 30 to heroes within 3 m, 40 to allies within 2.5 m. Fell earlier — explodes where it fell. 120 health, 1.5 m/s
  */
 export class StumpSapper extends Mob {
   readonly kind = 'sapper';
-  readonly title = 'Пнёвый подрывник';
+  readonly title = t('Stump Sapper');
   readonly cost = 7;
   readonly radius = 0.55;
   override readonly topY = 1.5;
-  /** Взорвался (для тестов) */
+  /** Exploded (for tests) */
   blasted = false;
   private readonly keg = new THREE.Group();
   private readonly spark: THREE.MeshBasicMaterial;
@@ -542,13 +543,13 @@ export class StumpSapper extends Mob {
     const iron = this.lam('#3a3c42'), eye = this.shimmer(POWDER, C(3.4, 2.0, 0.6), 0, 2.4);
     this.spark = this.shimmer(FUSE, POWDER, 0, 6);
     const B = this.box.bind(this);
-    // пень с корой и железными пластинами, два угля-глаза
+    // a stump with bark and iron plates, two ember eyes
     B(this.body, bark, 0.9, 1.0, 0.8, 0, 0.9, 0);
     B(this.body, bark, 0.7, 0.3, 0.6, 0, 1.45, 0.05);
     for (const [x, z] of [[0.46, 0], [-0.46, 0], [0, 0.41]]) B(this.body, plate, x ? 0.08 : 0.6, 0.7, x ? 0.6 : 0.08, x, 0.95, z);
     for (const [x, y] of [[-0.25, 0.7], [0.3, 1.2], [0, 0.45]]) B(this.body, iron, 0.08, 0.08, 0.08, x, y, 0.45);
     for (const x of [-0.16, 0.16]) B(this.body, eye, 0.12, 0.1, 0.04, x, 1.1, 0.42);
-    // бочонок на спине с фитилём
+    // keg on the back with a fuse
     this.keg.position.set(0, 1.1, -0.55);
     this.body.add(this.keg);
     B(this.keg, wood, 0.6, 0.7, 0.5, 0, 0, 0);
@@ -566,7 +567,7 @@ export class StumpSapper extends Mob {
     this.place();
   }
 
-  /** Кора-броня: любой удар ×0,3 (пробивающий — без направления — проходит целиком, см. Mob.hit) */
+  /** Bark armour: any hit ×0.3 (a piercing one — without direction — goes through entirely, see Mob.hit) */
   protected override guard(): number { return 0.3; }
 
   protected choose(dist: number): string | null { return dist < 2.3 ? 'fuse' : null; }
@@ -577,7 +578,7 @@ export class StumpSapper extends Mob {
     return false;
   }
 
-  /** Взрыв: стене (приманке) 160, героям в 3 м — 30, своим в 2,5 м — 40; сам рассыпается */
+  /** Explosion: 160 to the wall (decoy), 30 to heroes within 3 m, 40 to allies within 2.5 m; crumbles itself */
   blast(): void {
     if (this.blasted) return;
     this.blasted = true;
@@ -600,7 +601,7 @@ export class StumpSapper extends Mob {
 
   protected override die(): void {
     super.die();
-    // пал — порох всё равно рванул
+    // fell — the powder went off anyway
     if (!this.blasted) this.blast();
   }
 
@@ -609,7 +610,7 @@ export class StumpSapper extends Mob {
     lerpTo(this.legs[0], walk ? s * 0.5 : 0, k);
     lerpTo(this.legs[1], walk ? -s * 0.5 : 0, k);
     this.body.rotation.z = walk ? s * 0.06 : 0;
-    // фитиль горит: искра мигает всё чаще, бочонок трясётся
+    // the fuse burns: the spark blinks faster and faster, the keg shakes
     const fusing = this.state === 'attack';
     const f = fusing ? this.fuseT / 1.6 : 0;
     this.spark.color.copy(FUSE).multiplyScalar(fusing ? 1 + Math.sin(this.time * (20 + f * 40)) : 0.6 + Math.sin(this.time * 6) * 0.3);
@@ -619,17 +620,17 @@ export class StumpSapper extends Mob {
 }
 
 /**
- * 39. Лозовая баллиста — осадная машина Ордена на корнях-ногах: держится в 9 м от цели и бьёт тяжёлым болтом раз в 3,4 с —
- * воротам и стенам 24, герою 14. Ворота для неё приманка (taunt 12): встала на дороге — и стреляет, пока не разбьёт.
- * 140 здоровья, 1,3 м/с, медленно разворачивается
+ * 39. Vine Ballista — the Order's siege engine on root legs: keeps 9 m from the target and fires a heavy bolt every 3.4 s —
+ * 24 to gates and walls, 14 to the hero. The gate is a decoy for it (taunt 12): stops on the road and fires until it breaks it.
+ * 140 health, 1.3 m/s, turns slowly
  */
 export class VineBallista extends Mob {
   readonly kind = 'ballista';
-  readonly title = 'Лозовая баллиста';
+  readonly title = t('Vine Ballista');
   readonly cost = 8;
   readonly radius = 0.7;
   override readonly topY = 1.9;
-  /** Выстрелов (для тестов) */
+  /** Shots (for tests) */
   shots = 0;
   private readonly bow = new THREE.Group();
   private readonly arm = new THREE.Group();
@@ -646,11 +647,11 @@ export class VineBallista extends Mob {
     this.loot = 5;
     const wood = this.lam('#7a5232', pixelTex('#7a5232', 10, 1021)), woodD = this.lam('#4a3018'), vine = this.lam('#4a8a2a', pixelTex('#4a8a2a', 10, 1022)), iron = this.lam('#3a3c42'), rope = this.lam('#d8c8a0');
     const B = this.box.bind(this);
-    // станина из брёвен, обвитая лозой
+    // a frame of logs wrapped in vine
     B(this.body, wood, 1.2, 0.3, 1.6, 0, 0.75, 0);
     for (const z of [-0.5, 0.4]) B(this.body, vine, 1.26, 0.1, 0.14, 0, 0.8, z);
     for (let i = 0; i < 3; i++) B(this.body, this.shimmer(RASP, C(3.4, 1.2, 0.6), i, 1.5), 0.12, 0.12, 0.12, -0.5 + i * 0.5, 0.95, -0.6);
-    // лук на вертлюге: ложе, дуги, тетива, ворот; стрела в жёлобе
+    // bow on a swivel: stock, limbs, string, winch; bolt in the groove
     this.bow.position.set(0, 1.0, 0);
     this.body.add(this.bow);
     B(this.bow, woodD, 0.3, 0.24, 2.0, 0, 0.2, 0.2);
@@ -685,7 +686,7 @@ export class VineBallista extends Mob {
         this.shots++;
         if (!this.quiet) { boom(160, 70, 0.2, 0.3); hiss({ dur: 0.25, vol: 0.12, f: 1600, f1: 500, q: 1 }); }
         this.field.shot(from, this.aim, 14, C(3.4, 2.2, 1.0));
-        // ворота (приманка) стоят на месте — болт их не минует; герою — только в полосе
+        // the gate (decoy) stands still — the bolt will not miss it; the hero — only in the strip
         if (this.inLine(from, this.aim, 14, 0.7)) this.hurt(this.focus?.alive ? 24 : 14, from, 4);
       });
     }
@@ -696,7 +697,7 @@ export class VineBallista extends Mob {
     const k = Math.min(1, dt * 8), s = this.stride(5);
     this.legs.forEach((g, i) => lerpTo(g, walk ? s * 0.4 * (i % 2 ? 1 : -1) : 0, k));
     this.body.position.y = walk ? Math.abs(s) * 0.05 : 0;
-    // выстрел: стрела уходит, затем новая ложится в жёлоб
+    // shot: the bolt leaves, then a new one settles into the groove
     const fired = this.state === 'attack' && this.st > 0.9;
     this.arm.visible = !(fired && this.st < 1.3);
     this.bow.rotation.x = this.state === 'attack' ? -0.1 : 0;
@@ -704,17 +705,17 @@ export class VineBallista extends Mob {
 }
 
 /**
- * 40. Бобёр-грызун — охотник на башни (раздел 10 вики): идёт по дороге, а увидев целую башню в 7 м, сворачивает и грызёт
- * её — 9 прочности за укус (×сила волны); сгрыз — снова на дорогу. Героя кусает, только если тот рядом и башни нет.
- * 45 здоровья, 3 м/с
+ * 40. Gnawer Beaver — tower hunter (wiki section 10): walks the road, and on seeing an intact tower within 7 m turns off and gnaws
+ * it — 9 durability per bite (×wave strength); gnawed it down — back to the road. Bites the hero only if nearby and there is no tower.
+ * 45 health, 3 m/s
  */
 export class BeaverGnawer extends Mob {
   readonly kind = 'gnawer';
-  readonly title = 'Бобёр-грызун';
+  readonly title = t('Gnawer Beaver');
   readonly cost = 3;
   readonly radius = 0.45;
   override readonly topY = 1.0;
-  /** Укусов по башням (для тестов) */
+  /** Bites on towers (for tests) */
   bites = 0;
   private readonly head = new THREE.Group();
   private readonly tail = new THREE.Group();
@@ -731,7 +732,7 @@ export class BeaverGnawer extends Mob {
     this.hunter = true;
     const fur = this.lam('#7a4e2a', pixelTex('#7a4e2a', 10, 1031)), belly = this.lam('#b08050'), tooth = this.lam('#f4ecd0', undefined), eye = this.lam('#1a1010'), tailM = this.lam('#4a3020', pixelTex('#4a3020', 6, 1032));
     const B = this.box.bind(this);
-    // толстое тельце, голова с двумя большими резцами, плоский хвост-лопата
+    // a chubby body, head with two big incisors, flat paddle tail
     B(this.body, fur, 0.7, 0.55, 0.85, 0, 0.45, 0);
     B(this.body, belly, 0.5, 0.3, 0.05, 0, 0.4, 0.43);
     this.head.position.set(0, 0.6, 0.45);
@@ -778,23 +779,23 @@ export class BeaverGnawer extends Mob {
     const k = Math.min(1, dt * 14), s = this.stride(12);
     this.legs.forEach((g, i) => lerpTo(g, walk ? s * 0.8 * (i % 3 ? 1 : -1) : 0, k));
     this.tail.rotation.x = walk ? Math.sin(this.time * 12) * 0.15 : Math.sin(this.time * 2) * 0.08;
-    // грызёт — голова ходит вверх-вниз
+    // gnawing — the head bobs up and down
     this.head.rotation.x = this.state === 'attack' ? Math.sin(this.st * 30) * 0.25 : 0;
   }
 }
 
 /**
- * 41. Ледяной колдунчик — охотник на башни (раздел 10 вики): держится в 6 м и раз в ~7 с кидает снежок — башня замерзает
- * на 4 с и не стреляет; два удара героя разбивают лёд. Морозный шпиль не мёрзнет. Достаёт и башни на стенах.
- * Без башни рядом кидает снежок в героя (5 урона). 35 здоровья, 2,6 м/с
+ * 41. Ice Warlock — tower hunter (wiki section 10): keeps 6 m away and every ~7 s throws a snowball — the tower freezes
+ * for 4 s and does not fire; two hero hits break the ice. The frost spire does not freeze. Reaches towers on walls too.
+ * Without a tower nearby throws a snowball at the hero (5 damage). 35 health, 2.6 m/s
  */
 export class FrostImp extends Mob {
   readonly kind = 'frostling';
-  readonly title = 'Ледяной колдунчик';
+  readonly title = t('Ice Warlock');
   readonly cost = 3;
   readonly radius = 0.38;
   override readonly topY = 1.3;
-  /** Заморозил башен (для тестов) */
+  /** Towers frozen (for tests) */
   froze = 0;
   private readonly staff = new THREE.Group();
   private readonly orb: THREE.MeshBasicMaterial;
@@ -814,7 +815,7 @@ export class FrostImp extends Mob {
     const robe = this.lam('#4a7ab8', pixelTex('#4a7ab8', 10, 1041)), trim = this.lam('#e8f4ff'), face = this.lam('#a8d8f0'), eye = this.lam('#1a2a4a'), wood = this.lam('#6a4a2a');
     this.orb = this.shimmer(FROST_ORB, C(3.4, 3.6, 4), 0, 3);
     const B = this.box.bind(this);
-    // балахон-конус из кубов, колпак со снежным помпоном, посох со снежным шаром
+    // a cone robe of cubes, a cap with a snow pompom, a staff with a snowball
     B(this.body, robe, 0.6, 0.5, 0.55, 0, 0.35, 0);
     B(this.body, robe, 0.48, 0.35, 0.44, 0, 0.75, 0);
     B(this.body, trim, 0.62, 0.08, 0.57, 0, 0.12, 0);
@@ -845,7 +846,7 @@ export class FrostImp extends Mob {
 
   protected act(name: string, t: number, dt: number): boolean {
     if (t - dt <= 0) {
-      // снежок по дуге: 0,5 с полёта
+      // snowball in an arc: 0.5 s of flight
       const from = this.pos.clone().setY(this.pos.y + 1.4), to = this.h.hero.pos.clone();
       to.y += name === 'freeze' ? 1.6 : 0.8;
       this.aim.copy(to);
@@ -866,7 +867,7 @@ export class FrostImp extends Mob {
     lerpTo(this.legs[0], walk ? s * 0.8 : 0, k);
     lerpTo(this.legs[1], walk ? -s * 0.8 : 0, k);
     this.body.rotation.z = walk ? s * 0.05 : 0;
-    // замах посохом
+    // staff windup
     lerpTo(this.staff, this.state === 'attack' ? (this.st < 0.3 ? -1.2 : 0.6) : 0, k);
   }
 }

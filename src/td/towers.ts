@@ -1,59 +1,61 @@
 /**
- * Виды башен обороны куста (wiki/design-tower-defence.md, раздел 3). Числа — за один уровень; улучшение (до III)
- * умножает урон на UPGRADE_DMG и прибавляет дальности UPGRADE_RANGE. Цена улучшения — доля цены постройки.
+ * Bush Defence tower kinds (wiki/design-tower-defence.md, section 3). Numbers are per level; an upgrade (up to III)
+ * multiplies damage by UPGRADE_DMG and adds UPGRADE_RANGE to the range. Upgrade price is a fraction of the build price.
  */
+
+import { t } from '../i18n/i18n.ts';
 
 export type TowerKind = 'arrow' | 'frost' | 'splash' | 'fire' | 'magic' | 'meteor' | 'storm' | 'winter' | 'ballista' | 'oil';
 
 export interface TowerDef {
   id: TowerKind;
   title: string;
-  /** Чем бьёт — короткая строка в меню */
+  /** What it hits with — a short line in the menu */
   hint: string;
   cost: number;
   range: number;
-  /** Перезарядка, с */
+  /** Cooldown, s */
   cd: number;
   dmg: number;
-  /** Цвет башни в меню и в её свете, CSS */
+  /** Tower colour in the menu and in its light, CSS */
   color: string;
-  /** Прочность на уровне I: её грызут охотники на башни (src/mobs/td-foes.ts); ноль — башня в руинах */
+  /** Durability at level I: tower hunters gnaw it (src/mobs/td-foes.ts); zero — the tower is in ruins */
   hp: number;
 }
 
 export const TOWERS: Record<TowerKind, TowerDef> = {
-  arrow: { id: 'arrow', title: 'Стрелковая вышка', hint: 'быстрые болты по одному', cost: 60, range: 9, cd: 0.4, dmg: 6, color: '#d8b872', hp: 120 },
-  frost: { id: 'frost', title: 'Морозный шпиль', hint: 'иней: замедляет и бьёт', cost: 80, range: 8, cd: 1.1, dmg: 8, color: '#7ad8ff', hp: 140 },
-  splash: { id: 'splash', title: 'Катапульта', hint: 'камень по площади', cost: 110, range: 11, cd: 2.4, dmg: 26, color: '#c88a5a', hp: 160 },
-  fire: { id: 'fire', title: 'Огненная жаровня', hint: 'струя пламени, поджигает', cost: 100, range: 6, cd: 0.9, dmg: 10, color: '#ff8a3a', hp: 150 },
-  magic: { id: 'magic', title: 'Волшебный обелиск', hint: 'сфера бьёт цепью, ослабляет', cost: 130, range: 10, cd: 1.5, dmg: 18, color: '#c48aff', hp: 140 },
-  // раздел 14 вики: дорогие башни по площади, на всех картах
-  meteor: { id: 'meteor', title: 'Звездочёт', hint: 'метеорит в самую толпу: взрыв 4,5 м, поджог', cost: 500, range: 14, cd: 4.5, dmg: 150, color: '#ffb84a', hp: 220 },
-  storm: { id: 'storm', title: 'Грозовой шпиль', hint: 'молния цепью: 6 врагов, на II — 8, на III — 10', cost: 350, range: 11, cd: 1.8, dmg: 40, color: '#7ab8ff', hp: 180 },
-  winter: { id: 'winter', title: 'Сердце зимы', hint: 'вьюга вокруг: урон и −50 % всем, ледяная волна', cost: 400, range: 7, cd: 1, dmg: 12, color: '#bfeaff', hp: 200 },
-  // осада (раздел 9 вики): только на картах с `meta.td.towers`
-  ballista: { id: 'ballista', title: 'Стенная баллиста', hint: 'тяжёлый болт сквозь строй, пробивает броню', cost: 120, range: 14, cd: 2.2, dmg: 45, color: '#b8a070', hp: 200 },
-  oil: { id: 'oil', title: 'Котёл со смолой', hint: 'лужа смолы: вязнут и горят', cost: 90, range: 6, cd: 3.5, dmg: 7, color: '#5a3a1a', hp: 160 },
+  arrow: { id: 'arrow', title: t('Archer tower'), hint: t('quick bolts, one at a time'), cost: 60, range: 9, cd: 0.4, dmg: 6, color: '#d8b872', hp: 120 },
+  frost: { id: 'frost', title: t('Frost spire'), hint: t('rime: slows and hits'), cost: 80, range: 8, cd: 1.1, dmg: 8, color: '#7ad8ff', hp: 140 },
+  splash: { id: 'splash', title: t('Catapult'), hint: t('a rock over an area'), cost: 110, range: 11, cd: 2.4, dmg: 26, color: '#c88a5a', hp: 160 },
+  fire: { id: 'fire', title: t('Fire brazier'), hint: t('a jet of flame, sets on fire'), cost: 100, range: 6, cd: 0.9, dmg: 10, color: '#ff8a3a', hp: 150 },
+  magic: { id: 'magic', title: t('Arcane obelisk'), hint: t('an orb that chains and weakens'), cost: 130, range: 10, cd: 1.5, dmg: 18, color: '#c48aff', hp: 140 },
+  // wiki section 14: expensive area towers, on every map
+  meteor: { id: 'meteor', title: t('Stargazer'), hint: t('a meteor into the thick of the crowd: 4.5 m blast, sets on fire'), cost: 500, range: 14, cd: 4.5, dmg: 150, color: '#ffb84a', hp: 220 },
+  storm: { id: 'storm', title: t('Storm spire'), hint: t('chain lightning: 6 enemies, 8 at II, 10 at III'), cost: 350, range: 11, cd: 1.8, dmg: 40, color: '#7ab8ff', hp: 180 },
+  winter: { id: 'winter', title: t('Heart of winter'), hint: t('a blizzard around: damage and −50 % to all, an ice wave'), cost: 400, range: 7, cd: 1, dmg: 12, color: '#bfeaff', hp: 200 },
+  // siege (wiki section 9): only on maps with `meta.td.towers`
+  ballista: { id: 'ballista', title: t('Wall ballista'), hint: t('a heavy bolt through the ranks, pierces armour'), cost: 120, range: 14, cd: 2.2, dmg: 45, color: '#b8a070', hp: 200 },
+  oil: { id: 'oil', title: t('Tar cauldron'), hint: t('a pool of tar: they get stuck and burn'), cost: 90, range: 6, cd: 3.5, dmg: 7, color: '#5a3a1a', hp: 160 },
 };
 
-/** Порядок в меню; первые восемь — доступны везде; баллиста и котёл — где карта разрешает (`meta.td.towers`) */
+/** Menu order; the first eight are available everywhere; ballista and cauldron — where the map allows (`meta.td.towers`) */
 export const TOWER_ORDER: TowerKind[] = ['arrow', 'frost', 'splash', 'fire', 'magic', 'meteor', 'storm', 'winter', 'ballista', 'oil'];
-/** Сколько видов из TOWER_ORDER доступны на карте без `meta.td.towers` */
+/** How many kinds from TOWER_ORDER are available on a map without `meta.td.towers` */
 export const BASE_TOWERS = 8;
-/** Клавиша карточки в меню площадки — по месту в списке карты: 1…9, 0 */
+/** Card key in the pad menu — by position in the map's list: 1…9, 0 */
 export const menuKey = (i: number): string => String((i + 1) % 10);
 
 export const MAX_LEVEL = 3;
-/** Урон за уровень: I ×1, II ×1,6, III ×2,4 */
+/** Damage per level: I ×1, II ×1.6, III ×2.4 */
 export const UPGRADE_DMG = [1, 1.6, 2.4];
 export const UPGRADE_RANGE = [0, 1, 2];
-/** Цена улучшения — доля цены постройки */
+/** Upgrade price — a fraction of the build price */
 export const UPGRADE_COST = [0, 0.7, 1.0];
-/** Прочность за уровень: II ×1,3, III ×1,69 */
+/** Durability per level: II ×1.3, III ×1.69 */
 export const UPGRADE_HP = 1.3;
-/** Починка руин — доля всего вложенного */
+/** Repairing ruins — a fraction of everything invested */
 export const REPAIR_COST = 0.4;
-/** Возврат при продаже — доля всего вложенного */
+/** Sell-back — a fraction of everything invested */
 export const SELL_BACK = 0.7;
 
 export const upgradeCost = (def: TowerDef, toLevel: number): number => Math.round(def.cost * UPGRADE_COST[toLevel - 1]);

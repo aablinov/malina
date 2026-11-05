@@ -2,10 +2,10 @@ import { Level, type LevelJSON } from './level.ts';
 import { WALL_H, type RoomMeta, type RoomType, type Side } from './rooms.ts';
 
 /**
- * Генератор этажа подземелья (design-dungeon.md, раздел 3): сетка 5 × 5 с шагом 32 м,
- * главный путь случайным блужданием 5–6 комнат (последняя — босс), 1–2 ответвления по 1–2 комнаты,
- * комнаты — заготовки из assets/maps/rooms/*.json, коридоры 3 клетки шириной.
- * Детерминирован от seed.
+ * Dungeon floor generator (design-dungeon.md, section 3): a 5 × 5 grid with a 32 m step,
+ * the main path is a random walk of 5–6 rooms (the last is the boss), 1–2 branches of 1–2 rooms,
+ * rooms are templates from assets/maps/rooms/*.json, corridors are 3 cells wide.
+ * Deterministic from the seed.
  */
 
 export const GRID = 5;
@@ -13,7 +13,7 @@ export const STEP = 32;
 
 export interface FloorOpts {
   seed: number;
-  /** Номер этажа 1..3 — торговец обязателен на 2 и 3 */
+  /** Floor number 1..3 — the merchant is mandatory on 2 and 3 */
   floor?: number;
   rooms: LevelJSON[];
 }
@@ -34,7 +34,7 @@ function roomMeta(j: LevelJSON): RoomMeta | null {
   return m && m.type ? m : null;
 }
 
-/** Раскладка этажа: какие комнаты где и чем связаны */
+/** Floor layout: which rooms go where and how they are linked */
 export function layoutFloor(seed: number, floor = 1): { cells: Cell[]; types: RoomType[] } {
   const r = rng(seed * 7919 + floor);
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -68,7 +68,7 @@ export function layoutFloor(seed: number, floor = 1): { cells: Cell[]; types: Ro
       cur = next;
     }
     if (!ok) continue;
-    // ответвления: элитная, кладовая/торговец, алтарь
+    // branches: elite, storage/merchant, altar
     const extras: RoomType[] = ['elite', floor >= 2 ? 'merchant' : (r() < 0.5 ? 'merchant' : 'storage')];
     if (r() < 0.6) extras.push('altar');
     const branches = 1 + Math.floor(r() * 2);
@@ -94,10 +94,10 @@ export function layoutFloor(seed: number, floor = 1): { cells: Cell[]; types: Ro
     const cells = [...used.values()];
     return { cells, types: cells.map((c) => c.type) };
   }
-  throw new Error('Не удалось разложить этаж');
+  throw new Error('Could not lay out the floor');
 }
 
-/** Собрать этаж в один уровень */
+/** Assemble the floor into one level */
 export function buildFloor(o: FloorOpts): Level {
   const floor = o.floor ?? 1;
   const r = rng(o.seed * 104729 + floor * 31);
@@ -107,9 +107,9 @@ export function buildFloor(o: FloorOpts): Level {
     if (!m) continue;
     byType.set(m.type, [...(byType.get(m.type) ?? []), j]);
   }
-  if (!byType.get('combat')?.length) throw new Error('Нет ни одной боевой комнаты-заготовки');
+  if (!byType.get('combat')?.length) throw new Error('No combat room template at all');
   const { cells } = layoutFloor(o.seed, floor);
-  const L = new Level(`Этаж ${floor} · seed ${o.seed}`);
+  const L = new Level(`Floor ${floor} · seed ${o.seed}`);
   const origin = -Math.floor((GRID * STEP) / 2);
 
   const placed: { cell: Cell; x0: number; z0: number; meta: RoomMeta }[] = [];
@@ -118,7 +118,7 @@ export function buildFloor(o: FloorOpts): Level {
     cell.room = pick(pool, r);
     const meta = roomMeta(cell.room)!;
     const level = Level.fromJSON(cell.room);
-    // центр ячейки — на середине двери, т.е. на клетке floor(w/2)
+    // the cell centre is at the middle of the door, i.e. at cell floor(w/2)
     const cx = origin + cell.gx * STEP + STEP / 2, cz = origin + cell.gz * STEP + STEP / 2;
     const x0 = cx - Math.floor(meta.w / 2), z0 = cz - Math.floor(meta.d / 2);
     level.forEach((x, y, z, id, rot) => L.set(x + x0, y, z + z0, level.palette[id], rot));
@@ -129,12 +129,12 @@ export function buildFloor(o: FloorOpts): Level {
       }
       L.entities.push({ ...e, x: e.x + x0, z: e.z + z0, data: { ...(e.data ?? {}), room: cell.type, cell: [cell.gx, cell.gz] } });
     }
-    // декор комнаты — со сдвигом, вместе с клеткой крепления
+    // room decor — shifted, together with its anchor cell
     for (const dc of level.decor) {
       L.addDecor({ ...dc, pos: [dc.pos[0] + x0, dc.pos[1], dc.pos[2] + z0], ...(dc.on ? { on: [dc.on[0] + x0, dc.on[1], dc.on[2] + z0] } : {}) });
     }
     if (cell.type === 'start' && level.spawn) L.spawn = [level.spawn[0] + x0, level.spawn[1], level.spawn[2] + z0];
-    // лишние двери закладываем стеной
+    // unused doors are walled up
     for (const side of ['n', 'e', 's', 'w'] as Side[]) {
       if (cell.links.includes(side)) continue;
       const camSide = side === 'e' || side === 's';
@@ -147,10 +147,10 @@ export function buildFloor(o: FloorOpts): Level {
     placed.push({ cell, x0, z0, meta });
   }
 
-  // коридоры: от двери к двери по прямой, 3 клетки шириной, стены по бокам
+  // corridors: door to door in a straight line, 3 cells wide, walls on the sides
   const find = (gx: number, gz: number) => placed.find((p) => p.cell.gx === gx && p.cell.gz === gz)!;
   for (const p of placed) for (const side of p.cell.links) {
-    if (side !== 'e' && side !== 's') continue; // каждую пару — один раз
+    if (side !== 'e' && side !== 's') continue; // each pair once
     const q = find(p.cell.gx + DIR[side][0], p.cell.gz + DIR[side][1]);
     const cxA = p.x0 + Math.floor(p.meta.w / 2), czA = p.z0 + Math.floor(p.meta.d / 2);
     if (side === 'e') {

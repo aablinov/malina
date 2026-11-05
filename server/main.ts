@@ -1,11 +1,11 @@
 /**
- * Сервер сетевой игры «Малины» (wiki/design-multiplayer.md). Node ≥ 22.18 выполняет TypeScript сам:
+ * Malina multiplayer server (wiki/design-multiplayer.md). Node ≥ 22.18 runs TypeScript directly:
  *
- *   npm run server                     — http://localhost:8787, база ./data/malina.db
+ *   npm run server                     — http://localhost:8787, database ./data/malina.db
  *   PORT=9000 DB_PATH=/var/malina.db STATIC=dist npm run server
  *
- * PORT — порт, HOST — адрес (по умолчанию все), DB_PATH — файл SQLite, STATIC — каталог собранной игры
- * (отдаётся на `/`, тогда игра и сервер на одном адресе), MAPS — каталог карт (assets/maps)
+ * PORT — port, HOST — address (default: all), DB_PATH — SQLite file, STATIC — directory of the built game
+ * (served at `/`, so the game and the server share one address), MAPS — maps directory (assets/maps)
  */
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,10 +20,10 @@ const app = createApp({
   staticDir: env.STATIC ? join(process.cwd(), env.STATIC) : undefined,
 });
 const port = await app.listen(Number(env.PORT) || 8787, env.HOST);
-console.log(`Малина: сервер на http://localhost:${port} (ws — /ws)`);
+console.log(`Malina: server at http://localhost:${port} (ws — /ws)`);
 
 const stop = (): void => {
-  console.log('Малина: сервер останавливается');
+  console.log('Malina: server shutting down');
   void app.close().then(() => process.exit(0));
 };
 process.on('SIGINT', stop);

@@ -3,10 +3,10 @@ import { glowTex } from '../loot-look.ts';
 import type { TdLane, TdMist } from './types.ts';
 
 /**
- * Туман у лагерей врагов (wiki/design-tower-defence.md, раздел 9): точки выхода не видны ни со двора, ни со стен.
- * Вокруг начала каждой дороги в радиусе `radius` — слои мягких непрозрачных плоскостей (та же радиальная текстура,
- * что у дымки лавы, но обычное смешивание, чтобы закрывать, а не светить) на трёх высотах; плотнее к центру,
- * медленно плывут и дышат. Включается полем `meta.td.mist` (`TdMist`).
+ * Mist at the enemy camps (wiki/design-tower-defence.md, section 9): spawn points are hidden both from the yard and from the walls.
+ * Around the start of each lane within `radius` — layers of soft opaque planes (the same radial texture as the lava
+ * haze, but normal blending, to cover rather than glow) at three heights; denser towards the centre,
+ * slowly drifting and breathing. Enabled by the `meta.td.mist` field (`TdMist`).
  */
 export type { TdMist };
 
@@ -29,7 +29,7 @@ export class MistFx {
       const [cx, cz] = l.points[0];
       const n = Math.round(10 + spec.radius * 1.6);
       for (let i = 0; i < n; i++) {
-        // ближе к центру — крупнее и плотнее; у края — реже и прозрачнее
+        // closer to the centre — bigger and denser; at the edge — sparser and more transparent
         const k = Math.sqrt(rnd()), a = rnd() * Math.PI * 2, r = k * spec.radius;
         const size = 6 + (1 - k) * 8 + rnd() * 3;
         const y = 0.35 + rnd() * 2.2;

@@ -4,39 +4,39 @@ import { obstacle, type Obstacle } from '../collision.ts';
 import { DIRS } from './obj.ts';
 
 /**
- * Столкновения тел с блоками уровня, с учётом высоты.
- * Тело — вертикальный цилиндр радиуса r и высоты h, стоящий на y (ноги).
- * Шаг step (0,5 м) — на полублок и ступень поднимаемся не замечая, выше — стена.
+ * Collisions of bodies with level blocks, height-aware.
+ * A body is a vertical cylinder of radius r and height h standing at y (feet).
+ * Step step (0.5 m) — a half-block and stairs are climbed unnoticed, anything higher is a wall.
  *
- * Все функции принимают мировые координаты: клетка (x, y, z) занимает [x−0,5; x+0,5) × [y; y+1) × [z−0,5; z+0,5).
+ * All functions take world coordinates: cell (x, y, z) occupies [x−0.5; x+0.5) × [y; y+1) × [z−0.5; z+0.5).
  */
 
-/** Клетка по мировой координате вдоль X или Z */
+/** Cell by a world coordinate along X or Z */
 export const cell = (w: number): number => Math.floor(w + 0.5);
 
 export const STEP = 0.5;
 export const BODY_H = 1.6;
 
 export interface Terrain {
-  /** Высота пола под точкой: верх самого высокого блока не выше y + step; −Infinity — пропасть */
+  /** Floor height under a point: the top of the highest block not above y + step; −Infinity — a chasm */
   floorAt(x: number, z: number, y: number): number;
-  /** Вытолкнуть цилиндр из блоков. true — было касание */
+  /** Push a cylinder out of blocks. true — there was contact */
   resolve(pos: { x: number; y: number; z: number }, r: number, h?: number): boolean;
-  /** Пересекает ли отрезок (на высоте y) блок выше y */
+  /** Does the segment (at height y) cross a block higher than y */
   blocked(ax: number, az: number, bx: number, bz: number, y: number): boolean;
-  /** Точка, где отрезок на высоте y упирается в блок, и нормаль грани; null — путь свободен */
+  /** The point where the segment at height y runs into a block, and the face normal; null — the way is clear */
   wallHit(ax: number, az: number, bx: number, bz: number, y: number): { x: number; z: number; nx: number; nz: number } | null;
 }
 
 /**
- * Верх блока для столкновений (y + высота) или −Infinity, если проходимый.
- * Для ступеней зависит от точки (px, pz): над низкой половиной 0,5, над высокой 1; без точки — 0,5.
+ * Block top for collisions (y + height) or −Infinity if walkable.
+ * For stairs it depends on the point (px, pz): over the low half 0.5, over the high half 1; without a point — 0.5.
  */
 export function collideTop(L: Level, x: number, y: number, z: number, px?: number, pz?: number): number {
   const d = L.defAt(x, y, z);
   if (d.collide <= 0) return -Infinity;
   if (d.stairs && px !== undefined && pz !== undefined) {
-    // в локальные координаты формы: клетка [x−0,5; x+0,5) → [0; 1), затем снимаем поворот
+    // into the shape's local coordinates: cell [x−0.5; x+0.5) → [0; 1), then undo the rotation
     let lx = px - x + 0.5, lz = pz - z + 0.5;
     const rot = L.rotAt(x, y, z);
     for (let k = 0; k < (4 - rot) % 4; k++) { const nx = 1 - lz; lz = lx; lx = nx; }
@@ -65,12 +65,12 @@ export function terrainOf(L: Level): Terrain {
       let any = false;
       const x0 = cell(pos.x - r), x1 = cell(pos.x + r);
       const z0 = cell(pos.z - r), z1 = cell(pos.z + r);
-      // блоки ниже ног тоже могут быть высокими (забор 1,5 м), поэтому смотрим на слой ниже
+      // blocks below the feet can be tall too (a 1.5 m fence), so we look at the layer below
       const y0 = Math.max(b.minY, Math.floor(pos.y + STEP) - 1), y1 = Math.min(b.maxY, Math.floor(pos.y + h - 0.01));
       for (let cy = y0; cy <= y1; cy++) for (let cz = z0; cz <= z1; cz++) for (let cx = x0; cx <= x1; cx++) {
         const top = collideTop(L, cx, cy, cz, pos.x, pos.z);
         if (top <= pos.y + STEP + 1e-3 || cy >= pos.y + h) continue;
-        // круг против квадрата клетки
+        // circle against the cell square
         const qx = Math.max(cx - 0.5, Math.min(pos.x, cx + 0.5)), qz = Math.max(cz - 0.5, Math.min(pos.z, cz + 0.5));
         let nx = pos.x - qx, nz = pos.z - qz;
         const d2 = nx * nx + nz * nz;
@@ -113,8 +113,8 @@ export function terrainOf(L: Level): Terrain {
 }
 
 /**
- * Потолок над точкой: низ ближайшего твёрдого блока не ниже y + gap (перемычку двери над головой пропускаем).
- * Infinity — над головой открыто. Нужен для разреза дома в рендере.
+ * Ceiling above a point: the bottom of the nearest solid block not below y + gap (a door lintel overhead is skipped).
+ * Infinity — open overhead. Needed for the house cut in the renderer.
  */
 export function ceilingAt(L: Level, x: number, z: number, y: number, gap = 2.5, range = 8): number {
   const cx = cell(x), cz = cell(z);
@@ -122,9 +122,9 @@ export function ceilingAt(L: Level, x: number, z: number, y: number, gap = 2.5, 
   return Infinity;
 }
 
-export interface VoxelHit { x: number; y: number; z: number; /** Направление грани (индекс DIRS), через которую вошёл луч */ face: number; t: number }
+export interface VoxelHit { x: number; y: number; z: number; /** Direction of the face (DIRS index) through which the ray entered */ face: number; t: number }
 
-/** Луч по вокселям (DDA): первая клетка, где hit(x, y, z) (по умолчанию — непустая, y ≤ maxY), и грань входа */
+/** Ray through voxels (DDA): the first cell where hit(x, y, z) (by default — non-empty, y ≤ maxY), and the entry face */
 export function raycastVoxels(L: Level, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number, maxY = Infinity, hit?: (x: number, y: number, z: number) => boolean): VoxelHit | null {
   ox += 0.5; oz += 0.5;
   let x = Math.floor(ox), y = Math.floor(oy), z = Math.floor(oz);
@@ -146,8 +146,8 @@ export function raycastVoxels(L: Level, ox: number, oy: number, oz: number, dx: 
 }
 
 /**
- * Препятствия для плоских систем (пули, навигация врагов, укрытия): все клетки в прямоугольнике,
- * чей верх выше y0 + step, слитые в полосы вдоль X. Высота препятствия — для пуль, от y0.
+ * Obstacles for flat systems (bullets, enemy navigation, covers): all cells in the rectangle
+ * whose top is above y0 + step, merged into strips along X. The obstacle height is for bullets, from y0.
  */
 export function obstaclesOf(L: Level, y0: number, x0: number, z0: number, x1: number, z1: number): Obstacle[] {
   const out: Obstacle[] = [];
@@ -182,8 +182,8 @@ export function obstaclesOf(L: Level, y0: number, x0: number, z0: number, x1: nu
 const decorCache = new WeakMap<Level, { v: number; list: Obstacle[] }>();
 
 /**
- * Препятствия декора (src/level/decor.ts, поле solid): боксы, повёрнутые по рыску предмета (наклон и крен не учитываются),
- * с низом на высоте точки опоры. Для героя, поиска пути, врагов и пуль — как бочки и ящики. Кэш по level.decorVersion.
+ * Decor obstacles (src/level/decor.ts, the solid field): boxes rotated by the item's yaw (pitch and roll are ignored),
+ * with the bottom at the pivot height. For the hero, pathfinding, enemies and bullets — like barrels and crates. Cached by level.decorVersion.
  */
 export function decorSolids(L: Level): Obstacle[] {
   const c = decorCache.get(L);
@@ -192,7 +192,7 @@ export function decorSolids(L: Level): Obstacle[] {
   for (const d of L.decor) {
     const def = decorDef(d.name);
     if (!def.solid) continue;
-    // рыск декора 90° переводит +X в +Z; у препятствия угол обратный (как поворот three вокруг Y)
+    // decor yaw 90° turns +X into +Z; the obstacle angle is the opposite (like a three rotation around Y)
     const yaw = d.rot?.[0] ?? 0;
     const a = (-yaw * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
     for (const b of def.solid) {

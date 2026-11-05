@@ -1,25 +1,25 @@
 import * as THREE from 'three';
 
 /**
- * Препятствие — повёрнутый прямоугольник на плоскости XZ с высотой.
- * Тела (герой, жуки) — круги. Пули летят горизонтально на своей высоте
- * и задевают только препятствия выше себя: из-за низкого укрытия стоя стрелять можно, присев — нет.
+ * An obstacle is a rotated rectangle on the XZ plane with a height.
+ * Bodies (hero, beetles) are circles. Bullets fly horizontally at their own height
+ * and hit only obstacles taller than themselves: you can shoot over low cover standing, but not crouching.
  */
 export interface Obstacle {
   x: number;
   z: number;
-  /** Половины размеров вдоль своих осей */
+  /** Half-sizes along its own axes */
   hx: number;
   hz: number;
-  /** Поворот вокруг Y, рад */
+  /** Rotation around Y, rad */
   rot: number;
-  /** Высота для пуль, м (визуально стена может быть ниже — как стены со стороны камеры) */
+  /** Height for bullets, m (visually the wall may be lower — like walls on the camera side) */
   h: number;
-  /** Низ препятствия, м (декор на втором ярусе); нет — стоит на полу арены, мешает на любой высоте */
+  /** Obstacle bottom, m (decor on the second tier); absent — stands on the arena floor, blocks at any height */
   y0?: number;
 }
 
-/** Тело ростом 1,6 м на высоте ног y задевает препятствие по вертикали */
+/** A 1.6 m tall body with feet at height y overlaps the obstacle vertically */
 export function overlapsY(o: Obstacle, y: number, bodyH = 1.6): boolean {
   return o.y0 === undefined || (y + bodyH > o.y0 && y < o.y0 + o.h);
 }
@@ -28,7 +28,7 @@ export function obstacle(x: number, z: number, w: number, d: number, h: number, 
   return { x, z, hx: w / 2, hz: d / 2, rot: THREE.MathUtils.degToRad(rotDeg), h };
 }
 
-/** Вытолкнуть круг из препятствий. Возвращает true, если было касание. Скольжение вдоль стен получается само. */
+/** Push a circle out of obstacles. Returns true if there was contact. Sliding along walls comes for free. */
 export function resolveCircle(pos: THREE.Vector3, r: number, obs: readonly Obstacle[]): boolean {
   let touched = false;
   for (let iter = 0; iter < 3; iter++) {
@@ -37,7 +37,7 @@ export function resolveCircle(pos: THREE.Vector3, r: number, obs: readonly Obsta
       if (!overlapsY(o, pos.y)) continue;
       const c = Math.cos(o.rot), s = Math.sin(o.rot);
       const dx = pos.x - o.x, dz = pos.z - o.z;
-      // в локальные оси препятствия (поворот на −rot)
+      // into the obstacle's local axes (rotate by −rot)
       const lx = dx * c - dz * s;
       const lz = dx * s + dz * c;
       const qx = THREE.MathUtils.clamp(lx, -o.hx, o.hx);
@@ -51,12 +51,12 @@ export function resolveCircle(pos: THREE.Vector3, r: number, obs: readonly Obsta
         nx /= d; nz /= d;
         push = r - d;
       } else {
-        // центр внутри — выталкиваем по ближайшей грани
+        // centre inside — push out through the nearest face
         const px = o.hx - Math.abs(lx), pz = o.hz - Math.abs(lz);
         if (px < pz) { nx = Math.sign(lx) || 1; nz = 0; push = px + r; }
         else { nx = 0; nz = Math.sign(lz) || 1; push = pz + r; }
       }
-      // обратно в мировые оси (поворот на +rot)
+      // back into world axes (rotate by +rot)
       const wx = nx * c + nz * s;
       const wz = -nx * s + nz * c;
       pos.x += wx * push;
@@ -70,13 +70,13 @@ export function resolveCircle(pos: THREE.Vector3, r: number, obs: readonly Obsta
 
 export interface RayHit {
   t: number;
-  /** Нормаль поверхности в точке попадания (XZ) */
+  /** Surface normal at the hit point (XZ) */
   nx: number;
   nz: number;
   obstacle: Obstacle;
 }
 
-/** Луч на высоте y против препятствий; dir — единичный вектор в XZ */
+/** A ray at height y against obstacles; dir — a unit vector in XZ */
 export function raycastObstacles(ox: number, oz: number, dx: number, dz: number, maxT: number, y: number, obs: readonly Obstacle[]): RayHit | null {
   let best: RayHit | null = null;
   for (const o of obs) {
@@ -105,7 +105,7 @@ export function raycastObstacles(ox: number, oz: number, dx: number, dz: number,
   return best;
 }
 
-/** Луч против круга; возвращает расстояние до входа или −1 */
+/** A ray against a circle; returns the entry distance or −1 */
 export function raycastCircle(ox: number, oz: number, dx: number, dz: number, cx: number, cz: number, r: number): number {
   const fx = ox - cx, fz = oz - cz;
   const b = fx * dx + fz * dz;
@@ -117,7 +117,7 @@ export function raycastCircle(ox: number, oz: number, dx: number, dz: number, cx
   return c < 0 ? 0 : -1;
 }
 
-/** Расстояние от точки до края препятствия (0 — внутри) */
+/** Distance from a point to the obstacle edge (0 — inside) */
 export function distToObstacle(x: number, z: number, o: Obstacle): number {
   const c = Math.cos(o.rot), s = Math.sin(o.rot);
   const dx = x - o.x, dz = z - o.z;

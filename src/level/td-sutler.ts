@@ -2,8 +2,8 @@ import type { TdLane, TdPad } from '../td/types.ts';
 import type { Level } from './level.ts';
 
 /**
- * Маркитант обороны куста (wiki/design-tower-defence.md, раздел 12) — место для его прилавка: у точки появления героя,
- * не на дороге, не у площадки, на ровной земле без блоков и декора. Ищет по кольцам от предпочтительной точки.
+ * The Bush Defence sutler (wiki/design-tower-defence.md, section 12) — a spot for his stall: near the hero's spawn point,
+ * not on a road, not by a pad, on flat ground with no blocks or decor. Searches in rings out from the preferred point.
  */
 
 const segDist = (px: number, pz: number, a: [number, number], b: [number, number]): number => {
@@ -12,7 +12,7 @@ const segDist = (px: number, pz: number, a: [number, number], b: [number, number
   return Math.hypot(px - (a[0] + dx * t), pz - (a[1] + dz * t));
 };
 
-/** Свободная клетка для маркитанта рядом с (x, z); лицом к кусту в (bx, bz). null — не нашлось */
+/** A free cell for the sutler near (x, z); facing the bush at (bx, bz). null — none found */
 export function sutlerSpot(L: Level, lanes: TdLane[], pads: TdPad[], x: number, z: number, bx = 0, bz = 0): { kind: 'sutler'; x: number; z: number; yaw: number } | null {
   const ok = (cx: number, cz: number): boolean => {
     for (const l of lanes) {

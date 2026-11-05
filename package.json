@@ -1,7 +1,7 @@
 {
   "name": "malina",
   "version": "1.0.0",
-  "description": "Малина — мистическая кооперативная зачистка подземелий в воксельном стиле",
+  "description": "Malina — a cosy co-op dungeon crawler with tower defence in a voxel style",
   "scripts": {
     "dev": "vite",
     "build": "tsc && tsc -p tsconfig.server.json && vite build",

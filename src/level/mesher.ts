@@ -10,14 +10,14 @@ import { getShape } from './shapes.ts';
 import type { Shape } from './obj.ts';
 
 /**
- * Рендер уровня: на каждый чанк — по одной сетке на слой (opaque / cutout / water / fire).
- * Грани между непрозрачными соседями не рисуются, углы затенены (AO), яркость чуть гуляет от блока к блоку.
- * Изменился чанк (level.dirty) — вызови sync(), и он перестроится.
+ * Level rendering: per chunk — one mesh per layer (opaque / cutout / water / fire).
+ * Faces between opaque neighbours are not drawn, corners are shaded (AO), brightness drifts a little from block to block.
+ * A chunk changed (level.dirty) — call sync() and it rebuilds.
  *
- * Клетка (x, y, z) стоит в мире центром на целых x и z: занимает [x−0,5; x+0,5) × [y; y+1) × [z−0,5; z+0,5).
+ * Cell (x, y, z) stands in the world centred on integer x and z: it occupies [x−0.5; x+0.5) × [y; y+1) × [z−0.5; z+0.5).
  */
 
-/** Запечённый источник: тёплый цвет в вершины блоков в радиусе dist, сила k (без PointLight — бесплатно по кадрам) */
+/** Baked source: warm colour into block vertices within radius dist, strength k (no PointLight — free per frame) */
 interface Baked { x: number; y: number; z: number; r: number; g: number; b: number; k: number; dist: number }
 
 interface LightSpot { x: number; y: number; z: number; color: THREE.Color; intensity: number; dist: number; seed: number }
@@ -25,10 +25,10 @@ interface LightSpot { x: number; y: number; z: number; color: THREE.Color; inten
 const LAYERS: Layer[] = ['opaque', 'cutout', 'water', 'acid', 'fire', 'glow', 'detail', 'river', 'falls', 'portal', 'lava'];
 
 /**
- * «Рентген»: блоки между камерой и героем (в цилиндре радиуса uXrayR вокруг луча камера → герой,
- * выше ног героя) растворяются сеточкой Байера, чтобы стены не закрывали бойца. uXrayR = 0 — выключено.
- * «Разрез»: всё выше uXrayCut не рисуется (герой в доме — видно этаж без потолка и верхних этажей).
- * У непрозрачных блоков (caps) тогда рисуются и задние грани — тёмным, это «срез» стен сверху.
+ * "X-ray": blocks between the camera and the hero (in a cylinder of radius uXrayR around the camera → hero ray,
+ * above the hero's feet) dissolve with a Bayer dither so walls do not hide the fighter. uXrayR = 0 — off.
+ * "Cut": everything above uXrayCut is not drawn (the hero is in a house — the floor is visible without the ceiling and upper floors).
+ * For opaque blocks (caps) the back faces are then drawn too — dark, this is the "cut" of the walls from above.
  */
 const XRAY_UNIFORMS = { uXrayHero: { value: new THREE.Vector3() }, uXrayCam: { value: new THREE.Vector3() }, uXrayR: { value: 0 }, uXrayCut: { value: 1e9 } };
 const CUT_OFF = 1e8;
@@ -36,7 +36,7 @@ function withXray(m: THREE.Material, caps = false): THREE.Material {
   if (caps) m.side = THREE.DoubleSide;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, XRAY_UNIFORMS);
-    // запечённый свет (свечи, портал): атрибут bake добавляется к излучению — светит и ночью, без PointLight
+    // baked light (candles, portal): the bake attribute is added to the emission — glows at night too, without PointLight
     if (sh.fragmentShader.includes('totalEmissiveRadiance')) {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 bake;\nvarying vec3 vBake;')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBake = bake;');
@@ -80,14 +80,14 @@ ${caps ? 'if (!gl_FrontFacing) gl_FragColor = vec4(0.11, 0.1, 0.09, 1.0);' : ''}
   return m;
 }
 /**
- * Живая вода (и кислота): верх колышется волнами, по поверхности бегут каустика и мерцающие блики,
- * у берегов — пена. Атрибут shore = 1 в углах, где рядом нет такой же жидкости.
- * Блики ярче 1 — их подхватывает bloom.
+ * Live water (and acid): the top sways in waves, caustics and twinkling glints run over the surface,
+ * foam by the banks. The shore attribute = 1 in corners with no such liquid nearby.
+ * Glints brighter than 1 are picked up by bloom.
  */
 const WATER_UNIFORMS = { uTime: { value: 0 } };
-/** Время анимации воды (для тестов) */
+/** Water animation time (for tests) */
 export const liquidTime = (): number => WATER_UNIFORMS.uTime.value;
-/** foamK — доля береговой пены: в узком русле реки берег у каждого угла, полная пена закрыла бы воду */
+/** foamK — share of bank foam: in a narrow river bed every corner is a bank, full foam would cover the water */
 function liquid(m: THREE.Material, foam: string, spark: [number, number, number], caustic: [number, number, number], foamK = 0.7): THREE.Material {
   const f = new THREE.Color(foam);
   const v3 = (c: [number, number, number] | THREE.Color) => Array.isArray(c) ? `vec3(${c.map((x) => x.toFixed(3)).join(',')})` : `vec3(${c.r.toFixed(3)},${c.g.toFixed(3)},${c.b.toFixed(3)})`;
@@ -115,25 +115,25 @@ float wHash(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.54
       .replace('#include <opaque_fragment>', `#include <opaque_fragment>
 if (vTop > 0.5) {
   float t = uTime;
-  // течение (река): всё, что нарисовано по поверхности, уносит по направлению потока
+  // flow (river): everything drawn on the surface is carried in the flow direction
   vec2 p = vWater.xz - vFlow * t;
-  // наклон волны: склоны к солнцу светлее
+  // wave slope: slopes facing the sun are lighter
   float sx = cos(p.x * 1.1 + t * 1.4) * 0.0385 + cos(p.y * 1.4 - t * 1.1 + p.x * 0.5) * 0.015;
   float sz = cos(p.y * 1.4 - t * 1.1 + p.x * 0.5) * 0.042;
   vec3 col = gl_FragColor.rgb * (1.0 + (sz - sx) * 6.0);
-  // каустика: светлые переплетающиеся полосы
+  // caustics: light interweaving bands
   float caus = pow(abs(sin(p.x * 2.1 + sin(p.y * 1.7 + t) * 1.3 + t * 0.8) * sin(p.y * 2.3 + sin(p.x * 1.5 - t * 0.9) * 1.2 - t * 0.6)), 6.0);
   col += ${v3(caustic)} * caus;
-  // мерцающие пиксельные блики (1/8 блока), медленно плывут
+  // twinkling pixel glints (1/8 block), drifting slowly
   vec2 cell = floor(p * 8.0 + vec2(t * 0.35, t * 0.2));
   float h = wHash(cell);
   float tw = 0.5 + 0.5 * sin(t * 3.0 + h * 40.0);
   col += ${v3(spark)} * step(0.968, h) * smoothstep(0.55, 1.0, tw);
-  // пена у берега: рваный пиксельный край, дышит
+  // foam by the bank: ragged pixel edge, breathing
   float fn = wHash(floor(p * 8.0) + floor(t * 2.0) * 0.37);
   float foam = smoothstep(0.68, 0.9, vShore + (fn - 0.5) * 0.22 + sin(t * 2.0 + p.x * 3.0 + p.y * 2.0) * 0.07);
   col = mix(col, ${v3(f)}, foam * ${foamK.toFixed(2)});
-  // река: светлые штрихи вдоль течения, рвутся и бегут
+  // river: light streaks along the flow, tearing and running
   float fl = length(vFlow);
   if (fl > 0.0) {
     vec2 fd = vFlow / fl, fn2 = vec2(-fd.y, fd.x);
@@ -149,8 +149,8 @@ if (vTop > 0.5) {
 }
 
 /**
- * Портал (скриншот 14): золото светится само (ярче 1 — bloom), снизу вверх бегут светлые полосы, края мерцают.
- * Время — общее с водой (uTime).
+ * Portal (screenshot 14): the gold glows by itself (brighter than 1 — bloom), light bands run from bottom to top, the edges shimmer.
+ * The time is shared with the water (uTime).
  */
 function portalMaterial(map: THREE.Texture): THREE.Material {
   const m = new THREE.MeshBasicMaterial({ map, toneMapped: false, color: new THREE.Color(1.35, 1.2, 0.95), side: THREE.DoubleSide });
@@ -169,13 +169,13 @@ diffuseColor.rgb *= 0.86 + 0.3 * smoothstep(0.2, 1.0, band) + 0.05 * sin(uTime *
 }
 
 const AO_SHADE = [0.5, 0.68, 0.84, 1];
-/** Бахрома: свисает на 8/16 и отстоит от грани на 1/16 (не мерцает с текстурой бока) */
+/** Fringe: hangs down 8/16 and stands off the face by 1/16 (no z-fighting with the side texture) */
 const FRINGE_H = 0.5, FRINGE_OUT = 1 / 16;
-/** Рваный край: на сколько верх блока может зайти на соседа, м (маска рисует 0–8 px из 16) */
+/** Ragged edge: how far the block top may spill onto a neighbour, m (the mask draws 0–8 px of 16) */
 const BLEED_D = 0.5, BLEED_LIFT = 0.004;
-/** Общая верхняя грань с соседом по стороне d в долях клетки (без сдвига) */
+/** Shared top edge with the neighbour on side d in cell fractions (no offset) */
 const BLEED_EDGE: [number, number, number, number][] = [[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0]];
-/** Концы верхнего края блока в долях клетки для каждой стороны (0 +X, 1 +Z, 2 −X, 3 −Z), уже со сдвигом наружу */
+/** Ends of the block's top edge in cell fractions for each side (0 +X, 1 +Z, 2 −X, 3 −Z), already offset outwards */
 const FRINGE_EDGE: [number, number, number, number][] = [
   [1 + FRINGE_OUT, 0, 1 + FRINGE_OUT, 1], [1, 1 + FRINGE_OUT, 0, 1 + FRINGE_OUT],
   [-FRINGE_OUT, 1, -FRINGE_OUT, 0], [0, -FRINGE_OUT, 1, -FRINGE_OUT],
@@ -183,8 +183,8 @@ const FRINGE_EDGE: [number, number, number, number][] = [
 const MAX_LIGHTS = 8;
 
 /**
- * Пятна цвета природной земли по миру (как трава на скриншотах Minecraft Dungeons): два слоя плавного шума — 9 м и 3 м;
- * светлые пятна теплее и желтее, тёмные — холоднее. Множители RGB для вершины, ±6 %.
+ * Colour patches of natural ground across the world (like grass on Minecraft Dungeons screenshots): two layers of smooth noise — 9 m and 3 m;
+ * light patches are warmer and yellower, dark ones colder. RGB multipliers for a vertex, ±6 %.
  */
 function macroTint(x: number, z: number): [number, number, number] {
   const vn = (sx: number, sz: number, cell: number, seed: number) => {
@@ -198,7 +198,7 @@ function macroTint(x: number, z: number): [number, number, number] {
   return [1 + 0.06 * k, 1 + 0.045 * k, 1 - 0.01 * k];
 }
 
-/** Высота верха блока в клетке: полный куб — 1, полублок и ступени — по высоте столкновения */
+/** Height of the block top in a cell: full cube — 1, half-block and stairs — by the collision height */
 const topOf = (d: BlockDef): number => (d.full ? 1 : d.collide > 0 && d.collide < 1 ? d.collide : 1);
 
 function hash(x: number, y: number, z: number, s = 0): number {
@@ -208,9 +208,9 @@ function hash(x: number, y: number, z: number, s = 0): number {
 }
 
 /**
- * Вершины слоя чанка (wiki/dev-performance.md): геометрия индексированная — квад это 4 вершины и 6 индексов,
- * у форм блоков вершины общих рёбер тоже не дублируются. Атрибуты — только нужные слою: shore и flow есть у
- * жидкостей, bake — когда рядом есть запечённый свет (шейдер читает отсутствующий атрибут как ноль).
+ * Vertices of a chunk layer (wiki/dev-performance.md): the geometry is indexed — a quad is 4 vertices and 6 indices,
+ * and vertices on shared edges of block shapes are not duplicated either. Attributes — only those the layer needs: shore and flow
+ * exist for liquids, bake — when baked light is nearby (the shader reads a missing attribute as zero).
  */
 class Bucket {
   pos: number[] = []; nrm: number[] = []; uv: number[] = []; col: number[] = []; shore: number[] = []; flow: number[] = []; bake: number[] = []; idx: number[] = [];
@@ -218,7 +218,7 @@ class Bucket {
   readonly lit: boolean;
   constructor(liquid: boolean, lit: boolean) { this.liquid = liquid; this.lit = lit;}
   get empty(): boolean { return this.idx.length === 0; }
-  /** Номер следующей вершины */
+  /** Index of the next vertex */
   get count(): number { return this.pos.length / 3; }
   geometry(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
@@ -238,7 +238,7 @@ class Bucket {
 
 const LIQUID_LAYERS = new Set<Layer>(['water', 'acid', 'river', 'lava']);
 
-/** Форма с общими вершинами: грани ссылаются на номера вершин; совпадают только вершины одной группы и одного cull */
+/** Shape with shared vertices: faces reference vertex indices; only vertices of the same group and the same cull coincide */
 interface IndexedShape { verts: { p: [number, number, number]; n: [number, number, number]; uv: [number, number]; group: string; cull: number }[]; tris: { v: [number, number, number]; cull: number; group: string }[] }
 const indexedShapes = new WeakMap<Shape, IndexedShape>();
 function indexedOf(shape: Shape): IndexedShape {
@@ -259,13 +259,13 @@ function indexedOf(shape: Shape): IndexedShape {
   indexedShapes.set(shape, ix = { verts, tris });
   return ix;
 }
-/** Соответствие вершин формы вершинам слоя в текущем блоке (−1 — ещё не выпущена) */
+/** Mapping of shape vertices to layer vertices in the current block (−1 — not emitted yet) */
 let shapeMap = new Int32Array(64);
 
 export class LevelRenderer {
   readonly group = new THREE.Group();
   readonly atlas: Atlas;
-  /** Рисовать только блоки не выше этого y (срез в редакторе) */
+  /** Draw only blocks not above this y (the cut in the editor) */
   maxY = Infinity;
   private readonly mats: Record<Layer, THREE.Material>;
   private readonly meshes = new Map<string, THREE.Mesh[]>();
@@ -276,7 +276,7 @@ export class LevelRenderer {
   private readonly lavaTex: THREE.Texture;
   private readonly fireTex: THREE.Texture;
   private readonly fallsTex: THREE.Texture;
-  /** Свободный декор поверх блоков (src/level/decor.ts) */
+  /** Free decor on top of blocks (src/level/decor.ts) */
   readonly decor: DecorRenderer;
 
   private readonly scene: THREE.Scene;
@@ -292,20 +292,20 @@ export class LevelRenderer {
       opaque: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true }), true),
       cutout: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide })),
       water: liquid(new THREE.MeshLambertMaterial({ map: T.water, vertexColors: true, transparent: true, opacity: 0.82 }), '#e8fbff', [1.7, 1.9, 2.1], [0.12, 0.3, 0.36]),
-      // река: глубже и темнее пруда, бирюза; течение — атрибут flow
+      // river: deeper and darker than the pond, teal; the flow is the flow attribute
       river: liquid(new THREE.MeshLambertMaterial({ map: T.river, vertexColors: true, transparent: true, opacity: 0.96 }), '#e4f4f6', [1.2, 1.4, 1.5], [0.04, 0.1, 0.13], 0.22),
-      // водопад: непрозрачные струи, текстура бежит вниз
+      // waterfall: opaque streams, the texture runs down
       falls: withXray(new THREE.MeshLambertMaterial({ map: T.waterfall, vertexColors: true, emissive: new THREE.Color('#0d3a4a'), emissiveIntensity: 0.6 })),
       portal: portalMaterial(this.atlas.texture),
       acid: liquid(new THREE.MeshLambertMaterial({ map: T.acid, vertexColors: true, transparent: true, opacity: 0.85, emissive: new THREE.Color('#2a7a10'), emissiveIntensity: 0.8 }), '#d8ffb0', [1.4, 2.4, 0.8], [0.2, 0.4, 0.1]),
-      // лава: непрозрачная, светится сама (эмиссия под bloom), медленные волны, жёлтая пена у берега
+      // lava: opaque, glows by itself (emission under bloom), slow waves, yellow foam by the bank
       lava: liquid(new THREE.MeshLambertMaterial({ map: T.lava, vertexColors: true, emissive: new THREE.Color('#d8500e'), emissiveIntensity: 0.45 }), '#ffd070', [2.0, 1.1, 0.3], [0.8, 0.35, 0.07], 0.3),
       fire: new THREE.MeshBasicMaterial({ map: T.fire, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.8, 1.5, 1.1) }),
-      // мелкая трава: только лицевая сторона (пучки выпускаются в обе стороны) — иначе обратная сторона переворачивает
-      // нормаль «вверх» и темнеет; тени не отбрасывает
-      // polygonOffset — рваный край лежит прямо на верхе соседа и не должен мерцать с ним
+      // small grass: front side only (tufts are emitted both ways) — otherwise the back side flips the
+      // "up" normal and darkens; casts no shadows
+      // polygonOffset — the ragged edge lies right on the neighbour's top and must not z-fight with it
       detail: withXray(new THREE.MeshLambertMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 })),
-      // светится сам (грибы, стекло фонаря): без освещения, ярче 1 — подхватывает bloom
+      // glows by itself (mushrooms, lantern glass): unlit, brighter than 1 — picked up by bloom
       glow: withXray(new THREE.MeshBasicMaterial({ map: this.atlas.texture, vertexColors: true, alphaTest: 0.5, toneMapped: false, color: new THREE.Color(1.5, 1.4, 1.2) })),
     };
     for (let i = 0; i < MAX_LIGHTS; i++) {
@@ -329,11 +329,11 @@ export class LevelRenderer {
 
   private baked: Baked[] = [];
   private bakedKey = '';
-  /** Блоки с запечённым светом — по чанкам: пересчитываются только у изменённых, не обходом всего уровня */
+  /** Blocks with baked light — per chunk: recomputed only for changed ones, not by scanning the whole level */
   private readonly blockBaked = new Map<string, Baked[]>();
   /**
-   * Запечённый свет: источники — декор со свечами (light.baked) и блоки с bakedLight. Если набор поменялся,
-   * помечаем чанки вокруг старых и новых источников — их вершины пересчитаются.
+   * Baked light: the sources are candle decor (light.baked) and blocks with bakedLight. If the set changed,
+   * mark the chunks around the old and new sources — their vertices will be recomputed.
    */
   private refreshBaked(): void {
     const L = this.level;
@@ -368,8 +368,8 @@ export class LevelRenderer {
   }
 
   /**
-   * Перестроить чанки, помеченные в level.dirty. budgetMs — сколько миллисекунд можно потратить за вызов
-   * (стриминг: остальные подождут следующего кадра), focus — ближние к этой точке идут первыми
+   * Rebuild the chunks marked in level.dirty. budgetMs — how many milliseconds may be spent per call
+   * (streaming: the rest wait for the next frame), focus — those closest to this point go first
    */
   sync(budgetMs = Infinity, focus?: { x: number; z: number }): void {
     this.decor.maxY = this.maxY;
@@ -390,7 +390,7 @@ export class LevelRenderer {
     }
   }
 
-  /** Сколько чанков ещё ждут перестройки */
+  /** How many chunks still await rebuilding */
   get pending(): number { return this.level.dirty.size; }
 
   private drop(key: string): void {
@@ -406,14 +406,14 @@ export class LevelRenderer {
     if (!chunk) return;
     const [cx, cy, cz] = key.split(',').map(Number);
     const L = this.level;
-    // запечённый свет: только источники, достающие до этого чанка
+    // baked light: only the sources reaching this chunk
     const near = this.baked.filter((l) => l.x + l.dist >= cx * CH - 0.5 && l.x - l.dist <= cx * CH + CH - 0.5 && l.z + l.dist >= cz * CH - 0.5 && l.z - l.dist <= cz * CH + CH - 0.5 && l.y + l.dist >= cy * CH && l.y - l.dist <= cy * CH + CH);
     const lit = near.length > 0;
     const buckets = Object.fromEntries(LAYERS.map((l) => [l, new Bucket(LIQUID_LAYERS.has(l), lit)])) as Record<Layer, Bucket>;
     const spots: LightSpot[] = [];
     const isFull = (x: number, y: number, z: number) => L.defAt(x, y, z).full;
     const lit3: [number, number, number] = [0, 0, 0];
-    /** Запечённый свет в вершине: тёплое свечение, к краю радиуса сходит на нет (добавляется к излучению) */
+    /** Baked light at a vertex: warm glow, fading out towards the radius edge (added to the emission) */
     const bake = (x: number, y: number, z: number): [number, number, number] => {
       lit3[0] = lit3[1] = lit3[2] = 0;
       for (const l of near) {
@@ -424,7 +424,7 @@ export class LevelRenderer {
       }
       return lit3;
     };
-    /** Четырёхугольник в слой: 4 точки мира, uv в долях тайла атласа, нормаль, яркость */
+    /** Quad into a layer: 4 world points, uv in atlas tile fractions, normal, brightness */
     const quad = (b: Bucket, p: number[][], uv: number[][], n: readonly number[], tex: string, c: number) => {
       const r = this.atlas.uv(tex);
       const base = b.count;
@@ -432,7 +432,7 @@ export class LevelRenderer {
         b.pos.push(p[k][0], p[k][1], p[k][2]);
         b.nrm.push(n[0], n[1], n[2]);
         b.uv.push(r.u0 + (r.u1 - r.u0) * uv[k][0], r.v0 + (r.v1 - r.v0) * uv[k][1]);
-        // трава поверх блока — того же оттенка, что земля под ней
+        // grass on top of a block — the same shade as the ground under it
         const [tr, tg, tb] = macroTint(p[k][0], p[k][2]);
         b.col.push(c * tr, c * tg, c * tb);
         if (lit) b.bake.push(...bake(p[k][0], p[k][1], p[k][2]));
@@ -440,7 +440,7 @@ export class LevelRenderer {
       }
       b.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     };
-    /** Плотность пучков: плавный шум с шагом 5 м — трава растёт пятнами */
+    /** Tuft density: smooth noise with a 5 m step — grass grows in patches */
     const density = (x: number, z: number) => {
       const gx = Math.floor(x / 5), gz = Math.floor(z / 5), fx = x / 5 - gx, fz = z / 5 - gz;
       const sm = (t: number) => t * t * (3 - 2 * t), u = sm(fx), v = sm(fz);
@@ -517,7 +517,7 @@ export class LevelRenderer {
               bucket.col.push(cv * tr, cv * tg, cv * tb);
               if (lit) bucket.bake.push(...bake(wx, y + py * scale, wz));
               if (bucket.liquid) {
-                // берег: в этом углу рядом нет той же жидкости
+                // bank: in this corner there is no such liquid nearby
                 let shore = 0;
                 const sx = px < 0.5 ? -1 : 1, sz = pz < 0.5 ? -1 : 1;
                 if (L.idAt(x + sx, y, z) !== id || L.idAt(x, y, z + sz) !== id || L.idAt(x + sx, y, z + sz) !== id) shore = 1;
@@ -529,11 +529,11 @@ export class LevelRenderer {
         }
       }
 
-      // трава поверх блоков (как в Minecraft Dungeons): бахрома свисает с края уступа, сверху — пучки пятнами
+      // grass on top of blocks (as in Minecraft Dungeons): the fringe hangs from the ledge edge, tufts in patches on top
       const topH = topOf(def);
       if ((def.fringe || def.tufts) && !L.defAt(x, y + 1, z).full) {
         const c0 = bright * 0.97;
-        // у полублока бахрома короче — не длиннее трёх четвертей его высоты
+        // on a half-block the fringe is shorter — no longer than three quarters of its height
         const fh = Math.min(FRINGE_H, topH * 0.75);
         if (def.fringe) for (let d = 0; d < 4; d++) {
           const n = L.defAt(x + DIRS[d][0], y, z + DIRS[d][2]);
@@ -554,7 +554,7 @@ export class LevelRenderer {
             const c = c0 * (0.88 + hash(x, y, z, 75 + i) * 0.2);
             for (const a of [ang, ang + Math.PI / 2]) {
               const dx = Math.cos(a) * sz / 2, dz = Math.sin(a) * sz / 2;
-              // нормаль вверх: пучок освещён, как земля под ним
+              // normal up: the tuft is lit like the ground under it
               const ty = y + topH;
               const p0 = [tx - dx, ty, tz - dz], p1 = [tx + dx, ty, tz + dz], p2 = [tx + dx, ty + sz, tz + dz], p3 = [tx - dx, ty + sz, tz - dz];
               quad(buckets.detail, [p0, p1, p2, p3], [[u0, 0], [u0 + sz, 0], [u0 + sz, sz], [u0, sz]], [0, 1, 0], tex, c);
@@ -564,11 +564,11 @@ export class LevelRenderer {
         }
       }
 
-      // рваный край (как дороги в Minecraft Dungeons): верх этого блока заходит на верх соседа другой природной земли
+      // ragged edge (like roads in Minecraft Dungeons): the top of this block spills onto the top of a neighbour of other natural ground
       if (def.bleed && !L.defAt(x, y + 1, z).full) for (let d = 0; d < 4; d++) {
         const nx = x + DIRS[d][0], nz = z + DIRS[d][2];
         const nDef = L.defAt(nx, y, nz);
-        // своё семейство (трава ↔ скала с травой) не перекрываем — та же текстура
+        // its own family (grass ↔ grassy cliff) is not overlapped — the same texture
         if (!nDef.natural || L.idAt(nx, y, nz) === id || nDef.bleed?.[0] === def.bleed[0] || L.defAt(nx, y + 1, nz).full || topOf(nDef) !== topH || nDef.stairs) continue;
         const tex = def.bleed[Math.floor(hash(x, y, z, 80 + d) * def.bleed.length)];
         const flip = hash(x, y, z, 84 + d) < 0.5;
@@ -577,7 +577,7 @@ export class LevelRenderer {
         const P = (u: number, w: number) => [x + u - 0.5, yy, z + w - 0.5];
         const u0 = flip ? 1 : 0, u1 = flip ? 0 : 1;
         const c = 1 - (nDef.jitter ?? 0) * hash(nx, y, nz, 9);
-        // a → b по грани, внутрь соседа; обход против часовой сверху — нормаль вверх (материал односторонний)
+        // a → b along the edge, into the neighbour; counter-clockwise from above — normal up (the material is single-sided)
         quad(buckets.detail, [P(ax, az), P(bx, bz), P(bx + ox, bz + oz), P(ax + ox, az + oz)],
           [[u0, 0], [u1, 0], [u1, BLEED_D], [u0, BLEED_D]], [0, 1, 0], tex, c);
       }
@@ -598,26 +598,26 @@ export class LevelRenderer {
     if (spots.length) this.lights.set(key, spots);
   }
 
-  /** Сколько треугольников в слое по всем чанкам (для тестов и замеров) */
+  /** How many triangles in a layer over all chunks (for tests and measurements) */
   triangles(layer: Layer): number {
     let n = 0;
     for (const list of this.meshes.values()) for (const m of list) if (m.material === this.mats[layer]) n += (m.geometry.index?.count ?? m.geometry.getAttribute('position').count) / 3;
     return n;
   }
 
-  /** Прозрачность стен между камерой и героем: hero — точка груди героя, radius — радиус окна (0 — выключить) */
+  /** Transparency of walls between the camera and the hero: hero — the hero's chest point, radius — window radius (0 — off) */
   setXray(hero: THREE.Vector3, cam: THREE.Vector3, radius: number): void {
     XRAY_UNIFORMS.uXrayHero.value.copy(hero);
     XRAY_UNIFORMS.uXrayCam.value.copy(cam);
     XRAY_UNIFORMS.uXrayR.value = radius;
   }
 
-  /** Разрез: не рисовать блоки выше y; Infinity — выключить */
+  /** Cut: do not draw blocks above y; Infinity — off */
   setCut(y: number): void {
     XRAY_UNIFORMS.uXrayCut.value = Math.min(y, 1e9);
   }
 
-  /** Анимация воды и огня, ближайшие к focus источники света. night 0..1 */
+  /** Water and fire animation, the light sources closest to focus. night 0..1 */
   update(t: number, night: number, focus: THREE.Vector3): void {
     WATER_UNIFORMS.uTime.value = t;
     this.waterTex.offset.set(Math.sin(t * 0.4) * 0.06, t * 0.02);

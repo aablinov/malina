@@ -11,21 +11,21 @@ import { Piles } from './pile.ts';
 import { SimTd } from './td.ts';
 
 /**
- * Мир симуляции — «game» Quake 3 (wiki/design-multiplayer.md): без сцены, DOM, звука и системной случайности; один и тот же код
- * крутит сервер и браузер (одиночная игра — listen server). Всё видимое — события (`events`) и записи сущностей (`entities()`).
- * Пока герои и враги живут в старых классах (src/knight.ts, src/mobs/) — мир берёт их через крючки `SimHooks`
+ * Simulation world — the Quake 3 "game" (wiki/design-multiplayer.md): no scene, DOM, sound or system randomness; the same code
+ * runs on the server and in the browser (single player is a listen server). Everything visible is events (`events`) and entity records (`entities()`).
+ * While heroes and enemies live in the old classes (src/knight.ts, src/mobs/), the world reaches them through the `SimHooks` hooks
  */
 
-/** Враг для башен и снарядов: цель с долей пройденной дороги (кто ближе к кусту — тот первый) */
+/** Enemy for towers and projectiles: a target with its share of the lane travelled (closer to the bush — first) */
 export interface Foe extends Target {
   readonly progress?: number;
   readonly dead: boolean;
 }
 
-/** Герой как цель кучек малины и тревоги: место, без сил ли, место в партии */
+/** Hero as a target for raspberry piles and alarms: position, whether exhausted, seat in the party */
 export interface HeroLike { readonly pos: THREE.Vector3; readonly down: boolean; readonly seat: number }
 
-/** Враг, вышедший из логова на дорогу (src/mobs/mob.ts): маршрут и настороженность задаёт оборона */
+/** Enemy that left a lair onto a lane (src/mobs/mob.ts): the defence sets its route and wariness */
 export interface MarchingMob {
   march: THREE.Vector3[] | null;
   laneId: string | null;
@@ -38,17 +38,17 @@ export interface MarchingMob {
 }
 
 export interface SimHooks {
-  /** Живые враги на карте (цели башен) */
+  /** Living enemies on the map (tower targets) */
   foes(): readonly Foe[];
-  /** Герои партии — сборщики малины */
+  /** Party heroes — the raspberry gatherers */
   heroes(): readonly HeroLike[];
-  /** Враг из реестра в точке; null — нет такого */
+  /** Enemy from the roster at a point; null — no such kind */
   spawnMob(kind: string, at: THREE.Vector3): MarchingMob | null;
-  /** Враги крепчают с волнами и игроками */
+  /** Enemies get tougher with waves and players */
   setScale(level: number, players: number): void;
-  /** Блоки уровня изменились (пролом, починка): пересчитать препятствия */
+  /** Level blocks changed (breach, repair): recompute obstacles */
   levelChanged?(): void;
-  /** Шаг героев и стаи внутри шага мира — под игровой случайностью и приманками этого мира */
+  /** Step of heroes and the pack inside the world step — under this world's game randomness and decoys */
   step?(dt: number): void;
 }
 
@@ -57,7 +57,7 @@ export interface SimWorldOpts {
   level: Level | null;
   td?: TdSpec;
   players?: number;
-  /** Общий бой: у каждого места своя малина */
+  /** Shared battle: each seat has its own raspberries */
   personal?: boolean;
 }
 
@@ -70,7 +70,7 @@ export class SimWorld {
   readonly h: SimHooks;
   readonly td: SimTd | null;
   readonly piles: Piles;
-  /** Приманки мобов этого мира: куст, стены, башни, призванные (src/decoys.ts) */
+  /** This world's mob decoys: bush, walls, towers, summons (src/decoys.ts) */
   readonly decoys: Decoy[] = [];
   events: SimEvent[] = [];
   private nextId = 0;
@@ -85,18 +85,18 @@ export class SimWorld {
   }
 
   emit(e: SimEvent): void { this.events.push(e); }
-  /** Номер новой сущности с приставкой вида */
+  /** Number of a new entity with the kind prefix */
   id(prefix: string): string { return `${prefix}${++this.nextId}`; }
 
-  /** Препятствия героя: ствол куста и башни */
+  /** Hero obstacles: the bush trunk and towers */
   get solids(): Obstacle[] { return this.td?.solids ?? []; }
-  /** Препятствия врагов: то же плюс целые ворота */
+  /** Enemy obstacles: the same plus intact gates */
   get foeSolids(): Obstacle[] { return this.td?.foeSolids ?? []; }
 
-  /** События с прошлого забора — вид и снимок забирают их после шага; что случилось между шагами (удары героя), тоже тут */
+  /** Events since the last pickup — the view and the snapshot take them after the step; what happened between steps (hero hits) is here too */
   takeEvents(): SimEvent[] { const e = this.events; this.events = []; return e; }
 
-  /** Шаг мира: игровая случайность и приманки — этого мира, затем герои и стая (крючок), оборона, кучки */
+  /** World step: game randomness and decoys are this world's, then heroes and the pack (hook), the defence, piles */
   step(dt: number): void {
     const r1 = useRng(this.rng), r2 = useDecoys(this.decoys);
     try {
@@ -108,7 +108,7 @@ export class SimWorld {
     } finally { r2(); r1(); }
   }
 
-  /** Записи всех сущностей для снимка (src/sim/entities.ts) */
+  /** Records of all entities for the snapshot (src/sim/entities.ts) */
   entities(): EntityState[] {
     const out: EntityState[] = [];
     this.td?.entities(out);

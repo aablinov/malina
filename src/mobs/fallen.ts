@@ -4,20 +4,21 @@ import { pixelTex } from '../textures.ts';
 import { hiss, voice } from '../spell-audio.ts';
 import { C, rand, RASP } from '../bosses/kit.ts';
 import { Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Павшие садовники (wiki/design-mobs.md, семья D): нежить Ордена — сборщик с серпом, костяной лучник, огонёк-плакальщик,
- * пугало с воронами. Увядший садовник — в critters.ts.
+ * Fallen gardeners (wiki/design-mobs.md, family D): the Order's undead — sickle reaper, bone archer, mourning wisp,
+ * scarecrow with crows. The withered gardener is in critters.ts.
  */
 
 const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x += (x - o.rotation.x) * k; };
 const BONE = '#e8e2c8';
 const SOUL = C(1.4, 3, 3.4);
 
-/** Части скелета */
+/** Skeleton parts */
 interface Bones { legs: THREE.Group[]; arms: THREE.Group[]; head: THREE.Group }
 
-/** Скелет: тонкие ноги и руки, рёбра под рваной малиновой накидкой, череп со светящимися глазами */
+/** Skeleton: thin legs and arms, ribs under a torn raspberry cape, a skull with glowing eyes */
 function buildSkeleton(m: Mob, body: THREE.Group, seed: number): Bones {
   const bone = m.lam(BONE, pixelTex(BONE, 8, seed)), dark = m.lam('#3a3430'), rag = m.lam('#7a2a3a', pixelTex('#7a2a3a', 10, seed + 1));
   const eye = m.shimmer(C(3.4, 1.2, 2.2), SOUL, rnd() * 6, 1.8);
@@ -32,7 +33,7 @@ function buildSkeleton(m: Mob, body: THREE.Group, seed: number): Bones {
   B(body, bone, 0.1, 0.4, 0.1, 0, 0.92, 0);
   B(body, bone, 0.5, 0.42, 0.26, 0, 1.24, 0);
   for (const y of [1.12, 1.24, 1.36]) B(body, dark, 0.44, 0.04, 0.27, 0, y, 0.005);
-  // рваная накидка: плечи и спина
+  // torn cape: shoulders and back
   B(body, rag, 0.62, 0.16, 0.34, 0, 1.46, 0);
   B(body, rag, 0.56, 0.6, 0.04, 0, 1.12, -0.17, 0.1);
   const head = new THREE.Group();
@@ -57,10 +58,10 @@ function stepPose(r: Bones, s: number, walk: boolean, dt: number): void {
   lerpTo(r.legs[1], walk ? -s * 0.6 : 0, k);
 }
 
-/** 17. Сборщик с серпом — натиск: быстрый скелет, двойной взмах; хрупкий */
+/** 17. Sickle Reaper — charge: a fast skeleton, a double swing; fragile */
 export class Reaper extends Mob {
   readonly kind = 'reaper';
-  readonly title = 'Сборщик с серпом';
+  readonly title = t('Sickle Reaper');
   readonly cost = 3;
   readonly radius = 0.4;
   override readonly topY = 2;
@@ -73,7 +74,7 @@ export class Reaper extends Mob {
     this.keep = 1.4;
     this.mass = 0.7;
     this.rig = buildSkeleton(this, this.body, 781);
-    // серп в правой руке, корзинка увядших ягод на спине
+    // a sickle in the right hand, a basket of withered berries on the back
     const wood = this.lam('#6a4a2a'), steel = this.lam('#c8ccd2'), basket = this.lam('#a07a40', pixelTex('#a07a40', 10, 783)), dry = this.lam('#6a2a3a');
     const B = this.box.bind(this);
     const arm = this.rig.arms[1];
@@ -107,15 +108,15 @@ export class Reaper extends Mob {
     const swing = this.state === 'attack' ? ((this.st % 0.4) < 0.3 ? -2.2 : 0.2) : walk ? -0.5 : -0.3;
     lerpTo(r.arms[1], swing, this.state === 'attack' ? Math.min(1, dt * 30) : k);
     lerpTo(r.arms[0], walk ? -this.stride(13) * 0.5 : 0, k);
-    // бежит, пригнувшись
+    // runs crouched
     this.body.rotation.x = walk ? 0.15 : 0;
   }
 }
 
-/** 18. Костяной лучник — стрелок: две колючие стрелы по полосе, держит дистанцию; вплотную — беззащитен */
+/** 18. Bone Archer — shooter: two thorny arrows along a strip, keeps distance; defenceless up close */
 export class BoneArcher extends Mob {
   readonly kind = 'archer';
-  readonly title = 'Костяной лучник';
+  readonly title = t('Bone Archer');
   readonly cost = 3;
   readonly radius = 0.4;
   override readonly topY = 2;
@@ -128,7 +129,7 @@ export class BoneArcher extends Mob {
     this.keep = 8;
     this.aggro = 16;
     this.rig = buildSkeleton(this, this.body, 791);
-    // лук из лозы с шипами в левой руке
+    // a bow of thorny vine in the left hand
     const vine = this.lam('#4a7a2a'), thorn = this.lam('#c8245a');
     const B = this.box.bind(this);
     const arm = this.rig.arms[0];
@@ -145,7 +146,7 @@ export class BoneArcher extends Mob {
     if (t - dt <= 0) {
       const from = this.pos.clone();
       this.aim.copy(this.fwd());
-      // две стрелы подряд по одной полосе
+      // two arrows in a row along one strip
       for (const [k, delay] of [[0, 0.6], [1, 0.85]] as const) {
         this.field.markLine(from, this.aim, 12, 0.45, delay, () => {
           if (this.dead) return;
@@ -162,17 +163,17 @@ export class BoneArcher extends Mob {
     const k = Math.min(1, dt * 12), r = this.rig;
     stepPose(r, this.stride(), walk, dt);
     const draw = this.state === 'attack';
-    // лук вперёд, правая рука натягивает тетиву
+    // bow forward, the right hand draws the string
     lerpTo(r.arms[0], draw ? -1.5 : -0.4, k);
     lerpTo(r.arms[1], draw ? -1.4 + Math.min(1, (this.st % 0.85) / 0.5) * 0.4 : walk ? -this.stride() * 0.4 : 0, k);
     r.arms[1].position.z = draw ? -0.1 : 0;
   }
 }
 
-/** 19. Огонёк-плакальщик — охотник: летит сквозь стены прямо к герою, лопается рядом холодной вспышкой; сбить на подлёте */
+/** 19. Mourning Wisp — hunter: flies through walls straight to the hero, bursts nearby in a cold flash; shoot it down on approach */
 export class Wisp extends Mob {
   readonly kind = 'wisp';
-  readonly title = 'Огонёк-плакальщик';
+  readonly title = t('Mourning Wisp');
   readonly cost = 2;
   readonly radius = 0.35;
   override readonly topY = 1.8;
@@ -186,7 +187,7 @@ export class Wisp extends Mob {
     this.mass = 0.3;
     this.aggro = 12;
     this.ghost = true;
-    // язычок пламени: три светящихся куба друг над другом, внутри — личико
+    // a tongue of flame: three glowing cubes stacked, a little face inside
     this.flame.position.y = 1.1;
     this.body.add(this.flame);
     const B = this.box.bind(this);
@@ -211,9 +212,9 @@ export class Wisp extends Mob {
         if (!this.quiet) hiss({ dur: 0.4, vol: 0.15, f: 4000, f1: 800, q: 0.7, type: 'bandpass' });
         this.h.fx.burst(c.clone().setY(1), [SOUL, '#ffffff'], 16, { speed: 4, up: 2, size: 0.1, life: 0.5, glow: true, gravity: 0 });
         if (this.inCircle(c, 1.6)) this.hurt(6, c, 3);
-        // холодная лужица: недолго замедляет
+        // cold puddle: slows briefly
         this.field.hazard(c, 1.4, 1.5, 0, SOUL, 0.35);
-        // лопнул сам — малины нет, его не сбили
+        // burst on its own — no raspberries, it was not shot down
         this.summoned = true;
         this.vanish();
       }, SOUL);
@@ -229,10 +230,10 @@ export class Wisp extends Mob {
   }
 }
 
-/** Ворона пугала: летит над землёй к герою, клюёт; два удара — и нет её */
+/** Scarecrow crow: flies above the ground to the hero, pecks; two hits — and it is gone */
 export class Crow extends Mob {
   readonly kind = 'crow';
-  readonly title = 'Ворона';
+  readonly title = t('Crow');
   readonly cost = 0;
   readonly radius = 0.3;
   override readonly topY = 1.6;
@@ -286,10 +287,10 @@ export class Crow extends Mob {
   }
 }
 
-/** 20. Пугало — призыв: каждые 6 с из шляпы вылетают 3 вороны; вплотную оживает и бьёт по кругу */
+/** 20. Scarecrow — summon: every 6 s 3 crows fly out of the hat; comes alive up close and hits in a circle */
 export class Scarecrow extends Mob {
   readonly kind = 'scarecrow';
-  readonly title = 'Пугало';
+  readonly title = t('Scarecrow');
   readonly cost = 5;
   readonly radius = 0.5;
   override readonly topY = 2.4;
@@ -310,7 +311,7 @@ export class Scarecrow extends Mob {
     const pole = this.lam('#6a4a2a'), coat = this.lam('#7a2a3a', pixelTex('#7a2a3a', 8, 803)), stitch = this.lam('#3a2414');
     const eye = this.shimmer(C(3.4, 2, 0.6), RASP, 0, 1.4);
     const B = this.box.bind(this);
-    // кол, кафтан с малиновой заплатой, соломенные кисти, голова-мешок с шитым ртом, шляпа
+    // a stake, a kaftan with a raspberry patch, straw hands, a sack head with a stitched mouth, a hat
     B(this.body, pole, 0.14, 1.2, 0.14, 0, 0.6, 0);
     B(this.body, coat, 0.62, 0.8, 0.36, 0, 1.4, 0);
     B(this.body, this.lam('#c8245a'), 0.16, 0.16, 0.02, 0.14, 1.5, 0.185);
@@ -335,7 +336,7 @@ export class Scarecrow extends Mob {
 
   protected override die(): void {
     super.die();
-    // пугало пало — вороны разлетаются
+    // the scarecrow fell — the crows scatter
     for (const c of this.crows) c.vanish();
   }
 
@@ -356,7 +357,7 @@ export class Scarecrow extends Mob {
       });
       return t > 1.1;
     }
-    // шляпа подпрыгивает — из неё три вороны
+    // the hat bounces — three crows out of it
     if (t >= 0.5 && t - dt < 0.5) {
       if (!this.quiet) { for (let i = 0; i < 3; i++) voice({ type: 'sawtooth', f: rand(500, 700), f1: 300, dur: 0.15, vol: 0.03, delay: i * 0.08, lp: 1800 }); }
       for (let i = 0; i < 3; i++) {
@@ -374,7 +375,7 @@ export class Scarecrow extends Mob {
   }
 
   protected animate(_dt: number, walk: boolean): void {
-    // скачет на колу; кружится в ударе; шляпа подпрыгивает, выпуская ворон
+    // hops on its stake; spins in the hit; the hat bounces, releasing crows
     this.body.position.y = walk ? Math.abs(Math.sin(this.time * 6)) * 0.2 : 0;
     const spin = this.state === 'attack' && this.attack === 'spin';
     this.body.rotation.y = spin && this.st > 0.6 ? Math.min(1, (this.st - 0.6) / 0.3) * Math.PI * 2 : 0;

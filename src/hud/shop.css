@@ -1,4 +1,4 @@
-/* Окно торговли (src/hud/shop.ts): фон и плитки — как у инвентаря (inventory.css) */
+/* Trade window (src/hud/shop.ts): background and tiles as in the inventory (inventory.css) */
 .trade {
   position: fixed; inset: 0; z-index: 20; display: none; color: var(--mcd-ink); user-select: none; box-sizing: border-box;
   font: 700 clamp(10px, min(0.84vw, 1.5vh), 22px) / 1.25 var(--mcd-text);
@@ -54,7 +54,7 @@
 .trade-forge em { font-style: normal; color: #3fd67a; }
 .trade-forge button img { width: 1.5em; height: 1.5em; }
 
-/* имя торговца над лавкой */
+/* merchant name above the stall */
 .npc-label {
   position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; z-index: 4;
   font: 400 clamp(11px, min(0.95vw, 1.7vh), 22px) / 1 var(--mcd-px); color: #fff; text-transform: uppercase;

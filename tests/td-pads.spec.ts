@@ -3,9 +3,9 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Оборона куста: до каждой площадки герой доходит кликом и открывает её меню — с пустыми площадками
- * и когда на всех соседних уже стоят башни; к площадке на земле подходишь и клавишами (WASD) почти с любой стороны —
- * камни и стенки не обступают её кругом (wiki/design-tower-defence.md, раздел 2).
+ * Bush Defence: the hero reaches every pad by click and opens its menu — with empty pads
+ * and when towers already stand on all the neighbours; a pad on the ground can be approached with the keys (WASD) from almost any side —
+ * rocks and walls do not surround it (wiki/design-tower-defence.md, section 2).
  */
 
 const url = (map: string): string => pathToFileURL(resolve('dist/index.html')).href + `?dev=playground&map=${map}`;
@@ -19,7 +19,7 @@ async function open(page: Page, map: string): Promise<void> {
   expect(errors).toEqual([]);
 }
 
-/** Номера площадок, к которым герой не дошёл кликом за 25 с; full — сначала застроить все площадки */
+/** Indices of the pads the hero did not reach by click within 25 s; full — build on all pads first */
 async function unreachable(page: Page, full: boolean): Promise<number[]> {
   return page.evaluate((full) => {
     const m = (window as any).__malina, td = m.td;
@@ -43,14 +43,14 @@ async function unreachable(page: Page, full: boolean): Promise<number[]> {
   }, full);
 }
 
-/** Площадки на земле, к которым клавишами напрямую с 6 м не подойти больше чем с одной стороны из восьми */
+/** Pads on the ground that cannot be approached straight with the keys from 6 m on more than one of the eight sides */
 async function boxedIn(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, bad: string[] = [];
     m.hero.god = true;
     td.waves.length = 0;
     for (const p of td.pads) {
-      if (p.pos.y > 0) continue; // на стенах замка — только по лестницам
+      if (p.pos.y > 0) continue; // on the castle walls — only by the stairs
       const shut: number[] = [];
       for (let k = 0; k < 8; k++) {
         const a = (k * Math.PI) / 4, sx = p.pos.x + Math.cos(a) * 6, sz = p.pos.z + Math.sin(a) * 6;
@@ -68,7 +68,7 @@ async function boxedIn(page: Page): Promise<string[]> {
 }
 
 for (const map of ['td', 'td2', 'td3']) {
-  test(`оборона ${map}: до каждой площадки можно дойти и открыть меню`, async ({ page }) => {
+  test(`defence ${map}: every pad can be reached and its menu opened`, async ({ page }) => {
     test.setTimeout(180_000);
     await open(page, map);
     expect(await boxedIn(page)).toEqual([]);

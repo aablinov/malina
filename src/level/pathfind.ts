@@ -5,24 +5,24 @@ import { BODY_H, collideTop, STEP, type Terrain } from './collide.ts';
 import type { Level } from './level.ts';
 
 /**
- * Поиск пути героя по блокам уровня — для клика мышью (идти туда, подойти к цели).
- * Узлы — точки сетки 0,5 м (по две на блок, поэтому у ступени видны обе половины) на высоте пола под ними.
- * Переход к соседу: вверх не больше шага (0,5 м — ступень, полублок), вниз — до dropMax (спрыгнуть с края),
- * над полом свободно на рост героя. Диагональ — только если свободны оба соседа сбоку (не срезаем углы).
- * Узлы у стен дороже — путь идёт серединой прохода. Готовый путь спрямляется: лишние узлы на прямой выкидываются.
+ * Hero pathfinding over level blocks — for mouse clicks (go there, approach a target).
+ * Nodes are points of a 0.5 m grid (two per block, so both halves of a stair are visible) at the floor height under them.
+ * Moving to a neighbour: up by at most a step (0.5 m — stairs, half-block), down up to dropMax (jump off an edge),
+ * free above the floor for the hero's height. Diagonals only if both side neighbours are free (no corner cutting).
+ * Nodes by walls cost more — the path runs through the middle of a passage. The finished path is straightened: extra nodes on a line are dropped.
  */
 
 const G = 0.5;
 const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
-/** Сколько узлов можно раскрыть за один поиск (≈ поле 85 × 85 м на одном уровне) */
+/** How many nodes one search may expand (≈ an 85 × 85 m field on one level) */
 const MAX_EXPAND = 30000;
 
 export interface PathOptions {
-  /** Плоские препятствия (бочки, ящики, декор) — обходить */
+  /** Flat obstacles (barrels, crates, decor) — to go around */
   solids?: readonly Obstacle[];
-  /** Насколько можно спрыгнуть вниз, м */
+  /** How far down one may drop, m */
   dropMax?: number;
-  /** Потолок раскрытых клеток (цена поиска); по умолчанию MAX_EXPAND — для героя, мобам дешевле */
+  /** Cap on expanded cells (search cost); MAX_EXPAND by default — for the hero, cheaper for mobs */
   maxExpand?: number;
 }
 
@@ -35,7 +35,7 @@ export class Pathfinder {
   private readonly terrain: Terrain;
   constructor(level: Level, terrain: Terrain) { this.level = level; this.terrain = terrain; }
 
-  /** Над полом y в точке (x, z) свободно на рост героя */
+  /** Above floor y at point (x, z) it is free for the hero's height */
   private clear(x: number, z: number, y: number): boolean {
     const cx = Math.floor(x + 0.5), cz = Math.floor(z + 0.5);
     for (let cy = Math.floor(y + STEP + 1e-3); cy < y + BODY_H; cy++) {
@@ -44,7 +44,7 @@ export class Pathfinder {
     return true;
   }
 
-  /** Пол под точкой, если на нём можно стоять: из высоты from шагом вверх не больше STEP, вниз — не больше dropMax */
+  /** The floor under a point if one can stand on it: from height from, up by at most STEP, down by at most dropMax */
   private stand(x: number, z: number, from: number, dropMax: number, solids: readonly Obstacle[]): number | null {
     const f = this.terrain.floorAt(x, z, from);
     if (f === -Infinity || f < from - dropMax - 1e-3) return null;
@@ -54,13 +54,13 @@ export class Pathfinder {
   }
 
   /**
-   * Путь от a до b: точки, по которым идти (первая — следующая, последняя — b или ближайшая достижимая к b).
-   * Пустой массив — герой уже на месте.
+   * Path from a to b: the points to walk through (the first is the next one, the last is b or the reachable point closest to b).
+   * An empty array — the hero is already there.
    */
   find(a: THREE.Vector3, b: THREE.Vector3, opts: PathOptions = {}): THREE.Vector3[] {
     const solids = opts.solids ?? [];
     const dropMax = opts.dropMax ?? 3;
-    // в чистом поле — сразу по прямой
+    // in an open field — straight away
     if (this.straight(a, b, solids)) return [b.clone()];
     const si = Math.round((a.x - 0.25) / G), sj = Math.round((a.z - 0.25) / G);
     const gx = b.x, gz = b.z, gy = b.y;
@@ -89,7 +89,7 @@ export class Pathfinder {
       return top;
     };
     const px = (i: number): number => i * G + 0.25;
-    // пол под узлом сетки считается много раз (соседи, стены, диагонали) — запоминаем на время поиска
+    // the floor under a grid node is computed many times (neighbours, walls, diagonals) — memoised for the search
     const memo = new Map<number, number | null>();
     const DROPS = [dropMax, 0.6, 0.01, 1];
     const standAt = (i: number, j: number, from: number, drop: 0 | 1 | 2 | 3): number | null => {
@@ -102,7 +102,7 @@ export class Pathfinder {
       const dx = Math.abs(px(i) - gx), dz = Math.abs(px(j) - gz);
       return Math.max(dx, dz) + (Math.SQRT2 - 1) * Math.min(dx, dz) + Math.abs(y - gy) * 0.5;
     };
-    // стена рядом (с любой из четырёх сторон) — узел дороже
+    // a wall nearby (on any of the four sides) — the node costs more
     const nearWall = (i: number, j: number, y: number): boolean => {
       for (let d = 0; d < 4; d++) {
         const [di, dj] = DIRS8[d];
@@ -111,7 +111,7 @@ export class Pathfinder {
       return false;
     };
 
-    // старт: ближайшая к герою точка сетки, где можно стоять
+    // start: the grid point closest to the hero where one can stand
     let start: Node | null = null;
     for (const [di, dj] of [[0, 0], ...DIRS8]) {
       const y = standAt(si + di, sj + dj, a.y, 3);
@@ -139,7 +139,7 @@ export class Pathfinder {
         const i = n.i + di, j = n.j + dj;
         const y = standAt(i, j, n.y, 0);
         if (y === null) continue;
-        // диагональ — без срезания углов и без перепадов высоты
+        // diagonal — no corner cutting and no height changes
         if (d >= 4) {
           const ya = standAt(n.i + di, n.j, n.y, 2), yb = standAt(n.i, n.j + dj, n.y, 2);
           if (ya === null || yb === null || Math.abs(y - n.y) > 1e-3) continue;
@@ -158,7 +158,7 @@ export class Pathfinder {
       }
     }
 
-    // цель недостижима — идём к ближайшей достижимой точке
+    // the goal is unreachable — go to the closest reachable point
     const end = goal ?? best;
     const raw: THREE.Vector3[] = [];
     for (let n: Node | null = end; n; n = n.parent) raw.push(new THREE.Vector3(px(n.i), n.y, px(n.j)));
@@ -167,7 +167,7 @@ export class Pathfinder {
     return this.smooth(a, raw, solids);
   }
 
-  /** Спрямление: от текущей точки сразу к самой дальней, до которой ровный проход */
+  /** Straightening: from the current point straight to the farthest one with a level passage */
   private smooth(a: THREE.Vector3, raw: THREE.Vector3[], solids: readonly Obstacle[]): THREE.Vector3[] {
     const out: THREE.Vector3[] = [];
     let from = a.clone();
@@ -182,7 +182,7 @@ export class Pathfinder {
     return out;
   }
 
-  /** По прямой от a до b можно пройти: на каждом шаге 0,2 м пол есть, перепад не больше ступени, коридор шириной героя свободен */
+  /** One can walk straight from a to b: at every 0.2 m step there is floor, the difference is at most a step, a hero-wide corridor is free */
   straight(a: THREE.Vector3, b: THREE.Vector3, solids: readonly Obstacle[] = []): boolean {
     const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
     if (d < 1e-3) return true;
@@ -193,7 +193,7 @@ export class Pathfinder {
       const t = s / n, x = a.x + dx * t, z = a.z + dz * t;
       const f = this.stand(x, z, y, STEP, solids);
       if (f === null || Math.abs(f - y) > STEP + 1e-3) return false;
-      // плечи героя: по бокам от линии тоже свободно и тот же пол
+      // the hero's shoulders: on both sides of the line it is also free and the floor is the same
       for (const k of [-1, 1]) {
         const fs = this.stand(x + sx * k, z + sz * k, y, STEP, solids);
         if (fs === null || Math.abs(fs - f) > STEP + 1e-3) return false;

@@ -9,21 +9,21 @@ import type { Auth } from '../auth.ts';
 import type { MatchRunner } from './runner.ts';
 
 /**
- * WebSocket боя `/game` (wiki/design-multiplayer.md, раздел 7): каждое соединение — `Channel` над транспортом;
- * первое надёжное сообщение — `hello` с токеном и матчем, дальше канал отдаётся матчу (`Match.attach`).
- * Лобби, чат и профили живут на `/ws` (server/hub.ts)
+ * Battle WebSocket `/game` (wiki/design-multiplayer.md, section 7): each connection is a `Channel` over a transport;
+ * the first reliable message is `hello` with a token and a match, then the channel is handed to the match (`Match.attach`).
+ * Lobby, chat and profiles live on `/ws` (server/hub.ts)
  */
 const HELLO_MS = 15_000;
 /**
- * Параметры клиента (client_max_window_bits, *_no_context_takeover) не навязываем: Safari предлагает голый
- * `permessage-deflate`, и `ws` с жёстким clientMaxWindowBits отвергал все предложения — 400 и нет соединения
+ * Client parameters (client_max_window_bits, *_no_context_takeover) are not forced: Safari offers bare
+ * `permessage-deflate`, and `ws` with a hard clientMaxWindowBits rejected every offer — 400 and no connection
  */
 export const DEFLATE = { threshold: 64, serverMaxWindowBits: 15, zlibDeflateOptions: { level: 6, memLevel: 8 }, concurrencyLimit: 4 };
 
 export interface GameHubDeps {
   auth: Auth;
   runner: MatchRunner;
-  /** Место игрока в матче; null — не в нём */
+  /** Player's seat in the match; null — not in it */
   seatOf: (matchId: string, playerId: string) => number | null;
   now?: () => number;
 }
@@ -35,7 +35,7 @@ export class GameHub {
 
   constructor(deps: GameHubDeps) {
     this.d = deps;
-    // permessage-deflate с общим контекстом: снимки похожи от кадра к кадру, сжимаются в разы; порог низкий — кадры мелкие
+    // permessage-deflate with a shared context: snapshots look alike frame to frame and compress several times over; low threshold — frames are small
     this.wss = new WebSocketServer({ noServer: true, maxPayload: NET_LIMITS.maxMessage, perMessageDeflate: DEFLATE });
     this.wss.on('connection', (ws: WebSocket) => this.greet(ws));
   }
@@ -59,14 +59,14 @@ export class GameHub {
       if (!p) { chan.close(CLOSE.auth); return; }
       const match = this.d.runner.get(String(h.matchId ?? ''));
       const seat = match ? this.d.seatOf(match.id, p.id) : null;
-      if (!match || seat === null) { chan.sendReliable({ t: 'error', text: 'Нет такого боя' }); chan.flush(); chan.close(4004); return; }
-      // дальше канал ведёт матч: он перепишет обработчики
+      if (!match || seat === null) { chan.sendReliable({ t: 'error', text: 'No such battle' }); chan.flush(); chan.close(4004); return; }
+      // from here on the match drives the channel: it overrides the handlers
       if (!this.closing) match.attach(seat, chan);
     };
     chan.onClose = () => clearTimeout(timer);
   }
 
-  /** Апгрейд HTTP → WebSocket боя */
+  /** HTTP → battle WebSocket upgrade */
   upgrade(req: IncomingMessage, socket: import('node:stream').Duplex, head: Buffer): void {
     this.wss.handleUpgrade(req, socket, head, (ws) => this.wss.emit('connection', ws, req));
   }

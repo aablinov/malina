@@ -11,16 +11,17 @@ import { SimBush } from './bush.ts';
 import { r1 } from './entities.ts';
 import { SimLair } from './lair.ts';
 import { SimTower } from './tower.ts';
+import { t } from '../i18n/i18n.ts';
 import { SimWall } from './wall.ts';
 import type { SimWorld } from './world.ts';
 
 /**
- * Правила «Обороны куста» (wiki/design-tower-defence.md) — чистая логика: площадки и башни, стены, куст, логова, волны по
- * дорогам, казна. Меню, HUD, модели и искры — у вида (src/cgame/td-ui.ts, views). Все действия игроков — командами
- * `command(seat, c)` (постройка, улучшение, продажа, починка, волна сейчас), как у гостя сетевого боя
+ * Bush Defence rules (wiki/design-tower-defence.md) — pure logic: pads and towers, walls, the bush, lairs, waves along
+ * lanes, the treasury. Menu, HUD, models and sparks belong to the view (src/cgame/td-ui.ts, views). All player actions are commands
+ * `command(seat, c)` (build, upgrade, sell, repair, wave now), just like a guest of a network battle
  */
 
-/** Мини-босс обороны (src/mobs/td-chiefs.ts) */
+/** Defence mini-boss (src/mobs/td-chiefs.ts) */
 export const isChief = (kind: string): boolean => kind.startsWith('chief_');
 
 export class SimPad {
@@ -49,16 +50,16 @@ export class SimTd {
   spawned = 0;
   fallen = 0;
   players: number;
-  /** Общий бой: у каждого места своя малина; иначе одна казна (место 0) */
+  /** Shared battle: each seat has its own raspberries; otherwise one treasury (seat 0) */
   readonly personal: boolean;
   private readonly purses = new Map<number, number>();
-  /** Подсказка игроку: не хватает малины, башня на пределе (seat, текст) */
+  /** Hint to the player: not enough raspberries, tower at its limit (seat, text) */
   onToast: ((seat: number, text: string) => void) | null = null;
-  /** Башню грызут, заморозили или сломали */
+  /** A tower is being gnawed, frozen or broken */
   onAlarm: ((t: SimTower, why: 'hurt' | 'frozen' | 'ruin') => void) | null = null;
-  /** Клиент сетевого боя (src/cgame/net-battle.ts): зеркало серверной обороны — команды уходят серверу, волны не считаются */
+  /** Client of a network battle (src/cgame/net-battle.ts): a mirror of the server's defence — commands go to the server, waves are not counted */
   remote: ((c: TdCommand) => void) | null = null;
-  /** Зеркало: идёт ли волна — со снимка сервера */
+  /** Mirror: whether a wave is running — from the server snapshot */
   netRunning: boolean | null = null;
   private time = 0;
   private solidsCache: Obstacle[] = [];
@@ -94,25 +95,25 @@ export class SimTd {
 
   dispose(): void { for (const f of this.undecoy) f(); for (const t of this.towers) { t.dispose(); this.undecoyTower(t); } }
 
-  // ---------- казна ----------
+  // ---------- treasury ----------
   private key(seat: number): number { return this.personal ? seat : 0; }
   berries(seat = 0): number { return this.purses.get(this.key(seat)) ?? 0; }
-  /** Малина в кошелёк (награда, продажа, подбор); отрицательное — заплатить */
+  /** Raspberries into the purse (bounty, sale, pickup); negative — pay */
   gain(seat: number, n: number): void { this.purses.set(this.key(seat), Math.max(0, this.berries(seat) + n)); }
-  /** Заплатить, если хватает (башни, маркитант); false — нет */
+  /** Pay if there is enough (towers, sutler); false — there is not */
   spend(seat: number, cost: number): boolean {
     if (cost <= 0) return true;
-    if (this.berries(seat) < cost) { this.onToast?.(seat, `Не хватает малины: нужно ${cost}`); return false; }
+    if (this.berries(seat) < cost) { this.onToast?.(seat, t('Not enough raspberries: {cost} needed', { cost })); return false; }
     this.gain(seat, -cost);
     return true;
   }
-  /** Стартовая казна карты — месту (каждому в общем бою) */
+  /** The map's starting treasury — to a seat (to each in a shared battle) */
   fund(seat: number): void { this.purses.set(this.key(seat), this.spec.berries); }
-  /** Зеркало сетевого боя: малина места — со снимка сервера */
+  /** Mirror of a network battle: a seat's raspberries — from the server snapshot */
   setBerries(seat: number, n: number): void { this.purses.set(this.key(seat), Math.max(0, n)); }
   get seats(): number[] { return [...this.purses.keys()]; }
 
-  // ---------- геометрия ----------
+  // ---------- geometry ----------
   get solids(): Obstacle[] {
     if (this.solidsN !== this.towers.length) { this.solidsCache = [this.bush.solid, ...this.towers.map((t) => t.solid)]; this.solidsN = this.towers.length; this.foeSolidsCache = null; }
     return this.solidsCache;
@@ -127,19 +128,19 @@ export class SimTd {
   nearWall(pos: THREE.Vector3): SimWall | null { return this.walls.find((wl) => wl.hp < wl.maxHp && wl.near(pos)) ?? null; }
   repairCost(wl: SimWall): number { return Math.max(5, Math.ceil(((wl.maxHp - wl.hp) / 100) * (this.spec.repair ?? 20))); }
   lane(id: string): TdLane | undefined { return this.spec.lanes.find((l) => l.id === id); }
-  /** Площадка рядом с героем (в 2 м от края) */
+  /** Pad next to the hero (within 2 m of the edge) */
   nearPad(pos: THREE.Vector3): SimPad | null {
     let best: SimPad | null = null, bd = 2.2;
     for (const p of this.pads) { if (Math.abs(p.pos.y - pos.y) > 1.5) continue; const d = Math.hypot(p.pos.x - pos.x, p.pos.z - pos.z); if (d < bd) { bd = d; best = p; } }
     return best;
   }
-  /** Куда подойти, чтобы открыть меню площадки: точка на краю со стороны героя */
+  /** Where to walk to open the pad menu: a point on the edge on the hero's side */
   approach(p: SimPad, from: THREE.Vector3): THREE.Vector3 {
     const d = new THREE.Vector3(from.x - p.pos.x, 0, from.z - p.pos.z);
     if (d.lengthSq() < 1e-4) d.set(0, 0, 1);
     return p.pos.clone().addScaledVector(d.normalize(), 1.7);
   }
-  /** Лёд на башнях — цели меча */
+  /** Ice on towers — sword targets */
   targets(): Target[] { return this.towers.filter((t) => t.frozen > 0).map((t) => t.ice); }
 
   private breach(wl: SimWall): void {
@@ -149,11 +150,11 @@ export class SimTd {
       for (const m of this.marching) if (m.march && m.laneId === lane.id && !m.ghost && m.march.length <= lane.points.length) m.extendMarch(inner.map((v) => v.clone()));
     }
   }
-  /** Враги на марше (вышли из логов) — чтобы продлить им дорогу при проломе */
+  /** Enemies on the march (out of the lairs) — to extend their lane on a breach */
   private readonly marching: import('./world.ts').MarchingMob[] = [];
 
-  // ---------- команды ----------
-  /** Действие игрока места seat; false — не вышло (подсказка — в onToast) */
+  // ---------- commands ----------
+  /** Action of the player in seat `seat`; false — it failed (the hint goes to onToast) */
   command(seat: number, c: TdCommand): boolean {
     if (this.remote) { this.remote(c); return true; }
     if (this.state !== 'play') return false;
@@ -182,12 +183,12 @@ export class SimTd {
   }
 
   upgrade(seat: number, p: SimPad): boolean {
-    const t = p.tower;
-    if (!t || t.ruined) return false;
-    const cost = t.nextCost;
-    if (cost === null) { this.onToast?.(seat, 'Башня на пределе'); return false; }
+    const tw = p.tower;
+    if (!tw || tw.ruined) return false;
+    const cost = tw.nextCost;
+    if (cost === null) { this.onToast?.(seat, t('Tower at its limit')); return false; }
     if (!this.spend(seat, cost)) return false;
-    t.upgrade();
+    tw.upgrade();
     this.w.emit({ t: 'berry.spent', x: p.pos.x, y: p.pos.y + 1.6, z: p.pos.z, n: cost, seat });
     return true;
   }
@@ -229,7 +230,7 @@ export class SimTd {
     return true;
   }
 
-  /** Следующая волна сейчас (G): бонус за ожидание — в кошелёк позвавшего */
+  /** Next wave now (G): the waiting bonus goes to the caller's purse */
   callWave(seat = 0): boolean {
     if (this.remote) { this.remote({ t: 'td', a: 'wave' }); return true; }
     if (this.state !== 'play' || this.waveRunning || this.wave >= this.waves.length) return false;
@@ -239,17 +240,17 @@ export class SimTd {
     return true;
   }
 
-  /** Число игроков: следующие волны — по новому масштабу, живые враги — сразу */
+  /** Player count: the next waves use the new scale, living enemies right away */
   setPlayers(n: number): void {
     this.players = Math.max(1, Math.round(n));
     this.w.h.setScale(this.wave ? waveLevel(this.wave, this.spec.level) : (this.spec.level ?? 1), this.players);
   }
 
-  // ---------- враги и волны ----------
-  /** Враг в точке (без дороги: стоит и ждёт героя) */
+  // ---------- enemies and waves ----------
+  /** Enemy at a point (no lane: stands and waits for the hero) */
   spawn(kind: string, at: THREE.Vector3): import('./world.ts').MarchingMob | null { return this.w.h.spawnMob(kind, at); }
 
-  /** Враг из логова на дорогу: марш по точкам к кусту, героя замечает только в 3,5 м */
+  /** Enemy from a lair onto a lane: marches along the points to the bush, notices the hero only within 3.5 m */
   spawnOn(kind: string, laneId: string): import('./world.ts').MarchingMob | null {
     const lane = this.lane(laneId);
     if (!lane) return null;
@@ -280,7 +281,7 @@ export class SimTd {
   get waves(): readonly TdWave[] { return this.spec.waves ?? []; }
   get waveRunning(): boolean { if (this.netRunning !== null) return this.netRunning; return this.queue.length > 0 || this.w.h.foes().some((m) => !m.dead); }
   get earlyBonus(): number { return this.waveRunning || this.wave >= this.waves.length ? 0 : Math.round(this.next); }
-  /** Следующая волна: кто и сколько (карточка в HUD) */
+  /** Next wave: who and how many (the HUD card) */
   preview(): { kind: string; n: number }[] {
     const w = this.waves[this.wave];
     if (!w) return [];
@@ -313,7 +314,7 @@ export class SimTd {
     }
     const rest = this.spec.rest ?? 20;
     if (this.wave > 0 && !this.waveRunning && this.next >= rest) {
-      // волна отбита: награда каждому и отдых; последняя — победа
+      // wave beaten: bounty to everyone and rest; the last one — victory
       const w = this.waves[this.wave - 1], bounty = this.personal ? w.bounty : scaledBounty(w.bounty, this.players);
       for (const seat of this.purses.keys()) this.gain(seat, bounty);
       this.w.piles.harvest();
@@ -330,7 +331,7 @@ export class SimTd {
   update(dt: number): void {
     this.time += dt;
     this.tickWaves(dt);
-    // логова: тревога нарастает за 6 с до волны по их дорогам и держится, пока группы выходят
+    // lairs: the alarm builds for 6 s before a wave along their lanes and holds while the groups come out
     const soon = this.state === 'play' && !this.waveRunning ? this.nextLanes : null;
     const busy = new Set(this.queue.map((q) => q.lane));
     for (const l of this.lairs) {
@@ -340,7 +341,7 @@ export class SimTd {
     for (const t of this.towers) t.update(dt);
   }
 
-  /** Всё заново: башни снесены, враги убраны, казна полная */
+  /** Everything anew: towers demolished, enemies removed, treasury full */
   reset(): void {
     for (const t of this.towers.splice(0)) { t.dispose(); this.undecoyTower(t); }
     for (const p of this.pads) p.tower = null;

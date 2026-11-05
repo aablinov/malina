@@ -1,19 +1,19 @@
 /**
- * Настройки игры (wiki/design-main-menu.md): меню меняет, игра читает при запуске.
- * Хранятся в localStorage `malina.settings`; закрытое хранилище — значения по умолчанию.
+ * Game settings (wiki/design-main-menu.md): the menu changes them, the game reads them at start.
+ * Stored in localStorage `malina.settings`; a closed storage gives the defaults.
  */
 export interface Settings {
-  /** Общая громкость 0..1 */
+  /** Master volume 0..1 */
   volume: number;
-  /** Громкость музыки 0..1 (поверх общей) */
+  /** Music volume 0..1 (on top of master) */
   music: number;
-  /** Постобработка: bloom, AO, цветокоррекция */
+  /** Post-processing: bloom, AO, colour grading */
   postFX: boolean;
-  /** Тени от солнца */
+  /** Sun shadows */
   shadows: boolean;
-  /** Качество картинки: high — плотность пикселей до 1,5, low — 1 */
+  /** Picture quality: high — pixel density up to 1.5, low — 1 */
   quality: 'high' | 'low';
-  /** Подсказка по управлению в начале боя */
+  /** Controls hint at the start of a battle */
   help: boolean;
 }
 
@@ -24,13 +24,13 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
-  } catch { /* закрытое хранилище или битый JSON */ }
+  } catch { /* closed storage or broken JSON */ }
   return { ...DEFAULT_SETTINGS };
 }
 
 export function saveSettings(s: Settings): void {
-  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* закрытое хранилище */ }
+  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* closed storage */ }
 }
 
-/** Плотность пикселей рендера по качеству */
+/** Render pixel density by quality */
 export const pixelRatio = (s: Settings): number => Math.min(window.devicePixelRatio, s.quality === 'low' ? 1 : 1.5);

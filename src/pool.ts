@@ -1,14 +1,14 @@
 /**
- * Пул объектов без выделений в бою (wiki/dev-performance.md): свободные — стек индексов, живые — плотный массив
- * с удалением свапом. Переполнение: 'steal-oldest' забирает самый старый живой объект, 'drop' отказывает.
+ * Object pool with no allocations in battle (wiki/dev-performance.md): free ones are a stack of indices, live ones a dense array
+ * with swap removal. Overflow: 'steal-oldest' takes the oldest live object, 'drop' refuses.
  */
 export class FxPool<T> {
   private readonly items: T[] = [];
   private readonly free: Int32Array;
   private freeN = 0;
-  /** Индексы живых по порядку выдачи (самый старый — первый) */
+  /** Indices of live objects in order of issue (the oldest first) */
   private readonly liveIdx: Int32Array;
-  /** Позиция индекса в liveIdx (для удаления свапом) */
+  /** Position of the index in liveIdx (for swap removal) */
   private readonly where: Int32Array;
   private liveN = 0;
 
@@ -23,7 +23,7 @@ export class FxPool<T> {
 
   get live(): number { return this.liveN; }
 
-  /** Взять свободный объект; null — пул полон и переполнение запрещено. onSteal — забранный у старого владельца */
+  /** Take a free object; null — the pool is full and overflow is forbidden. onSteal — the one taken from its old owner */
   acquire(onSteal?: (t: T) => void): T | null {
     let i: number;
     if (this.freeN > 0) i = this.free[--this.freeN];
@@ -38,7 +38,7 @@ export class FxPool<T> {
     return this.items[i];
   }
 
-  /** Вернуть в пул */
+  /** Return to the pool */
   release(t: T): void {
     const i = this.items.indexOf(t);
     if (i < 0 || this.where[i] < 0) return;
@@ -46,7 +46,7 @@ export class FxPool<T> {
     this.free[this.freeN++] = i;
   }
 
-  /** Обойти живых; вернуть false из fn — освободить объект (безопасно во время обхода) */
+  /** Iterate live objects; returning false from fn frees the object (safe during iteration) */
   forEachLive(fn: (t: T) => boolean | void): void {
     for (let k = this.liveN - 1; k >= 0; k--) {
       const i = this.liveIdx[k];

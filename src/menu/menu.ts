@@ -1,5 +1,6 @@
 import { initAudio, sfx } from '../audio.ts';
 import { DEV_TOOLS, openEditor } from '../devflag.ts';
+import { LANG, setLang, storedLang, t } from '../i18n/i18n.ts';
 import { Profile } from '../items.ts';
 import { makeTextures } from '../textures.ts';
 import { Lobby } from './lobby.ts';
@@ -11,19 +12,20 @@ import '../hud/hud.css';
 import './menu.css';
 
 /**
- * Главное меню в духе Minecraft Dungeons (wiki/design-main-menu.md). Страница без параметров открывает его,
- * `?dev=playground` и `?map=…` — сразу игру (src/main.ts).
- * Стартовый экран: «Одиночная игра», «Сетевая игра», «Настройки» → лагерь: снаряжение героя и выбор карты обороны куста →
- * «Начать игру» перезагружает страницу на `?map=td…&from=menu`. Из боя «В лагерь» возвращает на `?menu=lobby`.
+ * Main menu in the spirit of Minecraft Dungeons (wiki/design-main-menu.md). The page without parameters opens it,
+ * `?dev=playground` and `?map=…` — the game at once (src/main.ts).
+ * Start screen: "Solo game", "Online game", "Settings" → camp: the hero's gear and the Bush Defence map choice →
+ * "Start game" reloads the page to `?map=td…&from=menu`. "To camp" from a battle returns to `?menu=lobby`.
+ * First launch (no stored language, src/i18n/i18n.ts): a language picker over the start screen; the choice reloads the page.
  */
 export function runMenu(): void {
-  document.title = 'Малина';
+  document.title = t('Malina');
   document.body.classList.add('menu');
   const profile = new Profile();
-  // бой отдавал малину героя под казну обороны — вернуть её (src/menu/session.ts)
+  // the battle gave the hero's raspberries to the defence treasury — return them (src/menu/session.ts)
   const stash = takeStash();
   if (stash !== null) { profile.data.berries = stash; profile.save(); }
-  // купленное у маркитанта обороны остаётся в бою: снаряжение — как до него
+  // what was bought from the defence sutler stays in the battle: gear is as it was before it
   const gear = takeGear();
   if (gear) { profile.data.items = gear.items as typeof profile.data.items; profile.data.equip = gear.equip as typeof profile.data.equip; profile.data.arrows = gear.arrows; profile.save(); }
 
@@ -41,18 +43,18 @@ export function runMenu(): void {
   scene.dress(profile);
   scene.start();
 
-  // ---------- Стартовый экран ----------
+  // ---------- Start screen ----------
   const start = document.createElement('div');
   start.className = 'mm-start';
   start.innerHTML = `
-    <div class="mm-logo">Малина<small>Оборона куста</small></div>
+    <div class="mm-logo">${t('Malina')}<small>${t('Bush Defence')}</small></div>
     <nav class="mm-nav">
-      <button class="mm-btn big" data-act="solo">Одиночная игра</button>
-      <button class="mm-btn big" data-act="online">Сетевая игра</button>
-      <button class="mm-btn big" data-act="settings">Настройки</button>
-      ${DEV_TOOLS ? '<div class="mm-dev"><button class="mm-btn small" data-act="playground">Плейграунд</button><button class="mm-btn small" data-act="editor">Редактор</button></div>' : ''}
+      <button class="mm-btn big" data-act="solo">${t('Solo game')}</button>
+      <button class="mm-btn big" data-act="online">${t('Online game')}</button>
+      <button class="mm-btn big" data-act="settings">${t('Settings')}</button>
+      ${DEV_TOOLS ? `<div class="mm-dev"><button class="mm-btn small" data-act="playground">${t('Playground')}</button><button class="mm-btn small" data-act="editor">${t('Editor')}</button></div>` : ''}
     </nav>
-    <footer class="mm-foot"><span>↑ ↓ — выбрать · Enter — открыть</span><span>Уровень героя <b>${profile.data.level}</b> · предметов <b>${profile.data.items.length}</b></span></footer>`;
+    <footer class="mm-foot"><span>${t('↑ ↓ — select · Enter — open')}</span><span>${t('Hero level <b>{level}</b> · items <b>{items}</b>', { level: profile.data.level, items: profile.data.items.length })}</span></footer>`;
   root.appendChild(start);
 
   const lobby = new Lobby(root, profile, T, scene);
@@ -101,9 +103,13 @@ export function runMenu(): void {
     if (i >= 0 && i !== focus) setFocus(i);
   });
 
+  // ---------- Language choice (first launch) ----------
+  const langPick = storedLang() === null ? makeLangPick(root) : null;
+
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     initAudio();
+    if (langPick) { langPick.key(e); return; }
     if (settingsPanel.key(e)) return;
     if (lobby.open) { lobby.key(e); return; }
     switch (e.code) {
@@ -114,16 +120,64 @@ export function runMenu(): void {
     }
   });
 
-  // из боя «В лагерь» — сразу в лагерь
+  // "To camp" from a battle — straight to the camp
   const q = new URLSearchParams(window.location.search);
   if (q.get('menu') === 'lobby') openLobby(loadMenuState().mode);
   else showStart();
 
-  // для тестов и отладки
+  // for tests and debugging
   (window as unknown as { __menu?: unknown }).__menu = {
     profile,
-    get screen() { return lobby.open ? 'lobby' : 'start'; },
+    get screen() { return langPick ? 'lang' : lobby.open ? 'lobby' : 'start'; },
     lobby,
     settings: settingsPanel,
+  };
+}
+
+/**
+ * Language picker over the start screen: the logo, the question in both languages (it is shown before the choice)
+ * and two buttons; ↑ ↓ Enter like the start screen. The choice is saved with `setLang()` and the page reloads,
+ * so every module re-resolves its strings.
+ */
+function makeLangPick(root: HTMLElement): { key(e: KeyboardEvent): void } {
+  const el = document.createElement('div');
+  el.className = 'mm-lang';
+  el.innerHTML = `
+    <div class="mm-logo">${t('Malina')}<small>${t('Bush Defence')}</small></div>
+    <p class="mm-lang-ask">Choose your language / Выберите язык</p>
+    <nav class="mm-nav">
+      <button class="mm-btn big" data-lang="en">English</button>
+      <button class="mm-btn big" data-lang="ru">Русский</button>
+    </nav>`;
+  root.appendChild(el);
+  const buttons = (): HTMLButtonElement[] => [...el.querySelectorAll<HTMLButtonElement>('[data-lang]')];
+  let focus = LANG === 'ru' ? 1 : 0;
+  const setFocus = (i: number): void => {
+    const b = buttons();
+    focus = (i + b.length) % b.length;
+    b.forEach((x, j) => x.classList.toggle('focus', j === focus));
+  };
+  const choose = (l: string | undefined): void => {
+    if (l !== 'en' && l !== 'ru') return;
+    sfx.twinkle();
+    setLang(l);
+    location.reload();
+  };
+  el.addEventListener('click', (e) => choose((e.target as HTMLElement).closest<HTMLElement>('[data-lang]')?.dataset.lang));
+  el.addEventListener('mousemove', (e) => {
+    const b = (e.target as HTMLElement).closest('button');
+    const i = b ? buttons().indexOf(b as HTMLButtonElement) : -1;
+    if (i >= 0 && i !== focus) setFocus(i);
+  });
+  setFocus(focus);
+  return {
+    key(e: KeyboardEvent): void {
+      switch (e.code) {
+        case 'ArrowDown': case 'KeyS': setFocus(focus + 1); break;
+        case 'ArrowUp': case 'KeyW': setFocus(focus - 1); break;
+        case 'Enter': case 'Space': e.preventDefault(); choose(buttons()[focus]?.dataset.lang); break;
+        default: break;
+      }
+    },
   };
 }

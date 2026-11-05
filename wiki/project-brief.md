@@ -49,7 +49,7 @@ The document to start a new chat from. It is complemented by:
   - Playground debug hook `window.__malina` (`mode: 'playground'`): `hero`, `input`, `dummies`, `beetles`, `obstacles`, `GUNS`, `HERO`, `script(on)` — input from the test instead of the keyboard, `step(sec)` — run the simulation (fixed step 1/60), `press('crouch' | 'roll' | 'reload' | 'primary' | 'pistol')`, `setAim(x, z)`, `setCam(dist, dir?)`, `equip(id)`, `spawnBeetle(kind)`, `resetTargets()`.
   - Hook of the old game (farm): `G`, `player`, `camera`, `combat`, `startGame`, `equip`, `step`.
   - Open the game page with `waitUntil: 'domcontentloaded'`: without network, Google fonts delay `load`.
-- **Language of communication and interface:** Russian.
+- **Language:** code, comments, wiki and commit messages are English. The interface is bilingual â every user-visible string goes through `t()` from `src/i18n/i18n.ts`, the Russian dictionary is `src/i18n/ru.ts` (English source string â Russian). The language is chosen on the first visit to the main menu, stored in localStorage `malina.lang`, changed in Settings; a direct game URL without a stored choice follows the browser language. Switching reloads the page.
 - **Starting money for tests:** 1000 berries (`START_BERRIES` in `config.ts`).
 
 ## Code map (`src/`)

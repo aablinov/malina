@@ -5,44 +5,45 @@ import { boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Первый Садовник — финальный босс (wiki/design-bosses.md, разделы 1–5): тот, кто посадил первый куст малины. Старый
- * каменный титан ~4 м: замшелое тело, соломенная шляпа из досок, длинная борода из лоз, в руке мотыга-кирка, на спине —
- * маленький малинник с горящими ягодами; на груди — самая крупная ягода, сердце (в оглушении бьётся крупно). Свет земли
- * переливается в малину. Фаза 1 (садовник): удар мотыгой — полоса, из борозды шипы, мотыга застревает (оглушён); посев —
- * пять семян по дуге вокруг героя, из каждого терновый куст; топот кругом; ростки-подручные. На 50 % — превращение
- * «Облик титана»: мир темнеет, камера отъезжает, шляпа слетает, камень трескается, страж вырастает в 1,7 раза за 1,5 с,
- * малинник цветёт; каждый шаг трясёт экран. Фаза 2 (титан): «землетрясение» — оба кулака в землю, три расходящиеся
- * волны, потом задыхается (оглушён); валун из земли по дуге — завал; «жатва» — мотыга вкруг себя. Роняет «Облик титана».
- * Подвижных частей: две ноги, торс (с головой, бородой и садом), две руки (правая с мотыгой), шляпа, сердце.
+ * First Gardener — final boss (wiki/design-bosses.md, sections 1–5): the one who planted the first raspberry bush. An old
+ * stone titan ~4 m: a mossy body, a straw hat of planks, a long beard of vines, a pick-hoe in hand, on the back
+ * a small raspberry patch with burning berries; on the chest the largest berry, the heart (beats hard when dazed). The light of earth
+ * shimmers into raspberry. Phase 1 (gardener): a hoe strike — a strip, spikes from the furrow, the hoe gets stuck (dazed); sowing —
+ * five seeds in arcs around the hero, a thorn bush from each; a stomp all around; sprout minions. At 50 % — the transformation
+ * "Titan Form": the world darkens, the camera pulls back, the hat flies off, the stone cracks, the warden grows 1.7× over 1.5 s,
+ * the raspberry patch blooms; every step shakes the screen. Phase 2 (titan): "earthquake" — both fists into the ground, three spreading
+ * waves, then winded (dazed); a boulder out of the ground in an arc — a rockfall; "harvest" — the hoe all around. Drops "Titan Form".
+ * Moving parts: two legs, torso (with head, beard and garden), two arms (right with the hoe), hat, heart.
  */
 
 const EARTH = C(4, 2.6, 0.8), LEAF = C(1.2, 3, 0.6), PINK = C(4, 1.7, 2.4), BLOOM = C(4, 3.6, 2.4);
 const STONE = '#7a7468', MOSS = '#5a7a3a', PLANK = '#c8a060', VINE = '#3f6a2a';
 const DUST = ['#7a7468', '#5a5248', '#5a7a3a'];
-/** Рост во втором облике и время превращения */
+/** Growth in the second form and the transformation time */
 const GROW = 1.7, GROW_T = 1.5;
 const HOE_LEN = 10, HOE_W = 2.4, HOE_AIM = 0.8;
 const QUAKE_R = [4.5, 8, 11.5] as const;
 
 const sfx = {
-  /** Удар о землю: низкий гул и треск */
+  /** Ground impact: a low rumble and a crack */
   slam(k = 1) { boom(60, 22, 0.9 * k, 0.6 * k, 0.02, 0.5); hiss({ dur: 0.4, vol: 0.2 * k, f: 900, f1: 200, q: 0.7, type: 'lowpass', verb: 0.4 }); },
-  /** Шорох листвы: семена, кусты */
+  /** Rustle of leaves: seeds, bushes */
   rustle() { hiss({ dur: 0.35, vol: 0.12, f: 2600, f1: 1200, q: 0.8, type: 'bandpass', verb: 0.3 }); },
-  /** Каменный шаг титана */
+  /** Stone step of the titan */
   step() { boom(48, 26, 0.35, 0.35); },
-  /** Каменный стон превращения */
+  /** Stone groan of the transformation */
   groan() { voice({ type: 'sawtooth', f: 70, f1: 40, dur: 1.6, vol: 0.09, detune: 25, lp: 700, lp1: 180, verb: 0.7 }); boom(40, 16, 1.8, 0.9, 0.1, 0.7); },
 };
 
 export class FirstGardener extends MiniBoss {
-  readonly title = 'Первый Садовник';
-  override readonly subtitle = 'тот, кто посадил малину';
+  readonly title = t('First Gardener');
+  override readonly subtitle = t('the one who planted the raspberries');
   override readonly tier = 'final' as const;
   readonly drop = 'titanform';
-  /** Растёт во втором облике — меняются вместе с ростом */
+  /** Grows in the second form — change together with the growth */
   radius = 1.3;
   override topY = 4.3;
   private readonly rig = new THREE.Group();
@@ -53,12 +54,12 @@ export class FirstGardener extends MiniBoss {
   private readonly armR = new THREE.Group();
   private readonly hat = new THREE.Group();
   private readonly heart = new THREE.Group();
-  /** Цветение малинника и трещины камня (второй облик) — неподвижны, на торсе */
+  /** Blooming of the raspberry patch and stone cracks (second form) — static, on the torso */
   private readonly bloom = new THREE.Group();
   private readonly cracks = new THREE.Group();
   private gait = 0;
   private last = '';
-  /** Превращение: с его начала, −1 — не было */
+  /** Transformation: since its start, −1 — none yet */
   private growT = -1;
   private quakeHit = false;
 
@@ -86,14 +87,14 @@ export class FirstGardener extends MiniBoss {
     const crackM = this.shimmer(EARTH, RASP, 2, 2.4);
     const B = this.box.bind(this);
     this.body.add(this.rig);
-    // ноги: каменные столбы, мох на ступнях
+    // legs: stone pillars, moss on the feet
     for (const [g, s] of [[this.legL, -1], [this.legR, 1]] as const) {
       g.position.set(s * 0.55, 1.3, 0);
       this.rig.add(g);
       B(g, stone, 0.75, 1.3, 0.8, 0, -0.62, 0);
       B(g, moss, 0.85, 0.25, 0.95, 0, -1.18, 0.05);
     }
-    // торс: глыба, мох на плечах и животе, светящаяся жила; голова с глазами-щелями и бородой из лоз
+    // torso: a boulder, moss on the shoulders and belly, a glowing vein; head with slit eyes and a beard of vines
     this.torso.position.y = 1.3;
     this.rig.add(this.torso);
     B(this.torso, stone, 1.9, 1.6, 1.2, 0, 0.85, 0);
@@ -106,20 +107,20 @@ export class FirstGardener extends MiniBoss {
     B(this.torso, vine, 0.85, 0.35, 0.25, 0, 1.75, 0.55);
     for (const [x, l] of [[-0.3, 0.9], [0, 1.2], [0.3, 0.8]] as const) B(this.torso, vine, 0.2, l, 0.18, x, 1.6 - l / 2, 0.64);
     B(this.torso, berry, 0.14, 0.14, 0.14, 0.12, 0.65, 0.72);
-    // сердце: самая крупная ягода — на груди, в гнезде из мха
+    // heart: the largest berry — on the chest, in a nest of moss
     this.heart.position.set(0.45, 1.0, 0.66);
     this.torso.add(this.heart);
     B(this.heart, heartM, 0.42, 0.48, 0.3, 0, 0, 0);
     for (const [x, y] of [[-0.14, 0.14], [0.14, 0.1], [0, -0.17], [0.15, -0.12], [-0.15, -0.1]] as const) B(this.heart, berry, 0.16, 0.16, 0.12, x, y, 0.13);
     B(this.heart, vine, 0.3, 0.1, 0.26, 0, 0.28, 0);
-    // малинник на спине: гряда земли, три куста с ягодами
+    // raspberry patch on the back: a ridge of earth, three bushes with berries
     B(this.torso, soil, 1.7, 0.3, 0.8, 0, 1.75, -0.95);
     for (const [x, hgt] of [[-0.55, 0.6], [0.05, 0.85], [0.6, 0.55]] as const) {
       B(this.torso, vine, 0.5, hgt, 0.5, x, 1.9 + hgt / 2, -0.95);
       B(this.torso, berry, 0.13, 0.13, 0.13, x + 0.2, 1.95 + hgt * 0.7, -0.75);
       B(this.torso, berry, 0.13, 0.13, 0.13, x - 0.15, 1.95 + hgt * 0.4, -1.2);
     }
-    // цветение: кусты выше, ягоды крупнее и чаще, белые цветы
+    // blooming: bushes taller, berries bigger and denser, white flowers
     this.torso.add(this.bloom);
     for (let i = 0; i < 9; i++) {
       const x = -0.75 + (i % 3) * 0.75 + rand(-0.1, 0.1), z = -0.95 + (Math.floor(i / 3) - 1) * 0.3, y = 2.5 + rand(0, 0.7);
@@ -127,19 +128,19 @@ export class FirstGardener extends MiniBoss {
       if (i % 2 === 0) B(this.bloom, glowMat(BLOOM), 0.12, 0.05, 0.12, x + 0.1, y + 0.16, z + 0.1);
     }
     B(this.bloom, vine, 0.6, 0.6, 0.6, 0, 3.0, -0.95);
-    // трещины: светящиеся жилы на груди, плечах, голове
+    // cracks: glowing veins on the chest, shoulders, head
     this.torso.add(this.cracks);
     for (const [w, hh, x, y, z, rz] of [[0.08, 1.1, 0.1, 0.9, 0.61, 0.4], [0.06, 0.7, -0.3, 0.5, 0.61, -0.6], [0.06, 0.8, 0.96, 0.9, 0, 0.2], [0.06, 0.8, -0.96, 1.0, 0, -0.3], [0.06, 0.5, 0.25, 2.3, 0.53, 0.5]] as const) {
       const m = B(this.cracks, crackM, w, hh, 0.05, x, y, z, 0, 0, rz);
       if (Math.abs(x) > 0.9) m.scale.set(0.05, hh, w * 8);
     }
-    // шляпа из досок
+    // hat of planks
     this.hat.position.set(0, 2.62, 0.05);
     this.torso.add(this.hat);
     B(this.hat, plank, 1.8, 0.12, 1.8, 0, 0, 0);
     B(this.hat, plank, 1.05, 0.45, 1.05, 0, 0.28, 0);
     B(this.hat, vine, 1.08, 0.1, 1.08, 0, 0.1, 0);
-    // руки: правая держит мотыгу (рукоять вперёд от кулака, железо вниз на конце)
+    // arms: the right holds the hoe (handle forward from the fist, the iron down at the end)
     for (const [g, s] of [[this.armL, -1], [this.armR, 1]] as const) {
       g.position.set(s * 1.2, 1.5, 0);
       this.torso.add(g);
@@ -161,7 +162,7 @@ export class FirstGardener extends MiniBoss {
     this.bloom.visible = false; this.cracks.visible = false;
   }
 
-  /** Рост тела: вместе с ним — радиус и макушка */
+  /** Body growth: with it — radius and top */
   private setSize(s: number): void {
     this.rig.scale.setScalar(s);
     this.radius = 1.3 * s;
@@ -170,13 +171,13 @@ export class FirstGardener extends MiniBoss {
 
   protected override cry(): void { if (!this.quiet) { voice({ type: 'sawtooth', f: 82, f1: 55, dur: 1.3, vol: 0.08, detune: 18, lp: 800, verb: 0.6 }); boom(50, 22, 1.1, 0.6, 0.1, 0.5); } }
 
-  /** Превращение «Облик титана»: темнота, камера назад, шляпа слетает, камень трескается, рост 1,7× за 1,5 с */
+  /** Transformation "Titan Form": darkness, camera back, the hat flies off, the stone cracks, growth 1.7× over 1.5 s */
   protected override onEnrage(): void {
     const fx = this.h.fx;
     this.growT = 0;
     this.speed = 1.7; this.keep = 4.5;
     this.cracks.visible = true;
-    fx.title('Облик титана', '#ffb040');
+    fx.title(t('Titan Form'), '#ffb040');
     fx.darken(1.8);
     fx.zoom = Math.max(fx.zoom, 0.45);
     fx.shake = Math.max(fx.shake, 1.2);
@@ -199,19 +200,19 @@ export class FirstGardener extends MiniBoss {
     return this.pick(r < 0.6 ? 'seeds' : few ? 'gardeners' : 'hoe');
   }
 
-  /** Не повторять атаку два раза подряд */
+  /** Do not repeat an attack twice in a row */
   private pick(a: string): string {
     if (a === this.last) a = ({ hoe: 'stomp', stomp: 'hoe', seeds: 'hoe', gardeners: 'seeds', quake: 'harvest', harvest: 'boulder', boulder: 'quake' } as Record<string, string>)[a] ?? a;
     this.last = a;
     return a;
   }
 
-  protected act(name: string, t: number, dt: number): boolean {
-    const fx = this.h.fx, at = (x: number) => t >= x && t - dt < x;
+  protected act(name: string, ta: number, dt: number): boolean {
+    const fx = this.h.fx, at = (x: number) => ta >= x && ta - dt < x;
     switch (name) {
-      case 'grow': return t > GROW_T + 0.3;
+      case 'grow': return ta > GROW_T + 0.3;
       case 'hoe': {
-        // мотыга над головой → полоса вперёд → удар, из борозды шипы; мотыга застряла — оглушён
+        // hoe overhead → a strip forward → strike, spikes from the furrow; the hoe stuck — dazed
         if (!this.hitDone) { this.hitDone = true; this.markLine(this.pos.clone().setY(0), this.fwd(), HOE_LEN, HOE_W, HOE_AIM, () => undefined, EARTH); }
         if (at(HOE_AIM)) {
           const from = this.pos.clone().setY(0), dir = this.fwd();
@@ -222,13 +223,13 @@ export class FirstGardener extends MiniBoss {
           this.spikes(from, dir);
           if (this.inLine(from, dir, HOE_LEN, HOE_W)) this.hurt(20, from, 8);
         }
-        if (t < HOE_AIM + 0.3) return false;
-        fx.text(this.pos.clone().setY(this.topY + 0.6), 'мотыга застряла!', '');
+        if (ta < HOE_AIM + 0.3) return false;
+        fx.text(this.pos.clone().setY(this.topY + 0.6), t('hoe stuck!'), '');
         this.daze(2);
         return true;
       }
       case 'seeds': {
-        // горсть семян: пять дуг на метки вокруг героя; где упало — терновый куст
+        // a handful of seeds: five arcs onto marks around the hero; where one lands — a thorn bush
         if (at(0.45)) {
           if (!this.quiet) sfx.rustle();
           const hero = this.heroAt(), hand = this.pos.clone().addScaledVector(this.fwd(), 0.6).setY(this.topY * 0.75);
@@ -242,7 +243,7 @@ export class FirstGardener extends MiniBoss {
             this.lob(seed, hand, p, dur, 4, LEAF, (q) => this.sprout(q));
           }
         }
-        return t > 1.9;
+        return ta > 1.9;
       }
       case 'stomp': {
         if (!this.hitDone) { this.hitDone = true; this.markCircle(this.pos, 4, 0.9, () => undefined); }
@@ -253,7 +254,7 @@ export class FirstGardener extends MiniBoss {
           fx.burst(this.pos.clone().setY(0.3), DUST, 18, { speed: 5, up: 4, size: 0.14, life: 0.7, gravity: 12 });
           if (this.inCircle(this.pos, 4)) this.hurt(18, this.pos, 10);
         }
-        return t > 1.4;
+        return ta > 1.4;
       }
       case 'gardeners': {
         if (at(0.5)) {
@@ -264,10 +265,10 @@ export class FirstGardener extends MiniBoss {
             this.summon(this.pos.clone().add(new THREE.Vector3(Math.sin(a) * 3, 0, Math.cos(a) * 3)), { body: MOSS, head: VINE, eye: RASP, hp: 40, dmg: 6, speed: 2.8 });
           }
         }
-        return t > 1.1;
+        return ta > 1.1;
       }
       case 'quake': {
-        // оба кулака в землю → три волны расходятся одна за другой; потом задыхается — оглушён
+        // both fists into the ground → three waves spread one after another; then winded — dazed
         if (!this.hitDone) {
           this.hitDone = true;
           this.quakeHit = false;
@@ -286,13 +287,13 @@ export class FirstGardener extends MiniBoss {
           });
         }
         if (at(1.1)) fx.hitstop = Math.max(fx.hitstop, 0.08);
-        if (t < 2.3) return false;
-        fx.text(this.pos.clone().setY(this.topY + 0.6), 'задыхается!', '');
+        if (ta < 2.3) return false;
+        fx.text(this.pos.clone().setY(this.topY + 0.6), t('winded!'), '');
         this.daze(2.5);
         return true;
       }
       case 'boulder': {
-        // наклон, валун из земли → бросок по дуге, большая метка; завал
+        // lean, a boulder out of the ground → a lob, a big mark; rockfall
         if (at(0.9)) {
           if (!this.quiet) sfx.slam(0.6);
           fx.burst(this.pos.clone().addScaledVector(this.fwd(), 1.5).setY(0.3), DUST, 16, { speed: 4, up: 5, size: 0.16, life: 0.8, gravity: 12 });
@@ -311,11 +312,11 @@ export class FirstGardener extends MiniBoss {
             this.hazard(q, 2.2, 6, 8, EARTH, 0.4);
           });
         }
-        if (t < 0.8) this.face(dt, 0.8);
-        return t > 2.1;
+        if (ta < 0.8) this.face(dt, 0.8);
+        return ta > 2.1;
       }
       case 'harvest': {
-        // мотыга вкруг себя: метка 1 с → полный взмах
+        // the hoe all around: a mark 1 s → a full swing
         if (!this.hitDone) { this.hitDone = true; this.markCircle(this.pos, 6, 1, () => undefined); }
         if (at(1)) {
           if (!this.quiet) { sfx.slam(0.7); hiss({ dur: 0.5, vol: 0.2, f: 600, f1: 2400, q: 0.6, verb: 0.4 }); }
@@ -324,13 +325,13 @@ export class FirstGardener extends MiniBoss {
           fx.shock(this.pos.clone().setY(0.1), 6.2, EARTH, 0.4, 0.2);
           if (this.inCircle(this.pos, 6)) this.hurt(24, this.pos, 12);
         }
-        return t > 1.7;
+        return ta > 1.7;
       }
     }
     return true;
   }
 
-  /** Борозда: шипы встают из земли вдоль полосы и уходят обратно */
+  /** Furrow: spikes rise out of the ground along the strip and go back */
   private spikes(from: THREE.Vector3, dir: THREE.Vector3): void {
     const mat = new THREE.MeshLambertMaterial({ color: STONE }), tip = glowMat(EARTH), g = new THREE.Group();
     for (let i = 0; i < 9; i++) {
@@ -342,7 +343,7 @@ export class FirstGardener extends MiniBoss {
     this.h.fx.custom(g, 1.2, (k) => { g.position.y = k < 0.15 ? -1.8 * (1 - k / 0.15) : k > 0.7 ? -1.8 * ((k - 0.7) / 0.3) : 0; }, () => { mat.dispose(); tip.dispose(); });
   }
 
-  /** Семя упало: удар 12, терновый куст — зона 10/с на 5 с */
+  /** A seed landed: strike 12, a thorn bush — a zone 10/s for 5 s */
   private sprout(at: THREE.Vector3): void {
     if (this.state === 'dead') return;
     const fx = this.h.fx;
@@ -361,7 +362,7 @@ export class FirstGardener extends MiniBoss {
 
   protected animate(dt: number, walk: boolean): void {
     const t = this.time, S = this.st, A = this.state === 'attack' ? this.attack : '', fx = this.h.fx;
-    // превращение: рост за 1,5 с, шляпа слетает вверх-назад, камень сыплется
+    // transformation: growth over 1.5 s, the hat flies up and back, stone crumbles
     if (this.growT >= 0 && this.growT < GROW_T + 1) {
       this.growT += dt;
       const k = Math.min(1, this.growT / GROW_T);
@@ -374,7 +375,7 @@ export class FirstGardener extends MiniBoss {
       }
       if (k < 1 && rnd() < 0.5) fx.burst(this.pos.clone().add(new THREE.Vector3(rand(-1, 1), rand(1, this.topY), rand(-1, 1))), DUST, 1, { speed: 2, up: 1, size: 0.16, life: 0.8, gravity: 10 });
     }
-    // шаги: ноги ходят, торс качается; титан трясёт землю каждым шагом
+    // steps: the legs walk, the torso sways; the titan shakes the ground with every step
     if (walk) {
       const was = this.gait % 0.5;
       this.gait += dt * (this.enraged ? 1.1 : 1.5) * this.speedK;
@@ -392,7 +393,7 @@ export class FirstGardener extends MiniBoss {
       this.torso.rotation.z *= 0.85;
       this.rig.position.y *= 0.85;
     }
-    // руки и наклон по атаке (руки: −3 — над головой, −1,4 — вперёд)
+    // arms and lean by attack (arms: −3 — overhead, −1.4 — forward)
     let aL = -0.15, aR = -0.5, lean = Math.sin(t * 1.2) * 0.03, spin = 0;
     if (A === 'hoe') {
       if (S < HOE_AIM - 0.1) { aL = aR = -3; lean = -0.15; } else { aL = -1.0; aR = -0.9; lean = 0.45; }
@@ -409,10 +410,10 @@ export class FirstGardener extends MiniBoss {
     this.armR.rotation.x += (aR - this.armR.rotation.x) * ease;
     this.torso.rotation.x += (lean - this.torso.rotation.x) * ease;
     this.rig.rotation.y = A === 'harvest' ? spin : this.rig.rotation.y * 0.8;
-    // сердце: бьётся тихо, в оглушении — крупно
+    // heart: beats quietly, hard when dazed
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 4)) * 0.08;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.6 : 1));
-    // малинник зацветает на середине роста
+    // the raspberry patch blooms at the middle of the growth
     if (!this.bloom.visible && this.growT > GROW_T * 0.5) { this.bloom.visible = true; fx.burst(this.pos.clone().setY(this.topY * 0.8), [BLOOM, RASP, LEAF], 20, { speed: 3, up: 3, size: 0.12, life: 0.8, glow: true, gravity: 4 }); }
   }
 }

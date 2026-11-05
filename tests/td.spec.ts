@@ -3,8 +3,8 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Оборона куста (wiki/design-tower-defence.md, src/td/): карта с meta.td даёт площадки и казну; башня строится за малину,
- * сама бьёт врага в радиусе, улучшается и продаётся; меню площадки открывается клавишами и кликом.
+ * Bush Defence (wiki/design-tower-defence.md, src/td/): a map with meta.td gives pads and a treasury; a tower is built for raspberries,
+ * hits enemies in range by itself, upgrades and sells; the pad menu opens with keys and by click.
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=td';
@@ -18,7 +18,7 @@ async function open(page: Page): Promise<void> {
   expect(errors).toEqual([]);
 }
 
-test('оборона: площадки из карты, башня за малину бьёт врага, улучшение и продажа', async ({ page }) => {
+test('defence: pads from the map, a tower for raspberries hits an enemy, upgrade and sale', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
@@ -62,14 +62,14 @@ test('оборона: площадки из карты, башня за мали
   expect(r.free).toBe(true);
 });
 
-test('оборона: нет малины — нет башни; меню площадки по F и по клику, цифра строит', async ({ page }) => {
+test('defence: no raspberries — no tower; the pad menu by F and by click, a digit builds', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td;
     m.profile.data.berries = 10;
     const poor = td.build(td.pads[0], 'arrow');
     m.profile.data.berries = 500;
-    // F рядом с площадкой — меню; цифра 1 — стрелковая вышка; меню закрылось
+    // F next to a pad — the menu; digit 1 — the archer tower; the menu closed
     const pad = td.pads[15];
     m.hero.place(pad.pos.x + 1.7, pad.pos.z, Math.PI);
     m.interact(); m.step(0.1);
@@ -77,7 +77,7 @@ test('оборона: нет малины — нет башни; меню пло
     const key = td.key(new KeyboardEvent('keydown', { code: 'Digit1' }));
     const built = pad.tower?.kind ?? null;
     const closed = !td.menuOpen;
-    // клик по площадке издалека: герой идёт к ней и открывает меню
+    // a click on a pad from afar: the hero walks to it and opens the menu
     const far = td.pads[14];
     m.hero.place(far.pos.x + 7, far.pos.z, Math.PI);
     m.click(far.pos.x, far.pos.z);
@@ -86,7 +86,7 @@ test('оборона: нет малины — нет башни; меню пло
     let opened = false;
     for (let i = 0; i < 80 && !opened; i++) { m.step(0.1); opened = td.menuOpen && td.menuPad === far; }
     const dist = Math.hypot(m.hero.pos.x - far.pos.x, m.hero.pos.z - far.pos.z);
-    // Esc закрывает
+    // Esc closes
     td.key(new KeyboardEvent('keydown', { code: 'Escape' }));
     return { poor, open1, key, built, closed, opened, dist, esc: !td.menuOpen, hud: document.querySelector('.td-hud')?.textContent ?? '' };
   });
@@ -98,10 +98,10 @@ test('оборона: нет малины — нет башни; меню пло
   expect(r.opened).toBe(true);
   expect(r.dist).toBeLessThan(2.4);
   expect(r.esc).toBe(true);
-  expect(r.hud).toContain('Волна');
+  expect(r.hud).toContain('Wave');
 });
 
-test('оборона: пять башен бьют по-своему — болты, иней замедляет, камень по площади, пламя жжёт, сфера ослабляет цепью', async ({ page }) => {
+test('defence: five towers hit in their own way — bolts, rime slows, a rock over an area, flame burns, the orb weakens in a chain', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
@@ -118,16 +118,16 @@ test('оборона: пять башен бьют по-своему — бол�
   });
   for (const s of r.shots) expect(s).toBeGreaterThan(0);
   for (const d of r.dealt) expect(d).toBeGreaterThan(0);
-  // вышка стреляет чаще всех, катапульта — реже
+  // the archer tower fires most often, the catapult — least
   expect(r.shots[0]).toBeGreaterThan(r.shots[2]);
   expect(r.chilled).toBeGreaterThan(0);
   expect(r.exposed).toBeGreaterThan(0);
   expect(r.burning).toBeGreaterThan(0);
   expect(r.dead).toBeGreaterThan(5);
-  expect(r.titles).toEqual(['Стрелковая вышка I', 'Морозный шпиль I', 'Катапульта I', 'Огненная жаровня I', 'Волшебный обелиск I']);
+  expect(r.titles).toEqual(['Archer tower I', 'Frost spire I', 'Catapult I', 'Fire brazier I', 'Arcane obelisk I']);
 });
 
-test('оборона: враги идут по дорогам к кусту и бьют его; ударенный гонится и возвращается на дорогу; куст засыхает', async ({ page }) => {
+test('defence: enemies walk the roads to the bush and hit it; a struck one gives chase and returns to the road; the bush withers', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
@@ -137,7 +137,7 @@ test('оборона: враги идут по дорогам к кусту и �
     let reached = -1, maxProgress = 0;
     for (let i = 0; i < 400; i++) { m.step(0.1); maxProgress = Math.max(maxProgress, a.progress); if (td.bush.taken > 0 && reached < 0) reached = i; }
     const r1 = { none, p0, maxProgress, reached, taken: td.bush.taken, alerted: [a.alerted, b.alerted, w.alerted], focus: [!!a.focus, !!b.focus, !!w.focus], near: [a, b, w].map((x: any) => Math.hypot(x.pos.x, x.pos.z) < 4), hud: document.querySelector('.td-hud')?.textContent ?? '' };
-    // поводок: ударенный мечом гонится, герой убежал — снова марш
+    // the leash: struck by the sword it gives chase, the hero ran away — marching again
     td.pack.clear();
     const c = td.spawnOn('gardener', 'west');
     for (let i = 0; i < 30; i++) m.step(0.1);
@@ -147,19 +147,19 @@ test('оборона: враги идут по дорогам к кусту и �
     m.hero.place(c.pos.x + 25, c.pos.z, 0);
     for (let i = 0; i < 20; i++) m.step(0.1);
     const al2 = c.alerted, walking = c.state === 'walk';
-    // башня бьёт марширующего издалека — тот не отвлекается
+    // a tower hits a marching one from afar — it is not distracted
     td.pack.clear();
     m.profile.data.berries = 500;
     td.build(td.pads[1], 'arrow');
     const d = td.spawnOn('gardener', 'west');
     let hitYetMarching = false;
     for (let i = 0; i < 150; i++) { m.step(0.1); if (d.taken > 0 && !d.alerted) hitYetMarching = true; }
-    // куст засыхает
+    // the bush withers
     td.pack.clear();
     td.bush.hp = 3;
     const e = td.spawnOn('berryling', 'east');
     for (let i = 0; i < 400 && td.state === 'play'; i++) m.step(0.1);
-    const lost = td.state, dead = td.bush.dead, banner = document.body.textContent?.includes('Куст засох');
+    const lost = td.state, dead = td.bush.dead, banner = document.body.textContent?.includes('The bush withered');
     m.resetTargets();
     return { r1, al1, al2, walking, hitYetMarching, lost, dead, banner, after: [td.state, td.bush.hp, td.towers.length, td.pack.mobs.length], e: !!e };
   });
@@ -171,7 +171,7 @@ test('оборона: враги идут по дорогам к кусту и �
   expect(r.r1.alerted).toEqual([true, true, true]);
   expect(r.r1.focus).toEqual([true, true, true]);
   expect(r.r1.near).toEqual([true, true, true]);
-  expect(r.r1.hud).toContain('куст малины');
+  expect(r.r1.hud).toContain('raspberry bush');
   expect(r.al1).toBe(true);
   expect(r.al2).toBe(false);
   expect(r.walking).toBe(true);
@@ -182,7 +182,7 @@ test('оборона: враги идут по дорогам к кусту и �
   expect(r.after).toEqual(['play', 400, 0, 0]);
 });
 
-test('оборона: гонец быстрый, таран держит удар спереди, мотылёк летит; волны по G с бонусом, награда за отбитую, победа', async ({ page }) => {
+test('defence: the courier is fast, the ram takes hits from the front, the moth flies; waves by G with a bonus, a reward for a beaten one, victory', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
@@ -191,14 +191,14 @@ test('оборона: гонец быстрый, таран держит уда�
     const x0 = ru.pos.x;
     m.step(2);
     const runDist = ru.pos.x - x0;
-    // таран идёт на юг (+z): удар навстречу взгляду — dir от героя к мобу смотрит в −z
+    // the ram walks south (+z): a hit against its gaze — dir from the hero to the mob looks toward −z
     ra.hit(10, new V(0, 0, -1), ra.pos.clone(), 0);
     const front = ra.taken;
     ra.hit(10, new V(0, 0, 1), ra.pos.clone(), 0);
     const back = ra.taken - front;
     const r1 = { runDist, front, back, mothY: mo.pos.y, ghost: mo.ghost, titles: [ru.title, ra.title, mo.title], speeds: [ru.speed, ra.speed, mo.speed] };
     td.pack.clear();
-    // волна раньше срока: бонус за ожидание; группы выходят по дорогам; отбили — награда, отдых
+    // a wave ahead of time: a bonus for the waiting; groups come out along the roads; beaten — a reward, rest
     const b0 = m.berries, next0 = td.next, waves = td.waves.length;
     const called = td.callWave();
     const bonus = m.berries - b0;
@@ -206,13 +206,13 @@ test('оборона: гонец быстрый, таран держит уда�
     for (let i = 0; i < 300 && td.waveRunning; i++) { m.step(0.1); maxAlive = Math.max(maxAlive, td.pack.mobs.filter((x: any) => !x.dead).length); if (td.spawned >= 6) for (const x of td.pack.mobs) if (!x.dead) x.vanish(); }
     m.step(0.2);
     const afterFirst = { wave: td.wave, spawned: td.spawned, fallen: td.fallen, running: td.waveRunning, berries: m.berries, resting: td.next < next0 && td.next > 0, hud: document.querySelector('.td-hud')?.textContent ?? '' };
-    // остальные волны: всех сразу в землю — до победы
+    // the remaining waves: everyone into the ground at once — until victory
     for (let w = 0; w < waves + 1 && td.state === 'play'; w++) {
       td.callWave();
       for (let i = 0; i < 600 && td.waveRunning; i++) { m.step(0.1); for (const x of td.pack.mobs) if (!x.dead && x.state !== 'spawn') x.vanish(); }
       m.step(0.2);
     }
-    const won = { state: td.state, wave: td.wave, banner: document.body.textContent?.includes('Куст отбит'), again: td.callWave() };
+    const won = { state: td.state, wave: td.wave, banner: document.body.textContent?.includes('The bush is saved'), again: td.callWave() };
     m.resetTargets();
     return { r1, called, bonus, waves, afterFirst, won, reset: [td.wave, td.state, td.next] };
   });
@@ -221,7 +221,7 @@ test('оборона: гонец быстрый, таран держит уда�
   expect(r.r1.back).toBeCloseTo(10, 1);
   expect(r.r1.mothY).toBeGreaterThan(0.8);
   expect(r.r1.ghost).toBe(true);
-  expect(r.r1.titles).toEqual(['Ягодный гонец', 'Лозовый таран', 'Пыльцевой мотылёк']);
+  expect(r.r1.titles).toEqual(['Berry Courier', 'Vine Battering Ram', 'Pollen Moth']);
   expect(r.r1.speeds[0]).toBeGreaterThan(r.r1.speeds[2]);
   expect(r.r1.speeds[2]).toBeGreaterThan(r.r1.speeds[1]);
   expect(r.called).toBe(true);
@@ -232,7 +232,7 @@ test('оборона: гонец быстрый, таран держит уда�
   expect(r.afterFirst.running).toBe(false);
   expect(r.afterFirst.berries).toBe(300 + r.bonus + 50);
   expect(r.afterFirst.resting).toBe(true);
-  expect(r.afterFirst.hud).toContain('Волна 1 из 10');
+  expect(r.afterFirst.hud).toContain('Wave 1 of 10');
   expect(r.won.state).toBe('won');
   expect(r.won.wave).toBe(10);
   expect(r.won.banner).toBe(true);
@@ -240,7 +240,7 @@ test('оборона: гонец быстрый, таран держит уда�
   expect(r.reset).toEqual([0, 'play', 20]);
 });
 
-test('оборона: масштаб — с волнами уровень стаи 1, 4, 7…; игроков больше — врагов, здоровья и награды больше', async ({ page }) => {
+test('defence: scale — with the waves the pack level is 1, 4, 7…; more players — more enemies, health and reward', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td;
@@ -260,7 +260,7 @@ test('оборона: масштаб — с волнами уровень ста
       return { players: td.players, spawned: td.spawned, maxHp, level, bounty: m.berries - b0 - 0, hud: document.querySelector('.td-hud')?.textContent ?? '' };
     };
     const solo = run(1), trio = run(3);
-    // вторая волна втроём: уровень стаи 4
+    // the second wave with three: pack level 4
     td.callWave();
     for (let i = 0; i < 30; i++) m.step(0.1);
     const lvl2 = td.pack.mobs.map((x: any) => x.scale?.level ?? 0);
@@ -274,22 +274,22 @@ test('оборона: масштаб — с волнами уровень ста
   expect(r.trio.players).toBe(3);
   expect(r.trio.spawned).toBe(26);
   expect(r.trio.maxHp).toBe(r.solo.maxHp * 2);
-  expect(r.trio.hud).toContain('игроков 3');
-  expect(r.solo.hud).not.toContain('игроков');
-  // награда = бонус за ранний вызов (одинаков: та же пауза) + bounty × 2
+  expect(r.trio.hud).toContain('players 3');
+  expect(r.solo.hud).not.toContain('players');
+  // reward = the early-call bonus (the same: the same pause) + bounty × 2
   expect(r.trio.bounty - r.solo.bounty).toBe(50);
   expect(r.lvl2.length).toBeGreaterThan(0);
   expect(r.lvl2.every((l: number) => l === 4)).toBe(true);
 });
 
-test('оборона: логова на дорогах тревожатся перед волной и вспыхивают при выходе врага', async ({ page }) => {
+test('defence: lairs on the roads stir before a wave and flare when an enemy comes out', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td;
     m.hero.place(0, 30, Math.PI); m.hero.god = true;
     const lairs = td.lairs.map((l: any) => l.lane.id);
     const next = td.nextLanes.map((l: any) => l.id);
-    // за 6 с до волны тревожится только логово её дороги
+    // 6 s before a wave only the lair of its road stirs
     const warn0 = td.lairs.map((l: any) => l.warn);
     td.next = 2;
     m.step(1.5);
@@ -307,19 +307,19 @@ test('оборона: логова на дорогах тревожатся пе
   expect(r.warn0).toEqual([0, 0, 0]);
   expect(r.warn1[0]).toBeGreaterThan(0.5);
   expect(r.warn1[1]).toBe(0);
-  expect(r.hud).toContain('западная тропа');
+  expect(r.hud).toContain('west path');
   expect(r.bursts[0]).toBeGreaterThan(1);
   expect(r.bursts[1]).toBe(0);
   expect(r.after).toEqual([0, 0, 0]);
 });
 
-test('оборона: лавовая карта — лава в разломах жжёт героя, мосты через неё на дорогах, дороги проходимы, дымка над лавой', async ({ page }) => {
+test('defence: the lava map — lava in the rifts burns the hero, bridges over it on the roads, the roads are walkable, haze over the lava', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, L = m.level, V = m.hero.pos.constructor;
     let lava = 0, bridges = 0, fences = 0, volcanoFire = 0;
     L.forEach((_x: number, _y: number, _z: number, id: number) => { const n = L.palette[id]; if (n === 'lava') lava++; else if (n === 'bridge_deck') bridges++; else if (n === 'fence' || n === 'bridge_post') fences++; else if (n === 'fire') volcanoFire++; });
-    // дороги проходимы от логова до куста по точкам
+    // the roads are walkable from the lair to the bush point by point
     const bad: unknown[] = [];
     for (const lane of td.spec.lanes) for (let i = 0; i + 1 < lane.points.length; i++) {
       const [ax, az] = lane.points[i], [bx, bz] = lane.points[i + 1];
@@ -328,9 +328,9 @@ test('оборона: лавовая карта — лава в разломах
       const end = path[path.length - 1], d = end ? Math.hypot(end.x - bx, end.z - bz) : 99;
       if (d > 1.5) bad.push([lane.id, i, d]);
     }
-    // площадки и куст — на ровной земле, не в лаве
+    // the pads and the bush — on level ground, not in lava
     const spots = [...td.spec.pads, td.spec.bush].map((p: any) => L.nameAt(p.x, -1, p.z));
-    // герой в лаве горит, на берегу — нет
+    // the hero burns in lava, on the shore — not
     let cell: [number, number] | null = null;
     L.forEach((x: number, y: number, z: number, id: number) => { if (!cell && y === -1 && L.palette[id] === 'lava' && L.nameAt(x + 1, -1, z) === 'lava' && L.nameAt(x - 1, -1, z) === 'lava') cell = [x, z]; });
     m.hero.god = false; m.hero.hp = m.hero.maxHp;
@@ -354,12 +354,12 @@ test('оборона: лавовая карта — лава в разломах
   expect(r.safe).toBe(0);
   expect(r.weather).toBe('embers');
   expect(r.fog).toBe('#3a1c14');
-  // дымка считает лаву, открытую сверху (в кратерах над ней огонь)
+  // the haze counts lava open from above (in the craters there is fire over it)
   expect(r.haze).toBeGreaterThan(r.lava * 0.9);
   expect(r.haze).toBeLessThanOrEqual(r.lava);
 });
 
-test('оборона: слизень и лоза сами не ходят, но по дороге доходят до куста; половинки слизня идут дальше по той же дороге', async ({ page }) => {
+test('defence: the slime and the vine do not walk by themselves, but reach the bush along the road; the slime halves go on along the same road', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, V = m.hero.pos.constructor;
@@ -370,7 +370,7 @@ test('оборона: слизень и лоза сами не ходят, но 
     const p1 = [s.progress, v.progress];
     for (let i = 0; i < 400; i++) m.step(0.1);
     const p2 = [s.progress, v.progress];
-    // слизень на полпути убит — половинки на марше, а не стоят
+    // the slime is killed halfway — the halves are on the march, not standing
     td.pack.clear();
     const b = td.spawnOn('slime', 'east');
     for (let i = 0; i < 100; i++) m.step(0.1);

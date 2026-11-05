@@ -4,15 +4,15 @@ import { r2 } from './entities.ts';
 import type { SimWorld } from './world.ts';
 
 /**
- * Кучки малины с павших врагов (wiki/design-tower-defence.md): подскакивают из точки, падают, лежат; летят к ближайшему
- * герою на ногах ближе `reach` (сбор урожая после волны — отовсюду), кто подобрал — того и малина (`onPick`)
+ * Raspberry piles from fallen enemies (wiki/design-tower-defence.md): pop up from a point, fall, lie; fly to the nearest
+ * hero on their feet within `reach` (the harvest after a wave — from anywhere), whoever picks it up gets the raspberries (`onPick`)
  */
 export interface Pile {
   id: string;
   n: number;
   pos: THREE.Vector3;
   vel: THREE.Vector3;
-  /** Пока не подобрать: только вылетела */
+  /** Cannot be picked up yet: just popped out */
   lock: number;
   t: number;
   landed: boolean;
@@ -20,17 +20,17 @@ export interface Pile {
 
 export class Piles {
   readonly list: Pile[] = [];
-  /** Откуда малину тянет к герою, м */
+  /** From how far raspberries are pulled to the hero, m */
   reach = 6;
-  /** Сбор урожая: ещё столько секунд вся малина летит к герою отовсюду */
+  /** Harvest: for this many more seconds all raspberries fly to the hero from anywhere */
   harvestT = 0;
-  /** Подобрал герой места seat */
+  /** Picked up by the hero of seat `seat` */
   onPick: ((seat: number, n: number, at: THREE.Vector3) => void) | null = null;
   private readonly w: SimWorld;
 
   constructor(w: SimWorld) { this.w = w; }
 
-  /** Малина с рядового моба: одна кучка подскакивает из точки */
+  /** Raspberries from a rank-and-file mob: one pile pops up from the point */
   drop(at: THREE.Vector3, n: number): Pile | null {
     if (n <= 0) return null;
     const r = this.w.rng;
@@ -40,7 +40,7 @@ export class Piles {
     return p;
   }
 
-  /** Сбор урожая (волна отбита) */
+  /** Harvest (wave beaten) */
   harvest(sec = 4): void { this.harvestT = Math.max(this.harvestT, sec); }
 
   clear(): void { this.list.length = 0; }
@@ -60,7 +60,7 @@ export class Piles {
         if (Math.abs(p.vel.y) > 1.5) { p.vel.y = -p.vel.y * 0.3; p.vel.x *= 0.5; p.vel.z *= 0.5; }
         else { p.vel.y = 0; const k = Math.exp(-6 * dt); p.vel.x *= k; p.vel.z *= k; }
       }
-      // к ближайшему герою на ногах
+      // to the nearest hero on their feet
       let to: (typeof heroes)[number] | null = null, d = Infinity;
       for (const h of heroes) {
         if (h.down) continue;

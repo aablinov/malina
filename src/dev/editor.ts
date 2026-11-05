@@ -16,33 +16,34 @@ import type { Layer } from '../level/palette.ts';
 import { Lighting } from '../lighting.ts';
 import { Weather } from '../weather.ts';
 import { LIGHT_DEFAULTS, WEATHER_TITLES, WORLD_DEFAULTS, WORLD_PRESETS, aimLight, lightData, makeLight, mergeWorld, setWorld, sunOffset, worldOf, type LightData, type WeatherKind, type WorldSettings } from '../world.ts';
-import { GROUPS, Thumbs, catalog, loadUserPrefabs, saveUserPrefabs, stampUser, type Prefab, type UserPrefab } from './editor/prefabs.ts';
+import { GROUPS, GROUP_TITLES, Thumbs, catalog, loadUserPrefabs, saveUserPrefabs, stampUser, type Prefab, type PrefabGroup, type UserPrefab } from './editor/prefabs.ts';
 import { Outliner, type TreeNode } from './editor/outliner.ts';
 import { Viewports, type Viewport } from './editor/viewports.ts';
 import { PropGrid, closeMenus, h, icon, menuButton, popupMenu, splitter, type MenuItem } from './editor/ui.ts';
 import './editor.css';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Редактор уровней в духе Unreal Engine (?dev=editor, F10 в плейграунде).
- * Карта — воксельная сетка (src/level/level.ts), блоки — палитра (src/level/palette.ts), формы — assets/blocks/*.obj.
- * Сохраняется в JSON (assets/maps/*.json) и в localStorage (автосохранение).
+ * Level editor in the spirit of Unreal Engine (?dev=editor, F10 in the playground).
+ * The map is a voxel grid (src/level/level.ts), blocks — the palette (src/level/palette.ts), shapes — assets/blocks/*.obj.
+ * Saved to JSON (assets/maps/*.json) and to localStorage (autosave).
  *
- * Окно: строка меню и панель инструментов сверху; слева — «Префабы» (блоки, декор, сборки, свет, служебные, свои —
- * с разделами и поиском, тянутся мышью во вьюпорт); в центре — вьюпорты (один или четыре: перспектива, сверху, спереди,
- * сбоку) и вкладка «Оружие»; справа — «Аутлайнер» (дерево карты) и «Детали» / «Настройки мира» (солнце, небо и
- * глобальное освещение, дымка, погода, постобработка). Внизу — строка состояния.
+ * Window: menu bar and toolbar on top; on the left — "Prefabs" (blocks, decor, kits, lights, service objects, user ones —
+ * with sections and search, dragged with the mouse into a viewport); in the centre — viewports (one or four: perspective, top, front,
+ * side) and the "Weapons" tab; on the right — "Outliner" (map tree) and "Details" / "World settings" (sun, sky and
+ * global lighting, haze, weather, post-processing). At the bottom — the status bar.
  *
- * Режимы (Tab — по кругу): «Выделение» — ЛКМ выбирает блок, предмет, свет, точку появления (Shift — добавить, тянуть по
- * пустому — рамка), гизмо двигает и вращает выбранное по осям (W / E / R — перенос / поворот / размер, Q — без гизмо),
- * F — к выбранному, Del — убрать, Ctrl+D — копия, стрелки — сдвиг, ПКМ — меню. «Блоки» — кисть: ЛКМ — поставить,
- * Shift+ЛКМ — убрать, Ctrl+ЛКМ дважды — залить параллелепипед (с Shift — вырезать), Q — взять, R — повернуть,
- * [ ] и 1–9 — палитра. «Декор» — ЛКМ ставит предмет на пол, стену или потолок, ЛКМ по предмету — выбрать и тащить,
- * R / T / Y — поворот, наклон, крен на 15°, Z — случайный поворот, Ctrl+D — копия. «Ландшафт» — куски проходимого
- * рельефа (meta.lands): ползунки, «Случайно», стрелки — сдвиг, Del — убрать. «Поставить» — префаб из панели по клику.
+ * Modes (Tab — cycles): "Select" — LMB selects a block, item, light, spawn point (Shift — add, dragging over
+ * empty space — marquee), the gizmo moves and rotates the selection along the axes (W / E / R — translate / rotate / scale, Q — no gizmo),
+ * F — to the selection, Del — remove, Ctrl+D — copy, arrows — nudge, RMB — menu. "Blocks" — brush: LMB — place,
+ * Shift+LMB — remove, Ctrl+LMB twice — fill a box (with Shift — cut out), Q — pick, R — rotate,
+ * [ ] and 1–9 — palette. "Decor" — LMB places an item on the floor, wall or ceiling, LMB on an item — select and drag,
+ * R / T / Y — yaw, pitch, roll by 15°, Z — random yaw, Ctrl+D — copy. "Landscape" — pieces of walkable
+ * terrain (meta.lands): sliders, "Random", arrows — nudge, Del — remove. "Place" — a prefab from the panel on click.
  *
- * Камера: колесо — зум, СКМ или Alt+ЛКМ — вращать вокруг цели, ПКМ — двигать, ПКМ + WASD / QE — лететь,
- * в режимах кисти WASD двигает и без ПКМ. PgUp / PgDn — срез по высоте, G — сетка, Alt+X — развернуть вьюпорт.
- * Ctrl+Z / Ctrl+Y — отмена и повтор (свойства, свет и мир тоже), Ctrl+S — скачать JSON, Ctrl+O — открыть.
+ * Camera: wheel — zoom, MMB or Alt+LMB — orbit around the target, RMB — pan, RMB + WASD / QE — fly,
+ * in brush modes WASD moves without RMB too. PgUp / PgDn — height slice, G — grid, Alt+X — maximise the viewport.
+ * Ctrl+Z / Ctrl+Y — undo and redo (properties, lights and world too), Ctrl+S — download JSON, Ctrl+O — open.
  */
 
 export const EDITOR_STORAGE = 'malina.editor.level';
@@ -50,20 +51,20 @@ const QUICK = ['grass', 'dirt', 'stone', 'cobble', 'bricks', 'planks', 'log', 'l
 const maps = MAPS;
 
 interface BlockEdit { x: number; y: number; z: number; was: [string, number]; now: [string, number] }
-/** Правка декора: before null — предмет добавлен, after null — убран, иначе — изменён (снимки полей) */
+/** Decor edit: before null — the item was added, after null — removed, otherwise — changed (field snapshots) */
 interface DecorEdit { decor: DecorItem; before: DecorItem | null; after: DecorItem | null }
-/** Кусок ландшафта на карте (meta.lands): центр, параметры и клетки, которые он поменял, — [x, y, z, было, поворот, стало, поворот] */
-interface LandPiece { x: number; y: number; z: number; w: number; d: number; layers: number; scale: number; stone: number; seed: number; /** Земля (GROUNDS): нет поля — трава */ ground?: string; cells: [number, number, number, string, number, string, number][] }
+/** Terrain piece on the map (meta.lands): centre, parameters and the cells it changed — [x, y, z, was, rot, now, rot] */
+interface LandPiece { x: number; y: number; z: number; w: number; d: number; layers: number; scale: number; stone: number; seed: number; /** Ground (GROUNDS): no field — grass */ ground?: string; cells: [number, number, number, string, number, string, number][] }
 type LandParams = Omit<LandPiece, 'cells'>;
-/** Правка куска ландшафта: снимки записи до и после (null — куска нет) */
+/** Terrain piece edit: snapshots of the record before and after (null — no piece) */
 interface LandEdit { land: LandPiece; before: LandPiece | null; after: LandPiece | null }
-/** Правка свойств (мир, свет, точка появления): как отменить и повторить; подряд идущие с одним key сливаются */
+/** Property edit (world, light, spawn point): how to undo and redo; consecutive ones with the same key merge */
 interface PropEdit { key: string; t: number; undo: () => void; redo: () => void }
 type Edit = BlockEdit | DecorEdit | LandEdit | PropEdit;
 const snapDecor = (d: DecorItem): DecorItem => JSON.parse(JSON.stringify(d)) as DecorItem;
 const snapLand = (p: LandPiece): LandPiece => JSON.parse(JSON.stringify(p)) as LandPiece;
 const landParams = ({ cells: _, ...p }: LandPiece): LandParams => p;
-/** Прямоугольник куска: x0, z0, x1, z1 и верх рамки по высоте */
+/** Rectangle of a piece: x0, z0, x1, z1 and the top of the frame in height */
 const landRect = (p: LandParams): [number, number, number, number, number] => {
   const x0 = p.x - Math.floor(p.w / 2), z0 = p.z - Math.floor(p.d / 2);
   return [x0, z0, x0 + p.w - 1, z0 + p.d - 1, p.y + Math.ceil(p.layers / 2) + 2];
@@ -72,7 +73,7 @@ const landRect = (p: LandParams): [number, number, number, number, number] => {
 type Mode = 'select' | 'blocks' | 'decor' | 'land' | 'place';
 type Tool = 'select' | 'translate' | 'rotate' | 'scale';
 type WorldPart = 'sun' | 'sky' | 'fog' | 'weather' | 'post';
-/** Что выделено: блок, предмет декора, свет, точка появления, кусок ландшафта, раздел мира */
+/** What is selected: block, decor item, light, spawn point, terrain piece, world section */
 type Sel =
   | { t: 'block'; x: number; y: number; z: number }
   | { t: 'decor'; d: DecorItem }
@@ -81,14 +82,14 @@ type Sel =
   | { t: 'land'; p: LandPiece }
   | { t: 'world'; part: WorldPart };
 
-const MODE_TITLES: Record<Mode, string> = { select: 'Выделение', blocks: 'Блоки', decor: 'Декор', land: 'Ландшафт', place: 'Поставить' };
+const MODE_TITLES: Record<Mode, string> = { select: t('Select'), blocks: t('Blocks'), decor: t('Decor'), land: t('Landscape'), place: t('Place') };
 const MODE_ICONS: Record<Mode, string> = { select: 'select', blocks: 'brush', decor: 'decor', land: 'land', place: 'prefab' };
 const WORLD_PARTS: [WorldPart, string, string, string][] = [
-  ['sun', 'Солнце', 'sun', 'DirectionalLight'],
-  ['sky', 'Небо и глобальный свет', 'sky', 'SkyLight'],
-  ['fog', 'Дымка', 'fog', 'HeightFog'],
-  ['weather', 'Погода', 'rain', 'Weather'],
-  ['post', 'Постобработка', 'post', 'PostProcessVolume'],
+  ['sun', t('Sun'), 'sun', 'DirectionalLight'],
+  ['sky', t('Sky and global light'), 'sky', 'SkyLight'],
+  ['fog', t('Haze'), 'fog', 'HeightFog'],
+  ['weather', t('Weather'), 'rain', 'Weather'],
+  ['post', t('Post-processing'), 'post', 'PostProcessVolume'],
 ];
 
 export function runEditor(): void {
@@ -102,7 +103,7 @@ export function runEditor(): void {
   const scene = new THREE.Scene();
   const mainCam = new THREE.PerspectiveCamera(40, 1, 0.3, 600);
   mainCam.position.set(22, 24, 26);
-  // свет «как в Unreal» (src/lighting.ts) с настройками мира карты (src/world.ts) и погода — как в игре
+  // light "like in Unreal" (src/lighting.ts) with the map's world settings (src/world.ts) and weather — as in the game
   const look = new Lighting(renderer, scene, mainCam);
   const weather = new Weather(scene);
 
@@ -111,7 +112,7 @@ export function runEditor(): void {
   let view = new LevelRenderer(scene, level, T);
   let world = worldOf(level);
 
-  // ---------- окно ----------
+  // ---------- window ----------
   const root = h('div.ue');
   const menubar = h('div.ue-menubar');
   const toolbar = h('div.ue-toolbar');
@@ -142,7 +143,7 @@ export function runEditor(): void {
     log.push(`${new Date().toLocaleTimeString()}  ${s}`); if (log.length > 200) log.shift();
   };
 
-  // ---------- состояние ----------
+  // ---------- state ----------
   let mode: Mode = 'select';
   let tool: Tool = 'translate';
   let current = 'grass', rot = 0;
@@ -154,87 +155,87 @@ export function runEditor(): void {
   let lastPainted = '';
   let drag: 'place' | 'remove' | null = null;
   let dirtyAutosave = false;
-  /** Ландшафт для нового куска: размеры, слои по 0,5 м, крупность плит, доля камня (%), зерно шума — от него изгибы краёв и углов */
+  /** Landscape for a new piece: size, layers of 0.5 m, plate coarseness, stone share (%), noise seed — it drives the curves of the edges and corners */
   const land: { w: number; d: number; layers: number; scale: number; stone: number; seed: number; ground: string } = { w: 24, d: 18, layers: 4, scale: 22, stone: 30, seed: 1, ground: 'grass' };
-  /** Выбранный кусок — его правят ползунки, «Случайно», стрелки и Del; live — последняя правка куска, к ней сливаются следующие */
+  /** Selected piece — edited by the sliders, "Random", arrows and Del; live — the last edit of the piece, the next ones merge into it */
   let selLand: LandPiece | null = null, hoverLand: LandPiece | null = null;
   let live: { piece: LandPiece; batch: Edit[] } | null = null;
   let curDecor = DECOR[0].name;
-  /** Поворот пользователя: [рыск, наклон, крен], градусы */
+  /** User rotation: [yaw, pitch, roll], degrees */
   const dRot = [0, 0, 0];
   let randomYaw = false, randYaw = 0;
   let placement: DecorPlacement | null = null;
   let hoverDecor: DecorItem | null = null, selected: DecorItem | null = null;
   let moving: { item: DecorItem; before: DecorItem } | null = null;
-  /** Выделение в режиме «Выделение» */
+  /** Selection in "Select" mode */
   let sel: Sel[] = [];
-  /** Префаб для режима «Поставить» */
+  /** Prefab for "Place" mode */
   let curPrefab: Prefab | null = null;
-  /** Поворот пресета в режиме «Поставить», четверти (R) */
+  /** Preset rotation in "Place" mode, quarters (R) */
   let placeRot = 0;
-  /** Шаг сетки и угла для гизмо */
+  /** Grid and angle step for the gizmo */
   const snap = { grid: true, gridStep: 1, rotOn: true, rotStep: 15 };
-  /** Флаги «Показать» */
+  /** "Show" flags */
   const show = { grid: true, icons: true, decor: true, weather: true, fog: true, stats: true };
   let entVersion = 0;
   let userPrefabs = loadUserPrefabs();
   let prefabs = catalog(userPrefabs);
   const thumbs = new Thumbs(T);
 
-  // ---------- строка меню ----------
+  // ---------- menu bar ----------
   const mbtn = (label: string, items: () => MenuItem[]) => menuButton(h('button.ue-mb', { text: label }), items);
-  const nameInput = h('input.ue-mapname', { spellcheck: 'false', title: 'Имя карты' });
+  const nameInput = h('input.ue-mapname', { spellcheck: 'false', title: t('Map name') });
   nameInput.addEventListener('input', () => { level.name = nameInput.value; dirtyAutosave = true; outliner.invalidate(); docTabs.querySelector('.lvl span')!.textContent = level.name; });
   nameInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') nameInput.blur(); });
   menubar.append(
     h('span.ue-logo', { html: '<b>M</b>' }),
-    mbtn('Файл', () => [
-      { label: 'Новая карта', icon: 'plus', action: newMap },
-      { label: 'Открыть JSON…', icon: 'folder', shortcut: 'Ctrl+O', action: open },
-      { label: 'Скачать JSON', icon: 'save', shortcut: 'Ctrl+S', action: save },
+    mbtn(t('File'), () => [
+      { label: t('New map'), icon: 'plus', action: newMap },
+      { label: t('Open JSON…'), icon: 'folder', shortcut: 'Ctrl+O', action: open },
+      { label: t('Download JSON'), icon: 'save', shortcut: 'Ctrl+S', action: save },
       { sep: true },
-      { label: 'Встроенные карты', icon: 'world', sub: () => Object.keys(maps).sort().map((p) => ({ label: `${maps[p].name}  ·  ${p}`, action: () => { setLevel(Level.fromJSON(maps[p])); toast(`Открыта «${level.name}»`); } })) },
-      { label: 'Этаж подземелья…', icon: 'grid', action: floorDialog },
+      { label: t('Built-in maps'), icon: 'world', sub: () => Object.keys(maps).sort().map((p) => ({ label: `${t(maps[p].name)}  ·  ${p}`, action: () => { setLevel(Level.fromJSON(maps[p])); toast(t('Opened "{name}"', { name: level.name })); } })) },
+      { label: t('Dungeon floor…'), icon: 'grid', action: floorDialog },
       { sep: true },
-      { label: 'Играть на этой карте', icon: 'play', shortcut: 'F5', action: play },
+      { label: t('Play this map'), icon: 'play', shortcut: 'F5', action: play },
     ]),
-    mbtn('Правка', () => [
-      { label: 'Отменить', icon: 'undo', shortcut: 'Ctrl+Z', disabled: !undo.length, action: doUndo },
-      { label: 'Повторить', icon: 'redo', shortcut: 'Ctrl+Y', disabled: !redo.length, action: doRedo },
+    mbtn(t('Edit'), () => [
+      { label: t('Undo'), icon: 'undo', shortcut: 'Ctrl+Z', disabled: !undo.length, action: doUndo },
+      { label: t('Redo'), icon: 'redo', shortcut: 'Ctrl+Y', disabled: !redo.length, action: doRedo },
       { sep: true },
-      { label: 'Дублировать', icon: 'copy', shortcut: 'Ctrl+D', disabled: !sel.length, action: duplicateSel },
-      { label: 'Удалить', icon: 'trash', shortcut: 'Del', disabled: !sel.length, action: deleteSel },
-      { label: 'Снять выделение', shortcut: 'Esc', action: () => select([]) },
-      { label: 'Выделить все такие блоки', disabled: !sel.some((s) => s.t === 'block'), action: selectSameBlocks },
+      { label: t('Duplicate'), icon: 'copy', shortcut: 'Ctrl+D', disabled: !sel.length, action: duplicateSel },
+      { label: t('Delete'), icon: 'trash', shortcut: 'Del', disabled: !sel.length, action: deleteSel },
+      { label: t('Deselect'), shortcut: 'Esc', action: () => select([]) },
+      { label: t('Select all blocks like this'), disabled: !sel.some((s) => s.t === 'block'), action: selectSameBlocks },
       { sep: true },
-      { label: 'Создать префаб из выделения…', icon: 'prefab', disabled: !sel.length, action: makePrefab },
+      { label: t('Create prefab from selection…'), icon: 'prefab', disabled: !sel.length, action: makePrefab },
     ]),
-    mbtn('Вид', () => [
-      { head: 'Раскладка вьюпортов' },
-      { label: 'Один вьюпорт', icon: 'layout1', checked: vps.layout === 'one', action: () => vps.setLayout('one') },
-      { label: 'Два рядом', icon: 'layout2', checked: vps.layout === 'two', action: () => vps.setLayout('two') },
-      { label: 'Четыре вида', icon: 'layout4', checked: vps.layout === 'four', action: () => vps.setLayout('four') },
+    mbtn(t('View'), () => [
+      { head: t('Viewport layout') },
+      { label: t('One viewport'), icon: 'layout1', checked: vps.layout === 'one', action: () => vps.setLayout('one') },
+      { label: t('Two side by side'), icon: 'layout2', checked: vps.layout === 'two', action: () => vps.setLayout('two') },
+      { label: t('Four views'), icon: 'layout4', checked: vps.layout === 'four', action: () => vps.setLayout('four') },
       { sep: true },
       ...showItems(),
       { sep: true },
-      { label: 'Турель: сцена вращается', icon: 'turntable', checked: vps.list[0].controls.autoRotate, action: () => { const c = vps.list[0].controls; c.autoRotate = !c.autoRotate; } },
-      { label: 'К выделенному', icon: 'focus', shortcut: 'F', action: focusSel },
-      { label: 'Показать всю карту', icon: 'world', shortcut: 'Home', action: frameAll },
+      { label: t('Turntable: the scene rotates'), icon: 'turntable', checked: vps.list[0].controls.autoRotate, action: () => { const c = vps.list[0].controls; c.autoRotate = !c.autoRotate; } },
+      { label: t('To the selection'), icon: 'focus', shortcut: 'F', action: focusSel },
+      { label: t('Show the whole map'), icon: 'world', shortcut: 'Home', action: frameAll },
     ]),
-    mbtn('Окно', () => [
-      { label: 'Префабы', icon: 'prefab', checked: !left.hidden, action: () => { left.hidden = !left.hidden; root.classList.toggle('no-left', left.hidden); } },
-      { label: 'Аутлайнер и детали', icon: 'world', checked: !right.hidden, action: () => { right.hidden = !right.hidden; root.classList.toggle('no-right', right.hidden); } },
-      { label: 'Настройки мира', icon: 'sun', action: () => setDetTab('world') },
-      { label: 'Оружие', icon: 'weapon', action: () => setDoc('weapons') },
-      { label: 'Журнал', icon: 'info', action: showLog },
+    mbtn(t('Window'), () => [
+      { label: t('Prefabs'), icon: 'prefab', checked: !left.hidden, action: () => { left.hidden = !left.hidden; root.classList.toggle('no-left', left.hidden); } },
+      { label: t('Outliner and details'), icon: 'world', checked: !right.hidden, action: () => { right.hidden = !right.hidden; root.classList.toggle('no-right', right.hidden); } },
+      { label: t('World settings'), icon: 'sun', action: () => setDetTab('world') },
+      { label: t('Weapons'), icon: 'weapon', action: () => setDoc('weapons') },
+      { label: t('Log'), icon: 'info', action: showLog },
     ]),
-    mbtn('Справка', () => [{ label: 'Горячие клавиши', icon: 'info', shortcut: 'F1', action: showHelp }]),
+    mbtn(t('Help'), () => [{ label: t('Hotkeys'), icon: 'info', shortcut: 'F1', action: showHelp }]),
     h('span.ue-grow'),
     nameInput,
-    h('span.ue-proj', { text: 'Малина' }),
+    h('span.ue-proj', { text: t('Malina') }),
   );
 
-  // ---------- панель инструментов ----------
+  // ---------- toolbar ----------
   const tb = (iconName: string, title: string, fn: () => void, label = '') => {
     const b = h('button.ue-tb', { html: `${icon(iconName)}${label ? `<span>${label}</span>` : ''}`, title });
     b.addEventListener('click', () => { fn(); b.blur(); });
@@ -243,36 +244,36 @@ export function runEditor(): void {
   const modeBtn = h('button.ue-tb.ue-tb-mode');
   menuButton(modeBtn, () => (Object.keys(MODE_TITLES) as Mode[]).map((m, i) => ({ label: MODE_TITLES[m], icon: MODE_ICONS[m], shortcut: `Shift+${i + 1}`, checked: mode === m, action: () => setMode(m) })));
   const toolBtns: Record<Tool, HTMLButtonElement> = {
-    select: tb('select', 'Только выделение (Q)', () => setTool('select')),
-    translate: tb('move', 'Перенос (W)', () => setTool('translate')),
-    rotate: tb('rotate', 'Поворот по осям (E)', () => setTool('rotate')),
-    scale: tb('scale', 'Размер (R): ландшафт, дальность света', () => setTool('scale')),
+    select: tb('select', t('Select only (Q)'), () => setTool('select')),
+    translate: tb('move', t('Translate (W)'), () => setTool('translate')),
+    rotate: tb('rotate', t('Rotate along axes (E)'), () => setTool('rotate')),
+    scale: tb('scale', t('Scale (R): landscape, light range'), () => setTool('scale')),
   };
-  const gridBtn = h('button.ue-tb.ue-snap', { title: 'Привязка к сетке' });
+  const gridBtn = h('button.ue-tb.ue-snap', { title: t('Snap to grid') });
   gridBtn.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('.v')) return; snap.grid = !snap.grid; refreshToolbar(); });
   const gridVal = h('span.v');
-  menuButton(gridVal, () => [1 / 16, 1 / 8, 0.25, 0.5, 1, 2].map((v) => ({ label: `${v < 1 ? `1/${1 / v}` : v} м`, checked: snap.gridStep === v, action: () => { snap.gridStep = v; snap.grid = true; refreshToolbar(); } })));
+  menuButton(gridVal, () => [1 / 16, 1 / 8, 0.25, 0.5, 1, 2].map((v) => ({ label: t('{v} m', { v: v < 1 ? `1/${1 / v}` : v }), checked: snap.gridStep === v, action: () => { snap.gridStep = v; snap.grid = true; refreshToolbar(); } })));
   gridBtn.append(h('span', { html: icon('grid') }), gridVal);
-  const rotBtn = h('button.ue-tb.ue-snap', { title: 'Привязка угла' });
+  const rotBtn = h('button.ue-tb.ue-snap', { title: t('Angle snap') });
   rotBtn.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('.v')) return; snap.rotOn = !snap.rotOn; refreshToolbar(); });
   const rotVal = h('span.v');
   menuButton(rotVal, () => [5, 15, 30, 45, 90].map((v) => ({ label: `${v}°`, checked: snap.rotStep === v, action: () => { snap.rotStep = v; snap.rotOn = true; refreshToolbar(); } })));
   rotBtn.append(h('span', { html: icon('angle') }), rotVal);
-  const envBtn = h('button.ue-tb', { html: `${icon('sun')}<span>Окружение</span>`, title: 'Готовые наборы света и погоды' });
+  const envBtn = h('button.ue-tb', { html: `${icon('sun')}<span>${t('Environment')}</span>`, title: t('Ready-made light and weather presets') });
   menuButton(envBtn, () => [
-    { head: 'Набор' },
-    ...Object.entries(WORLD_PRESETS).map(([, p]) => ({ label: p.title, action: () => { changeWorld((w) => Object.assign(w, mergeWorld(WORLD_DEFAULTS, p.patch)), 'preset'); toast(`Окружение: ${p.title}`); } })),
+    { head: t('Preset') },
+    ...Object.entries(WORLD_PRESETS).map(([, p]) => ({ label: p.title, action: () => { changeWorld((w) => Object.assign(w, mergeWorld(WORLD_DEFAULTS, p.patch)), 'preset'); toast(t('Environment: {title}', { title: p.title })); } })),
     { sep: true },
-    { head: 'Погода' },
+    { head: t('Weather') },
     ...(Object.keys(WEATHER_TITLES) as WeatherKind[]).map((k) => ({ label: WEATHER_TITLES[k], checked: world.weather.kind === k, action: () => changeWorld((w) => { w.weather.kind = k; }) })),
     { sep: true },
-    { label: 'Настройки мира…', icon: 'world', action: () => setDetTab('world') },
+    { label: t('World settings…'), icon: 'world', action: () => setDetTab('world') },
   ]);
-  const playBtn = h('button.ue-tb.ue-play', { html: `${icon('play')}<span>Играть</span>`, title: 'Открыть игру с этой картой (F5)' });
+  const playBtn = h('button.ue-tb.ue-play', { html: `${icon('play')}<span>${t('Play')}</span>`, title: t('Open the game with this map (F5)') });
   playBtn.addEventListener('click', play);
   const statEl = h('span.ue-tb-stat');
   toolbar.append(
-    tb('save', 'Скачать JSON (Ctrl+S)', save),
+    tb('save', t('Download JSON (Ctrl+S)'), save),
     h('span.ue-sep'),
     modeBtn,
     h('span.ue-sep'),
@@ -280,11 +281,11 @@ export function runEditor(): void {
     h('span.ue-sep'),
     gridBtn, rotBtn,
     h('span.ue-sep'),
-    tb('undo', 'Отменить (Ctrl+Z)', () => doUndo()), tb('redo', 'Повторить (Ctrl+Y)', () => doRedo()),
+    tb('undo', t('Undo (Ctrl+Z)'), () => doUndo()), tb('redo', t('Redo (Ctrl+Y)'), () => doRedo()),
     h('span.ue-sep'),
-    tb('prefab', 'Создать префаб из выделения', () => makePrefab(), 'Префаб'),
+    tb('prefab', t('Create prefab from selection'), () => makePrefab(), t('Prefab')),
     envBtn,
-    tb('weapon', 'Оружие: превью и баланс', () => setDoc('weapons'), 'Оружие'),
+    tb('weapon', t('Weapons: preview and balance'), () => setDoc('weapons'), t('Weapons')),
     h('span.ue-grow'),
     statEl,
     playBtn,
@@ -297,40 +298,40 @@ export function runEditor(): void {
     applyGizmo();
   }
 
-  // ---------- вкладки документов: уровень и оружие ----------
+  // ---------- document tabs: level and weapons ----------
   let doc: 'level' | 'weapons' = 'level';
   let weaponsPanel: { show(): void; hide(): void } | null = null;
   docTabs.append(
     h('div.ue-doctab.lvl.on', { html: `${icon('world')}<span></span>`, onclick: () => setDoc('level') }),
-    h('div.ue-doctab.wpn', { html: `${icon('weapon')}<span>Оружие</span>`, onclick: () => setDoc('weapons') }),
+    h('div.ue-doctab.wpn', { html: `${icon('weapon')}<span>${t('Weapons')}</span>`, onclick: () => setDoc('weapons') }),
   );
   function setDoc(d: 'level' | 'weapons'): void {
     doc = d;
     docTabs.querySelector('.lvl')!.classList.toggle('on', d === 'level');
     docTabs.querySelector('.wpn')!.classList.toggle('on', d === 'weapons');
     vps.el.hidden = d !== 'level';
-    // оружие — отдельный редактор ассета: панели уровня прячем, ему вся ширина
+    // weapons is a separate asset editor: hide the level panels, give it the full width
     root.classList.toggle('doc-weapons', d === 'weapons');
     weaponsHost.hidden = d !== 'weapons';
     if (d === 'weapons') {
       if (!weaponsPanel) {
-        weaponsHost.textContent = 'Загрузка…';
+        weaponsHost.textContent = t('Loading…');
         void import('./editor/weapons-panel.ts').then((m) => { weaponsHost.textContent = ''; weaponsPanel = m.mountWeaponsPanel(weaponsHost); if (doc === 'weapons') weaponsPanel.show(); })
-          .catch((e: Error) => { weaponsHost.textContent = `Панель оружия не загрузилась: ${e.message}`; });
+          .catch((e: Error) => { weaponsHost.textContent = t('The weapons panel failed to load: {msg}', { msg: e.message }); });
       } else weaponsPanel.show();
     } else { weaponsPanel?.hide(); vps.resize(); }
   }
 
-  // ---------- левая панель: инструменты режима и префабы ----------
+  // ---------- left panel: mode tools and prefabs ----------
   const modeTools = h('div.ue-modetools');
   const pfTabs = h('div.ue-pf-tabs');
-  const pfSearch = h('input.ue-search', { type: 'search', placeholder: 'Поиск префабов…', spellcheck: 'false' });
+  const pfSearch = h('input.ue-search', { type: 'search', placeholder: t('Search prefabs…'), spellcheck: 'false' });
   const pfList = h('div.ue-pf-list');
-  let pfGroup: string = 'Все';
-  left.append(h('div.ue-panel-h', { html: `${icon('prefab')}<span>Префабы</span>` }), modeTools, pfTabs, h('div.ue-pf-search', {}, h('span.ue-search-ic', { html: icon('search') }), pfSearch), pfList);
+  let pfGroup: PrefabGroup = 'all';
+  left.append(h('div.ue-panel-h', { html: `${icon('prefab')}<span>${t('Prefabs')}</span>` }), modeTools, pfTabs, h('div.ue-pf-search', {}, h('span.ue-search-ic', { html: icon('search') }), pfSearch), pfList);
   pfSearch.addEventListener('input', () => drawPrefabs());
   pfSearch.addEventListener('keydown', (e) => e.stopPropagation());
-  for (const g of GROUPS) pfTabs.append(h('button.ue-chip', { text: g, 'data-g': g, onclick: () => { pfGroup = g; drawPrefabs(); } }));
+  for (const g of GROUPS) pfTabs.append(h('button.ue-chip', { text: GROUP_TITLES[g], 'data-g': g, onclick: () => { pfGroup = g; drawPrefabs(); } }));
   const blockThumb = new Map<string, string>();
   const texThumb = (b: BlockDef): string => {
     let t = blockThumb.get(b.name);
@@ -347,14 +348,14 @@ export function runEditor(): void {
   function drawPrefabs(): void {
     for (const c of pfTabs.children) c.classList.toggle('on', (c as HTMLElement).dataset.g === pfGroup);
     const q = pfSearch.value.trim().toLowerCase();
-    const list = prefabs.filter((p) => (pfGroup === 'Все' || p.group === pfGroup) && (!q || `${p.title} ${p.name ?? ''} ${p.category} ${p.group}`.toLowerCase().includes(q)));
+    const list = prefabs.filter((p) => (pfGroup === 'all' || p.group === pfGroup) && (!q || `${p.title} ${p.name ?? ''} ${t(p.category)} ${GROUP_TITLES[p.group]}`.toLowerCase().includes(q)));
     pfList.textContent = '';
     let lastCat = '';
     for (const p of list) {
-      const cat = `${p.group} · ${p.category}`;
-      if (cat !== lastCat) { pfList.append(h('div.ue-pf-cat', { text: pfGroup === 'Все' ? cat : p.category })); lastCat = cat; }
+      const cat = `${GROUP_TITLES[p.group]} · ${t(p.category)}`;
+      if (cat !== lastCat) { pfList.append(h('div.ue-pf-cat', { text: pfGroup === 'all' ? cat : t(p.category) })); lastCat = cat; }
       const on = (mode === 'blocks' && p.kind === 'block' && p.name === current) || (mode === 'decor' && p.kind === 'decor' && p.name === curDecor) || (mode === 'place' && curPrefab?.id === p.id);
-      const tile = h('div.ue-pf', { draggable: 'true', title: `${p.title}${p.name ? ` · ${p.name}` : ''}\n${p.hint ?? ''}\nКлик — выбрать, тянуть — поставить во вьюпорте` });
+      const tile = h('div.ue-pf', { draggable: 'true', title: `${p.title}${p.name ? ` · ${p.name}` : ''}\n${p.hint ?? ''}\n${t('Click — select, drag — place in a viewport')}` });
       if (on) tile.classList.add('on');
       tile.append(
         p.icon ? h('span.ue-pf-ic', { html: icon(p.icon) }) : h('img', { src: thumbOf(p), alt: '', 'data-id': p.id }),
@@ -364,14 +365,14 @@ export function runEditor(): void {
       tile.addEventListener('dragstart', (e) => { e.dataTransfer!.setData('text/x-malina-prefab', p.id); e.dataTransfer!.effectAllowed = 'copy'; });
       tile.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        const items: MenuItem[] = [{ label: 'Выбрать', action: () => pickPrefab(p) }];
-        if (p.kind === 'user') items.push({ label: 'Сохранить в библиотеку (JSON)', icon: 'save', action: () => exportPrefab(p.user!) });
-        if (p.kind === 'user') items.push({ label: 'Удалить префаб', icon: 'trash', action: () => { userPrefabs = userPrefabs.filter((u) => u !== p.user); saveUserPrefabs(userPrefabs); prefabs = catalog(userPrefabs); drawPrefabs(); } });
+        const items: MenuItem[] = [{ label: t('Select'), action: () => pickPrefab(p) }];
+        if (p.kind === 'user') items.push({ label: t('Save to the library (JSON)'), icon: 'save', action: () => exportPrefab(p.user!) });
+        if (p.kind === 'user') items.push({ label: t('Delete prefab'), icon: 'trash', action: () => { userPrefabs = userPrefabs.filter((u) => u !== p.user); saveUserPrefabs(userPrefabs); prefabs = catalog(userPrefabs); drawPrefabs(); } });
         popupMenu(e.clientX, e.clientY, items);
       });
       pfList.append(tile);
     }
-    if (!list.length) pfList.append(h('div.ue-empty', { text: pfGroup === 'Мои префабы' ? 'Пусто. Выдели блоки и декор — «Создать префаб из выделения».' : 'Ничего не нашлось' }));
+    if (!list.length) pfList.append(h('div.ue-empty', { text: pfGroup === 'mine' ? t('Empty. Select blocks and decor — "Create prefab from selection".') : t('Nothing found') }));
   }
   function pickPrefab(p: Prefab): void {
     if (p.kind === 'block') { setCurrent(p.name!); setMode('blocks'); }
@@ -386,28 +387,28 @@ export function runEditor(): void {
       h('div.ue-cur', { html: `${img ? `<img src="${img}" alt="">` : `<span class="ue-pf-ic">${icon(ic)}</span>`}<div><b>${title}</b><br><small>${sub}</small></div>` });
     if (mode === 'select') {
       const n = sel.length;
-      modeTools.append(head('select', n ? `Выбрано: ${n}` : 'Выделение', n ? selSummary() : 'ЛКМ — выбрать · Shift — добавить · рамка по пустому'));
+      modeTools.append(head('select', n ? t('Selected: {n}', { n }) : t('Select'), n ? selSummary() : t('LMB — select · Shift — add · marquee over empty space')));
     } else if (mode === 'blocks') {
       const d = blockDef(current);
-      modeTools.append(head('block', d.title, `${d.name}${d.rotatable ? ` · поворот ${rot * 90}° (R)` : ''} · срез y ≤ ${maxY}`, thumbs.get(prefabs.find((p) => p.id === `block:${current}`)!) ?? texThumb(d)));
+      modeTools.append(head('block', t(d.title), `${d.name}${d.rotatable ? ` · ${t('rotation {deg}° (R)', { deg: rot * 90 })}` : ''} · ${t('slice y ≤ {y}', { y: maxY })}`, thumbs.get(prefabs.find((p) => p.id === `block:${current}`)!) ?? texThumb(d)));
     } else if (mode === 'decor') {
       const d = decorDef(curDecor);
       const r = dRot.some(Boolean) ? ` · ${dRot.join('° / ')}°` : '';
-      modeTools.append(head('decor', d.title, `${d.name}${r}${randomYaw ? ' · случайный поворот' : ''}${selected ? ` · выбран: ${decorDef(selected.name).title}` : ''}`, thumbs.get(prefabs.find((p) => p.id === `decor:${curDecor}`)!)));
+      modeTools.append(head('decor', t(d.title), `${d.name}${r}${randomYaw ? ` · ${t('random yaw')}` : ''}${selected ? ` · ${t('selected: {title}', { title: t(decorDef(selected.name).title) })}` : ''}`, thumbs.get(prefabs.find((p) => p.id === `decor:${curDecor}`)!)));
     } else if (mode === 'place') {
-      modeTools.append(head(curPrefab?.icon ?? 'prefab', curPrefab?.title ?? 'Выбери префаб', curPrefab ? `${curPrefab.hint ?? ''}${curPrefab.kind === 'lib' || curPrefab.kind === 'user' ? ` · поворот ${placeRot * 90}°` : ''} · ЛКМ — поставить` : 'клик по префабу ниже', curPrefab && !curPrefab.icon ? thumbs.get(curPrefab) : undefined));
+      modeTools.append(head(curPrefab?.icon ?? 'prefab', curPrefab?.title ?? t('Pick a prefab'), curPrefab ? `${curPrefab.hint ?? ''}${curPrefab.kind === 'lib' || curPrefab.kind === 'user' ? ` · ${t('rotation {deg}°', { deg: placeRot * 90 })}` : ''} · ${t('LMB — place')}` : t('click a prefab below'), curPrefab && !curPrefab.icon ? thumbs.get(curPrefab) : undefined));
     } else {
       const p = selLand ?? land;
-      modeTools.append(head('land', selLand ? `Кусок в ${selLand.x}, ${selLand.y}, ${selLand.z}` : 'Новый кусок ландшафта', `${p.w} × ${p.d} м · ${p.layers} слоёв (${p.layers / 2} м) · зерно ${p.seed}`));
+      modeTools.append(head('land', selLand ? t('Piece at {x}, {y}, {z}', { x: selLand.x, y: selLand.y, z: selLand.z }) : t('New landscape piece'), t('{w} × {d} m · {n} layers ({h} m) · seed {seed}', { w: p.w, d: p.d, n: p.layers, h: p.layers / 2, seed: p.seed })));
       const g = new PropGrid();
-      g.section('Ландшафт — проходим отовсюду', 'land');
+      g.section(t('Landscape — walkable from everywhere'), 'land');
       const ln = (label: string, key: Exclude<keyof typeof land, 'ground'>, min: number, max: number, step = 1) =>
         g.num(label, () => (selLand ?? land)[key], (v) => setLandParam(key, Math.round(v)), { min, max, step, slider: true });
-      ln('Размер X', 'w', 6, 64); ln('Размер Z', 'd', 6, 64); ln('Слои × 0,5 м', 'layers', 1, 10); ln('Крупность', 'scale', 8, 40); ln('Камень, %', 'stone', 0, 80, 5);
-      g.text('Земля', () => GROUND_TITLES[(selLand ?? land).ground ?? 'grass'] ?? 'Трава', () => {}, true);
+      ln(t('Size X'), 'w', 6, 64); ln(t('Size Z'), 'd', 6, 64); ln(t('Layers × 0.5 m'), 'layers', 1, 10); ln(t('Coarseness'), 'scale', 8, 40); ln(t('Stone, %'), 'stone', 0, 80, 5);
+      g.text(t('Ground'), () => GROUND_TITLES[(selLand ?? land).ground ?? 'grass'] ?? t('Grass'), () => {}, true);
       g.buttons(...Object.keys(GROUNDS).map((k): [string, () => void, string?] => [GROUND_TITLES[k] ?? k, () => setLandGround(k), 'land']));
-      g.buttons(['Случайно: края и углы', () => { randomizeLand(); toast('Новые края и углы'); }, 'turntable']);
-      g.note('ЛКМ по земле — поставить, ЛКМ по куску — выбрать, Shift+ЛКМ — новый поверх. Стрелки — сдвиг, Del — убрать, Esc — снять выбор.');
+      g.buttons([t('Random: edges and corners'), () => { randomizeLand(); toast(t('New edges and corners')); }, 'turntable']);
+      g.note(t('LMB on the ground — place, LMB on a piece — select, Shift+LMB — a new one on top. Arrows — nudge, Del — remove, Esc — deselect.'));
       g.refresh();
       landGrid = g;
       modeTools.append(g.el);
@@ -425,7 +426,7 @@ export function runEditor(): void {
   }
   function randomizeLand(): void { setLandParam('seed', 1 + Math.floor(Math.random() * 1e6)); }
 
-  // ---------- правая панель: аутлайнер ----------
+  // ---------- right panel: outliner ----------
   const ICON_OF_BLOCK = (b: BlockDef) => (b.light || b.bakedLight ? 'light' : 'block');
   const outliner = new Outliner({
     roots: () => outlineRoots(),
@@ -434,8 +435,8 @@ export function runEditor(): void {
     onDbl: (n) => { outlinerSelect(n, false); focusSel(); },
     onContext: (n, e) => { if (!selIds.has(n.id)) outlinerSelect(n, false); popupMenu(e.clientX, e.clientY, contextItems()); },
   });
-  outlPanel.append(h('div.ue-panel-h', { html: `${icon('world')}<span>Аутлайнер</span>` }), outliner.el);
-  /** Узлы дерева → выделение */
+  outlPanel.append(h('div.ue-panel-h', { html: `${icon('world')}<span>${t('Outliner')}</span>` }), outliner.el);
+  /** Tree nodes → selection */
   const nodeSel = new Map<string, Sel[]>();
   let selIds = new Set<string>();
   const selId = (s: Sel): string => s.t === 'block' ? `b:${s.x},${s.y},${s.z}` : s.t === 'decor' ? `d:${level.decor.indexOf(s.d)}` : s.t === 'light' ? `l:${level.entities.indexOf(s.e)}` : s.t === 'land' ? `n:${lands().indexOf(s.p)}` : s.t === 'world' ? `w:${s.part}` : 'spawn';
@@ -443,39 +444,39 @@ export function runEditor(): void {
     nodeSel.clear();
     const node = (id: string, label: string, ic: string, type: string, s: Sel[] | null, extra: Partial<TreeNode> = {}): TreeNode => { if (s) nodeSel.set(id, s); return { id, label, icon: ic, type, ...extra }; };
     const lights = level.entities.filter((e) => e.kind === 'light');
-    // блоки по типам: тип → клетки (до 400 на тип)
+    // blocks by type: type → cells (up to 400 per type)
     const byType = new Map<string, [number, number, number][]>();
     let nBlocks = 0;
     level.forEach((x, y, z, id) => { const n = level.palette[id]; let a = byType.get(n); if (!a) byType.set(n, a = []); a.push([x, y, z]); nBlocks++; });
     const decorBy = new Map<string, DecorItem[]>();
     for (const d of level.decor) { const c = decorDef(d.name).category; let a = decorBy.get(c); if (!a) decorBy.set(c, a = []); a.push(d); }
-    return [node('root', level.name || 'Без имени', 'world', 'World', null, {
+    return [node('root', level.name || t('Unnamed'), 'world', 'World', null, {
       kids: () => [
-        node('world', 'Окружение', 'sun', 'Folder', WORLD_PARTS.map(([part]) => ({ t: 'world', part }) as Sel), {
+        node('world', t('Environment'), 'sun', 'Folder', WORLD_PARTS.map(([part]) => ({ t: 'world', part }) as Sel), {
           kids: () => WORLD_PARTS.map(([part, title, ic, type]) => node(`w:${part}`, part === 'weather' ? `${title}: ${WEATHER_TITLES[world.weather.kind]}` : title, ic, type, [{ t: 'world', part }],
             part === 'fog' ? { eye: { get: () => show.fog, set: (v) => { show.fog = v; } } } : part === 'weather' ? { eye: { get: () => show.weather, set: (v) => { show.weather = v; } } } : {})),
         }),
-        node('spawn', 'Точка появления', 'flag', 'PlayerStart', level.spawn ? [{ t: 'spawn' }] : null),
-        node('lights', 'Свет', 'light', 'Folder', lights.map((e) => ({ t: 'light', e }) as Sel), {
+        node('spawn', t('Spawn point'), 'flag', 'PlayerStart', level.spawn ? [{ t: 'spawn' }] : null),
+        node('lights', t('Lights'), 'light', 'Folder', lights.map((e) => ({ t: 'light', e }) as Sel), {
           count: lights.length, eye: { get: () => show.icons, set: (v) => { show.icons = v; } },
-          kids: () => lights.map((e) => { const d = lightData(e.data); return node(`l:${level.entities.indexOf(e)}`, d.name || (d.type === 'spot' ? 'Прожектор' : 'Точечный свет'), d.type === 'spot' ? 'spot' : 'light', d.type === 'spot' ? 'SpotLight' : 'PointLight', [{ t: 'light', e }]); }),
+          kids: () => lights.map((e) => { const d = lightData(e.data); return node(`l:${level.entities.indexOf(e)}`, d.name || (d.type === 'spot' ? t('Spotlight') : t('Point light')), d.type === 'spot' ? 'spot' : 'light', d.type === 'spot' ? 'SpotLight' : 'PointLight', [{ t: 'light', e }]); }),
         }),
-        node('lands', 'Ландшафт', 'land', 'Folder', lands().map((p) => ({ t: 'land', p }) as Sel), {
+        node('lands', t('Landscape'), 'land', 'Folder', lands().map((p) => ({ t: 'land', p }) as Sel), {
           count: lands().length,
-          kids: () => lands().map((p, i) => node(`n:${i}`, `Кусок ${p.w} × ${p.d}, ${p.layers} слоёв`, 'land', 'Landscape', [{ t: 'land', p }])),
+          kids: () => lands().map((p, i) => node(`n:${i}`, t('Piece {w} × {d}, {n} layers', { w: p.w, d: p.d, n: p.layers }), 'land', 'Landscape', [{ t: 'land', p }])),
         }),
-        node('decor', 'Декор', 'decor', 'Folder', null, {
+        node('decor', t('Decor'), 'decor', 'Folder', null, {
           count: level.decor.length, eye: { get: () => show.decor, set: (v) => { show.decor = v; } },
-          kids: () => [...decorBy].map(([cat, items]) => node(`dc:${cat}`, cat, 'folder', 'Folder', items.map((d) => ({ t: 'decor', d }) as Sel), {
+          kids: () => [...decorBy].map(([cat, items]) => node(`dc:${cat}`, t(cat), 'folder', 'Folder', items.map((d) => ({ t: 'decor', d }) as Sel), {
             count: items.length,
-            kids: () => items.map((d) => node(`d:${level.decor.indexOf(d)}`, decorDef(d.name).title, 'decor', 'Decor', [{ t: 'decor', d }])),
+            kids: () => items.map((d) => node(`d:${level.decor.indexOf(d)}`, t(decorDef(d.name).title), 'decor', 'Decor', [{ t: 'decor', d }])),
           })),
         }),
-        node('blocks', 'Блоки', 'cube', 'Folder', null, {
+        node('blocks', t('Blocks'), 'cube', 'Folder', null, {
           count: nBlocks,
           kids: () => [...byType].sort((a, b) => b[1].length - a[1].length).map(([name, cells]) => {
             const def = blockDef(name);
-            return node(`bt:${name}`, def.title, ICON_OF_BLOCK(def), 'BlockType', null, {
+            return node(`bt:${name}`, t(def.title), ICON_OF_BLOCK(def), 'BlockType', null, {
               count: cells.length, heavy: true,
               kids: () => cells.slice(0, 400).map(([x, y, z]) => node(`b:${x},${y},${z}`, `${x}, ${y}, ${z}`, 'block', def.name, [{ t: 'block', x, y, z }])),
             });
@@ -502,13 +503,13 @@ export function runEditor(): void {
     return [...cur, ...add.filter((s) => !have.has(selId(s)))];
   };
 
-  // ---------- правая панель: детали и настройки мира ----------
+  // ---------- right panel: details and world settings ----------
   const detTabs = h('div.ue-tabs');
   const detBody = h('div.ue-det-body');
   let detTab: 'details' | 'world' = 'details';
   detTabs.append(
-    h('div.ue-tab.on', { 'data-t': 'details', html: `${icon('info')}<span>Детали</span>`, onclick: () => setDetTab('details') }),
-    h('div.ue-tab', { 'data-t': 'world', html: `${icon('world')}<span>Настройки мира</span>`, onclick: () => setDetTab('world') }),
+    h('div.ue-tab.on', { 'data-t': 'details', html: `${icon('info')}<span>${t('Details')}</span>`, onclick: () => setDetTab('details') }),
+    h('div.ue-tab', { 'data-t': 'world', html: `${icon('world')}<span>${t('World settings')}</span>`, onclick: () => setDetTab('world') }),
   );
   detPanel.append(detTabs, detBody);
   const details = new PropGrid();
@@ -525,11 +526,11 @@ export function runEditor(): void {
     if (detTab === 'world') { worldSections(g, ['sun', 'sky', 'fog', 'weather', 'post'], true); g.refresh(); return; }
     if (!sel.length) {
       const b = level.getBounds();
-      g.section('Карта', 'world')
-        .text('Имя', () => level.name, (v) => { level.name = v; nameInput.value = v; dirtyAutosave = true; outliner.invalidate(); })
-        .info('Размер', () => b ? `${b.maxX - b.minX + 1} × ${b.maxY - b.minY + 1} × ${b.maxZ - b.minZ + 1} м` : 'пусто')
-        .info('Содержимое', () => `${blockCount()} блоков · ${level.decor.length} декора · ${level.entities.filter((e) => e.kind === 'light').length} света · ${lands().length} ландшафта`)
-        .note('Выбери объект во вьюпорте или в аутлайнере — здесь появятся его настройки. Окружение — во вкладке «Настройки мира».');
+      g.section(t('Map'), 'world')
+        .text(t('Name'), () => level.name, (v) => { level.name = v; nameInput.value = v; dirtyAutosave = true; outliner.invalidate(); })
+        .info(t('Size'), () => b ? t('{x} × {y} × {z} m', { x: b.maxX - b.minX + 1, y: b.maxY - b.minY + 1, z: b.maxZ - b.minZ + 1 }) : t('empty'))
+        .info(t('Contents'), () => t('{b} blocks · {d} decor · {l} lights · {n} landscape', { b: blockCount(), d: level.decor.length, l: level.entities.filter((e) => e.kind === 'light').length, n: lands().length }))
+        .note(t('Select an object in a viewport or in the outliner — its settings will appear here. The environment is in the "World settings" tab.'));
       g.refresh();
       return;
     }
@@ -543,9 +544,9 @@ export function runEditor(): void {
       else if (s.t === 'spawn') spawnDetails(g);
       else if (s.t === 'land') landDetails(g, s.p);
     } else {
-      g.section('Выделение', 'select').info('Объекты', () => selSummary());
-      g.buttons(['К выделенному', focusSel, 'focus'], ['Дублировать', duplicateSel, 'copy'], ['Удалить', deleteSel, 'trash']);
-      g.buttons(['Создать префаб', makePrefab, 'prefab']);
+      g.section(t('Selection'), 'select').info(t('Objects'), () => selSummary());
+      g.buttons([t('To the selection'), focusSel, 'focus'], [t('Duplicate'), duplicateSel, 'copy'], [t('Delete'), deleteSel, 'trash']);
+      g.buttons([t('Create prefab'), makePrefab, 'prefab']);
     }
     g.refresh();
   }
@@ -554,46 +555,46 @@ export function runEditor(): void {
     const cells = sel.filter((s): s is Extract<Sel, { t: 'block' }> => s.t === 'block');
     const one = cells.length === 1 ? cells[0] : null;
     if (one) {
-      g.section('Трансформация', 'move')
-        .vec3('Положение', () => [one.x, one.y, one.z], (v) => moveCells([one], [Math.round(v[0]) - one.x, Math.round(v[1]) - one.y, Math.round(v[2]) - one.z]), { step: 1 })
-        .select('Поворот', [['0', '0°'], ['1', '90°'], ['2', '180°'], ['3', '270°']], () => String(level.rotAt(one.x, one.y, one.z)) as '0', (v) => { beginBatch(); edit(one.x, one.y, one.z, level.nameAt(one.x, one.y, one.z), Number(v)); endBatch(); });
+      g.section(t('Transform'), 'move')
+        .vec3(t('Position'), () => [one.x, one.y, one.z], (v) => moveCells([one], [Math.round(v[0]) - one.x, Math.round(v[1]) - one.y, Math.round(v[2]) - one.z]), { step: 1 })
+        .select(t('Rotation'), [['0', '0°'], ['1', '90°'], ['2', '180°'], ['3', '270°']], () => String(level.rotAt(one.x, one.y, one.z)) as '0', (v) => { beginBatch(); edit(one.x, one.y, one.z, level.nameAt(one.x, one.y, one.z), Number(v)); endBatch(); });
     } else {
-      g.section('Выделение', 'select').info('Блоков', () => String(cells.length));
-      g.buttons(['Повернуть 90° вокруг Y', () => rotateSel('y'), 'rotate'], ['вокруг X', () => rotateSel('x')], ['вокруг Z', () => rotateSel('z')]);
+      g.section(t('Selection'), 'select').info(t('Blocks'), () => String(cells.length));
+      g.buttons([t('Rotate 90° around Y'), () => rotateSel('y'), 'rotate'], [t('around X'), () => rotateSel('x')], [t('around Z'), () => rotateSel('z')]);
     }
     const names = [...new Set(cells.map((c) => level.nameAt(c.x, c.y, c.z)))];
     const def = blockDef(names[0]);
-    g.section('Блок', 'cube')
-      .select('Тип', blockOptions(), () => (names.length === 1 ? names[0] : '') , (v) => { beginBatch(); for (const c of cells) edit(c.x, c.y, c.z, v, level.rotAt(c.x, c.y, c.z)); endBatch(); toast(`Заменено: ${cells.length}`); buildDetails(); })
-      .info('Категория', () => names.length === 1 ? def.category : `${names.length} типов`)
-      .info('Столкновение', () => names.length === 1 ? (def.collide ? `${def.collide} м` : 'проходим') : '—')
-      .info('Свойства', () => names.length === 1 ? [def.full && 'полный куб', def.rotatable && 'поворачивается', def.stairs && 'ступени', def.light && 'светит', def.bakedLight && 'запечённый свет', def.natural && 'природная земля'].filter(Boolean).join(' · ') || '—' : '—');
-    g.buttons(['Взять в кисть', () => { setCurrent(names[0]); toast(`Кисть: ${def.title}`); }, 'brush'], ['Все такие', selectSameBlocks, 'select']);
-    g.buttons(['К выделенному', focusSel, 'focus'], ['Дублировать', duplicateSel, 'copy'], ['Удалить', deleteSel, 'trash']);
+    g.section(t('Block'), 'cube')
+      .select(t('Type'), blockOptions(), () => (names.length === 1 ? names[0] : '') , (v) => { beginBatch(); for (const c of cells) edit(c.x, c.y, c.z, v, level.rotAt(c.x, c.y, c.z)); endBatch(); toast(t('Replaced: {n}', { n: cells.length })); buildDetails(); })
+      .info(t('Category'), () => names.length === 1 ? t(def.category) : t('{n} types', { n: names.length }))
+      .info(t('Collision'), () => names.length === 1 ? (def.collide ? t('{v} m', { v: def.collide }) : t('walkable')) : '—')
+      .info(t('Properties'), () => names.length === 1 ? [def.full && t('full cube'), def.rotatable && t('rotatable'), def.stairs && t('stairs'), def.light && t('emits light'), def.bakedLight && t('baked light'), def.natural && t('natural ground')].filter(Boolean).join(' · ') || '—' : '—');
+    g.buttons([t('Pick as brush'), () => { setCurrent(names[0]); toast(t('Brush: {title}', { title: t(def.title) })); }, 'brush'], [t('All like this'), selectSameBlocks, 'select']);
+    g.buttons([t('To the selection'), focusSel, 'focus'], [t('Duplicate'), duplicateSel, 'copy'], [t('Delete'), deleteSel, 'trash']);
   }
   function blockOptions(): [string, string][] {
-    const out: [string, string][] = [['', '— разные —']];
-    for (const cat of CATEGORIES) for (const b of BLOCKS) if (b.category === cat && b.name !== 'air') out.push([b.name, `${cat}: ${b.title}`]);
+    const out: [string, string][] = [['', t('— mixed —')]];
+    for (const cat of CATEGORIES) for (const b of BLOCKS) if (b.category === cat && b.name !== 'air') out.push([b.name, `${t(cat)}: ${t(b.title)}`]);
     return out;
   }
   function decorDetails(g: PropGrid): void {
     const items = sel.filter((s): s is Extract<Sel, { t: 'decor' }> => s.t === 'decor').map((s) => s.d);
     const d = items[0];
     if (items.length === 1) {
-      g.section('Трансформация', 'move')
-        .vec3('Положение', () => [...d.pos] as [number, number, number], (v) => changeDecor(d, (x) => { x.pos = v.map((n) => Math.round(n * 16) / 16) as [number, number, number]; delete x.on; }, 'decor-pos'), { step: 1 / 16, digits: 3 })
-        .vec3('Поворот, °', () => [d.rot?.[0] ?? 0, d.rot?.[1] ?? 0, d.rot?.[2] ?? 0], (v) => changeDecor(d, (x) => setDecorRot(x, v), 'decor-rot'), { step: 1, digits: 1 })
-        .note('Поворот: X — рыск (вокруг вертикали), Y — наклон, Z — крен');
-    } else g.section('Выделение', 'select').info('Предметов', () => String(items.length));
+      g.section(t('Transform'), 'move')
+        .vec3(t('Position'), () => [...d.pos] as [number, number, number], (v) => changeDecor(d, (x) => { x.pos = v.map((n) => Math.round(n * 16) / 16) as [number, number, number]; delete x.on; }, 'decor-pos'), { step: 1 / 16, digits: 3 })
+        .vec3(t('Rotation, °'), () => [d.rot?.[0] ?? 0, d.rot?.[1] ?? 0, d.rot?.[2] ?? 0], (v) => changeDecor(d, (x) => setDecorRot(x, v), 'decor-rot'), { step: 1, digits: 1 })
+        .note(t('Rotation: X — yaw (around the vertical), Y — pitch, Z — roll'));
+    } else g.section(t('Selection'), 'select').info(t('Items'), () => String(items.length));
     const def = decorDef(d.name);
-    g.section('Декор', 'decor')
-      .select('Тип', DECOR.map((x) => [x.name, `${x.category}: ${x.title}`] as [string, string]), () => d.name, (v) => { for (const it of items) changeDecor(it, (x) => { x.name = v; }); buildDetails(); })
-      .info('Крепление', () => def.anchor === 'floor' ? 'на пол' : def.anchor === 'wall' ? 'на стену' : 'к потолку')
-      .info('Опора', () => d.on ? `клетка ${d.on.join(', ')} — стёрли её, уйдёт и предмет` : 'свободно')
-      .info('Свет', () => def.light ? `${def.light.baked ? 'запечённый' : 'настоящий'}, ${def.light.intensity} × ${def.light.dist} м` : 'нет')
-      .info('Столкновение', () => def.solid ? def.solid.map((b) => `${b.w}×${b.d}×${b.h}`).join(', ') : 'нет');
-    g.buttons(['Взять в кисть', () => { setDecor(d.name); setMode('decor'); }, 'brush'], ['К выделенному', focusSel, 'focus']);
-    g.buttons(['Дублировать', duplicateSel, 'copy'], ['Удалить', deleteSel, 'trash']);
+    g.section(t('Decor'), 'decor')
+      .select(t('Type'), DECOR.map((x) => [x.name, `${t(x.category)}: ${t(x.title)}`] as [string, string]), () => d.name, (v) => { for (const it of items) changeDecor(it, (x) => { x.name = v; }); buildDetails(); })
+      .info(t('Anchor'), () => def.anchor === 'floor' ? t('on the floor') : def.anchor === 'wall' ? t('on a wall') : t('on the ceiling'))
+      .info(t('Support'), () => d.on ? t('cell {c} — erase it and the item goes too', { c: d.on.join(', ') }) : t('free'))
+      .info(t('Light'), () => def.light ? `${def.light.baked ? t('baked') : t('real')}, ${def.light.intensity} × ${def.light.dist} ${t('m')}` : t('none'))
+      .info(t('Collision'), () => def.solid ? def.solid.map((b) => `${b.w}×${b.d}×${b.h}`).join(', ') : t('none'));
+    g.buttons([t('Pick as brush'), () => { setDecor(d.name); setMode('decor'); }, 'brush'], [t('To the selection'), focusSel, 'focus']);
+    g.buttons([t('Duplicate'), duplicateSel, 'copy'], [t('Delete'), deleteSel, 'trash']);
   }
   function lightDetails(g: PropGrid): void {
     const ents = sel.filter((s): s is Extract<Sel, { t: 'light' }> => s.t === 'light').map((s) => s.e);
@@ -601,115 +602,115 @@ export function runEditor(): void {
     const d = () => lightData(e.data);
     const setD = (fn: (d: LightData) => void, key: string) => { for (const x of ents) changeEnt(x, (en) => { const ld = lightData(en.data); fn(ld); en.data = { ...ld }; }, key); };
     if (ents.length === 1) {
-      g.section('Трансформация', 'move')
-        .vec3('Положение', () => [e.x, e.y, e.z], (v) => changeEnt(e, (en) => { en.x = v[0]; en.y = v[1]; en.z = v[2]; }, 'light-pos'), { step: 0.25, digits: 2 });
+      g.section(t('Transform'), 'move')
+        .vec3(t('Position'), () => [e.x, e.y, e.z], (v) => changeEnt(e, (en) => { en.x = v[0]; en.y = v[1]; en.z = v[2]; }, 'light-pos'), { step: 0.25, digits: 2 });
     }
-    g.section('Свет', 'light')
-      .text('Имя', () => d().name ?? '', (v) => setD((x) => { x.name = v || undefined; }, 'light-name'))
-      .select('Тип', [['point', 'Точечный'], ['spot', 'Прожектор']], () => d().type, (v) => { setD((x) => { x.type = v; }, 'light-type'); buildDetails(); })
-      .color('Цвет', () => d().color, (v) => setD((x) => { x.color = v; }, 'light-color'))
-      .num('Яркость', () => d().intensity, (v) => setD((x) => { x.intensity = v; }, 'light-i'), { min: 0, max: 40, step: 0.1, slider: true })
-      .num('Дальность, м', () => d().distance, (v) => setD((x) => { x.distance = v; }, 'light-dist'), { min: 1, max: 40, step: 0.5, slider: true })
-      .bool('Тени', () => d().shadows, (v) => setD((x) => { x.shadows = v; }, 'light-sh'));
+    g.section(t('Light'), 'light')
+      .text(t('Name'), () => d().name ?? '', (v) => setD((x) => { x.name = v || undefined; }, 'light-name'))
+      .select(t('Type'), [['point', t('Point')], ['spot', t('Spotlight')]], () => d().type, (v) => { setD((x) => { x.type = v; }, 'light-type'); buildDetails(); })
+      .color(t('Colour'), () => d().color, (v) => setD((x) => { x.color = v; }, 'light-color'))
+      .num(t('Intensity'), () => d().intensity, (v) => setD((x) => { x.intensity = v; }, 'light-i'), { min: 0, max: 40, step: 0.1, slider: true })
+      .num(t('Range, m'), () => d().distance, (v) => setD((x) => { x.distance = v; }, 'light-dist'), { min: 1, max: 40, step: 0.5, slider: true })
+      .bool(t('Shadows'), () => d().shadows, (v) => setD((x) => { x.shadows = v; }, 'light-sh'));
     if (d().type === 'spot') {
-      g.num('Конус, °', () => d().angle, (v) => setD((x) => { x.angle = v; }, 'light-angle'), { min: 5, max: 85, step: 1, slider: true })
-        .num('Рыск, °', () => e.rot ?? 0, (v) => { for (const x of ents) changeEnt(x, (en) => { en.rot = v; }, 'light-yaw'); }, { min: -180, max: 180, step: 1, slider: true })
-        .num('Наклон, °', () => d().pitch, (v) => setD((x) => { x.pitch = v; }, 'light-pitch'), { min: -90, max: 45, step: 1, slider: true });
+      g.num(t('Cone, °'), () => d().angle, (v) => setD((x) => { x.angle = v; }, 'light-angle'), { min: 5, max: 85, step: 1, slider: true })
+        .num(t('Yaw, °'), () => e.rot ?? 0, (v) => { for (const x of ents) changeEnt(x, (en) => { en.rot = v; }, 'light-yaw'); }, { min: -180, max: 180, step: 1, slider: true })
+        .num(t('Pitch, °'), () => d().pitch, (v) => setD((x) => { x.pitch = v; }, 'light-pitch'), { min: -90, max: 45, step: 1, slider: true });
     }
-    g.buttons(['К выделенному', focusSel, 'focus'], ['Дублировать', duplicateSel, 'copy'], ['Удалить', deleteSel, 'trash']);
+    g.buttons([t('To the selection'), focusSel, 'focus'], [t('Duplicate'), duplicateSel, 'copy'], [t('Delete'), deleteSel, 'trash']);
   }
   function spawnDetails(g: PropGrid): void {
     const sp = level.spawn!;
-    g.section('Точка появления', 'flag')
-      .vec3('Положение', () => [sp[0], sp[1], sp[2]], (v) => setSpawn([Math.round(v[0]), Math.round(v[1]), Math.round(v[2])], spawnYaw()), { step: 1 })
-      .num('Взгляд, °', () => spawnYaw(), (v) => setSpawn(level.spawn!, v), { min: -180, max: 180, step: 15, slider: true })
-      .note('Герой появляется в этой клетке и смотрит по стрелке. P в режиме «Блоки» — поставить под курсором.');
-    g.buttons(['К точке', focusSel, 'focus'], ['Играть отсюда', play, 'play']);
+    g.section(t('Spawn point'), 'flag')
+      .vec3(t('Position'), () => [sp[0], sp[1], sp[2]], (v) => setSpawn([Math.round(v[0]), Math.round(v[1]), Math.round(v[2])], spawnYaw()), { step: 1 })
+      .num(t('Facing, °'), () => spawnYaw(), (v) => setSpawn(level.spawn!, v), { min: -180, max: 180, step: 15, slider: true })
+      .note(t('The hero appears in this cell and looks along the arrow. P in "Blocks" mode — place under the cursor.'));
+    g.buttons([t('To the point'), focusSel, 'focus'], [t('Play from here'), play, 'play']);
   }
   function landDetails(g: PropGrid, p: LandPiece): void {
     const set = (k: keyof LandParams, v: number) => changeLand(p, { ...landParams(p), [k]: Math.round(v) });
-    g.section('Трансформация', 'move')
-      .vec3('Центр', () => [p.x, p.y, p.z], (v) => changeLand(p, { ...landParams(p), x: Math.round(v[0]), y: Math.round(v[1]), z: Math.round(v[2]) }), { step: 1 });
-    g.section('Ландшафт', 'land')
-      .num('Размер X', () => p.w, (v) => set('w', v), { min: 6, max: 64, step: 1, slider: true })
-      .num('Размер Z', () => p.d, (v) => set('d', v), { min: 6, max: 64, step: 1, slider: true })
-      .num('Слои × 0,5 м', () => p.layers, (v) => set('layers', v), { min: 1, max: 10, step: 1, slider: true })
-      .num('Крупность', () => p.scale, (v) => set('scale', v), { min: 8, max: 40, step: 1, slider: true })
-      .num('Камень, %', () => p.stone, (v) => set('stone', v), { min: 0, max: 80, step: 5, slider: true })
-      .info('Клеток', () => String(p.cells.length));
-    g.buttons(['Случайно: края и углы', () => set('seed', 1 + Math.floor(Math.random() * 1e6)), 'turntable'], ['Удалить', () => { removeLand(p); select([]); }, 'trash']);
+    g.section(t('Transform'), 'move')
+      .vec3(t('Centre'), () => [p.x, p.y, p.z], (v) => changeLand(p, { ...landParams(p), x: Math.round(v[0]), y: Math.round(v[1]), z: Math.round(v[2]) }), { step: 1 });
+    g.section(t('Landscape'), 'land')
+      .num(t('Size X'), () => p.w, (v) => set('w', v), { min: 6, max: 64, step: 1, slider: true })
+      .num(t('Size Z'), () => p.d, (v) => set('d', v), { min: 6, max: 64, step: 1, slider: true })
+      .num(t('Layers × 0.5 m'), () => p.layers, (v) => set('layers', v), { min: 1, max: 10, step: 1, slider: true })
+      .num(t('Coarseness'), () => p.scale, (v) => set('scale', v), { min: 8, max: 40, step: 1, slider: true })
+      .num(t('Stone, %'), () => p.stone, (v) => set('stone', v), { min: 0, max: 80, step: 5, slider: true })
+      .info(t('Cells'), () => String(p.cells.length));
+    g.buttons([t('Random: edges and corners'), () => set('seed', 1 + Math.floor(Math.random() * 1e6)), 'turntable'], [t('Delete'), () => { removeLand(p); select([]); }, 'trash']);
   }
-  /** Разделы настроек мира; all — вкладка «Настройки мира» (с наборами), иначе — выбранные узлы аутлайнера */
+  /** World settings sections; all — the "World settings" tab (with presets), otherwise — the selected outliner nodes */
   function worldSections(g: PropGrid, parts: WorldPart[], all: boolean): void {
     const w = () => world;
     const num = (label: string, get: () => number, set: (v: number) => void, min: number, max: number, step: number, key: string) => g.num(label, get, (v) => changeWorld(() => set(v), key), { min, max, step, slider: true });
     const col = (label: string, get: () => string, set: (v: string) => void, key: string) => g.color(label, get, (v) => changeWorld(() => set(v), key));
     if (all) {
-      g.section('Набор окружения', 'world');
+      g.section(t('Environment preset'), 'world');
       const wrap = h('div.ue-presets');
-      for (const [, p] of Object.entries(WORLD_PRESETS)) wrap.append(h('button.ue-btn', { text: p.title, onclick: () => { changeWorld((x) => Object.assign(x, mergeWorld(WORLD_DEFAULTS, p.patch)), 'preset'); buildDetails(); toast(`Окружение: ${p.title}`); } }));
+      for (const [, p] of Object.entries(WORLD_PRESETS)) wrap.append(h('button.ue-btn', { text: p.title, onclick: () => { changeWorld((x) => Object.assign(x, mergeWorld(WORLD_DEFAULTS, p.patch)), 'preset'); buildDetails(); toast(t('Environment: {title}', { title: p.title })); } }));
       g.custom(wrap);
-      g.buttons(['Сбросить всё', () => { changeWorld((x) => Object.assign(x, mergeWorld(WORLD_DEFAULTS, {})), 'preset'); buildDetails(); }, 'undo']);
+      g.buttons([t('Reset everything'), () => { changeWorld((x) => Object.assign(x, mergeWorld(WORLD_DEFAULTS, {})), 'preset'); buildDetails(); }, 'undo']);
     }
     for (const part of parts) {
       if (part === 'sun') {
-        g.section('Солнце', 'sun');
-        col('Цвет', () => w().sun.color, (v) => { world.sun.color = v; }, 'sun-c');
-        num('Яркость', () => w().sun.intensity, (v) => { world.sun.intensity = v; }, 0, 6, 0.05, 'sun-i');
-        num('Высота, °', () => w().sun.elevation, (v) => { world.sun.elevation = v; }, 2, 90, 1, 'sun-e');
-        num('Азимут, °', () => w().sun.azimuth, (v) => { world.sun.azimuth = v; }, 0, 360, 1, 'sun-a');
-        g.bool('Тени', () => w().sun.shadows, (v) => changeWorld(() => { world.sun.shadows = v; }, 'sun-s'));
-        g.note('Стрелка во вьюпорте показывает, откуда светит солнце.');
+        g.section(t('Sun'), 'sun');
+        col(t('Colour'), () => w().sun.color, (v) => { world.sun.color = v; }, 'sun-c');
+        num(t('Intensity'), () => w().sun.intensity, (v) => { world.sun.intensity = v; }, 0, 6, 0.05, 'sun-i');
+        num(t('Elevation, °'), () => w().sun.elevation, (v) => { world.sun.elevation = v; }, 2, 90, 1, 'sun-e');
+        num(t('Azimuth, °'), () => w().sun.azimuth, (v) => { world.sun.azimuth = v; }, 0, 360, 1, 'sun-a');
+        g.bool(t('Shadows'), () => w().sun.shadows, (v) => changeWorld(() => { world.sun.shadows = v; }, 'sun-s'));
+        g.note(t('The arrow in the viewport shows where the sun shines from.'));
       } else if (part === 'sky') {
-        g.section('Небо и глобальное освещение', 'sky');
-        col('Цвет неба (фон)', () => w().sky.color, (v) => { world.sky.color = v; }, 'sky-c');
-        col('Свет неба сверху', () => w().sky.hemiSky, (v) => { world.sky.hemiSky = v; }, 'sky-hs');
-        col('Отражённый от земли', () => w().sky.hemiGround, (v) => { world.sky.hemiGround = v; }, 'sky-hg');
-        num('Сила неба (GI)', () => w().sky.hemi, (v) => { world.sky.hemi = v; }, 0, 5, 0.05, 'sky-h');
-        num('Заполняющий свет', () => w().sky.ambient, (v) => { world.sky.ambient = v; }, 0, 2, 0.01, 'sky-a');
+        g.section(t('Sky and global lighting'), 'sky');
+        col(t('Sky colour (background)'), () => w().sky.color, (v) => { world.sky.color = v; }, 'sky-c');
+        col(t('Sky light from above'), () => w().sky.hemiSky, (v) => { world.sky.hemiSky = v; }, 'sky-hs');
+        col(t('Bounced from the ground'), () => w().sky.hemiGround, (v) => { world.sky.hemiGround = v; }, 'sky-hg');
+        num(t('Sky strength (GI)'), () => w().sky.hemi, (v) => { world.sky.hemi = v; }, 0, 5, 0.05, 'sky-h');
+        num(t('Fill light'), () => w().sky.ambient, (v) => { world.sky.ambient = v; }, 0, 2, 0.01, 'sky-a');
       } else if (part === 'fog') {
-        g.section('Дымка', 'fog');
-        g.bool('Включена', () => w().fog.enabled, (v) => changeWorld(() => { world.fog.enabled = v; }, 'fog-on'));
-        col('Цвет', () => w().fog.color, (v) => { world.fog.color = v; }, 'fog-c');
-        num('Начало, м', () => w().fog.near, (v) => { world.fog.near = Math.min(v, world.fog.far - 1); }, 0, 150, 1, 'fog-n');
-        num('Конец, м', () => w().fog.far, (v) => { world.fog.far = Math.max(v, world.fog.near + 1); }, 5, 300, 1, 'fog-f');
+        g.section(t('Haze'), 'fog');
+        g.bool(t('Enabled'), () => w().fog.enabled, (v) => changeWorld(() => { world.fog.enabled = v; }, 'fog-on'));
+        col(t('Colour'), () => w().fog.color, (v) => { world.fog.color = v; }, 'fog-c');
+        num(t('Start, m'), () => w().fog.near, (v) => { world.fog.near = Math.min(v, world.fog.far - 1); }, 0, 150, 1, 'fog-n');
+        num(t('End, m'), () => w().fog.far, (v) => { world.fog.far = Math.max(v, world.fog.near + 1); }, 5, 300, 1, 'fog-f');
       } else if (part === 'weather') {
-        g.section('Погода', 'rain');
-        g.select('Погода', (Object.keys(WEATHER_TITLES) as WeatherKind[]).map((k) => [k, WEATHER_TITLES[k]] as [WeatherKind, string]), () => w().weather.kind, (v) => changeWorld(() => { world.weather.kind = v; }, 'wx-k'));
-        num('Сила', () => w().weather.intensity, (v) => { world.weather.intensity = v; }, 0, 1, 0.05, 'wx-i');
-        num('Ветер, м/с', () => w().weather.wind, (v) => { world.weather.wind = v; }, -10, 10, 0.1, 'wx-w');
-        g.note('Гроза — сильный дождь и вспышки молний. Частицы видны в перспективе.');
+        g.section(t('Weather'), 'rain');
+        g.select(t('Weather'), (Object.keys(WEATHER_TITLES) as WeatherKind[]).map((k) => [k, WEATHER_TITLES[k]] as [WeatherKind, string]), () => w().weather.kind, (v) => changeWorld(() => { world.weather.kind = v; }, 'wx-k'));
+        num(t('Strength'), () => w().weather.intensity, (v) => { world.weather.intensity = v; }, 0, 1, 0.05, 'wx-i');
+        num(t('Wind, m/s'), () => w().weather.wind, (v) => { world.weather.wind = v; }, -10, 10, 0.1, 'wx-w');
+        g.note(t('Storm — heavy rain and lightning flashes. Particles are visible in perspective.'));
       } else if (part === 'post') {
-        g.section('Постобработка', 'post');
-        g.bool('Включена', () => w().post.enabled, (v) => changeWorld(() => { world.post.enabled = v; }, 'pp-on'));
-        num('Экспозиция', () => w().post.exposure, (v) => { world.post.exposure = v; }, 0.3, 2.5, 0.01, 'pp-exp');
-        num('Bloom: сила', () => w().post.bloom, (v) => { world.post.bloom = v; }, 0, 2, 0.01, 'pp-b');
-        num('Bloom: радиус', () => w().post.bloomRadius, (v) => { world.post.bloomRadius = v; }, 0, 1, 0.01, 'pp-br');
-        num('Bloom: порог', () => w().post.bloomThreshold, (v) => { world.post.bloomThreshold = v; }, 0, 1.5, 0.01, 'pp-bt');
-        num('AO: сила', () => w().post.ao, (v) => { world.post.ao = v; }, 0, 1, 0.01, 'pp-ao');
-        num('AO: радиус', () => w().post.aoRadius, (v) => { world.post.aoRadius = v; }, 0.1, 2, 0.01, 'pp-aor');
-        num('Насыщенность', () => w().post.saturation, (v) => { world.post.saturation = v; }, 0, 2, 0.01, 'pp-sat');
-        num('Контраст', () => w().post.contrast, (v) => { world.post.contrast = v; }, 0.5, 1.5, 0.01, 'pp-con');
-        num('Виньетка', () => w().post.vignette, (v) => { world.post.vignette = v; }, 0, 0.8, 0.01, 'pp-vig');
-        col('Тон теней', () => w().post.shadowTint, (v) => { world.post.shadowTint = v; }, 'pp-st');
-        col('Тон светлого', () => w().post.highTint, (v) => { world.post.highTint = v; }, 'pp-ht');
-        num('Сила тонировки', () => w().post.tintAmount, (v) => { world.post.tintAmount = v; }, 0, 0.3, 0.005, 'pp-ta');
-        g.note('Постобработка видна в главном вьюпорте (перспектива, «С освещением»).');
+        g.section(t('Post-processing'), 'post');
+        g.bool(t('Enabled'), () => w().post.enabled, (v) => changeWorld(() => { world.post.enabled = v; }, 'pp-on'));
+        num(t('Exposure'), () => w().post.exposure, (v) => { world.post.exposure = v; }, 0.3, 2.5, 0.01, 'pp-exp');
+        num(t('Bloom: strength'), () => w().post.bloom, (v) => { world.post.bloom = v; }, 0, 2, 0.01, 'pp-b');
+        num(t('Bloom: radius'), () => w().post.bloomRadius, (v) => { world.post.bloomRadius = v; }, 0, 1, 0.01, 'pp-br');
+        num(t('Bloom: threshold'), () => w().post.bloomThreshold, (v) => { world.post.bloomThreshold = v; }, 0, 1.5, 0.01, 'pp-bt');
+        num(t('AO: strength'), () => w().post.ao, (v) => { world.post.ao = v; }, 0, 1, 0.01, 'pp-ao');
+        num(t('AO: radius'), () => w().post.aoRadius, (v) => { world.post.aoRadius = v; }, 0.1, 2, 0.01, 'pp-aor');
+        num(t('Saturation'), () => w().post.saturation, (v) => { world.post.saturation = v; }, 0, 2, 0.01, 'pp-sat');
+        num(t('Contrast'), () => w().post.contrast, (v) => { world.post.contrast = v; }, 0.5, 1.5, 0.01, 'pp-con');
+        num(t('Vignette'), () => w().post.vignette, (v) => { world.post.vignette = v; }, 0, 0.8, 0.01, 'pp-vig');
+        col(t('Shadow tint'), () => w().post.shadowTint, (v) => { world.post.shadowTint = v; }, 'pp-st');
+        col(t('Highlight tint'), () => w().post.highTint, (v) => { world.post.highTint = v; }, 'pp-ht');
+        num(t('Tint amount'), () => w().post.tintAmount, (v) => { world.post.tintAmount = v; }, 0, 0.3, 0.005, 'pp-ta');
+        g.note(t('Post-processing is visible in the main viewport (perspective, "Lit").'));
       }
     }
   }
 
-  // ---------- строка состояния ----------
+  // ---------- status bar ----------
   const stCursor = h('span.ue-st-v');
   const stFps = h('span.ue-st-v');
   const stCount = h('span.ue-st-v');
   status.append(
-    h('button.ue-st-btn', { html: `${icon('prefab')}<span>Префабы</span>`, onclick: () => { left.hidden = !left.hidden; root.classList.toggle('no-left', left.hidden); } }),
-    h('button.ue-st-btn', { html: `${icon('info')}<span>Журнал</span>`, onclick: showLog }),
+    h('button.ue-st-btn', { html: `${icon('prefab')}<span>${t('Prefabs')}</span>`, onclick: () => { left.hidden = !left.hidden; root.classList.toggle('no-left', left.hidden); } }),
+    h('button.ue-st-btn', { html: `${icon('info')}<span>${t('Log')}</span>`, onclick: showLog }),
     h('span.ue-st-sep'), stCount, h('span.ue-grow'), stCursor, h('span.ue-st-sep'), stFps,
   );
 
-  // ---------- сцена: сетки, курсоры, иконки ----------
+  // ---------- scene: grids, cursors, icons ----------
   const gridMat = (o: number) => { const m = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: o, depthWrite: false }); return m; };
   const mkGrid = (o: number) => { const g = new THREE.GridHelper(200, 200, '#ffffff', '#ffffff'); g.material = gridMat(o); return g; };
   const gridXZ = mkGrid(0.14); gridXZ.position.set(-0.5, 0.01, -0.5);
@@ -725,9 +726,9 @@ export function runEditor(): void {
   cornerBox.visible = hoverBox.visible = false;
   scene.add(cursorBox, hitBox, cornerBox, hoverBox);
 
-  /** Иконки служебных объектов (свет, точка появления) — спрайты, по ним можно кликнуть */
+  /** Icons of service objects (lights, spawn point) — sprites, clickable */
   const helpers = new THREE.Group();
-  helpers.name = 'Иконки';
+  helpers.name = 'Icons';
   scene.add(helpers);
   const iconTex = new Map<string, THREE.Texture>();
   function iconSprite(kind: 'point' | 'spot' | 'spawn', color = '#ffd25a'): THREE.Sprite {
@@ -768,12 +769,12 @@ export function runEditor(): void {
   spawnMark.add(spawnIcon, spawnBody, spawnYawG);
   spawnIcon.userData.pick = { t: 'spawn' } satisfies Sel;
   helpers.add(spawnMark);
-  /** Стрелка солнца — видна, когда выбран раздел «Солнце» */
+  /** Sun arrow — visible when the "Sun" section is selected */
   const sunArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 8, 0xffd25a, 1.6, 0.8);
   sunArrow.visible = false;
   scene.add(sunArrow);
 
-  // поставленный свет: сущности kind 'light' → свет three + иконка
+  // placed lights: entities of kind 'light' → three.js light + icon
   const entObjs = new Map<LevelEntity, { light: THREE.PointLight | THREE.SpotLight; icon: THREE.Sprite }>();
   let entBuilt = -1;
   function syncEntities(): void {
@@ -799,9 +800,9 @@ export function runEditor(): void {
   }
   const spawnYaw = (): number => (level.meta.spawnYaw as number | undefined) ?? 0;
 
-  // ---------- подсветка выделения ----------
+  // ---------- selection highlight ----------
   const selFx = new THREE.Group();
-  selFx.name = 'Выделение';
+  selFx.name = 'Selection';
   scene.add(selFx);
   const selLine = new THREE.LineBasicMaterial({ color: '#f5a524', depthTest: false, transparent: true, toneMapped: false });
   const selFill = new THREE.MeshBasicMaterial({ color: '#f5a524', transparent: true, opacity: 0.14, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 });
@@ -846,7 +847,7 @@ export function runEditor(): void {
     }
     placePivot();
   }
-  /** Габариты предмета декора с поворотом */
+  /** Bounds of a decor item with rotation */
   function decorBox(d: DecorItem): THREE.Box3 {
     const def = decorDef(d.name);
     const box = new THREE.Box3();
@@ -861,9 +862,9 @@ export function runEditor(): void {
     return box.expandByScalar(0.03);
   }
 
-  // ---------- гизмо: перенос, поворот, размер ----------
+  // ---------- gizmo: translate, rotate, scale ----------
   const pivot = new THREE.Object3D();
-  pivot.name = 'Гизмо';
+  pivot.name = 'Gizmo';
   scene.add(pivot);
   const tcs = vps.list.map((vp) => {
     const tc = new TransformControls(vp.camera, vp.el);
@@ -872,7 +873,7 @@ export function runEditor(): void {
     tc.addEventListener('dragging-changed', (e) => { vp.controls.enabled = !e.value; });
     tc.addEventListener('mouseDown', () => { pivotStart.copy(pivot.matrix); pivotStartPos.copy(pivot.position); });
     tc.addEventListener('objectChange', () => {
-      // подсветка едет за гизмо — видно, куда встанет
+      // the highlight follows the gizmo — shows where it will land
       pivot.updateMatrix();
       selFx.matrix.copy(pivot.matrix).multiply(pivotStart.clone().invert());
       selFx.matrixWorldNeedsUpdate = true;
@@ -881,7 +882,7 @@ export function runEditor(): void {
     return tc;
   });
   const pivotStart = new THREE.Matrix4(), pivotStartPos = new THREE.Vector3();
-  /** Центр поворота блоков — центр клетки; переноса — низ клетки (шаг сетки привязан к целым) */
+  /** Rotation centre of blocks — the cell centre; translation — the cell bottom (grid step snapped to integers) */
   function placePivot(): void {
     pivot.quaternion.identity(); pivot.scale.set(1, 1, 1);
     const c = selCenter();
@@ -913,7 +914,7 @@ export function runEditor(): void {
       tc.setTranslationSnap(blocks ? 1 : snap.grid ? snap.gridStep : null);
       tc.setRotationSnap(blocks && sel.some((s) => s.t === 'block') ? Math.PI / 2 : snap.rotOn ? THREE.MathUtils.degToRad(snap.rotStep) : null);
       tc.setScaleSnap(blocks ? 0.25 : null);
-      // поворот блоков и точки появления — только целыми четвертями; у точки — только вокруг вертикали
+      // blocks and the spawn point rotate only by whole quarters; the point — only around the vertical
       const spawnOnly = sel.every((s) => s.t === 'spawn' || s.t === 'land');
       tc.showX = tc.showZ = !(tool === 'rotate' && spawnOnly);
       tc.showY = true;
@@ -921,7 +922,7 @@ export function runEditor(): void {
   }
   function setTool(t: Tool): void { tool = t; placePivot(); refreshToolbar(); }
 
-  /** Отпустили гизмо — применить перенос, поворот или размер к выделенному одной правкой */
+  /** Gizmo released — apply the translation, rotation or scale to the selection as one edit */
   function commitGizmo(): void {
     pivot.updateMatrix();
     const d = pivot.position.clone().sub(pivotStartPos);
@@ -932,7 +933,7 @@ export function runEditor(): void {
     const c = pivotStartPos.clone();
     const R = new THREE.Matrix4().makeRotationFromQuaternion(q);
     beginBatch();
-    // блоки: перенос целыми клетками, поворот — четвертями вокруг центра клетки
+    // blocks: translation by whole cells, rotation — by quarters around the cell centre
     const cells = sel.filter((s): s is Extract<Sel, { t: 'block' }> => s.t === 'block');
     if (cells.length && (moved || turned)) {
       const di: [number, number, number] = [Math.round(d.x), Math.round(d.y), Math.round(d.z)];
@@ -982,12 +983,12 @@ export function runEditor(): void {
     afterSelEdit();
   }
   const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
-  /** Поворот гизмо → целая матрица (четверти оборота) */
+  /** Gizmo rotation → integer matrix (quarter turns) */
   function snapRot(R: THREE.Matrix4): THREE.Matrix4 {
     const e = R.elements.map((v) => Math.round(v));
     return new THREE.Matrix4().fromArray(e);
   }
-  /** Сколько четвертей поворота вокруг вертикали даёт матрица (для поворота блоков, 90° переводит +X в +Z) */
+  /** How many quarter turns around the vertical the matrix gives (for block rotation, 90° turns +X into +Z) */
   function yawSteps(R: THREE.Matrix4): number {
     const v = new THREE.Vector3(1, 0, 0).applyMatrix4(R);
     if (Math.abs(v.y) > 0.5) return 0;
@@ -999,11 +1000,11 @@ export function runEditor(): void {
     if (r.length === 1 && r[0] === 0) delete x.rot; else x.rot = r;
   }
 
-  /** Перенести клетки на d (одной правкой; with — вместе с прикреплённым декором) */
+  /** Move cells by d (as one edit; with — together with attached decor) */
   function moveCells(cells: Extract<Sel, { t: 'block' }>[], d: [number, number, number], withDecor = true): void {
     transformCells(cells, new THREE.Matrix4(), new THREE.Vector3(), d, withDecor);
   }
-  /** Перенести и повернуть клетки: новая клетка = R · (клетка − c) + c + d; блоки поворачиваются вместе с поворотом вокруг Y */
+  /** Move and rotate cells: new cell = R · (cell − c) + c + d; blocks rotate together with the rotation around Y */
   function transformCells(cells: Extract<Sel, { t: 'block' }>[], R: THREE.Matrix4, c: THREE.Vector3, d: [number, number, number], withDecor = true): void {
     const own = !batch;
     if (own) beginBatch();
@@ -1031,7 +1032,7 @@ export function runEditor(): void {
       it.on = map(it.on![0], it.on![1], it.on![2]);
       if (steps) setDecorRot(it, [(it.rot?.[0] ?? 0) + steps * 90, it.rot?.[1] ?? 0, it.rot?.[2] ?? 0]);
     });
-    // в выделении — новые клетки; остальное (декор, свет) остаётся выбранным
+    // the selection gets the new cells; the rest (decor, lights) stays selected
     sel = [...sel.filter((s) => s.t !== 'block'), ...out];
     if (own) endBatch();
   }
@@ -1043,10 +1044,10 @@ export function runEditor(): void {
     const R = new THREE.Matrix4()[axis === 'x' ? 'makeRotationX' : axis === 'y' ? 'makeRotationY' : 'makeRotationZ'](axis === 'y' ? -Math.PI / 2 : Math.PI / 2);
     beginBatch(); transformCells(cells, snapRot(R), ctr, [0, 0, 0]); endBatch();
     afterSelEdit();
-    toast(`Повёрнуто на 90° вокруг ${axis.toUpperCase()}`);
+    toast(t('Rotated 90° around {axis}', { axis: axis.toUpperCase() }));
   }
 
-  // ---------- выделение ----------
+  // ---------- selection ----------
   function select(list: Sel[], reveal = true): void {
     const seen = new Set<string>();
     sel = list.filter((s) => { const k = selId(s); if (seen.has(k)) return false; seen.add(k); return true; });
@@ -1066,10 +1067,10 @@ export function runEditor(): void {
   function selSummary(): string {
     const n: Record<string, number> = {};
     for (const s of sel) n[s.t] = (n[s.t] ?? 0) + 1;
-    const T: Record<string, string> = { block: 'блоков', decor: 'декора', light: 'света', spawn: 'точка появления', land: 'ландшафта', world: 'мир' };
+    const T: Record<string, string> = { block: t('blocks'), decor: t('decor'), light: t('lights'), spawn: t('spawn point'), land: t('landscape'), world: t('world') };
     return Object.entries(n).map(([k, v]) => `${v} ${T[k]}`).join(' · ');
   }
-  /** После правки выделенного: подсветка, детали, дерево */
+  /** After editing the selection: highlight, details, tree */
   function afterSelEdit(): void {
     sel = sel.filter((s) => s.t !== 'decor' || level.decor.includes(s.d)).filter((s) => s.t !== 'light' || level.entities.includes(s.e)).filter((s) => s.t !== 'land' || lands().includes(s.p));
     selIds = new Set(sel.map(selId));
@@ -1082,7 +1083,7 @@ export function runEditor(): void {
     const out: Sel[] = [];
     level.forEach((x, y, z, id) => { if (names.has(level.palette[id])) out.push({ t: 'block', x, y, z }); });
     select(out, false);
-    toast(`Выбрано: ${out.length}`);
+    toast(t('Selected: {n}', { n: out.length }));
   }
   function deleteSel(): void {
     if (!sel.length) return;
@@ -1097,7 +1098,7 @@ export function runEditor(): void {
     endBatch();
     const n = sel.length;
     select([]);
-    toast(`Удалено: ${n}`);
+    toast(t('Deleted: {n}', { n }));
   }
   function duplicateSel(): void {
     if (!sel.length) return;
@@ -1116,7 +1117,7 @@ export function runEditor(): void {
     }
     endBatch();
     select(out);
-    toast(`Копия: ${out.length}`);
+    toast(t('Copy: {n}', { n: out.length }));
   }
   function focusSel(): void {
     const box = new THREE.Box3();
@@ -1142,39 +1143,39 @@ export function runEditor(): void {
   function contextItems(): MenuItem[] {
     const hasBlocks = sel.some((s) => s.t === 'block');
     return [
-      { head: sel.length ? selSummary() : 'Ничего не выбрано' },
-      { label: 'К выделенному', icon: 'focus', shortcut: 'F', disabled: !sel.length, action: focusSel },
-      { label: 'Дублировать', icon: 'copy', shortcut: 'Ctrl+D', disabled: !sel.length, action: duplicateSel },
-      { label: 'Удалить', icon: 'trash', shortcut: 'Del', disabled: !sel.length, action: deleteSel },
+      { head: sel.length ? selSummary() : t('Nothing selected') },
+      { label: t('To the selection'), icon: 'focus', shortcut: 'F', disabled: !sel.length, action: focusSel },
+      { label: t('Duplicate'), icon: 'copy', shortcut: 'Ctrl+D', disabled: !sel.length, action: duplicateSel },
+      { label: t('Delete'), icon: 'trash', shortcut: 'Del', disabled: !sel.length, action: deleteSel },
       { sep: true },
-      { label: 'Повернуть', icon: 'rotate', disabled: !hasBlocks, sub: [
-        { label: '90° вокруг Y (вертикаль)', action: () => rotateSel('y') },
-        { label: '90° вокруг X', action: () => rotateSel('x') },
-        { label: '90° вокруг Z', action: () => rotateSel('z') },
+      { label: t('Rotate'), icon: 'rotate', disabled: !hasBlocks, sub: [
+        { label: t('90° around Y (vertical)'), action: () => rotateSel('y') },
+        { label: t('90° around X'), action: () => rotateSel('x') },
+        { label: t('90° around Z'), action: () => rotateSel('z') },
       ] },
-      { label: 'Выделить все такие блоки', disabled: !hasBlocks, action: selectSameBlocks },
-      { label: 'Взять в кисть', icon: 'brush', disabled: !hasBlocks && !sel.some((s) => s.t === 'decor'), action: () => {
+      { label: t('Select all blocks like this'), disabled: !hasBlocks, action: selectSameBlocks },
+      { label: t('Pick as brush'), icon: 'brush', disabled: !hasBlocks && !sel.some((s) => s.t === 'decor'), action: () => {
         const s = sel[0];
         if (s.t === 'block') { setCurrent(level.nameAt(s.x, s.y, s.z)); setMode('blocks'); } else if (s.t === 'decor') { setDecor(s.d.name); setMode('decor'); }
       } },
-      { label: 'Создать префаб из выделения…', icon: 'prefab', disabled: !sel.length, action: makePrefab },
+      { label: t('Create prefab from selection…'), icon: 'prefab', disabled: !sel.length, action: makePrefab },
       { sep: true },
-      { label: 'Поставить точку появления сюда', icon: 'flag', disabled: !hit, action: () => { if (place) setSpawn([...place], spawnYaw()); } },
-      { label: 'Поставить свет сюда', icon: 'light', disabled: !place, action: () => { if (place) { const e = newLight('point', place[0], place[1] + 1.5, place[2]); select([{ t: 'light', e }]); } } },
+      { label: t('Put the spawn point here'), icon: 'flag', disabled: !hit, action: () => { if (place) setSpawn([...place], spawnYaw()); } },
+      { label: t('Put a light here'), icon: 'light', disabled: !place, action: () => { if (place) { const e = newLight('point', place[0], place[1] + 1.5, place[2]); select([{ t: 'light', e }]); } } },
       { sep: true },
-      { label: 'Свойства', icon: 'info', disabled: !sel.length, action: () => setDetTab('details') },
+      { label: t('Properties'), icon: 'info', disabled: !sel.length, action: () => setDetTab('details') },
     ];
   }
 
-  // ---------- правки ----------
-  /** Привести предмет к снимку: null — убрать с карты, иначе — вернуть на карту с полями снимка */
+  // ---------- edits ----------
+  /** Bring the item to a snapshot: null — remove from the map, otherwise — return to the map with the snapshot's fields */
   function applyDecor(e: DecorEdit, to: DecorItem | null): void {
     if (!to) { level.removeDecor(e.decor); if (selected === e.decor) selected = null; return; }
     delete e.decor.rot; delete e.decor.on;
     Object.assign(e.decor, snapDecor(to));
     if (level.decor.includes(e.decor)) level.touchDecor(); else level.addDecor(e.decor);
   }
-  /** Куски ландшафта карты: хранятся в meta.lands и уходят в JSON вместе с картой */
+  /** Terrain pieces of the map: stored in meta.lands and go to JSON together with the map */
   function lands(): LandPiece[] { return ((level.meta.lands as LandPiece[] | undefined) ??= []); }
   function applyLand(e: LandEdit, to: LandPiece | null): void {
     const arr = lands();
@@ -1194,7 +1195,7 @@ export function runEditor(): void {
     else { undo.push([e]); redo.length = 0; if (undo.length > 300) undo.shift(); }
     dirtyAutosave = true;
   }
-  /** Правка свойства с отменой; подряд идущие правки с тем же ключом (тянем ползунок) — одна запись */
+  /** Property edit with undo; consecutive edits with the same key (dragging a slider) — one record */
   function recordProp(key: string, undoFn: () => void, redoFn: () => void): void {
     const last = undo[undo.length - 1];
     const now = performance.now();
@@ -1211,7 +1212,7 @@ export function runEditor(): void {
     const e: BlockEdit = { x, y, z, was, now: [name, r] };
     apply(e);
     record(e);
-    // стёрли блок — убрать прикреплённый к нему декор (факел на стене, цепь на потолке)
+    // a block was erased — remove the decor attached to it (torch on a wall, chain on the ceiling)
     if (name === 'air' && !keepDecor) for (const d of level.decor.filter((d) => attachedTo(d, x, y, z))) removeDecor(d);
     if (own) endBatch();
   }
@@ -1229,7 +1230,7 @@ export function runEditor(): void {
     record({ decor: d, before, after: null });
     outliner.invalidate();
   }
-  /** Изменить предмет на месте (поворот, перенос) одной правкой; key — слить подряд идущие правки полем «Детали» */
+  /** Change an item in place (rotation, translation) as one edit; key — merge consecutive edits from a "Details" field */
   function changeDecor(d: DecorItem, fn: (d: DecorItem) => void, key?: string): void {
     const before = snapDecor(d);
     fn(d);
@@ -1238,11 +1239,11 @@ export function runEditor(): void {
       const after = snapDecor(d);
       const e: DecorEdit = { decor: d, before, after };
       recordProp(`${key}:${level.decor.indexOf(d)}`, () => { const was = level.decor.indexOf(d); applyDecor(e, e.before); void was; }, () => applyDecor(e, after));
-      // при слиянии «до» — из первой правки: recordProp оставит старый undo
+      // when merging, "before" comes from the first edit: recordProp keeps the old undo
     } else record({ decor: d, before, after: snapDecor(d) });
     if (sel.some((s) => s.t === 'decor' && s.d === d)) { rebuildSelFx(); details.refresh(); }
   }
-  /** Свет и прочие сущности: изменить с отменой */
+  /** Lights and other entities: change with undo */
   function changeEnt(e: LevelEntity, fn: (e: LevelEntity) => void, key?: string): void {
     const before = JSON.stringify(e);
     fn(e);
@@ -1269,7 +1270,7 @@ export function runEditor(): void {
   function newLight(type: 'point' | 'spot', x: number, y: number, z: number): LevelEntity {
     const e: LevelEntity = { kind: 'light', x, y, z, rot: 0, data: { ...LIGHT_DEFAULTS, type, ...(type === 'spot' ? { distance: 14, intensity: 12, color: '#fff2d8' } : {}) } };
     addEnt(e);
-    toast(type === 'spot' ? 'Прожектор поставлен' : 'Свет поставлен');
+    toast(type === 'spot' ? t('Spotlight placed') : t('Light placed'));
     return e;
   }
   function setSpawn(p: [number, number, number] | null, yaw: number): void {
@@ -1280,7 +1281,7 @@ export function runEditor(): void {
     recordProp('spawn', () => set(before), () => set(after));
     if (sel.some((s) => s.t === 'spawn')) { rebuildSelFx(); details.refresh(); }
   }
-  /** Настройки мира с отменой: правка в fn, подряд идущие с тем же ключом — одна запись */
+  /** World settings with undo: the edit in fn, consecutive ones with the same key — one record */
   function changeWorld(fn: (w: WorldSettings) => void, key = 'world'): void {
     const before = JSON.stringify(world);
     fn(world);
@@ -1304,16 +1305,16 @@ export function runEditor(): void {
   function doUndo(): void {
     const b = undo.pop(); if (!b) return;
     for (let i = b.length - 1; i >= 0; i--) apply(b[i], true);
-    redo.push(b); dirtyAutosave = true; toast('Отмена');
+    redo.push(b); dirtyAutosave = true; toast(t('Undo'));
     afterSelEdit();
   }
   function doRedo(): void {
     const b = redo.pop(); if (!b) return;
     for (const e of b) apply(e);
-    undo.push(b); dirtyAutosave = true; toast('Повтор');
+    undo.push(b); dirtyAutosave = true; toast(t('Redo'));
     afterSelEdit();
   }
-  /** Сборка (kit) или свой префаб: все level.set внутри fn пишутся в одну правку */
+  /** Kit or user prefab: all level.set calls inside fn are written as one edit */
   function recordSets(fn: () => void): void {
     beginBatch();
     const L = level, b = batch!;
@@ -1328,36 +1329,36 @@ export function runEditor(): void {
     dirtyAutosave = true;
     endBatch();
   }
-  /** Поставить префаб в клетку (x, y, z) — y — первый слой воздуха */
+  /** Place a prefab at cell (x, y, z) — y is the first air layer */
   function placePrefab(p: Prefab, x: number, y: number, z: number): void {
     if (p.kind === 'block') { beginBatch(); edit(x, y, z, p.name!, rot); endBatch(); select([{ t: 'block', x, y, z }]); }
     else if (p.kind === 'decor') { const it = addDecor({ name: p.name!, pos: [x, y, z] }); select([{ t: 'decor', d: it }]); }
-    else if (p.kind === 'kit') { recordSets(() => p.build!(level, x, y, z, Math.floor(Math.random() * 1e5))); toast(`Поставлено: ${p.title}`); }
+    else if (p.kind === 'kit') { recordSets(() => p.build!(level, x, y, z, Math.floor(Math.random() * 1e5))); toast(t('Placed: {title}', { title: p.title })); }
     else if (p.kind === 'light') { const e = newLight(p.name as 'point' | 'spot', x, y + 1.5, z); select([{ t: 'light', e }]); }
-    else if (p.kind === 'spawn') { setSpawn([x, y, z], spawnYaw()); select([{ t: 'spawn' }]); toast('Точка появления'); }
+    else if (p.kind === 'spawn') { setSpawn([x, y, z], spawnYaw()); select([{ t: 'spawn' }]); toast(t('Spawn point')); }
     else if (p.kind === 'user' || p.kind === 'lib') {
       let res: ReturnType<typeof stampUser> | null = null;
       const n0 = undo.length;
       recordSets(() => { res = stampUser(level, p.user!, x, y, z, placeRot); });
       const r = res as ReturnType<typeof stampUser> | null;
       if (r) { beginBatch(); for (const d of r.decor) addDecor(d); for (const e of r.entities) addEnt(e); endBatch(); }
-      // блоки и декор пресета — одна запись в отмене
+      // the preset's blocks and decor — one undo record
       if (undo.length - n0 === 2) { const last = undo.pop()!; undo[undo.length - 1].push(...last); }
-      toast(`Поставлено: ${p.title}`);
+      toast(t('Placed: {title}', { title: p.title }));
     }
     outliner.invalidate();
   }
-  /** Сохранить выделение как свой префаб */
+  /** Save the selection as a user prefab */
   function makePrefab(): void {
     const cells = sel.filter((s): s is Extract<Sel, { t: 'block' }> => s.t === 'block');
     const decor = sel.filter((s): s is Extract<Sel, { t: 'decor' }> => s.t === 'decor').map((s) => s.d);
     const lightsSel = sel.filter((s): s is Extract<Sel, { t: 'light' }> => s.t === 'light').map((s) => s.e);
-    if (!cells.length && !decor.length && !lightsSel.length) { toast('Выдели блоки, декор или свет'); return; }
+    if (!cells.length && !decor.length && !lightsSel.length) { toast(t('Select blocks, decor or lights')); return; }
     const pts = [...cells.map((c) => [c.x, c.y, c.z]), ...decor.map((d) => d.pos), ...lightsSel.map((e) => [e.x, e.y, e.z])];
     const bx = Math.round((Math.min(...pts.map((p) => p[0])) + Math.max(...pts.map((p) => p[0]))) / 2);
     const bz = Math.round((Math.min(...pts.map((p) => p[2])) + Math.max(...pts.map((p) => p[2]))) / 2);
     const by = Math.min(...pts.map((p) => Math.floor(p[1])));
-    const title = prompt('Имя префаба', `Префаб ${userPrefabs.length + 1}`);
+    const title = prompt(t('Prefab name'), t('Prefab {n}', { n: userPrefabs.length + 1 }));
     if (!title) return;
     const u: UserPrefab = {
       id: `${Date.now().toString(36)}`, title,
@@ -1368,25 +1369,25 @@ export function runEditor(): void {
     userPrefabs = [...userPrefabs, u];
     saveUserPrefabs(userPrefabs);
     prefabs = catalog(userPrefabs);
-    pfGroup = 'Мои префабы';
+    pfGroup = 'mine';
     drawPrefabs();
-    toast(`Префаб «${title}» — в «Моих префабах»`);
+    toast(t('Prefab "{title}" — in "My prefabs"', { title }));
   }
-  /** Свой префаб → JSON в формате библиотеки (assets/prefabs/<id>.json): категория «мои», размер по содержимому */
+  /** User prefab → JSON in the library format (assets/prefabs/<id>.json): category "mine", size by contents */
   function exportPrefab(u: UserPrefab): void {
     const pts = [...u.cells.map((c) => [c[0], c[1], c[2]]), ...u.decor.map((d) => d.pos), ...u.entities.map((e) => [e.x, e.y, e.z])];
     const span = (i: number) => pts.length ? Math.ceil(Math.max(...pts.map((p) => p[i]))) - Math.floor(Math.min(...pts.map((p) => p[i]))) + 1 : 1;
     const id = u.title.replace(/[^\p{L}\p{N}_-]+/gu, '_').toLowerCase() || u.id;
-    const out = { id, title: u.title, category: 'мои', size: [span(0), span(1), span(2)], seed: 1, cells: u.cells, decor: u.decor, entities: u.entities };
+    const out = { id, title: u.title, category: 'mine', size: [span(0), span(1), span(2)], seed: 1, cells: u.cells, decor: u.decor, entities: u.entities };
     const blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = `${id}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast('JSON скачан — положи в assets/prefabs/');
+    toast(t('JSON downloaded — put it in assets/prefabs/'));
   }
   function blockCount(): number { let n = 0; level.forEach(() => n++); return n; }
 
-  /** Построить кусок по его параметрам (внутри пакета правок): края спадают к земле, внутри — плиты по 0,5 м; клетки — в p.cells */
+  /** Build a piece from its parameters (inside an edit batch): the edges fall off to the ground, inside — plates of 0.5 m; cells — in p.cells */
   function buildLand(p: LandPiece): void {
     const [x0, z0, x1, z1, y1] = landRect(p);
     const was = new Map<string, [string, number]>();
@@ -1406,7 +1407,7 @@ export function runEditor(): void {
       p.cells.push([x, yy, z, w0[0], w0[1], now[0], now[1]]);
     }
   }
-  /** Вернуть клетки куска как было до него — кроме тех, что после него поменяли руками */
+  /** Return the piece's cells to how they were before it — except those changed by hand afterwards */
   function clearLand(p: LandPiece): void {
     for (let i = p.cells.length - 1; i >= 0; i--) {
       const [x, y, z, wn, wr, nn, nr] = p.cells[i];
@@ -1414,8 +1415,8 @@ export function runEditor(): void {
     }
   }
   /**
-   * Поставить новый кусок (p = null) или перестроить кусок p с новыми параметрами и центром — одной правкой.
-   * Если прошлая правка была правкой этого же куска и она последняя в отмене — сливаем: откатываем её и строим заново.
+   * Place a new piece (p = null) or rebuild piece p with new parameters and centre — as one edit.
+   * If the previous edit was an edit of this same piece and it is the last in undo — merge: roll it back and build anew.
    */
   function changeLand(p: LandPiece | null, params: LandParams): LandPiece {
     const outer = batch;
@@ -1442,7 +1443,7 @@ export function runEditor(): void {
     return piece;
   }
   function placeLand(x: number, y: number, z: number): LandPiece { return changeLand(null, { ...land, x, y, z }); }
-  /** Убрать кусок: клетки — как было до него, запись — из карты */
+  /** Remove a piece: cells — as they were before it, the record — out of the map */
   function removeLand(p: LandPiece): void {
     beginBatch();
     clearLand(p);
@@ -1454,7 +1455,7 @@ export function runEditor(): void {
     syncSliders();
     refreshHud();
   }
-  /** Кусок под клеткой: в его прямоугольнике и по высоте в его рамке; из перекрытых — поставленный позже */
+  /** The piece under a cell: inside its rectangle and within its frame in height; of the overlapping ones — the one placed later */
   function landAt(c: [number, number, number]): LandPiece | null {
     const arr = lands();
     for (let i = arr.length - 1; i >= 0; i--) {
@@ -1472,7 +1473,7 @@ export function runEditor(): void {
     endBatch();
   }
 
-  // ---------- режимы и кисть ----------
+  // ---------- modes and brush ----------
   function setCurrent(name: string): void { current = name; refreshHud(); if (mode === 'blocks') drawPrefabs(); }
   function setDecor(name: string): void { curDecor = name; buildGhost(); refreshHud(); if (mode === 'decor') drawPrefabs(); }
   function setMode(m: Mode | 'blocks' | 'decor' | 'land'): void {
@@ -1492,7 +1493,7 @@ export function runEditor(): void {
   }
   const nextMode = (): Mode => (mode === 'select' ? 'blocks' : mode === 'blocks' ? 'decor' : mode === 'decor' ? 'land' : 'select');
   function refreshHud(): void {
-    const at = mode === 'decor' ? (placement ? `точка ${placement.pos.map((v) => +v.toFixed(3)).join(', ')}` : '') : place ? `клетка ${place[0]}, ${place[1]}, ${place[2]}` : '';
+    const at = mode === 'decor' ? (placement ? t('point {p}', { p: placement.pos.map((v) => +v.toFixed(3)).join(', ') }) : '') : place ? t('cell {x}, {y}, {z}', { x: place[0], y: place[1], z: place[2] }) : '';
     stCursor.textContent = at;
     if (mode === 'land') frameLand(selBox, selLand);
     if (mode !== 'select') drawModeTools();
@@ -1524,29 +1525,29 @@ export function runEditor(): void {
     outliner.invalidate();
   }
   function newMap(): void {
-    if (!confirm('Начать новую карту? Несохранённое пропадёт.')) return;
-    const L = new Level('Новая карта'); L.fill(-8, -1, -8, 8, -1, 8, 'grass'); L.spawn = [0, 0, 0]; setLevel(L);
+    if (!confirm(t('Start a new map? Unsaved changes will be lost.'))) return;
+    const L = new Level(t('New map')); L.fill(-8, -1, -8, 8, -1, 8, 'grass'); L.spawn = [0, 0, 0]; setLevel(L);
   }
   function floorDialog(): void {
-    const raw = prompt('Этаж подземелья: seed (и номер этажа через пробел)', `${Math.floor(Math.random() * 100000)} 1`);
+    const raw = prompt(t('Dungeon floor: seed (and the floor number after a space)'), `${Math.floor(Math.random() * 100000)} 1`);
     if (!raw) return;
     const [seed, floor] = raw.split(/\s+/).map(Number);
-    try { setLevel(buildFloor({ seed: seed || 1, floor: floor || 1, rooms: ROOMS })); toast(`Этаж собран: seed ${seed || 1}`); }
-    catch (e) { toast(`Не собрался: ${(e as Error).message}`); }
+    try { setLevel(buildFloor({ seed: seed || 1, floor: floor || 1, rooms: ROOMS })); toast(t('Floor built: seed {seed}', { seed: seed || 1 })); }
+    catch (e) { toast(t('Failed to build: {msg}', { msg: (e as Error).message })); }
   }
   function play(): void { autosave(); window.open('./?map=editor', '_blank'); }
 
-  // ---------- сохранение ----------
+  // ---------- saving ----------
   function loadInitial(): Level {
     try {
       const raw = localStorage.getItem(EDITOR_STORAGE);
       if (raw) return Level.fromJSON(JSON.parse(raw) as LevelJSON);
-    } catch { /* повреждённое автосохранение — берём встроенную карту */ }
+    } catch { /* corrupted autosave — take a built-in map */ }
     const first = maps['playground.json'] ?? maps[Object.keys(maps)[0]];
-    return first ? Level.fromJSON(first) : new Level('Новая карта');
+    return first ? Level.fromJSON(first) : new Level(t('New map'));
   }
   function autosave(): void {
-    try { localStorage.setItem(EDITOR_STORAGE, JSON.stringify(level.toJSON())); } catch { toast('Не удалось сохранить в localStorage'); }
+    try { localStorage.setItem(EDITOR_STORAGE, JSON.stringify(level.toJSON())); } catch { toast(t('Could not save to localStorage')); }
     dirtyAutosave = false;
   }
   function save(): void {
@@ -1557,22 +1558,22 @@ export function runEditor(): void {
     a.download = `${level.name.replace(/[^\p{L}\p{N}_-]+/gu, '_').toLowerCase() || 'map'}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast('JSON скачан — положи в assets/maps/');
+    toast(t('JSON downloaded — put it in assets/maps/'));
   }
   function open(): void {
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = '.json,application/json';
     inp.addEventListener('change', async () => {
       const f = inp.files?.[0]; if (!f) return;
-      try { setLevel(Level.fromJSON(JSON.parse(await f.text()) as LevelJSON)); toast(`Открыта «${level.name}»`); }
-      catch (e) { toast(`Не удалось открыть: ${(e as Error).message}`); }
+      try { setLevel(Level.fromJSON(JSON.parse(await f.text()) as LevelJSON)); toast(t('Opened "{name}"', { name: level.name })); }
+      catch (e) { toast(t('Could not open: {msg}', { msg: (e as Error).message })); }
     });
     inp.click();
   }
   setInterval(() => { if (dirtyAutosave) autosave(); }, 2000);
   window.addEventListener('beforeunload', () => { if (dirtyAutosave) autosave(); });
 
-  // ---------- окна: журнал и справка ----------
+  // ---------- windows: log and help ----------
   function modal(title: string, body: HTMLElement): void {
     const back = h('div.ue-modal-back');
     const close = () => back.remove();
@@ -1580,38 +1581,38 @@ export function runEditor(): void {
     back.append(h('div.ue-modal', {}, h('div.ue-modal-h', {}, h('span', { text: title }), h('button.ue-x', { text: '×', onclick: close })), body));
     document.body.append(back);
   }
-  function showLog(): void { modal('Журнал', h('pre.ue-log', { text: log.slice().reverse().join('\n') || 'Пусто' })); }
+  function showLog(): void { modal(t('Log'), h('pre.ue-log', { text: log.slice().reverse().join('\n') || t('Empty') })); }
   function showHelp(): void {
     const rows: [string, string][] = [
-      ['Tab / Shift+1…5', 'режимы: выделение, блоки, декор, ландшафт, поставить'],
-      ['ЛКМ', 'выбрать (Shift — добавить), тянуть по пустому — рамка'],
-      ['W / E / R / Q', 'гизмо: перенос, поворот по осям, размер, без гизмо'],
-      ['F / Home', 'к выделенному / вся карта'],
-      ['Del, Ctrl+D', 'удалить, дублировать'],
-      ['стрелки, PgUp/PgDn с Ctrl', 'сдвинуть выделенное (Shift — на 4)'],
-      ['СКМ или Alt+ЛКМ', 'вращать камеру вокруг цели'],
-      ['ПКМ', 'двигать камеру; клик — меню'],
-      ['ПКМ + WASD / QE', 'лететь'],
-      ['колесо', 'зум к курсору'],
-      ['Alt+X', 'развернуть вьюпорт'],
-      ['PgUp / PgDn', 'срез по высоте'],
-      ['G', 'сетка'],
-      ['Ctrl+Z / Ctrl+Y', 'отмена / повтор'],
-      ['Ctrl+S / Ctrl+O', 'скачать / открыть JSON'],
-      ['F5', 'играть на этой карте'],
-      ['Блоки: R, Q, [ ], 1–9', 'повернуть, взять, палитра'],
-      ['Декор: R / T / Y, Z', 'поворот, наклон, крен; случайный поворот'],
+      ['Tab / Shift+1…5', t('modes: select, blocks, decor, landscape, place')],
+      [t('LMB'), t('select (Shift — add), drag over empty space — marquee')],
+      ['W / E / R / Q', t('gizmo: translate, rotate along axes, scale, no gizmo')],
+      ['F / Home', t('to the selection / the whole map')],
+      ['Del, Ctrl+D', t('delete, duplicate')],
+      [t('arrows, PgUp/PgDn with Ctrl'), t('nudge the selection (Shift — by 4)')],
+      [t('MMB or Alt+LMB'), t('orbit the camera around the target')],
+      [t('RMB'), t('pan the camera; click — menu')],
+      [t('RMB + WASD / QE'), t('fly')],
+      [t('wheel'), t('zoom to the cursor')],
+      ['Alt+X', t('maximise the viewport')],
+      ['PgUp / PgDn', t('height slice')],
+      ['G', t('grid')],
+      ['Ctrl+Z / Ctrl+Y', t('undo / redo')],
+      ['Ctrl+S / Ctrl+O', t('download / open JSON')],
+      ['F5', t('play this map')],
+      [t('Blocks: R, Q, [ ], 1–9'), t('rotate, pick, palette')],
+      [t('Decor: R / T / Y, Z'), t('yaw, pitch, roll; random yaw')],
     ];
-    const t = h('table.ue-keys');
-    for (const [k, v] of rows) t.append(h('tr', {}, h('td', {}, h('kbd', { text: k })), h('td', { text: v })));
-    modal('Горячие клавиши', t);
+    const tbl = h('table.ue-keys');
+    for (const [k, v] of rows) tbl.append(h('tr', {}, h('td', {}, h('kbd', { text: k })), h('td', { text: v })));
+    modal(t('Hotkeys'), tbl);
   }
 
-  // ---------- мышь: курсор кисти ----------
+  // ---------- mouse: brush cursor ----------
   const ray = new THREE.Raycaster();
   function setRay(vp: Viewport, ndc: THREE.Vector2): void {
     ray.setFromCamera(ndc, vp.camera);
-    // у ортографической камеры луч начинается у плоскости near — отодвинем начало назад, чтобы видеть всё
+    // an orthographic camera's ray starts at the near plane — move the origin back to see everything
     if (vp.isOrtho) ray.ray.origin.addScaledVector(ray.ray.direction, -300);
   }
   function updateCursor(ev: { clientX: number; clientY: number; shiftKey?: boolean }, vp?: Viewport): void {
@@ -1626,10 +1627,10 @@ export function runEditor(): void {
     if (hh) {
       hit = [hh.x, hh.y, hh.z];
       const n = DIRS[hh.face] ?? [0, 1, 0];
-      // траву и цветы новый блок замещает, а не встаёт сверху
+      // grass and flowers are replaced by the new block, not built upon
       place = level.defAt(hh.x, hh.y, hh.z).replaceable ? hit : [hh.x + n[0], hh.y + n[1], hh.z + n[2]];
     } else if (Math.abs(d.y) > 1e-4) {
-      // пустота: ставим на плоскость y = 0 (блок под ней, как земля огорода)
+      // void: place on the plane y = 0 (the block below it, like the garden ground)
       const t = -o.y / d.y;
       if (t > 0 && t < 900) place = [Math.round(o.x + d.x * t), -1, Math.round(o.z + d.z * t)];
     }
@@ -1637,7 +1638,7 @@ export function runEditor(): void {
     cursorBox.visible = (mode === 'blocks' || mode === 'place') && !!place;
     hoverBox.visible = mode === 'select' && !!hit;
     if (mode === 'land') {
-      // над куском — его рамка (выбрать), иначе — рамка нового куска
+      // over a piece — its frame (select), otherwise — the frame of a new piece
       hoverLand = hit && !ev.shiftKey ? landAt(hit) : null;
       (landBox.material as THREE.LineBasicMaterial).color.set(hoverLand ? '#ffffff' : '#ffd25a');
       if (hoverLand) frameLand(landBox, hoverLand === selLand ? null : hoverLand);
@@ -1648,7 +1649,7 @@ export function runEditor(): void {
     refreshHud();
   }
 
-  // ---------- декор: призрак под курсором и рамка выбранного ----------
+  // ---------- decor: ghost under the cursor and the frame of the selected item ----------
   const ghost = new THREE.Group();
   ghost.visible = false;
   scene.add(ghost);
@@ -1675,7 +1676,7 @@ export function runEditor(): void {
   }
   function aim(anchorOf: DecorItem | null): DecorPlacement | null {
     const def = decorDef(anchorOf?.name ?? curDecor);
-    // переносим — сохраняем поворот предмета (у настенного — наклон и крен, рыск задаёт стена)
+    // moving — keep the item's rotation (for a wall item — pitch and roll, yaw is set by the wall)
     const extra = anchorOf ? (def.anchor === 'wall' ? [0, anchorOf.rot?.[1] ?? 0, anchorOf.rot?.[2] ?? 0] : [anchorOf.rot?.[0] ?? 0, anchorOf.rot?.[1] ?? 0, anchorOf.rot?.[2] ?? 0])
       : [dRot[0] + (randomYaw ? randYaw : 0), dRot[1], dRot[2]];
     return placeDecor(level, def.anchor, ray.ray.origin, ray.ray.direction, extra, maxY);
@@ -1711,15 +1712,15 @@ export function runEditor(): void {
     refreshHud();
   }
 
-  // рамка будущего куска ландшафта под курсором
+  // frame of the future terrain piece under the cursor
   const landBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: '#ffd25a', depthTest: false, transparent: true, toneMapped: false }));
   const selBox = new THREE.LineSegments(landBox.geometry, new THREE.LineBasicMaterial({ color: '#4cff7a', depthTest: false, transparent: true, toneMapped: false }));
-  // выбранный кусок — ещё и лёгкая заливка объёма: тонкую рамку на пёстрой траве легко потерять
+  // the selected piece also gets a light volume fill: a thin frame is easy to lose on mottled grass
   selBox.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: '#4cff7a', transparent: true, opacity: 0.12, depthWrite: false, toneMapped: false })));
   landBox.renderOrder = selBox.renderOrder = 20;
   landBox.visible = selBox.visible = false;
   scene.add(landBox, selBox);
-  /** Рамка куска ландшафта: прямоугольник и высота в его слоях; null — спрятать */
+  /** Frame of a terrain piece: rectangle and height in its layers; null — hide */
   function frameLand(box: THREE.LineSegments, p: LandParams | null): void {
     box.visible = !!p && mode === 'land';
     if (!p) return;
@@ -1729,8 +1730,8 @@ export function runEditor(): void {
     box.position.set((x0 + x1) / 2, p.y + hgt / 2, (z0 + z1) / 2);
   }
 
-  // ---------- мышь во вьюпортах ----------
-  /** Под курсором в режиме выделения: иконка, предмет или блок — ближайшее */
+  // ---------- mouse in the viewports ----------
+  /** Under the cursor in select mode: icon, item or block — the nearest */
   function pickAt(vp: Viewport, ndc: THREE.Vector2): Sel | null {
     setRay(vp, ndc);
     ray.camera = vp.camera;
@@ -1747,9 +1748,9 @@ export function runEditor(): void {
   }
   const marquee = h('div.ue-marquee');
   vps.el.append(marquee);
-  /** Нажатие в режиме выделения: клик — выбрать, тянуть — рамка */
+  /** Press in select mode: click — select, drag — marquee */
   let press: { vp: Viewport; x: number; y: number; shift: boolean; moved: boolean; button: number } | null = null;
-  /** ПКМ + WASD — полёт */
+  /** RMB + WASD — flight */
   let rmbFly = false;
   for (const vp of vps.list) {
     const el = vp.el;
@@ -1764,14 +1765,14 @@ export function runEditor(): void {
       if (mode === 'select') { press = { vp, x: e.clientX, y: e.clientY, shift: e.shiftKey || e.ctrlKey || e.metaKey, moved: false, button: 0 }; return; }
       if (mode === 'place') { if (curPrefab && place) placePrefab(curPrefab, place[0], place[1], place[2]); return; }
       if (mode === 'land') {
-        if (hoverLand) { selectLand(hoverLand); toast('Кусок выбран — ползунки правят его'); }
-        else if (place) { placeLand(place[0], place[1], place[2]); toast('Ландшафт поставлен'); }
+        if (hoverLand) { selectLand(hoverLand); toast(t('Piece selected — the sliders edit it')); }
+        else if (place) { placeLand(place[0], place[1], place[2]); toast(t('Landscape placed')); }
         updateCursor(e, vp);
         return;
       }
       if (mode === 'decor') {
         if (hoverDecor) {
-          if (e.shiftKey) { removeDecor(hoverDecor); toast('Предмет убран'); }
+          if (e.shiftKey) { removeDecor(hoverDecor); toast(t('Item removed')); }
           else { selected = hoverDecor; moving = { item: selected, before: snapDecor(selected) }; }
         } else if (placement && !e.shiftKey) {
           const p = placement;
@@ -1784,8 +1785,8 @@ export function runEditor(): void {
       if (e.ctrlKey || e.metaKey) {
         const cell = e.shiftKey ? hit : place;
         if (!cell) return;
-        if (!corner) { corner = cell; cornerBox.visible = true; cornerBox.position.set(cell[0], cell[1] + 0.5, cell[2]); toast('Угол задан — кликни второй'); }
-        else { fillBox(corner, cell, e.shiftKey ? 'air' : current); corner = null; cornerBox.visible = false; toast(e.shiftKey ? 'Вырезано' : 'Залито'); }
+        if (!corner) { corner = cell; cornerBox.visible = true; cornerBox.position.set(cell[0], cell[1] + 0.5, cell[2]); toast(t('Corner set — click the second one')); }
+        else { fillBox(corner, cell, e.shiftKey ? 'air' : current); corner = null; cornerBox.visible = false; toast(e.shiftKey ? t('Cut out') : t('Filled')); }
         return;
       }
       drag = e.shiftKey ? 'remove' : 'place';
@@ -1804,11 +1805,11 @@ export function runEditor(): void {
       const p = vps.pick(e.clientX, e.clientY, vp);
       if (!p) return;
       const s = pickAt(vp, p.ndc);
-      // двойной клик по ландшафту — весь кусок
+      // double-click on landscape — the whole piece
       if (s?.t === 'block') { const lp = landAt([s.x, s.y, s.z]); if (lp) { select([{ t: 'land', p: lp }]); return; } }
       focusSel();
     });
-    // перетащили префаб из панели — поставить там, куда отпустили
+    // a prefab dragged from the panel — place it where it was dropped
     el.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('text/x-malina-prefab')) { e.preventDefault(); updateCursor(e, vp); cursorBox.visible = !!place; } });
     el.addEventListener('drop', (e) => {
       const id = e.dataTransfer?.getData('text/x-malina-prefab');
@@ -1816,11 +1817,11 @@ export function runEditor(): void {
       if (!p) return;
       e.preventDefault();
       if (p.kind === 'decor') {
-        // декор — по своей опоре: на пол, стену или потолок
+        // decor — by its own anchor: on the floor, wall or ceiling
         updateCursor(e, vp);
         const pl = placeDecor(level, decorDef(p.name!).anchor, ray.ray.origin, ray.ray.direction, [0, 0, 0], maxY);
         if (pl) { const it = addDecor({ name: p.name!, pos: pl.pos, ...(pl.rot.length ? { rot: pl.rot } : {}), ...(pl.on ? { on: pl.on } : {}) }); if (mode === 'select') select([{ t: 'decor', d: it }]); }
-        else toast('Сюда не встанет — нужна опора');
+        else toast(t('It will not fit here — needs a support'));
       } else { updateCursor(e, vp); if (place) placePrefab(p, place[0], place[1], place[2]); }
       cursorBox.visible = false;
     });
@@ -1843,7 +1844,7 @@ export function runEditor(): void {
     marquee.style.display = 'none';
     if (!p) return;
     if (p.button === 2) {
-      // ПКМ без протягивания — контекстное меню
+      // RMB without dragging — context menu
       if (!p.moved && mode === 'select') {
         const pk = vps.pick(e.clientX, e.clientY, p.vp);
         if (pk) { const s = pickAt(p.vp, pk.ndc); if (s && !selIds.has(selId(s))) select([s]); updateCursor(e, p.vp); }
@@ -1862,7 +1863,7 @@ export function runEditor(): void {
     }
     marqueeSelect(p, e);
   });
-  /** Рамка: всё, чей центр попал в прямоугольник (блоки — не выше среза) */
+  /** Marquee: everything whose centre fell into the rectangle (blocks — not above the slice) */
   function marqueeSelect(p: NonNullable<typeof press>, e: PointerEvent): void {
     const vp = p.vp;
     const box = vps.el.getBoundingClientRect();
@@ -1878,7 +1879,7 @@ export function runEditor(): void {
       return sx >= rx0 && sx <= rx1 && sy >= ry0 && sy <= ry1;
     };
     const out: Sel[] = [];
-    // в перспективе — только видимые сверху (верхний блок колонки), чтобы рамка не хватала толщу земли
+    // in perspective — only those visible from above (the top block of a column), so the marquee does not grab the bulk of the ground
     const topOnly = !vp.isOrtho;
     level.forEach((x, y, z) => {
       if (y > maxY) return;
@@ -1889,7 +1890,7 @@ export function runEditor(): void {
     for (const en of level.entities) if (en.kind === 'light' && inside(en.x, en.y, en.z)) out.push({ t: 'light', e: en });
     if (level.spawn && inside(level.spawn[0], level.spawn[1] + 0.8, level.spawn[2])) out.push({ t: 'spawn' });
     select(p.shift ? [...sel, ...out] : out, false);
-    toast(`Выбрано: ${out.length}`);
+    toast(t('Selected: {n}', { n: out.length }));
   }
   function paint(): void {
     if (!drag) return;
@@ -1902,9 +1903,9 @@ export function runEditor(): void {
     else edit(cell[0], cell[1], cell[2], 'air', 0);
   }
 
-  // ---------- клавиши ----------
+  // ---------- keys ----------
   const keys = new Set<string>();
-  function sliceBy(dy: number): void { maxY = Math.max(-8, Math.min(64, maxY + dy)); view.maxY = maxY; view.rebuildAll(); refreshHud(); toast(`Срез: y ≤ ${maxY}`); }
+  function sliceBy(dy: number): void { maxY = Math.max(-8, Math.min(64, maxY + dy)); view.maxY = maxY; view.rebuildAll(); refreshHud(); toast(t('Slice: y ≤ {y}', { y: maxY })); }
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
     if (document.querySelector('.ue-modal-back')) { if (e.code === 'Escape') document.querySelector('.ue-modal-back')!.remove(); return; }
@@ -1937,7 +1938,7 @@ export function runEditor(): void {
       case 'BracketRight': setCurrent(list[(list.findIndex((b) => b.name === current) + 1) % list.length].name); break;
       case 'PageUp': sliceBy(1); break;
       case 'PageDown': sliceBy(-1); break;
-      case 'KeyP': if (place) { setSpawn([place[0], place[1], place[2]], spawnYaw()); toast('Точка появления задана'); } break;
+      case 'KeyP': if (place) { setSpawn([place[0], place[1], place[2]], spawnYaw()); toast(t('Spawn point set')); } break;
       case 'KeyG': show.grid = !show.grid; break;
       case 'Escape': corner = null; cornerBox.visible = false; setMode('select'); break;
       default: {
@@ -1953,7 +1954,7 @@ export function runEditor(): void {
     if (ctrl && e.code === 'KeyA') { e.preventDefault(); return; }
     if (ctrl) return;
     const k = e.shiftKey ? 4 : 1;
-    // стрелки — вдоль экрана активного вьюпорта, по ближайшей оси мира
+    // arrows — along the screen of the active viewport, by the nearest world axis
     const nudge = (sx: number, sy: number): [number, number, number] => {
       const cam = vps.active.camera;
       if (vps.active.isOrtho) {
@@ -1985,7 +1986,7 @@ export function runEditor(): void {
         if (arrows[e.code] && sel.length) { e.preventDefault(); nudgeSel(nudge(...arrows[e.code])); }
     }
   }
-  /** Сдвинуть выделенное на клетки (блоки, ландшафт, точка) или на столько же метров (декор, свет) */
+  /** Nudge the selection by cells (blocks, landscape, point) or by as many metres (decor, lights) */
   function nudgeSel(d: [number, number, number]): void {
     beginBatch();
     const cells = sel.filter((s): s is Extract<Sel, { t: 'block' }> => s.t === 'block');
@@ -2004,7 +2005,7 @@ export function runEditor(): void {
     const mv: Record<string, [number, number]> = { ArrowLeft: [-k, 0], ArrowRight: [k, 0], ArrowUp: [0, -k], ArrowDown: [0, k] };
     if (e.code === 'KeyG') show.grid = !show.grid;
     else if (e.code === 'Escape') { if (selLand) selectLand(null); else setMode('select'); }
-    else if (selLand && (e.code === 'Delete' || e.code === 'Backspace' || e.code === 'KeyX')) { removeLand(selLand); toast('Кусок убран'); }
+    else if (selLand && (e.code === 'Delete' || e.code === 'Backspace' || e.code === 'KeyX')) { removeLand(selLand); toast(t('Piece removed')); }
     else if (selLand && mv[e.code]) { e.preventDefault(); changeLand(selLand, { ...landParams(selLand), x: selLand.x + mv[e.code][0], z: selLand.z + mv[e.code][1] }); }
     else if (e.code === 'PageUp') sliceBy(1);
     else if (e.code === 'PageDown') sliceBy(-1);
@@ -2022,20 +2023,20 @@ export function runEditor(): void {
     };
     if (ctrl && e.code === 'KeyD') {
       e.preventDefault();
-      if (selected) { const c = snapDecor(selected); c.pos = [c.pos[0] + 0.5, c.pos[1], c.pos[2] + 0.5]; selected = addDecor(c); toast('Копия'); }
+      if (selected) { const c = snapDecor(selected); c.pos = [c.pos[0] + 0.5, c.pos[1], c.pos[2] + 0.5]; selected = addDecor(c); toast(t('Copy')); }
     } else if (ctrl) return;
     const list = DECOR.map((d) => d.name);
     switch (e.code) {
       case 'KeyR': turn(0); break;
       case 'KeyT': turn(1); break;
       case 'KeyY': turn(2); break;
-      case 'KeyZ': randomYaw = !randomYaw; randYaw = randomYaw ? Math.round(Math.random() * 24) * 15 : 0; toast(`Случайный поворот: ${randomYaw ? 'вкл' : 'выкл'}`); break;
+      case 'KeyZ': randomYaw = !randomYaw; randYaw = randomYaw ? Math.round(Math.random() * 24) * 15 : 0; toast(t('Random yaw: {state}', { state: randomYaw ? t('on') : t('off') })); break;
       case 'KeyQ': {
         const d = hoverDecor ?? selected;
         if (d) { setDecor(d.name); const r = d.rot ?? []; dRot[0] = decorDef(d.name).anchor === 'wall' ? 0 : r[0] ?? 0; dRot[1] = r[1] ?? 0; dRot[2] = r[2] ?? 0; }
         break;
       }
-      case 'Delete': case 'Backspace': case 'KeyX': { const d = selected ?? hoverDecor; if (d) { removeDecor(d); toast('Предмет убран'); } break; }
+      case 'Delete': case 'Backspace': case 'KeyX': { const d = selected ?? hoverDecor; if (d) { removeDecor(d); toast(t('Item removed')); } break; }
       case 'BracketLeft': setDecor(list[(list.indexOf(curDecor) - 1 + list.length) % list.length]); break;
       case 'BracketRight': setDecor(list[(list.indexOf(curDecor) + 1) % list.length]); break;
       case 'Escape': if (selected) { selected = null; outline.visible = false; } else setMode('select'); break;
@@ -2048,14 +2049,14 @@ export function runEditor(): void {
   }
 
   function showItems(): MenuItem[] {
-    const t = (label: string, k: keyof typeof show) => ({ label, checked: show[k], action: () => { show[k] = !show[k]; outliner.invalidate(); } });
-    return [{ head: 'Показать' }, t('Сетка (G)', 'grid'), t('Иконки света и точки появления', 'icons'), t('Декор', 'decor'), t('Погода', 'weather'), t('Дымка', 'fog'), t('Статистика', 'stats')];
+    const it = (label: string, k: keyof typeof show) => ({ label, checked: show[k], action: () => { show[k] = !show[k]; outliner.invalidate(); } });
+    return [{ head: t('Show') }, it(t('Grid (G)'), 'grid'), it(t('Light and spawn point icons'), 'icons'), it(t('Decor'), 'decor'), it(t('Weather'), 'weather'), it(t('Haze'), 'fog'), it(t('Statistics'), 'stats')];
   }
   vps.showMenu = showItems;
   vps.onHome = (vp) => { const t = level.spawn ? new THREE.Vector3(...level.spawn) : new THREE.Vector3(); vp.focus(t, 14); };
   vps.onLayout = () => applyGizmo();
 
-  // ---------- кадр ----------
+  // ---------- frame ----------
   vps.setActive(vps.list[0]);
   setMode('select');
   setDecor(curDecor);
@@ -2070,7 +2071,7 @@ export function runEditor(): void {
   buildDetails();
   refreshToolbar();
   vps.resize();
-  // превью префабов — по очереди, не задерживая старт
+  // prefab previews — one by one, without delaying the start
   for (const p of prefabs) thumbs.get(p);
 
   const clock = new THREE.Clock();
@@ -2079,11 +2080,11 @@ export function runEditor(): void {
   function frame(): void {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, clock.getDelta());
-    const t = clock.elapsedTime;
+    const now = clock.elapsedTime;
     fpsAcc += dt; fpsN++;
     if (fpsAcc > 0.5) { stFps.textContent = `${(fpsN / fpsAcc).toFixed(0)} FPS`; fpsAcc = fpsN = 0; }
     if (doc !== 'level') { thumbs.pump(); return; }
-    // полёт камерой: ПКМ + WASD / QE в любом режиме; в режимах кисти — WASD и без ПКМ (как раньше)
+    // camera flight: RMB + WASD / QE in any mode; in brush modes — WASD without RMB too (as before)
     const vp = vps.active;
     if (rmbFly || mode === 'blocks' || mode === 'decor' || mode === 'land') {
       const cam = vp.camera, c = vp.controls;
@@ -2104,7 +2105,7 @@ export function runEditor(): void {
     outliner.update();
     thumbs.pump(4);
     const focus = vps.list[0].controls.target;
-    view.update(t, 0.4, focus);
+    view.update(now, 0.4, focus);
     view.setXray(focus, mainCam.position, 0);
     weather.update(dt, focus);
     look.follow(focus, mainCam.position.distanceTo(focus));
@@ -2117,12 +2118,12 @@ export function runEditor(): void {
     for (const o of entObjs.values()) o.icon.visible = show.icons;
     sunArrow.position.copy(focus).add(sunOffset(world, 10));
     view.decor.group.visible = show.decor;
-    let nB = 0; if (show.stats && (fpsN === 1)) { nB = blockCount(); statEl.textContent = `${nB} блоков · ${level.decor.length} декора · ${level.entities.length} сущн.`; stCount.textContent = `Режим: ${MODE_TITLES[mode]} · отмена ${undo.length}`; }
+    let nB = 0; if (show.stats && (fpsN === 1)) { nB = blockCount(); statEl.textContent = t('{b} blocks · {d} decor · {e} entities', { b: nB, d: level.decor.length, e: level.entities.length }); stCount.textContent = t('Mode: {mode} · undo {n}', { mode: MODE_TITLES[mode], n: undo.length }); }
     statEl.hidden = !show.stats;
     render();
   }
 
-  /** Нарисовать все видимые вьюпорты: каждый своей камерой, со своим видом и режимом */
+  /** Draw all visible viewports: each with its own camera, view and mode */
   function render(): void {
     const vis = vps.visible();
     const fog = scene.fog;
@@ -2154,32 +2155,32 @@ export function runEditor(): void {
   const wireMat = new THREE.MeshBasicMaterial({ color: '#9fc6ff', wireframe: true });
   frame();
 
-  // ---------- отладочный хук и тесты ----------
+  // ---------- debug hook and tests ----------
   window.__malina = {
     mode: 'editor', get level() { return level; }, get view() { return view; }, camera: mainCam, get controls() { return vps.list[0].controls; }, setCurrent, edit: (x: number, y: number, z: number, n: string, r = 0) => edit(x, y, z, n, r),
-    /** Режим редактора: выделение, блоки, декор, ландшафт, поставить */
+    /** Editor mode: select, blocks, decor, landscape, place */
     get editMode() { return mode; }, setMode, setDecor, get selected() { return selected; },
-    /** Куда встанет текущий декор под лучом o → d (как под курсором) */
+    /** Where the current decor lands under the ray o → d (as under the cursor) */
     aimDecor(o: [number, number, number], d: [number, number, number]) { ray.ray.origin.set(...o); ray.ray.direction.set(...d).normalize(); return aim(null); },
-    /** Поставить / убрать предмет через отмену, как мышью */
+    /** Place / remove an item through undo, like with the mouse */
     addDecor: (d: DecorItem) => addDecor(d), removeDecor: (d: DecorItem) => removeDecor(d), changeDecor,
     undo: doUndo, redo: doRedo,
-    /** Ландшафт: параметры, поставить в точку, перестроить, случайные края */
+    /** Landscape: parameters, place at a point, rebuild, random edges */
     land, placeLand, randomizeLand, removeLand, selectLand, get lands() { return lands(); }, get selectedLand() { return selLand; },
-    /** Ландшафт под клеткой (как клик мышью по куску) */
+    /** Landscape under a cell (like clicking a piece with the mouse) */
     landAt: (x: number, y: number, z: number) => landAt([x, y, z]),
-    /** Править выбранный кусок: любые параметры и центр */
+    /** Edit the selected piece: any parameters and the centre */
     editLand(params: Partial<LandParams>) { if (selLand) changeLand(selLand, { ...landParams(selLand), ...params }); },
-    /** Выделение и гизмо: выбрать, повернуть / сдвинуть выбранное, удалить, дублировать */
+    /** Selection and gizmo: select, rotate / nudge the selection, delete, duplicate */
     select: (list: Sel[]) => select(list), get selection() { return sel; }, rotateSel, nudgeSel, deleteSel, duplicateSel, setTool,
-    /** Применить перенос и поворот, как если бы отпустили гизмо: d — сдвиг, q — [ось x|y|z, градусы] */
+    /** Apply translation and rotation as if the gizmo was released: d — offset, q — [axis x|y|z, degrees] */
     gizmo(d: [number, number, number], q?: ['x' | 'y' | 'z', number]) {
       placePivot(); pivotStart.copy(pivot.matrix); pivotStartPos.copy(pivot.position);
       pivot.position.add(new THREE.Vector3(...d));
       if (q) pivot.quaternion.setFromAxisAngle(new THREE.Vector3(q[0] === 'x' ? 1 : 0, q[0] === 'y' ? 1 : 0, q[0] === 'z' ? 1 : 0), THREE.MathUtils.degToRad(q[1]));
       commitGizmo();
     },
-    /** Настройки мира и свет */
+    /** World settings and lights */
     get world() { return world; }, changeWorld, newLight, setSpawn, placePrefab: (id: string, x: number, y: number, z: number, quarter = 0) => { const p = prefabs.find((q) => q.id === id); placeRot = quarter; if (p) placePrefab(p, x, y, z); },
     get prefabs() { return prefabs; }, viewports: vps, setDoc, look, weather,
   };

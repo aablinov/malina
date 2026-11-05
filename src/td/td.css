@@ -1,8 +1,8 @@
-/* Оборона куста (wiki/design-tower-defence.md): меню площадки и строка волны — в духе HUD Minecraft Dungeons */
+/* Bush Defence (wiki/design-tower-defence.md): pad menu and wave line — in the spirit of the Minecraft Dungeons HUD */
 .td-menu {
   position: fixed; left: 50%; bottom: calc(clamp(10px, min(0.84vw, 1.5vh), 22px) * 9.5); transform: translateX(-50%);
   display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px 12px; z-index: 6; pointer-events: auto; user-select: none;
-  /* до десяти башен: по пять в ряд, на узком экране — сколько влезет */
+  /* up to ten towers: five per row, on a narrow screen — as many as fit */
   width: max-content; max-width: min(calc(100vw - 32px), 720px); box-sizing: border-box;
   background: rgba(14, 12, 18, 0.92); border: 2px solid #5a5763; border-radius: 6px;
   font: 500 12px/1.3 Rubik, system-ui, sans-serif; color: #f4f1ea;
@@ -38,20 +38,20 @@
 .td-hud.lost .td-wave { color: #ff6a5a; }
 .td-hud.won .td-wave { color: #9ad87a; }
 
-/* осада: полоски стен и ворот под полосой куста */
+/* siege: wall and gate bars under the bush bar */
 .td-hud .td-walls { display: flex; justify-content: center; gap: 6px; margin-top: 4px; }
 .td-hud .td-walls span { display: flex; align-items: center; gap: 3px; width: 52px; height: 8px; border: 1px solid #3a3a40; border-radius: 4px; background: #1a1a20; overflow: hidden; padding-left: 2px; }
 .td-hud .td-walls span b { font-size: 9px; line-height: 1; color: #d8d0c0; width: 8px; }
 .td-hud .td-walls span i { display: block; height: 4px; border-radius: 2px; transition: width 0.2s; }
 .td-hud .td-walls span.dead { border-color: #ff6a5a; background: #3a1a18; }
 
-/* карточка следующей волны: кто идёт; охотники на башни и мини-босс — заметнее */
+/* next-wave card: who is coming; tower hunters and the mini-boss stand out */
 .td-hud .td-preview { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: 520px; margin: 4px auto 0; font-size: 11px; }
 .td-hud .td-preview b { color: #ffd25a; font-weight: 700; }
 .td-hud .td-preview span { padding: 1px 6px; border-radius: 4px; background: rgba(26, 27, 30, 0.65); }
 .td-hud .td-preview span.hunter { background: rgba(70, 120, 200, 0.75); }
 .td-hud .td-preview span.chief { background: rgba(200, 40, 90, 0.85); font-weight: 700; }
-/* башня в беде: мигает, стрелка — куда бежать */
+/* tower in trouble: blinks, the arrow shows where to run */
 .td-hud .td-alarm { margin-top: 5px; padding: 2px 8px; display: inline-block; border-radius: 5px; background: rgba(200, 40, 60, 0.85); font-weight: 700; animation: td-alarm 0.6s ease-in-out infinite alternate; }
 .td-hud .td-alarm.frozen { background: rgba(60, 130, 220, 0.85); }
 .td-hud .td-alarm i { display: inline-block; font-style: normal; }

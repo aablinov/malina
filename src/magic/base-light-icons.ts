@@ -1,9 +1,9 @@
 import type { Draw } from '../icons.ts';
 
-/** Пиксельные иконки 16 × 16 для src/magic/base-light.ts */
+/** Pixel icons 16 × 16 for src/magic/base-light.ts */
 export const ICONS: Record<string, Draw> = {
   blindflash(p) {
-    // вспышка-звезда: белое ядро, золотые лучи крестом и наискось
+    // star flash: white core, golden rays in a cross and diagonally
     for (let i = 1; i < 15; i++) { p.p(i, 7, '#ffd84a'); p.p(i, 8, '#ffd84a'); p.p(7, i, '#ffd84a'); p.p(8, i, '#ffd84a'); }
     p.l(3, 3, 12, 12, '#fff2a0'); p.l(3, 12, 12, 3, '#fff2a0');
     p.s(5, 5, [

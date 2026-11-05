@@ -7,19 +7,20 @@ import { boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { Field } from './field.ts';
 import { Boss, C, glowMat, rand, RASP, UNIT, wrap, type BossHooks } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Мини-босс в духе Minecraft Dungeons (wiki/design-bosses.md, раздел 1): тело из нескольких крупных кубов, не больше
- * восьми подвижных частей, двигается целиком (прыжок, наклон, шарканье). Сила боя — на полу: метки атак (круг, линия),
- * снаряды по дуге, опасные зоны, подручные. Здесь — общий мозг (сон → пробуждение → погоня и атаки → оглушение → смерть),
- * ярость на 50 %, метки, снаряды, зоны и подручные; у стража — модель, выбор атаки, ход атаки и поза.
+ * Mini-boss in the spirit of Minecraft Dungeons (wiki/design-bosses.md, section 1): a body of several big cubes, no more than
+ * eight moving parts, moves as a whole (jump, lean, shuffle). The power of the fight is on the floor: attack marks (circle, line),
+ * lobbed projectiles, hazard zones, minions. Here is the shared brain (sleep → waking → chase and attacks → daze → death),
+ * rage at 50 %, marks, projectiles, zones and minions; the warden provides the model, attack choice, attack course and pose.
  */
 
 export type MiniState = 'sleep' | 'wake' | 'idle' | 'walk' | 'attack' | 'daze' | 'dead';
 
-// ---------- подручные ----------
+// ---------- minions ----------
 
-/** Подручный стража: два-три куба, идёт к герою и бьёт; цель для меча и заклинаний */
+/** Warden's minion: two or three cubes, walks to the hero and hits; a target for sword and spells */
 export class Minion implements Target {
   readonly pos = new THREE.Vector3();
   readonly group = new THREE.Group();
@@ -30,10 +31,10 @@ export class Minion implements Target {
   private cd = 1;
   private flashT = 0;
   private hop = 0;
-  /** Время жизни, с — покачивание на месте (не часы: детерминизм на сервере) */
+  /** Lifetime, s — bobbing in place (not the clock: determinism on the server) */
   private bob = 0;
   private readonly mats: THREE.MeshLambertMaterial[] = [];
-  /** Тает (призрак): прозрачность 0..1 */
+  /** Fading (ghost): opacity 0..1 */
   ghost = false;
 
   private readonly h: BossHooks;
@@ -53,7 +54,7 @@ export class Minion implements Target {
     this.group.add(body, head, eyes);
     this.group.position.copy(this.pos);
     h.scene.add(this.group);
-    // появление: подпрыгивает из земли
+    // appearance: pops up out of the ground
     this.hop = 0.5;
   }
 
@@ -94,31 +95,31 @@ export class Minion implements Target {
   }
 }
 
-// ---------- мини-босс ----------
+// ---------- mini-boss ----------
 
 export abstract class MiniBoss extends Boss {
   state: MiniState = 'sleep';
-  /** Текущая атака (state === 'attack') */
+  /** Current attack (state === 'attack') */
   attack = '';
-  /** Время в состоянии */
+  /** Time in the state */
   st = 0;
-  /** Перезарядка между атаками */
+  /** Cooldown between attacks */
   cd = 1.2;
   enraged = false;
-  /** Скорость бега, м/с; разворот, рад/с */
+  /** Run speed, m/s; turn rate, rad/s */
   speed = 3.2;
   turn = 3;
-  /** Держит дистанцию: ближний бой ~2,5 м, дальний — 7–9 м */
+  /** Keeps its distance: melee ~2.5 m, ranged — 7–9 m */
   keep = 2.5;
-  /** Какой гримуар роняет (id предмета) */
+  /** Which grimoire it drops (item id) */
   abstract readonly drop: string;
-  /** Ступень: мини-босс, босс этажа (выбор из двух гримуаров), финальный */
+  /** Tier: mini-boss, floor boss (choice of two grimoires), final */
   readonly tier: 'mini' | 'boss' | 'final' = 'mini';
-  /** Ауры — второй гримуар у боссов этажа (выбор: заклинание или аура): [id ауры, шанс %], в сумме 100 */
+  /** Auras — the second grimoire at floor bosses (choice: spell or aura): [aura id, chance %], summing to 100 */
   readonly auras: readonly (readonly [string, number])[] = [];
-  /** Выпавшая аура этой победы: тянется один раз, сброс стража тянет заново */
+  /** The aura dropped by this victory: rolled once, resetting the warden rolls again */
   private auraPick: string | null = null;
-  /** Аура этой победы по шансам */
+  /** Aura of this victory by chance */
   get aura(): string | null {
     if (!this.auras.length) return null;
     if (!this.auraPick) {
@@ -128,20 +129,20 @@ export abstract class MiniBoss extends Boss {
     }
     return this.auraPick;
   }
-  /** Гримуары после победы: один, у боссов — пара на выбор */
+  /** Grimoires after the victory: one, at bosses — a pair to choose from */
   get drops(): string[] { const a = this.aura; return a ? [this.drop, a] : [this.drop]; }
-  /** Малина из лопнувшего сердца: чем сильнее страж, тем больше — от здоровья, ступени, уровня и числа игроков */
+  /** Raspberries from the burst heart: the stronger the warden, the more — from health, tier, level and number of players */
   get berries(): number { return Math.round(this.baseHp / ({ mini: 20, boss: 10, final: 6 } as const)[this.tier] * this.lootMult); }
   readonly minions: Minion[] = [];
   protected flyY = 0;
   protected hitDone = false;
   protected deathT = 0;
   protected dazeFor = 0;
-  /** Тело (всё, что качается и наклоняется); group — только позиция */
+  /** Body (everything that sways and leans); group — position only */
   protected readonly body = new THREE.Group();
-  /** Метки, снаряды и зоны на полу */
+  /** Marks, projectiles and zones on the floor */
   protected readonly field: Field;
-  /** Тело твёрдое: расталкивает героя (под землёй, в тумане — нет) */
+  /** The body is solid: pushes the hero away (underground, in the mist — no) */
   protected get solid(): boolean { return true; }
 
   readonly arena: Rect;
@@ -152,22 +153,22 @@ export abstract class MiniBoss extends Boss {
     this.group.add(this.body);
   }
 
-  /** Модель в this.body; вызывается из конструктора стража */
+  /** Model in this.body; called from the warden's constructor */
   protected abstract build(): void;
-  /** Выбор атаки, когда перезарядка вышла (null — идти дальше) */
+  /** Attack choice when the cooldown is over (null — keep walking) */
   protected abstract choose(dist: number, rel: number): string | null;
-  /** Ход атаки: t — время с начала; true — атака кончилась */
+  /** Attack course: t — time since the start; true — the attack is over */
   protected abstract act(name: string, t: number, dt: number, dist: number): boolean;
-  /** Поза частей тела по состоянию (раз в кадр) */
+  /** Pose of the body parts by state (once per frame) */
   protected abstract animate(dt: number, walk: boolean): void;
-  /** Звук рыка или клича (проснулся, ярость) */
+  /** Roar or war-cry sound (woke up, rage) */
   protected cry(): void { if (!this.quiet) { boom(70, 30, 0.9, 0.5, 0, 0.5); hiss({ dur: 0.9, vol: 0.25, f: 400, f1: 1600, q: 0.6, type: 'lowpass', attack: 0.15, verb: 0.5 }); } }
-  /** Ярость (50 %) — страж может добавить своё */
-  protected onEnrage(): void { /* у стража */ }
+  /** Rage (50 %) — the warden may add its own */
+  protected onEnrage(): void { /* the warden's own */ }
 
   get quiet(): boolean { return this.h.quiet(); }
   get speedK(): number { return this.enraged ? 1.25 : 1; }
-  /** Все цели стража: он сам и подручные */
+  /** All targets of the warden: itself and the minions */
   targets(): Target[] { return [...(this.alive && this.awake ? [this as Target] : []), ...this.minions.filter((m) => m.alive)]; }
 
   wake(): void {
@@ -189,7 +190,7 @@ export abstract class MiniBoss extends Boss {
   }
 
   protected go(s: MiniState, attack = ''): void { this.state = s; this.attack = attack; this.st = 0; this.hitDone = false; }
-  /** Оглушить: сердце открыто, урон ×2 */
+  /** Daze: heart open, damage ×2 */
   protected daze(sec: number): void { this.dazeFor = sec; this.go('daze'); }
 
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void {
@@ -201,7 +202,7 @@ export abstract class MiniBoss extends Boss {
     if (!this.enraged && this.hp > 0 && this.hp < this.maxHp * 0.5) {
       this.enraged = true;
       this.cry();
-      this.h.fx.text(this.pos.clone().setY(this.topY + 1), 'ярость!', 'crit');
+      this.h.fx.text(this.pos.clone().setY(this.topY + 1), t('rage!'), 'crit');
       this.h.fx.shock(this.pos.clone().setY(0.1), 5, RASP.clone().multiplyScalar(0.5), 0.5, 0.15);
       this.onEnrage();
     }
@@ -217,7 +218,7 @@ export abstract class MiniBoss extends Boss {
     this.h.fx.slowmo = Math.max(this.h.fx.slowmo, 0.5);
   }
 
-  // ---------- мозг ----------
+  // ---------- brain ----------
   update(dt: number): void {
     this.st += dt;
     const hero = this.h.hero.pos;
@@ -240,7 +241,7 @@ export abstract class MiniBoss extends Boss {
           if (a) { this.go('attack', a); break; }
         }
         this.face(dt);
-        // держит дистанцию: далеко — к герою, слишком близко (у дальних) — назад
+        // keeps its distance: far — towards the hero, too close (for ranged) — back
         const sp = this.speed * this.speedK * dt;
         if (Math.abs(rel) < 1.3 && dist > this.keep + 0.4) { this.pos.x += (dx / dist) * sp; this.pos.z += (dz / dist) * sp; walk = true; }
         else if (this.keep > 4 && dist < this.keep - 2) { this.pos.x -= (dx / dist) * sp * 0.7; this.pos.z -= (dz / dist) * sp * 0.7; walk = true; }
@@ -259,7 +260,7 @@ export abstract class MiniBoss extends Boss {
     }
     this.field.update(dt);
     for (let i = this.minions.length - 1; i >= 0; i--) { const m = this.minions[i]; m.update(dt); if (m.dead) this.minions.splice(i, 1); }
-    // тело не проходит сквозь стены, героя расталкивает
+    // the body does not pass through walls, pushes the hero away
     if (this.state !== 'dead' && this.flyY < 1) {
       const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
       resolveCircle(p, this.radius * 0.8, this.h.obstacles());
@@ -288,7 +289,7 @@ export abstract class MiniBoss extends Boss {
     this.yaw += Math.max(-m, Math.min(m, d));
   }
 
-  /** Точка внутри арены (с отступом) */
+  /** Point inside the arena (with a margin) */
   protected clampIn(p: THREE.Vector3, pad = 1.5): THREE.Vector3 {
     const a = this.arena;
     p.x = THREE.MathUtils.clamp(p.x, a.x0 + pad, a.x1 - pad);
@@ -298,7 +299,7 @@ export abstract class MiniBoss extends Boss {
   }
 
   private dying(dt: number): void {
-    // заваливается, свет гаснет, на 1,2 с рассыпается малиновыми кубами — сердце лопается
+    // topples, the light fades, over 1.2 s crumbles into raspberry cubes — the heart bursts
     this.body.rotation.z = Math.min(1, this.st / 0.9) * 0.6;
     if (this.st > 1.2 && this.deathT === 0) {
       this.deathT = 1;
@@ -316,18 +317,18 @@ export abstract class MiniBoss extends Boss {
     }
   }
 
-  // ---------- поле: метки, снаряды, зоны (src/bosses/field.ts) ----------
-  /** Круг-метка: наливается dur секунд, потом done (там и бьют) */
+  // ---------- field: marks, projectiles, zones (src/bosses/field.ts) ----------
+  /** Circle mark: fills for dur seconds, then done (that is where they hit) */
   markCircle(at: THREE.Vector3, r: number, dur: number, done: () => void, color?: THREE.Color): void { this.field.markCircle(at, r, dur, done, color); }
-  /** Полоса-метка от from вдоль dir */
+  /** Strip mark from `from` along dir */
   markLine(from: THREE.Vector3, dir: THREE.Vector3, len: number, w: number, dur: number, done: () => void, color?: THREE.Color): void { this.field.markLine(from, dir, len, w, dur, done, color); }
-  /** Снаряд по дуге из from в to за dur с высотой h; land — на месте падения */
+  /** Lobbed projectile from `from` to `to` over dur with height h; land — at the landing point */
   lob(mesh: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, dur: number, h: number, trail: THREE.Color, land: (at: THREE.Vector3) => void): void { this.field.lob(mesh, from, to, dur, h, trail, land); }
-  /** Опасная зона: dps урона в секунду, slow — замедление героя внутри */
+  /** Hazard zone: dps damage per second, slow — hero slowdown inside */
   hazard(pos: THREE.Vector3, r: number, t: number, dps: number, color: THREE.Color, slow = 0): void { this.field.hazard(pos, r, t, dps, color, slow); }
-  /** Замедление героя от зон (0..1) — плейграунд домножает скорость */
+  /** Hero slowdown from zones (0..1) — the playground multiplies the speed */
   get heroSlow(): number { return this.field.heroSlow; }
-  /** Подручный рядом с точкой */
+  /** Minion next to a point */
   summon(at: THREE.Vector3, look: ConstructorParameters<typeof Minion>[2]): Minion {
     const m = new Minion(this.h, this.clampIn(at.clone(), 1), look);
     this.minions.push(m);

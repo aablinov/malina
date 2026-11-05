@@ -4,20 +4,21 @@ import { pixelTex } from '../textures.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
 import { C, glowMat, rand, RASP, UNIT } from '../bosses/kit.ts';
 import { Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Порождения куста (wiki/design-mobs.md, семья C): живая малина — слизень, колючий клубок, лоза-хлыст, бутон-плевун,
- * терновое чудище. Малинёныш — в critters.ts.
+ * Bush spawn (wiki/design-mobs.md, family C): living raspberries — slime, prickle ball, whip vine, spitting bud,
+ * bramble horror. The berryling is in critters.ts.
  */
 
 const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x += (x - o.rotation.x) * k; };
 const LEAF = '#5aa03a', STEM = '#3a7a2a';
 const JAM = C(2.4, 0.3, 0.8);
 
-/** 11. Ягодный слизень — толпа: прыгает и липнет; при смерти делится на 2, потом ещё раз */
+/** 11. Berry Slime — crowd: hops and sticks; on death splits in 2, then once more */
 export class BerrySlime extends Mob {
   readonly kind: string = 'slime';
-  readonly title = 'Ягодный слизень';
+  readonly title = t('Berry Slime');
   readonly cost = 3;
   readonly radius: number;
   override readonly topY: number;
@@ -25,7 +26,7 @@ export class BerrySlime extends Mob {
   private readonly hopTo = new THREE.Vector3();
   private readonly hopFrom = new THREE.Vector3();
 
-  /** size: 2 — большой, 1 — средний, 0 — маленький */
+  /** size: 2 — big, 1 — medium, 0 — small */
   readonly size: number;
   constructor(h: MobHooks, at: THREE.Vector3, size: number = 2) {
     super(h, [8, 16, 36][size], at); this.size = size;
@@ -36,7 +37,7 @@ export class BerrySlime extends Mob {
     this.keep = 1;
     this.mass = 0.5 + s;
     this.loot = size === 2 ? 2 : 0;
-    // полупрозрачное желе с ягодой-ядром внутри, глазки на передней грани
+    // translucent jelly with a berry core inside, little eyes on the front face
     const jam = new THREE.MeshLambertMaterial({ color: '#e0306a', transparent: true, opacity: 0.72 });
     this.flashMats.push(jam);
     const core = this.lam('#9a1240'), eye = this.lam('#2a1420'), glint = this.lam('#ffffff');
@@ -50,9 +51,9 @@ export class BerrySlime extends Mob {
     this.place();
   }
 
-  /** Ходит только прыжками */
+  /** Moves only by hopping */
   protected override steer(dt: number): boolean { this.face(dt); return false; }
-  /** По дороге скачет мелкими прыжками */
+  /** Along the road it bounces in small hops */
   protected override get marchPace(): number { return 1.8 * this.slowMul; }
 
   protected choose(dist: number): string | null { return dist < 9 ? 'hop' : null; }
@@ -60,7 +61,7 @@ export class BerrySlime extends Mob {
 
   protected act(_name: string, t: number, dt: number, dist: number): boolean {
     if (t - dt <= 0) {
-      // прыжок к герою, не дальше 2,5 м; если допрыгнет — метка под героем
+      // a hop toward the hero, no farther than 2.5 m; if it reaches — a mark under the hero
       this.hopFrom.copy(this.pos);
       const hop = Math.min(2.5, Math.max(0, dist - 0.4));
       this.hopTo.copy(this.pos).addScaledVector(this.fwd(), hop);
@@ -70,7 +71,7 @@ export class BerrySlime extends Mob {
         if (!this.quiet) voice({ type: 'sine', f: 180 + 80 * (2 - this.size), f1: 90, dur: 0.15, vol: 0.05 });
         this.h.fx.burst(this.hopTo.clone().setY(0.1), ['#e0306a', '#9a1240'], 6, { speed: 2, up: 1.5, size: 0.08, life: 0.4, gravity: 8 });
         if (this.inCircle(this.hopTo, r)) this.hurt([3, 4, 6][this.size], this.hopTo, 2);
-        // липкая лужица
+        // sticky puddle
         if (this.size > 0) this.field.hazard(this.hopTo, r * 0.8, 1.5, 2, JAM);
       });
     }
@@ -83,7 +84,7 @@ export class BerrySlime extends Mob {
     return false;
   }
 
-  /** Умер — делится на двух помельче (без малины) */
+  /** Died — splits into two smaller ones (no raspberries) */
   protected override die(): void {
     super.die();
     if (this.size === 0) return;
@@ -92,16 +93,16 @@ export class BerrySlime extends Mob {
       const m = this.mh.spawn(this.size === 2 ? 'slime_mid' : 'slime_small', this.pos.clone().addScaledVector(side, s * this.radius));
       if (!m) continue;
       m.summoned = true;
-      // на марше половинки скачут дальше по той же дороге, иначе — сразу к герою
+      // on the march the halves hop on along the same road, otherwise — straight to the hero
       if (this.march) m.joinMarch(this); else m.notice();
     }
   }
 
   protected animate(): void {
-    // сплющивается перед прыжком, вытягивается в полёте, колышется на месте
+    // flattens before the hop, stretches in flight, wobbles in place
     const a = this.state === 'attack' ? (this.st < 0.25 ? 0.7 : this.st < 0.55 ? 1.25 : 0.8) : 1 + Math.sin(this.time * 4) * 0.05;
     this.jelly.scale.y = this.jelly.scale.x * a;
-    // на марше подпрыгивает на ходу
+    // on the march bounces as it goes
     if (this.state !== 'attack') this.flyY = this.state === 'walk' ? Math.abs(Math.sin(this.time * 5)) * 0.35 : 0;
   }
 }
@@ -116,10 +117,10 @@ export class BerrySlimeSmall extends BerrySlime {
   constructor(h: MobHooks, at: THREE.Vector3) { super(h, at, 0); }
 }
 
-/** 12. Колючий клубок — натиск: сворачивается ёжиком и катится по полосе; врезался в стену — оглушён */
+/** 12. Prickle Ball — charge: curls up like a hedgehog and rolls along a strip; hit a wall — stunned */
 export class ThornBall extends Mob {
   readonly kind = 'hedgehog';
-  readonly title = 'Колючий клубок';
+  readonly title = t('Prickle Ball');
   readonly cost = 3;
   readonly radius = 0.5;
   override readonly topY = 1.1;
@@ -140,7 +141,7 @@ export class ThornBall extends Mob {
     this.ball.position.y = 0.5;
     this.body.add(this.ball);
     B(this.ball, fur, 0.8, 0.7, 0.9, 0, 0, 0);
-    // шипы-костянки по спине: малиновые с белым кончиком
+    // drupelet spikes along the back: raspberry with a white tip
     for (let i = 0; i < 9; i++) {
       const a = (i / 9) * Math.PI * 2, x = Math.cos(a) * 0.36, z = Math.sin(a) * 0.38;
       B(this.ball, thorn, 0.14, 0.24, 0.14, x, 0.36, z, z * 0.6, 0, -x * 0.6);
@@ -173,14 +174,14 @@ export class ThornBall extends Mob {
       this.field.markLine(this.pos.clone(), this.dir, 9, 1.2, 0.7, () => undefined);
     }
     if (t < 0.7) return false;
-    // катится 11 м/с до конца полосы или до стены
+    // rolls at 11 m/s to the end of the strip or to a wall
     const blocked = this.dash(this.dir, 11, dt);
     this.rolled += 11 * dt;
-    // задел героя — сбил с ног и остановился
+    // touched the hero — knocked him down and stopped
     if (this.inCircle(this.pos, this.radius + 0.2)) { this.hurt(9, this.pos, 6); if (!this.quiet) boom(200, 80, 0.2, 0.25); return true; }
     if (rnd() < 0.5) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1, rand(-1, 1)), life: 0.3, size: 0.08, color: '#8a6a40', gravity: 6 });
     if (blocked) {
-      // о стену: отскок и звёзды
+      // into a wall: bounce and stars
       if (!this.quiet) boom(120, 40, 0.4, 0.5);
       this.h.fx.shake = Math.max(this.h.fx.shake, 0.2);
       this.move(this.dir, -0.4);
@@ -193,7 +194,7 @@ export class ThornBall extends Mob {
   protected animate(dt: number, walk: boolean): void {
     const k = Math.min(1, dt * 14), s = this.stride(14);
     const curled = this.state === 'attack';
-    // свернулся: мордочка и ножки спрятаны, клубок вертится
+    // curled up: snout and legs hidden, the ball spins
     this.face_.visible = !curled;
     for (const [i, l] of this.legs.entries()) { l.visible = !curled; lerpTo(l, walk ? (i % 3 === 0 ? s : -s) * 0.6 : 0, k); }
     this.ball.rotation.x = curled ? this.ball.rotation.x + dt * (this.st < 0.7 ? 6 : 18) : 0;
@@ -202,10 +203,10 @@ export class ThornBall extends Mob {
   }
 }
 
-/** 13. Лоза-хлыст — ловушка: растёт из земли, не ходит, хлещет по кругу 3 м */
+/** 13. Whip Vine — trap: grows out of the ground, does not walk, lashes in a 3 m circle */
 export class VineWhip extends Mob {
   readonly kind = 'vine';
-  readonly title = 'Лоза-хлыст';
+  readonly title = t('Whip Vine');
   readonly cost = 3;
   readonly radius = 0.45;
   override readonly topY = 2.2;
@@ -219,7 +220,7 @@ export class VineWhip extends Mob {
     this.aggro = 7;
     const stem = this.lam(STEM, pixelTex(STEM, 10, 751)), leaf = this.lam(LEAF), thorn = this.lam('#c8245a');
     const B = this.box.bind(this);
-    // корень-кочка, три колена стебля, на конце — бутон с шипами
+    // a root hummock, three stem joints, a thorny bud at the end
     B(this.body, this.lam('#5a4428'), 0.9, 0.2, 0.9, 0, 0.1, 0);
     let parent: THREE.Object3D = this.body;
     for (let i = 0; i < 3; i++) {
@@ -237,11 +238,11 @@ export class VineWhip extends Mob {
     this.place();
   }
 
-  /** Не ходит — только поворачивается */
+  /** Does not walk — only turns */
   protected override steer(dt: number): boolean { this.face(dt); return false; }
-  /** По дороге медленно ползёт, пуская корни */
+  /** Along the road it crawls slowly, putting down roots */
   protected override get marchPace(): number { return 1.2 * this.slowMul; }
-  /** Корни держат: не отбрасывается */
+  /** Roots hold: no knockback */
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void { const p = this.pos.clone(); super.hit(dmg, dir, point, knock); this.pos.copy(p); }
 
   protected choose(dist: number): string | null { return dist < 3.4 ? 'whip' : null; }
@@ -259,7 +260,7 @@ export class VineWhip extends Mob {
 
   protected animate(dt: number): void {
     const k = Math.min(1, dt * 12);
-    // покачивается; в замахе гнётся назад, хлёст — полный оборот кругом
+    // sways; in the windup bends back, the lash is a full turn around
     const whip = this.state === 'attack';
     this.segs.forEach((g, i) => {
       lerpTo(g, whip ? (this.st < 0.6 ? -0.35 : 0.5) : Math.sin(this.time * 1.6 + i) * 0.12, whip ? k * 1.5 : k);
@@ -269,10 +270,10 @@ export class VineWhip extends Mob {
   }
 }
 
-/** 14. Бутон-плевун — турель: плюётся косточками дугой на метки; пока плюёт — закрыт, бей в паузу */
+/** 14. Spitting Bud — turret: spits seeds in an arc onto marks; closed while spitting, hit it in the pause */
 export class BudSpitter extends Mob {
   readonly kind = 'bud';
-  readonly title = 'Бутон-плевун';
+  readonly title = t('Spitting Bud');
   readonly cost = 4;
   readonly radius = 0.5;
   override readonly topY = 1.9;
@@ -293,7 +294,7 @@ export class BudSpitter extends Mob {
     this.body.add(this.head);
     B(this.head, this.lam('#9a1240'), 0.4, 0.3, 0.4, 0, 0.1, 0);
     B(this.head, this.shimmer(RASP, C(3.4, 2.4, 1.2), 0, 2.4), 0.2, 0.08, 0.2, 0, 0.26, 0);
-    // четыре лепестка: раскрыты в паузе, сомкнуты, пока плюёт
+    // four petals: open in the pause, closed while spitting
     for (let i = 0; i < 4; i++) {
       const g = new THREE.Group();
       g.rotation.y = (i / 4) * Math.PI * 2;
@@ -309,7 +310,7 @@ export class BudSpitter extends Mob {
 
   protected override steer(dt: number): boolean { this.face(dt); return false; }
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void { const p = this.pos.clone(); super.hit(dmg, dir, point, knock); this.pos.copy(p); }
-  /** Сомкнут — лепестки держат удар со всех сторон */
+  /** Closed — the petals hold hits from all sides */
   protected override guard(): number { return this.state === 'attack' ? 0.25 : 1; }
 
   protected choose(dist: number): string | null { return dist < 12 ? 'spit' : null; }
@@ -336,15 +337,15 @@ export class BudSpitter extends Mob {
   protected animate(dt: number): void {
     const k = Math.min(1, dt * 10), shut = this.state === 'attack';
     for (const p of this.petals) lerpTo(p, shut ? -0.05 : 0.9, k);
-    // плевок — бутон кивает
+    // spit — the bud nods
     this.head.rotation.x = shut ? Math.max(0, Math.sin((this.st - 0.3) * 10)) * 0.25 : Math.sin(this.time * 1.4) * 0.06;
   }
 }
 
-/** 15. Терновое чудище — танк: высокое, из лоз; притягивает героя лозой и бьёт; после рывка оглушено */
+/** 15. Bramble Horror — tank: tall, made of vines; pulls the hero in with a vine and hits; stunned after the pull */
 export class ThornHorror extends Mob {
   readonly kind = 'horror';
-  readonly title = 'Терновое чудище';
+  readonly title = t('Bramble Horror');
   readonly cost = 8;
   readonly radius = 0.8;
   override readonly topY = 3.2;
@@ -366,7 +367,7 @@ export class ThornHorror extends Mob {
     const maw = this.lam('#c8202a'), thorn = this.lam('#a8d060'), crystal = this.lam('#7a4ac8', pixelTex('#7a4ac8', 10, 773));
     const core = this.shimmer(C(3.4, 2, 3.2), RASP, 0, 2.2);
     const B = this.box.bind(this);
-    // длинные ноги из лоз
+    // long legs of vines
     this.legs = [-1, 1].map((s) => {
       const g = new THREE.Group();
       g.position.set(s * 0.4, 1.6, 0);
@@ -375,7 +376,7 @@ export class ThornHorror extends Mob {
       for (let i = 0; i < 3; i++) B(g, thorn, 0.3, 0.06, 0.12, s * 0.2, -0.3 - i * 0.45, 0.1, 0, 0, s * 0.5);
       return g;
     });
-    // корпус: светящееся ядро между ног, сверху — голова-пасть с кристаллом
+    // torso: a glowing core between the legs, a maw head with a crystal on top
     B(this.body, dark, 0.9, 0.7, 0.6, 0, 1.85, 0);
     B(this.body, core, 0.3, 0.3, 0.1, 0, 1.8, 0.31);
     this.head.position.y = 2.2;
@@ -386,7 +387,7 @@ export class ThornHorror extends Mob {
     B(this.head, crystal, 0.36, 0.3, 0.36, 0, 1.12, 0);
     B(this.head, this.lam('#b0a0f0'), 0.12, 0.2, 0.12, 0.05, 1.32, 0);
     for (const [x, z] of [[-0.6, 0.3], [0.6, -0.2], [0.2, 0.5], [-0.3, -0.5]] as const) B(this.head, thorn, 0.3, 0.06, 0.14, x, 0.9, z, 0, Math.atan2(x, z), 0.4);
-    // руки-лозы
+    // vine arms
     this.arms = [-1, 1].map((s) => {
       const g = new THREE.Group();
       g.position.set(s * 0.75, 2.6, 0);
@@ -395,7 +396,7 @@ export class ThornHorror extends Mob {
       B(g, thorn, 0.36, 0.06, 0.14, s * 0.14, -1.1, 0.1, 0, 0, s * 0.4);
       return g;
     });
-    // лоза-аркан: тянется к герою
+    // lasso vine: reaches for the hero
     this.lash = new THREE.Mesh(UNIT, this.lam('#4a6a2a'));
     this.lash.visible = false;
     h.scene.add(this.lash);
@@ -421,7 +422,7 @@ export class ThornHorror extends Mob {
       });
       return t > 1;
     }
-    // аркан: полоса 7 м → лоза летит; поймал — тянет к себе и бьёт двумя руками; промах — оглушено
+    // lasso: a 7 m strip → the vine flies; caught — pulls the hero in and hits with both arms; miss — stunned
     if (t - dt <= 0) {
       this.caught = false;
       const from = this.pos.clone();
@@ -431,7 +432,7 @@ export class ThornHorror extends Mob {
         if (!this.quiet) hiss({ dur: 0.3, vol: 0.15, f: 1800, f1: 500, q: 1, type: 'bandpass' });
         if (this.inLine(from, this.lashDir, 7, 1)) {
           this.caught = true;
-          // тянет: отброс «от точки за героем» — к чудищу
+          // pulls: knockback "from a point behind the hero" — toward the horror
           const behind = this.h.hero.pos.clone().addScaledVector(this.lashDir, 1);
           this.hurt(6, behind, 9);
         }
@@ -465,7 +466,7 @@ export class ThornHorror extends Mob {
     const smash = grab && this.st > 1.1 && this.caught;
     lerpTo(this.arms[0], smash ? (this.st < 1.55 ? -2.6 : -0.6) : grab ? -1.5 : Math.sin(this.time * 1.5) * 0.15, k);
     lerpTo(this.arms[1], smash ? (this.st < 1.55 ? -2.6 : -0.6) : grab ? -0.2 : -Math.sin(this.time * 1.5) * 0.15, k);
-    // пасть открыта, когда бьёт; тело переваливается
+    // the maw is open when hitting; the body waddles
     this.head.rotation.x = this.state === 'attack' ? -0.25 : this.state === 'daze' ? 0.3 : 0;
     this.body.rotation.z = walk ? s * 0.06 : 0;
   }

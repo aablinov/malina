@@ -5,19 +5,20 @@ import type { Knight } from '../knight.ts';
 import { bossSfx } from './boss-audio.ts';
 import type { BossBar } from './boss-bar.ts';
 import { glowMat, RASP, UNIT, type Boss } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Арена стража (wiki/design-bosses.md, раздел 1): невидимый квадрат у входа — герой вошёл, за спиной поднимаются решётки,
- * страж просыпается, сверху полоса. Герой пал — страж на месте и спит, решётки опущены, героя ставит у входа.
- * Страж побеждён — решётки уходят в пол.
+ * Warden arena (wiki/design-bosses.md, section 1): an invisible square at the entrance — the hero walks in, gates rise behind him,
+ * the warden wakes, a bar appears at the top. The hero falls — the warden stays in place asleep, the gates are lowered, the hero is put at the entrance.
+ * The warden is beaten — the gates sink into the floor.
  */
 
 export interface Rect { x0: number; x1: number; z0: number; z1: number }
 export interface ArenaSpec {
   trigger: Rect;
-  /** Ворота: центр, ширина (вдоль X, если rot = 0) */
+  /** Gate: centre, width (along X if rot = 0) */
   gates: { x: number; z: number; w: number; rot?: number }[];
-  /** Куда ставить героя после гибели */
+  /** Where to put the hero after death */
   exit: { x: number; z: number; yaw: number };
 }
 export type ArenaState = 'idle' | 'fight' | 'won';
@@ -26,14 +27,14 @@ const RISE = 0.55;
 
 export class Arena {
   state: ArenaState = 'idle';
-  /** Подъём решёток 0..1 */
+  /** Gate rise 0..1 */
   private gateK = 0;
   private gateWant = 0;
   private failed = false;
   private winT = 0;
   private readonly gateObjs: THREE.Group[] = [];
   private readonly closed: Obstacle[];
-  /** Победа: где лопнуло сердце (плейграунд роняет гримуар) */
+  /** Victory: where the heart burst (the playground drops a grimoire) */
   onWin?: (at: THREE.Vector3) => void;
   onStart?: () => void;
 
@@ -48,7 +49,7 @@ export class Arena {
     const berry = glowMat(RASP);
     this.closed = spec.gates.map((g) => ({ x: g.x, z: g.z, hx: g.w / 2, hz: 0.3, rot: g.rot ?? 0, h: 3 }));
     for (const g of spec.gates) {
-      // решётка: прутья с остриями, две перекладины, посередине знак Ордена — ромб-ягода
+      // gate: bars with spikes, two crossbeams, in the middle the sign of the Order — a berry diamond
       const grp = new THREE.Group();
       grp.position.set(g.x, 0, g.z);
       grp.rotation.y = g.rot ?? 0;
@@ -67,12 +68,12 @@ export class Arena {
     boss.onDeath = (at) => this.win(at);
   }
 
-  /** Препятствия ворот: пока подняты */
+  /** Gate obstacles: while raised */
   get solids(): readonly Obstacle[] { return this.gateK > 0.5 ? this.closed : []; }
 
   inside(r: Rect, p: THREE.Vector3): boolean { return p.x >= r.x0 && p.x <= r.x1 && p.z >= r.z0 && p.z <= r.z1; }
 
-  /** Закрыть арену и разбудить стража (вошёл в квадрат или тест) */
+  /** Close the arena and wake the warden (entered the square, or a test) */
   start(): void {
     if (this.state !== 'idle') return;
     this.state = 'fight';
@@ -89,7 +90,7 @@ export class Arena {
     this.onWin?.(at);
   }
 
-  /** Сброс: страж спит на месте, решётки внизу (N на плейграунде) */
+  /** Reset: the warden sleeps in place, gates down (N on the playground) */
   reset(): void {
     this.state = 'idle';
     this.gateWant = 0;
@@ -100,7 +101,7 @@ export class Arena {
   update(dt: number, hero: Knight): void {
     if (this.state === 'idle' && !hero.down && !this.failed && this.inside(this.spec.trigger, hero.pos)) this.start();
     if (this.state === 'fight' && hero.down) {
-      // герой пал: арена сбрасывается, когда он встанет — у входа
+      // the hero fell: the arena resets when he gets up — at the entrance
       this.failed = true;
       this.reset();
       if (!this.quiet()) bossSfx.gate(false);
@@ -108,14 +109,14 @@ export class Arena {
     if (this.failed && !hero.down) {
       this.failed = false;
       hero.place(this.spec.exit.x, this.spec.exit.z, this.spec.exit.yaw);
-      this.fx.text(hero.pos.clone().setY(1.6), 'страж ждёт', 'bad');
+      this.fx.text(hero.pos.clone().setY(1.6), t('the warden waits'), 'bad');
     }
     if (this.state === 'won' && this.winT > 0) {
       this.winT -= dt;
       if (this.winT <= 0) { this.gateWant = 0; this.bar.hide(); if (!this.quiet()) bossSfx.gate(false); }
     }
     this.bar.update(dt);
-    // решётки: быстро вверх с отскоком, медленно вниз
+    // gates: fast up with a bounce, slow down
     const was = this.gateK;
     this.gateK = this.gateWant > this.gateK ? Math.min(1, this.gateK + dt / RISE) : Math.max(0, this.gateK - dt / (RISE * 2));
     if (was < 1 && this.gateK === 1) { this.fx.shake = Math.max(this.fx.shake, 0.4); for (const g of this.spec.gates) this.fx.burst(new THREE.Vector3(g.x, 0.1, g.z), ['#9a8f70', '#6b5a4a'], 14, { speed: 2.5, up: 1.5, size: 0.12, life: 0.6, gravity: 8 }); }

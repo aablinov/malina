@@ -1,4 +1,4 @@
-/* Плейграунд: HUD в духе Minecraft Dungeons (style-guide.md) и служебные панели */
+/* Playground: HUD in the spirit of Minecraft Dungeons (style-guide.md) and service panels */
 body.dev-playground #menu,
 body.dev-playground #hud,
 body.dev-playground #pause,
@@ -32,10 +32,10 @@ body.dev-playground #hurt { display: none !important; }
 
 .pg-reticle { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .pg-reticle i { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); transition: transform 0.08s; }
-/* под курсором цель — красный прицел; Shift — удар на месте, жёлтый */
+/* a target under the cursor — red reticle; Shift — strike in place, yellow */
 .pg-reticle.hover i { border-color: #ff5a6a; transform: rotate(45deg) scale(1.35); }
 .pg-reticle.here i { border-color: #ffd25a; }
-/* над площадкой обороны — золотой квадрат */
+/* over a defence pad — a golden square */
 .pg-reticle.pad i { border-color: #ffd25a; transform: rotate(0deg) scale(1.25); }
 
 .pg-dummy {

@@ -12,14 +12,14 @@ import type { RoomManager } from './rooms.ts';
 import { checkProfile } from './validate.ts';
 
 /**
- * REST сервера (wiki/design-multiplayer.md). Токен — заголовок `Authorization: Bearer …`, cookie нет,
- * поэтому CORS открыт всем: игра открывается и с file://, и с localhost:5173
+ * Server REST (wiki/design-multiplayer.md). Token in the `Authorization: Bearer …` header, no cookies,
+ * so CORS is open to all: the game opens from file:// as well as from localhost:5173
  */
 export interface HttpDeps {
   auth: Auth; players: Players; profiles: Profiles; matches: Matches; rooms: RoomManager; maps: MapCatalog; friends: Friends;
-  /** Игрок на связи (WebSocket открыт) */
+  /** Player is online (WebSocket open) */
   online: (playerId: string) => boolean;
-  /** Каталог собранной игры (dist) — отдавать на `/`; не задан — только API */
+  /** Directory of the built game (dist) — served at `/`; unset — API only */
   staticDir?: string;
   now?: () => number;
 }
@@ -39,7 +39,7 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
   const me = (req: IncomingMessage): PlayerRow => {
     const h = req.headers.authorization ?? '';
     const p = h.startsWith('Bearer ') ? d.auth.check(h.slice(7)) : null;
-    if (!p) throw new HttpError(401, { error: 'Нужен вход' });
+    if (!p) throw new HttpError(401, { error: 'Sign in required' });
     return p;
   };
 
@@ -48,21 +48,21 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
 
     'POST /api/auth': async (req) => {
       const body = (await readJson(req)) as { name?: unknown };
-      if (!validName(body.name)) return [400, { error: 'Имя — от 2 до 16 букв и цифр' }];
-      // своё же имя с действующим токеном — просто подтвердить вход
+      if (!validName(body.name)) return [400, { error: 'Name: 2 to 16 letters and digits' }];
+      // own name with a valid token — just confirm the sign-in
       const h = req.headers.authorization ?? '';
       const p = h.startsWith('Bearer ') ? d.auth.check(h.slice(7)) : null;
       if (p && nameKey(p.name) === nameKey(body.name)) return [200, { playerId: p.id, name: p.name, token: h.slice(7) } satisfies AuthReply];
       const r = d.auth.register(body.name, now());
-      return r ? [201, r] : [409, { error: 'Имя занято' }];
+      return r ? [201, r] : [409, { error: 'Name is taken' }];
     },
 
     'POST /api/auth/rename': async (req) => {
       const p = me(req);
       const body = (await readJson(req)) as { name?: unknown };
-      if (!validName(body.name)) return [400, { error: 'Имя — от 2 до 16 букв и цифр' }];
+      if (!validName(body.name)) return [400, { error: 'Name: 2 to 16 letters and digits' }];
       const other = d.players.byName(body.name);
-      if (other && other.id !== p.id) return [409, { error: 'Имя занято' }];
+      if (other && other.id !== p.id) return [409, { error: 'Name is taken' }];
       d.players.rename(p.id, body.name);
       return [200, { playerId: p.id, name: body.name }];
     },
@@ -71,7 +71,7 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
 
     'GET /api/profile': (req) => {
       const r = d.profiles.get(me(req).id);
-      return r ? [200, r] : [404, { error: 'Профиля ещё нет' }];
+      return r ? [200, r] : [404, { error: 'No profile yet' }];
     },
 
     'PUT /api/profile': async (req) => {
@@ -92,7 +92,7 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
       return [200, d.matches.forPlayer(me(req).id, limit)];
     },
 
-    // друзья: добавить по имени, список (на связи ли, в какой комнате — войти по коду), убрать
+    // friends: add by name, list (online or not, which room — join by code), remove
     'GET /api/friends': (req) => {
       const list: FriendInfo[] = d.friends.list(me(req).id).map((f) => ({ ...f, online: d.online(f.playerId), room: d.rooms.roomOfPlayer(f.playerId) }));
       return [200, list];
@@ -102,20 +102,20 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
       const p = me(req);
       const body = (await readJson(req)) as { name?: unknown };
       const other = typeof body.name === 'string' ? d.players.byName(body.name.trim()) : null;
-      if (!other) return [404, { error: 'Нет героя с таким именем' }];
-      if (other.id === p.id) return [400, { error: 'Это ты сам' }];
+      if (!other) return [404, { error: 'No hero with that name' }];
+      if (other.id === p.id) return [400, { error: 'That is you' }];
       d.friends.add(p.id, other.id, now());
       return [201, { playerId: other.id, name: other.name }];
     },
 
     'DELETE /api/friends': (req, url) => {
       const id = url.searchParams.get('id') ?? '';
-      return d.friends.remove(me(req).id, id) ? [200, { ok: true }] : [404, { error: 'Нет такого друга' }];
+      return d.friends.remove(me(req).id, id) ? [200, { ok: true }] : [404, { error: 'No such friend' }];
     },
 
     'GET /api/records': (_req, url) => {
       const map = url.searchParams.get('map') ?? '';
-      if (!d.maps.has(map)) return [400, { error: 'Нет такой карты' }];
+      if (!d.maps.has(map)) return [400, { error: 'No such map' }];
       return [200, d.matches.record(map)];
     },
   };
@@ -129,7 +129,7 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
     const route = routes[`${req.method} ${url.pathname}`];
     if (!route) {
       if (req.method === 'GET' && d.staticDir && !url.pathname.startsWith('/api/')) { void serveStatic(d.staticDir, url.pathname, res); return; }
-      send(res, 404, { error: 'Нет такого адреса' });
+      send(res, 404, { error: 'No such address' });
       return;
     }
     Promise.resolve()
@@ -137,7 +137,7 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
       .then(([status, body]) => send(res, status, body))
       .catch((e: unknown) => {
         if (e instanceof HttpError) send(res, e.status, e.body);
-        else { console.error(e); send(res, 500, { error: 'Ошибка сервера' }); }
+        else { console.error(e); send(res, 500, { error: 'Server error' }); }
       });
   };
 }
@@ -151,14 +151,14 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   let n = 0;
   for await (const c of req) {
     n += (c as Buffer).length;
-    if (n > MAX_BODY) throw new HttpError(413, { error: 'Слишком большой запрос' });
+    if (n > MAX_BODY) throw new HttpError(413, { error: 'Request too large' });
     chunks.push(c as Buffer);
   }
   try {
     const v: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
     if (typeof v !== 'object' || v === null) throw new Error();
     return v;
-  } catch { throw new HttpError(400, { error: 'Нужен JSON' }); }
+  } catch { throw new HttpError(400, { error: 'JSON required' }); }
 }
 
 async function serveStatic(dir: string, path: string, res: ServerResponse): Promise<void> {

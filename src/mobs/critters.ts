@@ -4,18 +4,19 @@ import { pixelTex } from '../textures.ts';
 import { boom, hiss, voice } from '../spell-audio.ts';
 import { C, rand, RASP, wrap } from '../bosses/kit.ts';
 import { Mob, type MobHooks } from './mob.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Рядовые без доспехов (wiki/design-mobs.md): малинёныш (порождения куста, C), увядший садовник (павшие садовники, D),
- * малиновый волк (звери Ордена, E).
+ * Unarmoured rank-and-file (wiki/design-mobs.md): berryling (bush spawn, C), withered gardener (fallen gardeners, D),
+ * raspberry wolf (beasts of the Order, E).
  */
 
 const lerpTo = (o: THREE.Object3D, x: number, k: number): void => { o.rotation.x += (x - o.rotation.x) * k; };
 
-/** 10. Малинёныш — рой: ягодка на ножках, кусает с подскока; падает с одного удара */
+/** 10. Berryling — swarm: a little berry on legs, bites with a hop; falls from one hit */
 export class Berryling extends Mob {
   readonly kind = 'berryling';
-  readonly title = 'Малинёныш';
+  readonly title = t('Berryling');
   readonly cost = 1;
   readonly radius = 0.35;
   override readonly topY = 0.9;
@@ -33,10 +34,10 @@ export class Berryling extends Mob {
     const eye = this.lam('#2a1420'), glint = this.lam('#ffffff');
     const B = this.box.bind(this);
     this.body.add(this.bob);
-    // ягода из костянок: ядро и бугорки по бокам
+    // a berry of drupelets: core and bumps on the sides
     B(this.bob, berry, 0.56, 0.52, 0.5, 0, 0.5, 0);
     for (const [x, y, z] of [[0.28, 0.42, 0.1], [-0.28, 0.42, 0.1], [0.2, 0.62, -0.2], [-0.2, 0.62, -0.2], [0, 0.28, 0.18], [0, 0.72, 0.16]] as const) B(this.bob, deep, 0.16, 0.16, 0.16, x, y, z);
-    // корона из листьев и хвостик
+    // a crown of leaves and a little tail
     for (const r of [0, 2.1, 4.2]) B(this.bob, leaf, 0.3, 0.05, 0.12, Math.sin(r) * 0.12, 0.79, Math.cos(r) * 0.12, 0, r, 0.25);
     B(this.bob, stem, 0.05, 0.14, 0.05, 0, 0.86, 0);
     for (const x of [-0.12, 0.12]) { B(this.bob, eye, 0.1, 0.12, 0.03, x, 0.55, 0.26); B(this.bob, glint, 0.04, 0.04, 0.03, x + 0.02, 0.58, 0.275); }
@@ -70,17 +71,17 @@ export class Berryling extends Mob {
     const s = this.stride(16);
     lerpTo(this.legs[0], walk ? s * 0.8 : 0, k);
     lerpTo(this.legs[1], walk ? -s * 0.8 : 0, k);
-    // подпрыгивает на бегу; перед укусом приседает, в укусе — прыжок
+    // bounces while running; crouches before the bite, leaps in the bite
     const hop = this.state === 'attack' ? (this.st < 0.35 ? -0.08 : Math.sin(Math.min(1, (this.st - 0.35) / 0.2) * Math.PI) * 0.3) : walk ? Math.abs(s) * 0.06 : 0;
     this.bob.position.y = hop;
     this.bob.scale.y = this.state === 'attack' && this.st < 0.35 ? 0.85 : 1;
   }
 }
 
-/** 16. Увядший садовник — толпа: медленный зомби с мотыгой; после удара мотыга застревает */
+/** 16. Withered Gardener — crowd: a slow zombie with a hoe; after the hit the hoe gets stuck */
 export class WitheredGardener extends Mob {
   readonly kind = 'gardener';
-  readonly title = 'Увядший садовник';
+  readonly title = t('Withered Gardener');
   readonly cost = 2;
   readonly radius = 0.45;
   override readonly topY = 2.1;
@@ -108,17 +109,17 @@ export class WitheredGardener extends Mob {
     });
     B(this.body, shirt, 0.6, 0.72, 0.34, 0, 1.06, 0);
     B(this.body, pants, 0.62, 0.22, 0.36, 0, 0.78, 0);
-    // пятна малинового сока на рубахе
+    // raspberry juice stains on the shirt
     for (const [x, y] of [[0.12, 1.2], [-0.16, 0.96], [0.2, 0.9]] as const) B(this.body, stain, 0.1, 0.1, 0.02, x, y, 0.18);
     this.head.position.y = 1.42;
     this.body.add(this.head);
     B(this.head, skin, 0.48, 0.48, 0.48, 0, 0.24, 0);
     for (const x of [-0.11, 0.11]) B(this.head, eye, 0.1, 0.06, 0.02, x, 0.28, 0.245);
-    // соломенная шляпа с малиновой лентой
+    // straw hat with a raspberry ribbon
     B(this.head, straw, 0.86, 0.06, 0.86, 0, 0.5, 0);
     B(this.head, straw, 0.5, 0.2, 0.5, 0, 0.6, 0);
     B(this.head, stain, 0.52, 0.06, 0.52, 0, 0.53, 0);
-    // руки вытянуты вперёд и сходятся к древку: мотыга стоит торчком в кулаках, лезвие сверху смотрит вперёд
+    // arms stretched forward and meeting at the handle: the hoe stands upright in the fists, the blade on top faces forward
     this.arms.position.y = 1.36;
     this.body.add(this.arms);
     for (const s of [-1, 1]) B(this.arms, skin, 0.16, 0.16, 0.6, s * 0.2, 0, 0.28, 0, -s * 0.28, 0);
@@ -141,7 +142,7 @@ export class WitheredGardener extends Mob {
         if (this.inLine(from, dir, 2.6, 1.2)) this.hurt(11, from, 3);
       });
     }
-    // мотыга в земле 0,6 с — окно
+    // the hoe is in the ground for 0.6 s — a window
     return t > 1.5;
   }
 
@@ -149,7 +150,7 @@ export class WitheredGardener extends Mob {
     const k = Math.min(1, dt * 8), s = this.stride(5);
     lerpTo(this.legs[0], walk ? s * 0.4 : 0, k);
     lerpTo(this.legs[1], walk ? -s * 0.4 : 0, k);
-    // шаркает, переваливаясь; замах над головой — и вниз
+    // shuffles, waddling; a windup over the head — and down
     const chop = this.state === 'attack' ? (this.st < 0.85 ? -1.1 * Math.min(1, this.st / 0.5) : 1.35) : 0;
     lerpTo(this.arms, chop, this.state === 'attack' && this.st > 0.85 ? 1 : k);
     this.body.rotation.z = walk ? s * 0.08 : 0;
@@ -158,16 +159,16 @@ export class WitheredGardener extends Mob {
   }
 }
 
-/** 21. Малиновый волк — стая по 3: кружат вокруг героя и прыгают по метке; промахнулся — открыт */
+/** 21. Raspberry Wolf — packs of 3: circle the hero and leap onto a mark; missed — open */
 export class RaspWolf extends Mob {
   readonly kind = 'wolf';
-  readonly title = 'Малиновый волк';
+  readonly title = t('Raspberry Wolf');
   readonly cost = 3;
   readonly radius = 0.5;
   override readonly topY = 1.2;
   private readonly legs: THREE.Group[];
   private readonly head = new THREE.Group();
-  /** В какую сторону кружит */
+  /** Which way it circles */
   private readonly side = rnd() < 0.5 ? -1 : 1;
   private readonly leapDir = new THREE.Vector3();
   private leapLen = 0;
@@ -183,11 +184,11 @@ export class RaspWolf extends Mob {
     const eye = this.shimmer(C(3.4, 1.6, 2.6), RASP, rnd() * 6, 2);
     const B = this.box.bind(this);
     B(this.body, fur, 0.5, 0.48, 1.0, 0, 0.72, 0);
-    // малиновая грива по хребту и ошейник Ордена с ягодой
+    // a raspberry mane along the spine and an Order collar with a berry
     B(this.body, mane, 0.6, 0.6, 0.42, 0, 0.8, 0.32);
     for (const z of [-0.1, -0.3]) B(this.body, mane, 0.16, 0.12, 0.16, 0, 1.0, z);
     B(this.body, gold, 0.1, 0.1, 0.04, 0, 0.6, 0.54);
-    // хвост
+    // tail
     B(this.body, fur, 0.16, 0.16, 0.5, 0, 0.84, -0.66, 0.5);
     B(this.body, light, 0.17, 0.17, 0.14, 0, 0.98, -0.86, 0.5);
     this.head.position.set(0, 0.92, 0.56);
@@ -206,7 +207,7 @@ export class RaspWolf extends Mob {
     this.place();
   }
 
-  /** Стая кружит на дистанции: сбоку от героя, у каждого своя сторона */
+  /** The pack circles at a distance: beside the hero, each on its own side */
   protected override steer(dt: number, dist: number, dx: number, dz: number, rel: number): boolean {
     if (dist > this.keep + 1.5) return super.steer(dt, dist, dx, dz, rel);
     const nx = dx / dist, nz = dz / dist, out = (this.keep - dist) * 0.8;
@@ -228,7 +229,7 @@ export class RaspWolf extends Mob {
       if (!this.quiet) voice({ type: 'sawtooth', f: 160, f1: 110, dur: 0.5, vol: 0.04, lp: 900, verb: 0.3 });
       this.field.markLine(this.pos.clone(), this.leapDir, this.leapLen, 1.1, 0.6, () => undefined);
     }
-    // присел — прыжок по полосе; задел героя — укус, промахнулся — оглушён
+    // crouched — a leap along a strip; touched the hero — a bite, missed — stunned
     if (t > 0.6 && t < 0.95) {
       this.move(this.leapDir, (this.leapLen / 0.35) * dt);
       this.flyY = Math.sin(((t - 0.6) / 0.35) * Math.PI) * 0.7;
@@ -252,7 +253,7 @@ export class RaspWolf extends Mob {
     const a = leap ? 0.9 : walk ? s * 0.7 : 0;
     lerpTo(this.legs[0], a, k); lerpTo(this.legs[3], a, k);
     lerpTo(this.legs[1], leap ? 0.9 : -a, k); lerpTo(this.legs[2], leap ? -0.9 : -a, k);
-    // присел перед прыжком, голова вниз; в оглушении трясёт головой
+    // crouches before the leap, head down; when stunned shakes its head
     this.body.position.y = this.state === 'attack' && this.st < 0.6 ? -0.15 : 0;
     this.body.rotation.x = this.state === 'attack' && this.st < 0.6 ? 0.12 : leap ? -0.15 : 0;
     this.head.rotation.y = this.state === 'daze' ? Math.sin(this.time * 20) * 0.4 : 0;

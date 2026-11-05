@@ -1,6 +1,6 @@
 import type { Transport } from './transport.ts';
 
-/** Что нужно от WebSocket — есть и у браузерного, и у пакета `ws` */
+/** What we need from a WebSocket — present in both the browser one and the `ws` package */
 export interface SocketLike {
   readonly readyState: number;
   send(data: string): void;
@@ -9,10 +9,10 @@ export interface SocketLike {
   onclose: ((e: { code: number }) => void) | null;
 }
 
-/** Очередь событий клиента (src/cgame/events.ts): кадр сети доставляется при её разборе, перед тактами, а не в `onmessage` */
+/** Client event queue (src/cgame/events.ts): a network frame is delivered when the queue is drained, before the ticks, not in `onmessage` */
 export interface NetSink { push(e: { kind: 'net'; deliver: () => void }): void }
 
-/** Транспорт над открытым WebSocket (readyState OPEN = 1); с очередью — кадры и закрытие идут через неё */
+/** Transport over an open WebSocket (readyState OPEN = 1); with a queue — frames and the close go through it */
 export class WebSocketTransport implements Transport {
   onMessage: ((frame: string) => void) | null = null;
   onClose: ((code: number) => void) | null = null;

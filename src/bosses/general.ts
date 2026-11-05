@@ -5,15 +5,16 @@ import { boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Генерал Рдян — легендарный босс этажа (wiki/design-bosses.md, разделы 1–4): огромный рыцарь Ордена в ржаво-алых латах,
- * заросших малиновой лозой с горящими ягодами, верхом на смешно крошечной лошадке (ноги мелькают в беге). Два изогнутых
- * меча, красный плащ-грива, на шлеме малиновая корона, на нагруднике — сердце-ягода. Гравитация: свет переливается
- * фиолетовым ↔ малиной. Атаки: «притяжение» (кольцо тянет героя, потом удар двумя мечами), два широких взмаха, прыжок через
- * арену (каждый второй — застрял, оглушён), веер терновых стрел; в ярости — фиолетовая аура, тернии кругом и «метеор»:
- * улетает ввысь, тень гонится за героем, падает, застревает в кратере (оглушён). Роняет «Гравитационный колодец» или
- * ауру «Терновый венец». Подвижных частей: лошадка, передние ноги, задние ноги, рыцарь, две руки с мечами, плащ, сердце.
+ * General Rdyan — legendary floor boss (wiki/design-bosses.md, sections 1–4): a huge knight of the Order in rusty scarlet armour,
+ * overgrown with raspberry vine with burning berries, riding a comically tiny horse (its legs flicker in the run). Two curved
+ * swords, a red mane cloak, a raspberry crown on the helmet, the berry heart on the breastplate. Gravity: the light shimmers
+ * violet ↔ raspberry. Attacks: "pull" (a ring drags the hero, then a strike with both swords), two wide sweeps, a leap across
+ * the arena (every second one — stuck, dazed), a fan of thorn arrows; in rage — a violet aura, thorns all around and the "meteor":
+ * flies up high, the shadow chases the hero, falls, gets stuck in the crater (dazed). Drops "Gravity Well" or
+ * the "Crown of Thorns" aura. Moving parts: horse, front legs, hind legs, knight, two arms with swords, cloak, heart.
  */
 
 const GRAV = C(2.6, 1, 4), THORN = C(1.2, 3, 0.6), METEOR = C(3.6, 0.8, 2.6), EMBER = C(4, 1.4, 0.4);
@@ -24,28 +25,28 @@ const ARROW_LEN = 16, ARROW_W = 1, ARROW_AIM = 0.9;
 const MET_R = 5, MET_RISE = 0.6, MET_CHASE = 1.8, MET_LOCK = 0.7, MET_FALL = 0.3, MET_H = 18;
 
 const sfx = {
-  /** Копытца: частая мелкая дробь — лошадка крошечная */
+  /** Little hooves: a quick light patter — the horse is tiny */
   hoof() { boom(180, 90, 0.08, 0.12); boom(160, 80, 0.07, 0.1, 0.05); },
-  /** Гравитация: низкий гул, уходящий вниз, и свист воздуха */
+  /** Gravity: a low hum going down and the whistle of air */
   grav() { voice({ type: 'sawtooth', f: 90, f1: 45, dur: 1.2, vol: 0.06, lp: 600, lp1: 200, verb: 0.6 }); hiss({ dur: 1.2, vol: 0.18, f: 300, f1: 1400, q: 0.6, attack: 0.3, verb: 0.5 }); },
-  /** Взмах мечом */
+  /** Sword swing */
   swing() { hiss({ dur: 0.4, vol: 0.28, f: 500, f1: 2400, q: 1.3 }); },
-  /** Удар о землю */
+  /** Ground impact */
   slam() { boom(60, 22, 1.1, 0.9, 0, 0.5); hiss({ dur: 0.6, vol: 0.22, f: 1600, f1: 200, q: 0.5, type: 'lowpass' }); },
-  /** Терновые стрелы сорвались */
+  /** Thorn arrows loosed */
   arrows() { for (let i = 0; i < 5; i++) hiss({ dur: 0.2, vol: 0.1, f: 2600, f1: 900, q: 1.2, delay: i * 0.03 }); },
-  /** Метеор: нарастающий вой сверху */
+  /** Meteor: a rising howl from above */
   fall() { voice({ type: 'sawtooth', f: 900, f1: 120, dur: 0.9, vol: 0.05, lp: 2500, lp1: 400, verb: 0.5 }); hiss({ dur: 0.9, vol: 0.25, f: 3000, f1: 300, q: 0.5, type: 'lowpass' }); },
 };
 
 export class GeneralRdyan extends MiniBoss {
   readonly radius = 2;
-  readonly title = 'Генерал Рдян';
-  override readonly subtitle = 'полководец Ордена малины';
+  readonly title = t('General Rdyan');
+  override readonly subtitle = t('commander of the Raspberry Order');
   override readonly topY = 5.4;
   readonly drop = 'gravitywell';
   override readonly tier = 'boss' as const;
-  /** Ауры на выбор после победы, шанс % — терн, тень гравитации, кратер метеора */
+  /** Auras to choose from after the victory, chance % — thorn, gravity shadow, meteor crater */
   override readonly auras = [['thorns', 40], ['shade', 30], ['quake', 30]] as const;
   private readonly horse = new THREE.Group();
   private readonly legsF = new THREE.Group();
@@ -55,9 +56,9 @@ export class GeneralRdyan extends MiniBoss {
   private readonly armR = new THREE.Group();
   private readonly cape = new THREE.Group();
   private readonly emblem = new THREE.Group();
-  /** Фиолетовое кольцо ярости под ногами */
+  /** Violet ring of rage underfoot */
   private readonly auraRing: THREE.Mesh;
-  /** Тень метеора: гонится за героем по полу */
+  /** Meteor shadow: chases the hero along the floor */
   private readonly shadow: THREE.Mesh;
   private gait = 0;
   private leaps = 0;
@@ -92,7 +93,7 @@ export class GeneralRdyan extends MiniBoss {
     const edge = this.shimmer(GRAV, RASP, 2, 2);
     const B = this.box.bind(this);
     this.body.add(this.horse);
-    // лошадка: маленький корпус под малиновой попоной, головка с гривой, хвостик
+    // horse: a small body under a raspberry caparison, a little head with a mane, a little tail
     B(this.horse, coat, 0.8, 0.6, 1.3, 0, 0.75, 0);
     B(this.horse, cloth, 0.86, 0.3, 1.0, 0, 0.86, 0);
     B(this.horse, coat, 0.38, 0.45, 0.55, 0, 1.15, 0.78);
@@ -100,13 +101,13 @@ export class GeneralRdyan extends MiniBoss {
     B(this.horse, cloth, 0.1, 0.35, 0.45, 0, 1.38, 0.66);
     for (const s of [-1, 1]) B(this.horse, glowMat(GRAV), 0.05, 0.06, 0.08, s * 0.2, 1.22, 0.98);
     B(this.horse, dark, 0.14, 0.5, 0.14, 0, 0.72, -0.72, -0.5);
-    // ножки парами — мелькают в беге
+    // little legs in pairs — flicker in the run
     for (const [g, z] of [[this.legsF, 0.45], [this.legsB, -0.45]] as const) {
       g.position.set(0, 0.5, z);
       this.horse.add(g);
       for (const s of [-1, 1]) { B(g, coat, 0.18, 0.46, 0.18, s * 0.26, -0.23, 0); B(g, dark, 0.2, 0.1, 0.2, s * 0.26, -0.45, 0); }
     }
-    // рыцарь: огромный, ноги в латах свисают почти до земли, торс, наплечники, шлем с короной
+    // knight: huge, armoured legs hang almost to the ground, torso, pauldrons, helmet with a crown
     this.knight.position.set(0, 1.05, -0.05);
     this.body.add(this.knight);
     for (const s of [-1, 1]) { B(this.knight, armor, 0.55, 0.45, 1.0, s * 0.62, 0.1, 0.25); B(this.knight, armor, 0.5, 0.85, 0.5, s * 0.78, -0.35, 0.6); }
@@ -117,20 +118,20 @@ export class GeneralRdyan extends MiniBoss {
     B(this.knight, armor, 0.95, 0.95, 0.95, 0, 2.5, 0.05);
     B(this.knight, dark, 0.75, 0.16, 0.05, 0, 2.5, 0.54);
     B(this.knight, edge, 0.6, 0.05, 0.03, 0, 2.5, 0.57);
-    // корона из малины: обод и пять ягод-зубцов
+    // raspberry crown: a rim and five berry prongs
     B(this.knight, gold, 1.0, 0.14, 1.0, 0, 3.02, 0.05);
     for (const [x, z, k] of [[0, 0.05, 0.26], [0.4, 0.45, 0.2], [-0.4, 0.45, 0.2], [0.4, -0.35, 0.2], [-0.4, -0.35, 0.2]] as const) B(this.knight, berry, k, k, k, x, 3.18 + k * 0.3, z);
-    // лоза с ягодами: по торсу, наплечникам и бёдрам
+    // vine with berries: over the torso, pauldrons and thighs
     for (const [x, y, z, rz] of [[0.5, 1.7, 0.57, 0.7], [-0.55, 0.9, 0.57, -0.6], [1.05, 2.27, 0.2, 0.2], [-1.05, 2.27, -0.1, -0.3], [0.62, 0.36, 0.76, 0.4]] as const) {
       B(this.knight, vine, 0.6, 0.12, 0.12, x, y, z, 0, 0, rz);
       B(this.knight, berry, 0.16, 0.16, 0.16, x + 0.15, y + 0.1, z + 0.06);
     }
-    // сердце-ягода на нагруднике: по нему ×2, когда генерал оглушён
+    // berry heart on the breastplate: ×2 on it when the general is dazed
     this.emblem.position.set(0, 1.35, 0.66);
     this.knight.add(this.emblem);
     for (const [x, y, k] of [[0, 0, 0.36], [0.24, 0.2, 0.24], [-0.24, 0.2, 0.24], [0.24, -0.2, 0.24], [-0.24, -0.2, 0.24], [0, 0.38, 0.2], [0, -0.38, 0.2]] as const) B(this.emblem, heart, k, k, 0.12, x, y, 0);
     B(this.emblem, vine, 0.16, 0.22, 0.1, 0, 0.6, 0);
-    // руки с изогнутыми мечами: клинок вперёд из кулака, конец загнут вверх, по кромке — свет гравитации
+    // arms with curved swords: the blade forward from the fist, the tip bent up, gravity light along the edge
     for (const [g, s] of [[this.armL, 1], [this.armR, -1]] as const) {
       g.position.set(s * 1.2, 1.9, 0);
       this.knight.add(g);
@@ -141,12 +142,12 @@ export class GeneralRdyan extends MiniBoss {
       B(g, steel, 0.1, 0.3, 0.9, 0, -1.12, 2.6, -0.45);
       B(g, edge, 0.12, 0.06, 1.9, 0, -1.12, 1.35);
     }
-    // плащ-грива: косматый ворот и полотнище за спиной
+    // mane cloak: a shaggy collar and a sheet behind the back
     this.cape.position.set(0, 2.15, -0.6);
     this.knight.add(this.cape);
     B(this.cape, cloth, 1.9, 0.45, 0.5, 0, 0, 0.05);
     B(this.cape, cloth, 1.7, 2.1, 0.12, 0, -1.05, -0.1);
-    // аура ярости и тень метеора
+    // rage aura and meteor shadow
     this.auraRing.rotation.x = -Math.PI / 2;
     this.auraRing.position.y = 0.08;
     this.group.add(this.auraRing);
@@ -166,7 +167,7 @@ export class GeneralRdyan extends MiniBoss {
   protected override die(): void { this.shadow.visible = false; super.die(); }
   protected override cry(): void { if (!this.quiet) { voice({ type: 'sawtooth', f: 98, f1: 70, dur: 1.2, vol: 0.08, detune: 20, lp: 900, verb: 0.6 }); boom(55, 25, 1, 0.6, 0.1, 0.5); } }
 
-  /** Ярость: фиолетовая аура, тернии кругом, открыт метеор */
+  /** Rage: violet aura, thorns all around, the meteor unlocked */
   protected override onEnrage(): void {
     this.meteorCd = 2;
     this.thornT = 0.5;
@@ -182,20 +183,20 @@ export class GeneralRdyan extends MiniBoss {
     return this.pick(r < 0.35 ? 'pull' : r < 0.7 ? 'arrows' : 'leap');
   }
 
-  /** Не повторять атаку два раза подряд (кроме метеора) */
+  /** Do not repeat an attack twice in a row (except the meteor) */
   private pick(a: string): string {
     if (a === this.last && a !== 'meteor') a = a === 'swords' ? 'pull' : a === 'leap' ? 'arrows' : 'swords';
     this.last = a;
     return a;
   }
 
-  protected act(name: string, t: number, dt: number): boolean {
-    const fx = this.h.fx, at = (x: number) => t >= x && t - dt < x;
+  protected act(name: string, ta: number, dt: number): boolean {
+    const fx = this.h.fx, at = (x: number) => ta >= x && ta - dt < x;
     switch (name) {
       case 'pull': {
-        // меч вверх — фиолетовое кольцо тянет героя к генералу; потом удар двумя мечами вокруг
+        // sword up — a violet ring drags the hero to the general; then a strike with both swords around
         if (!this.hitDone) { this.hitDone = true; this.markCircle(this.pos, PULL_R, PULL_T, () => undefined, GRAV); if (!this.quiet) sfx.grav(); }
-        if (t < PULL_T) {
+        if (ta < PULL_T) {
           const hero = this.h.hero.pos, dx = this.pos.x - hero.x, dz = this.pos.z - hero.z, d = Math.hypot(dx, dz);
           if (d < PULL_R && d > this.radius + 1) { hero.x += (dx / d) * PULL_SPEED * dt; hero.z += (dz / d) * PULL_SPEED * dt; }
           if (rnd() < 0.6) fx.particle({ pos: hero.clone().setY(rand(0.3, 1.5)), vel: new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(3), life: 0.4, size: 0.1, color: GRAV, gravity: 0 });
@@ -209,10 +210,10 @@ export class GeneralRdyan extends MiniBoss {
           fx.burst(this.pos.clone().addScaledVector(this.fwd(), 2).setY(0.4), [...DUST, GRAV], 22, { speed: 5, up: 5, size: 0.14, life: 0.8, gravity: 10 });
           if (this.inCircle(this.pos, SLAM_R)) this.hurt(22, this.pos, 10);
         }
-        return t > PULL_T + SLAM_AIM + 0.45;
+        return ta > PULL_T + SLAM_AIM + 0.45;
       }
       case 'swords': {
-        // два широких взмаха перед собой: справа налево и обратно
+        // two wide sweeps ahead: right to left and back
         for (const [mk, hit] of [[0, 0.6], [0.65, 1.15]] as const) {
           if (at(mk)) this.markCircle(this.pos.clone().addScaledVector(this.fwd(), 2.4), 2.6, hit - mk, () => undefined);
           if (at(hit)) {
@@ -222,12 +223,12 @@ export class GeneralRdyan extends MiniBoss {
             if (this.inCone(this.pos, this.yaw, 4.6, 1.15)) this.hurt(16, this.pos, 6);
           }
         }
-        if (t < 0.65) this.face(dt, 0.6);
-        return t > 1.5;
+        if (ta < 0.65) this.face(dt, 0.6);
+        return ta > 1.5;
       }
       case 'leap': {
-        // присел → прыжок через арену на героя → удар, кольца; каждый второй (в ярости — третий) — застрял, оглушён
-        if (t < LEAP_CROUCH) { this.face(dt, 2); return false; }
+        // crouch → leap across the arena onto the hero → strike, rings; every second one (in rage — third) — stuck, dazed
+        if (ta < LEAP_CROUCH) { this.face(dt, 2); return false; }
         if (!this.hitDone) {
           this.hitDone = true;
           this.jumpFrom.copy(this.pos).setY(0);
@@ -235,7 +236,7 @@ export class GeneralRdyan extends MiniBoss {
           this.markCircle(this.jumpAt, LEAP_R, LEAP_AIR, () => undefined);
           if (!this.quiet) boom(90, 40, 0.3, 0.4);
         }
-        const k = Math.min(1, (t - LEAP_CROUCH) / LEAP_AIR);
+        const k = Math.min(1, (ta - LEAP_CROUCH) / LEAP_AIR);
         this.pos.x = THREE.MathUtils.lerp(this.jumpFrom.x, this.jumpAt.x, k);
         this.pos.z = THREE.MathUtils.lerp(this.jumpFrom.z, this.jumpAt.z, k);
         this.flyY = Math.sin(Math.PI * k) * 5;
@@ -248,11 +249,11 @@ export class GeneralRdyan extends MiniBoss {
         fx.burst(this.jumpAt.clone().setY(0.4), DUST, 24, { speed: 6, up: 5, size: 0.18, life: 1, gravity: 12 });
         if (this.inCircle(this.jumpAt, LEAP_R)) this.hurt(24, this.jumpAt, 10);
         this.leaps++;
-        if (this.leaps % (this.enraged ? 3 : 2) === 0) { this.h.fx.text(this.pos.clone().setY(this.topY + 0.6), 'застрял!', ''); this.daze(1.8); }
+        if (this.leaps % (this.enraged ? 3 : 2) === 0) { this.h.fx.text(this.pos.clone().setY(this.topY + 0.6), t('stuck!'), ''); this.daze(1.8); }
         return true;
       }
       case 'arrows': {
-        // веер полос → терновые стрелы летят по ним; герой ловит не больше одной
+        // a fan of strips → thorn arrows fly along them; the hero catches no more than one
         const n = this.enraged ? 7 : 5;
         if (!this.hitDone) {
           this.hitDone = true;
@@ -266,10 +267,10 @@ export class GeneralRdyan extends MiniBoss {
           }
         }
         if (at(ARROW_AIM) && !this.quiet) sfx.arrows();
-        return t > ARROW_AIM + 0.4;
+        return ta > ARROW_AIM + 0.4;
       }
       case 'meteor': {
-        // взлёт за край неба → тень гонится за героем → замерла → падение метеором, кратер, огонь; застрял — оглушён
+        // takeoff beyond the edge of the sky → the shadow chases the hero → froze → falls as a meteor, crater, fire; stuck — dazed
         if (!this.hitDone) {
           this.hitDone = true;
           this.meteorCd = 14;
@@ -279,10 +280,10 @@ export class GeneralRdyan extends MiniBoss {
           fx.shock(this.pos.clone().setY(0.1), 4, GRAV, 0.5, 0.2);
           fx.burst(this.pos.clone().setY(0.4), [...DUST, GRAV], 20, { speed: 5, up: 6, size: 0.16, life: 0.9, gravity: 10 });
         }
-        if (t < MET_RISE) { this.flyY = (t / MET_RISE) ** 2 * MET_H; return false; }
+        if (ta < MET_RISE) { this.flyY = (ta / MET_RISE) ** 2 * MET_H; return false; }
         this.flyY = MET_H;
-        if (t < MET_RISE + MET_CHASE) {
-          // тень бежит к герою
+        if (ta < MET_RISE + MET_CHASE) {
+          // the shadow runs to the hero
           const to = this.heroAt().sub(this.jumpAt), d = to.length(), step = 7 * dt;
           if (d > 1e-3) this.jumpAt.addScaledVector(to, Math.min(1, step / d));
           this.clampIn(this.jumpAt, 2.5);
@@ -296,8 +297,8 @@ export class GeneralRdyan extends MiniBoss {
         }
         this.pos.x = this.jumpAt.x; this.pos.z = this.jumpAt.z;
         const f0 = MET_RISE + MET_CHASE + MET_LOCK;
-        if (t < f0) return false;
-        const k = Math.min(1, (t - f0) / MET_FALL);
+        if (ta < f0) return false;
+        const k = Math.min(1, (ta - f0) / MET_FALL);
         this.flyY = MET_H * (1 - k);
         if (rnd() < 0.9) fx.particle({ pos: this.pos.clone().setY(this.flyY + 2), vel: new THREE.Vector3(rand(-1, 1), 3, rand(-1, 1)), life: 0.5, size: 0.2, color: rnd() < 0.5 ? METEOR : EMBER, gravity: -2 });
         if (k < 1) return false;
@@ -310,9 +311,9 @@ export class GeneralRdyan extends MiniBoss {
         fx.explosion(this.jumpAt.clone().setY(0.3), MET_R, METEOR);
         for (const [r, d] of [[3, 0.35], [5.5, 0.55], [8, 0.8]] as const) fx.shock(this.jumpAt.clone().setY(0.08), r, r > 5 ? GRAV : EMBER, d, 0.25);
         if (this.inCircle(this.jumpAt, MET_R)) this.hurt(32, this.jumpAt, 12);
-        // кратер: огненное кольцо по краю
+        // crater: a ring of fire along the edge
         for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; this.hazard(this.jumpAt.clone().add(new THREE.Vector3(Math.cos(a) * 4, 0, Math.sin(a) * 4)), 1.2, 4, 10, EMBER); }
-        this.h.fx.text(this.pos.clone().setY(this.topY + 0.6), 'застрял!', '');
+        this.h.fx.text(this.pos.clone().setY(this.topY + 0.6), t('stuck!'), '');
         this.daze(2.5);
         return true;
       }
@@ -320,7 +321,7 @@ export class GeneralRdyan extends MiniBoss {
     return true;
   }
 
-  /** Терновая стрела: летит по полосе; герой в полосе — 12, не больше одной за залп */
+  /** Thorn arrow: flies along a strip; hero in the strip — 12, no more than one per volley */
   private bolt(from: THREE.Vector3, dir: THREE.Vector3): void {
     if (this.state === 'dead') return;
     const mat = glowMat(THORN);
@@ -335,7 +336,7 @@ export class GeneralRdyan extends MiniBoss {
   protected animate(dt: number, walk: boolean): void {
     const t = this.time, S = this.st, A = this.state === 'attack' ? this.attack : '';
     if (this.awake && this.enraged) this.meteorCd -= dt;
-    // ярость: аура и терновое кольцо раз в 4 с (пока на земле)
+    // rage: the aura and a thorn ring every 4 s (while on the ground)
     this.auraRing.visible = this.enraged && this.state !== 'dead' && this.flyY < 2;
     if (this.auraRing.visible) { this.auraRing.rotation.z = t * 0.8; this.auraRing.scale.setScalar(1 + Math.sin(t * 4) * 0.06); }
     if (this.enraged && this.state !== 'dead' && this.flyY < 1) {
@@ -347,7 +348,7 @@ export class GeneralRdyan extends MiniBoss {
       }
       if (rnd() < 0.4) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(0.5, 4.5), rand(-1.5, 1.5))), vel: new THREE.Vector3(0, 0.8, 0), life: 0.6, size: 0.1, color: GRAV, gravity: 0 });
     }
-    // бег: ножки лошадки мелькают, рыцарь подскакивает в седле
+    // run: the horse's little legs flicker, the knight bounces in the saddle
     if (walk) {
       const was = this.gait % 1;
       this.gait += dt * 5.5 * this.speedK;
@@ -362,7 +363,7 @@ export class GeneralRdyan extends MiniBoss {
       this.body.position.y *= 0.8;
       this.knight.position.y = 1.05 + Math.sin(t * 2) * 0.03;
     }
-    // руки и корпус по атаке
+    // arms and body by attack
     let aL = -0.3, aR = -0.3, twist = 0, lean = 0, crouch = 1;
     if (A === 'pull') {
       if (S < PULL_T) { aR = -2.9; lean = -0.15; }
@@ -382,9 +383,9 @@ export class GeneralRdyan extends MiniBoss {
     this.knight.rotation.y += (twist - this.knight.rotation.y) * ease;
     this.knight.rotation.x += (lean - this.knight.rotation.x) * ease;
     if (this.state !== 'dead') this.body.scale.set(1, this.body.scale.y + (crouch - this.body.scale.y) * ease, 1);
-    // лошадка в оглушении припала, ножки разъехались
+    // the horse crouched when dazed, little legs splayed
     if (this.state === 'daze') { this.horse.rotation.x = 0.15; this.legsF.rotation.x = -0.6; this.legsB.rotation.x = 0.6; } else this.horse.rotation.x *= 0.85;
-    // плащ-грива: колышется, в беге и полёте развевается назад
+    // mane cloak: sways, streams back in the run and the flight
     this.cape.rotation.x = (walk || this.flyY > 0.5 ? 0.45 : 0.08) + Math.sin(t * 3) * 0.06;
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.emblem.scale.setScalar(beat * (this.heartOpen ? 1.5 : 1));

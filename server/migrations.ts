@@ -1,6 +1,6 @@
 /**
- * Миграции SQLite: номер — индекс + 1, применённые помнит `PRAGMA user_version`.
- * Новую схему — только новой строкой в конце, старые не правим. Время везде — миллисекунды Unix.
+ * SQLite migrations: number = index + 1, applied ones are remembered by `PRAGMA user_version`.
+ * New schema goes only as a new string at the end, old ones are never edited. Time is Unix milliseconds everywhere.
  */
 export const MIGRATIONS: string[] = [
   // 001_init
@@ -8,7 +8,7 @@ export const MIGRATIONS: string[] = [
   CREATE TABLE players (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    -- имя в нижнем регистре: NOCASE в SQLite понимает только латиницу
+    -- lower-case name: NOCASE in SQLite only understands Latin letters
     name_key TEXT NOT NULL UNIQUE,
     token_hash TEXT NOT NULL UNIQUE,
     created_at INTEGER NOT NULL,
@@ -65,11 +65,11 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX match_players_player ON match_players(player_id);
   `,
-  // 002_loot: награда игрока за бой (battle.loot) засчитана — второй раз не принимается
+  // 002_loot: the player's battle reward (battle.loot) has been credited — not accepted a second time
   `
   ALTER TABLE match_players ADD COLUMN paid INTEGER NOT NULL DEFAULT 0;
   `,
-  // 003_friends: друзья — список «добавил по имени», в одну сторону
+  // 003_friends: friends — an "added by name" list, one-directional
   `
   CREATE TABLE friends (
     player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,

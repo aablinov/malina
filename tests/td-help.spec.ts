@@ -3,8 +3,8 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
- * Подсказки обороны для детей (wiki/td-playability-kids.md, топ-3): малину тянет издалека, а волна отбита — вся малина
- * на земле летит к герою; карточка следующей волны с охотниками и мини-боссом; сигнал «башня в беде» в HUD и на карте.
+ * Defence hints for kids (wiki/td-playability-kids.md, top 3): raspberries are pulled from afar, and once a wave is beaten all the raspberries
+ * on the ground fly to the hero; the next-wave card with hunters and a mini-boss; the "tower in trouble" signal in the HUD and on the map.
  */
 
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=td';
@@ -18,10 +18,10 @@ async function open(page: Page): Promise<void> {
   expect(errors).toEqual([]);
 }
 
-test('оборона: магнит малины в 6 м и сбор урожая после волны', async ({ page }) => {
+test('defence: raspberry magnet at 6 m and harvest after the wave', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
-    // кучки малины обороны — в мире симуляции (src/sim/pile.ts), не в складе props
+    // the defence's raspberry piles live in the simulation world (src/sim/pile.ts), not in the props storage yard
     const m = (window as any).__malina, td = m.td, piles = m.world.piles, V = m.hero.pos.constructor;
     m.hero.place(0, 10, 0); m.hero.god = true;
     const reach = piles.reach;
@@ -29,7 +29,7 @@ test('оборона: магнит малины в 6 м и сбор урожая
     piles.drop(new V(4.5, 0, 10), 5);
     m.step(3);
     const near = m.berries - b0;
-    // далёкая малина лежит, пока волна идёт; волна отбита — летит к герою
+    // far raspberries lie while the wave runs; the wave is beaten — they fly to the hero
     piles.drop(new V(-30, 0, -20), 7);
     td.callWave();
     let lying = 0;
@@ -49,7 +49,7 @@ test('оборона: магнит малины в 6 м и сбор урожая
   expect(r.harvested).toBeGreaterThanOrEqual(7);
 });
 
-test('оборона: карточка следующей волны — охотники и мини-босс; башня в беде — строка с направлением и метка на карте', async ({ page }) => {
+test('defence: next-wave card — hunters and a mini-boss; tower in trouble — a line with the direction and a marker on the map', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td;
@@ -71,12 +71,12 @@ test('оборона: карточка следующей волны — охо�
     const gone = { el: !!document.querySelector('.td-alarm'), markers: td.alarmMarkers.length };
     return { preview, hurt, frozen, gone };
   });
-  expect(r.preview.text).toContain('Садовники');
-  expect(r.preview.chief).toContain('Малиновый великан');
-  expect(r.preview.hunter).toContain('Бобёр-грызун ×2');
-  expect(r.hurt.text).toContain('Башню грызут');
-  expect(r.hurt.text).toMatch(/\d+ м/);
+  expect(r.preview.text).toContain('Gardeners');
+  expect(r.preview.chief).toContain('Raspberry Giant');
+  expect(r.preview.hunter).toContain('Gnawer Beaver ×2');
+  expect(r.hurt.text).toContain('Tower under attack');
+  expect(r.hurt.text).toMatch(/\d+ m/);
   expect(r.hurt.markers).toBe(1);
-  expect(r.frozen).toContain('Башню заморозили');
+  expect(r.frozen).toContain('Tower frozen');
   expect(r.gone).toEqual({ el: false, markers: 0 });
 });

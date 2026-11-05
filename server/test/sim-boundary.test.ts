@@ -4,24 +4,24 @@ import { join, relative } from 'node:path';
 import { test } from 'node:test';
 
 /**
- * Страж границы симуляции (wiki/design-multiplayer.md): модули src/sim, src/net, src/game должны грузиться в Node
- * и не тянуть сцену three, DOM, FX, звук, стили и недетерминированные источники — они общие для сервера и клиента.
+ * Simulation boundary guard (wiki/design-multiplayer.md): modules in src/sim, src/net, src/game must load in Node
+ * and must not pull in the three scene, DOM, FX, sound, styles or non-deterministic sources — they are shared by server and client.
  */
 const ROOT = join(import.meta.dirname, '..', '..');
-/** Чистые каталоги: без вида, DOM и случайности; src/game — безголовый бой на тех же классах, что в браузере: только грузится в Node */
+/** Pure directories: no view, DOM or randomness; src/game — headless battle on the same classes as in the browser: only has to load in Node */
 const PURE = ['src/sim', 'src/net'];
 const DIRS = [...PURE, 'src/game'];
-/** Геймплей, который крутит сервер (герой, снаряжение, магия, мобы, стражи): сцена и звук можно, случайность и часы — нет */
+/** Gameplay the server runs (hero, gear, magic, mobs, wardens): scene and sound allowed, randomness and clocks not */
 const GAMEPLAY = ['src/mobs', 'src/bosses', 'src/magic', 'src/knight.ts', 'src/gear.ts', 'src/spells.ts', 'src/weapon-arts.ts', 'src/aura-offense.ts', 'src/auras.ts', 'src/weapon-synergies.ts', 'src/decoys.ts', 'src/collision.ts', 'src/level/pathfind.ts'];
-/** Клиентские модули, которым место в src/net ради общего протокола, но в Node они не грузятся (WebSocket браузера, DOM) */
+/** Client modules that belong in src/net for the shared protocol but do not load in Node (browser WebSocket, DOM) */
 const CLIENT_ONLY = new Set(['src/net/client.ts', 'src/net/battle-ui.ts']);
 const BANNED: [RegExp, string][] = [
-  [/from '[^']*\/(fx|textures|audio|spell-audio|weapon-audio|loot-look)(\.ts)?'/, 'вид и звук'],
-  [/\.css'/, 'стили'],
-  [/THREE\.(Group|Mesh|Material|MeshBasicMaterial|MeshStandardMaterial|Texture|Scene|Object3D|Sprite|Points)\b/, 'сцена three'],
+  [/from '[^']*\/(fx|textures|audio|spell-audio|weapon-audio|loot-look)(\.ts)?'/, 'view and sound'],
+  [/\.css'/, 'styles'],
+  [/THREE\.(Group|Mesh|Material|MeshBasicMaterial|MeshStandardMaterial|Texture|Scene|Object3D|Sprite|Points)\b/, 'three scene'],
   [/\b(document|window|localStorage|sessionStorage|navigator)\./, 'DOM'],
-  [/\bMath\.random\b/, 'Math.random — только world.rng'],
-  [/\b(performance\.now|Date\.now)\b/, 'часы — только тик мира'],
+  [/\bMath\.random\b/, 'Math.random — only world.rng'],
+  [/\b(performance\.now|Date\.now)\b/, 'clock — only the world tick'],
 ];
 
 function walk(dir: string): string[] {
@@ -38,9 +38,9 @@ function walk(dir: string): string[] {
 const list = (dirs: string[]): string[] => dirs.flatMap((d) => { try { return walk(join(ROOT, d)); } catch { return []; } })
   .map((p) => relative(ROOT, p)).filter((p) => !CLIENT_ONLY.has(p));
 const pure = list(PURE), files = list(DIRS), gameplay = list(GAMEPLAY);
-const DETERMINISM = BANNED.filter(([, why]) => why.startsWith('Math.random') || why.startsWith('часы'));
+const DETERMINISM = BANNED.filter(([, why]) => why.startsWith('Math.random') || why.startsWith('clock'));
 
-test('модули симуляции и сети не трогают DOM, сцену и случайность', () => {
+test('simulation and net modules do not touch DOM, scene or randomness', () => {
   const bad: string[] = [];
   for (const f of pure) {
     const src = readFileSync(join(ROOT, f), 'utf8');
@@ -52,11 +52,11 @@ test('модули симуляции и сети не трогают DOM, сц�
   assert.deepEqual(bad, []);
 });
 
-test('модули симуляции и сети грузятся в Node', async () => {
+test('simulation and net modules load in Node', async () => {
   for (const f of files) await import(join(ROOT, f));
 });
 
-test('геймплей сервера (герой, снаряжение, магия, мобы, стражи) не трогает Math.random и часы — только rnd() и время боя', () => {
+test('server gameplay (hero, gear, magic, mobs, wardens) does not touch Math.random or clocks — only rnd() and battle time', () => {
   const bad: string[] = [];
   for (const f of gameplay) {
     const src = readFileSync(join(ROOT, f), 'utf8');

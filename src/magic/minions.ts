@@ -6,57 +6,57 @@ import type { Target } from '../target.ts';
 import { rand } from './kit.ts';
 
 /**
- * Призванные (wiki/design-spells.md, «Базовые заклинания»): общий ход для волков, элементалей и големов.
- * Портал раскрывается, фигура поднимается из земли, сама идёт к ближайшему врагу (не к бочкам), бьёт с перезарядкой,
- * без врагов держится у героя. Пока жива — приманка для мобов (src/decoys.ts): её бьют вместо героя, здоровье кончилось —
- * исчезает раньше срока. В конце растворяется и всё за собой убирает.
+ * Summons (wiki/design-spells.md, "Base spells"): the shared flow for wolves, elementals and golems.
+ * A portal opens, the figure rises from the ground, walks to the nearest enemy on its own (not to barrels), hits with a cooldown,
+ * stays near the hero without enemies. While alive it is bait for mobs (src/decoys.ts): they hit it instead of the hero; health gone —
+ * it vanishes early. At the end it dissolves and cleans everything up after itself.
  */
 
 export interface Minion {
   readonly g: THREE.Group;
   readonly pos: THREE.Vector3;
-  /** Номер в стае (раскладка у героя, фаза анимации) */
+  /** Index in the pack (layout around the hero, animation phase) */
   readonly i: number;
-  /** Сколько живёт, с */
+  /** Lifetime, s */
   t: number;
   hp: number;
   target: Target | null;
-  /** Идёт атака: сколько осталось, с (0 — нет) */
+  /** Attack in progress: time left, s (0 — none) */
   swing: number;
-  /** Своё состояние заклинания (огонёк элементаля, фаза прыжка волка) */
+  /** The spell's own state (the elemental's flame, the wolf's leap phase) */
   data: Record<string, unknown>;
 }
 
 export interface MinionSpec {
   school: School;
-  /** Где появиться */
+  /** Where to appear */
   at: THREE.Vector3;
   i: number;
-  /** Срок жизни, с */
+  /** Lifespan, s */
   life: number;
   hp: number;
-  /** Бег, м/с */
+  /** Run speed, m/s */
   speed: number;
-  /** С какого расстояния бьёт (от края цели), м */
+  /** Reach of the hit (from the target's edge), m */
   reach: number;
-  /** Перезарядка удара, с; длительность взмаха, с (урон — в середине) */
+  /** Hit cooldown, s; swing duration, s (damage at the middle) */
   cd: number;
   swing: number;
-  /** Радиус перетягивания мобов на себя (голем), м */
+  /** Radius of pulling mobs onto itself (golem), m */
   taunt?: number;
-  /** Ростом, м — для частиц и свечения портала */
+  /** Height, m — for particles and portal glow */
   height: number;
-  /** Модель и её материалы (материалы освобождаются в конце; геометрию можно делить между призывами) */
+  /** Model and its materials (materials are disposed at the end; geometry can be shared between summons) */
   build(): { g: THREE.Group; mats: THREE.Material[] };
-  /** Миг удара по цели (урон, вспышка, звук) */
+  /** The moment of the hit on the target (damage, flash, sound) */
   strike(m: Minion, t: Target): void;
-  /** Анимация каждый кадр: walking — идёт; swing 0..1 — фаза взмаха (или −1) */
+  /** Animation every frame: walking — moving; swing 0..1 — swing phase (or −1) */
   animate?(m: Minion, dt: number, walking: boolean, swing: number): void;
-  /** Получил удар от моба */
+  /** Took a hit from a mob */
   onHurt?(m: Minion, dmg: number): void;
 }
 
-/** Призвать: портал, подъём из земли, бой, растворение. Возвращает призванного (для тестов) */
+/** Summon: portal, rise from the ground, fight, dissolve. Returns the summon (for tests) */
 export function summon(kit: Spells, spec: MinionSpec): Minion {
   const fx = kit.h.fx, hero = kit.h.hero, s = kit.color(spec.school);
   const { g, mats } = spec.build();
@@ -82,9 +82,9 @@ export function summon(kit: Spells, spec: MinionSpec): Minion {
     m.t += dt;
     const floor = kit.h.terrain.floorAt(g.position.x, g.position.z, g.position.y + 2);
     const fy = Number.isFinite(floor) ? floor : hero.pos.y;
-    // подъём из портала
+    // rise from the portal
     if (m.t < 0.5) { g.position.y = fy - spec.height * (1 - m.t / 0.5) ** 2; spec.animate?.(m, dt, false, -1); return true; }
-    // конец: срок вышел или здоровье кончилось — растворяется вверх
+    // end: time is up or health is gone — dissolves upward
     if (m.t >= spec.life || m.hp <= 0) {
       if (!gone) { gone = true; remove(); m.data.endT = 0; }
       const e = ((m.data.endT as number) += dt) / 0.6;
@@ -97,7 +97,7 @@ export function summon(kit: Spells, spec: MinionSpec): Minion {
       return false;
     }
     g.position.y = fy;
-    // цель: ближайший живой враг в 12 м (вещи не трогаем), иначе — к герою
+    // target: the nearest living enemy within 12 m (props untouched), otherwise — to the hero
     if (!m.target?.alive || m.target.prop) m.target = nearestEnemy(kit, g.position, 12);
     const tg = m.target;
     const goal = tg ? tg.pos : hero.pos.clone().add(new THREE.Vector3(Math.cos(m.i * 2.3 + 0.6) * 1.8, 0, Math.sin(m.i * 2.3 + 0.6) * 1.8));
@@ -120,7 +120,7 @@ export function summon(kit: Spells, spec: MinionSpec): Minion {
   return m;
 }
 
-/** Ближайший живой враг (не бочка и не ящик) */
+/** Nearest living enemy (not a barrel and not a crate) */
 export function nearestEnemy(kit: Spells, p: THREE.Vector3, r: number): Target | null {
   let best: Target | null = null, bd = Infinity;
   for (const t of kit.h.targets()) {

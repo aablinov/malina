@@ -5,33 +5,34 @@ import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Друзовый голем — мини-босс (wiki/design-bosses.md, раздел 2): каменный истукан Ордена, из спины и плеч растёт малиновая
- * друза, в груди сквозь трещину светится сердце-ягода, на голове — венец из костянок (знак Ордена). Тяжело топает к герою.
- * Атаки: «разлом» — бьёт кулаками в пол, по полосе к герою один за другим вырастают кристаллы; кулаки застревают в земле —
- * оглушён, сердце открыто; «топот» — вплотную, кольцо пыли; «осколок» — отрывает кристалл со спины и бросает по дуге,
- * на месте падения — розовая крошка жжёт. Роняет «Разлом». Подвижных частей: тело, голова, две руки, две ноги, друза, сердце.
+ * Druse Golem — mini-boss (wiki/design-bosses.md, section 2): a stone idol of the Order, a raspberry druse grows from its back
+ * and shoulders, the berry heart glows through a crack in the chest, a crown of drupelets (sign of the Order) on the head. Stomps heavily towards the hero.
+ * Attacks: "rift" — slams its fists into the floor, crystals grow one after another along a strip towards the hero; the fists get stuck in the ground —
+ * dazed, heart open; "stomp" — up close, a ring of dust; "shard" — tears a crystal off its back and lobs it,
+ * pink grit burns where it lands. Drops "Rift". Moving parts: body, head, two arms, two legs, druse, heart.
  */
 
 const PINK = C(4, 1.2, 2.6), PINK2 = C(4, 2.6, 3.4), DUST = ['#9a9284', '#7a7468', '#5e5a52'];
 
 const sfx = {
-  /** Шаг: глухой удар камня о камень */
+  /** Step: a dull thud of stone on stone */
   step() { boom(55, 28, 0.35, 0.4); },
-  /** Кулаки в пол: гул и треск породы */
+  /** Fists into the floor: rumble and crack of rock */
   slam() { boom(60, 22, 1.2, 0.9, 0, 0.5); hiss({ dur: 0.6, vol: 0.25, f: 2200, f1: 300, q: 0.5, type: 'lowpass' }); },
-  /** Кристалл вырос: короткий стеклянный звон */
+  /** Crystal grew: a short glassy ring */
   spike(i: number) { bell(880 + (i % 5) * 140, 0.35, 0.025, 0, 0.4); },
-  /** Отломил осколок: хруст */
+  /** Broke off a shard: crunch */
   crack() { hiss({ dur: 0.18, vol: 0.2, f: 3000, f1: 800, q: 1.2, type: 'bandpass' }); voice({ type: 'square', f: 220, f1: 90, dur: 0.1, vol: 0.03, lp: 1500 }); },
-  /** Осколок разбился: звон и россыпь */
+  /** Shard shattered: ring and scatter */
   shatter() { boom(120, 50, 0.3, 0.3); for (const [f, d] of [[1320, 0], [1760, 0.03], [2210, 0.06]] as const) bell(f, 0.5, 0.025, d, 0.5); },
 };
 
 export class DruseGolem extends MiniBoss {
   readonly radius = 1.5;
-  readonly title = 'Друзовый голем';
+  readonly title = t('Druse Golem');
   override readonly topY = 3.7;
   readonly drop = 'rift';
   private readonly torso = new THREE.Group();
@@ -42,7 +43,7 @@ export class DruseGolem extends MiniBoss {
   private readonly heart = new THREE.Group();
   private stepT = 0;
   private riftCd = 2;
-  /** Кулаки застряли после разлома — оглушение держит их в земле */
+  /** Fists stuck after the rift — the daze keeps them in the ground */
   private stuck = false;
   private readonly riftDir = new THREE.Vector3();
 
@@ -61,12 +62,12 @@ export class DruseGolem extends MiniBoss {
     const gold = this.lam('#e8b84a');
     const B = this.box.bind(this);
     this.body.add(this.torso);
-    // туловище: огромная глыба, пояс потемнее, мох на плечах
+    // body: a huge boulder, a darker belt, moss on the shoulders
     B(this.torso, stone, 2.3, 1.7, 1.5, 0, 2.0, 0);
     B(this.torso, dark, 2.0, 0.45, 1.3, 0, 1.0, 0);
     B(this.torso, moss, 0.8, 0.14, 0.9, -0.75, 2.9, 0.1);
     B(this.torso, moss, 0.5, 0.3, 0.12, 0.7, 1.6, 0.76);
-    // трещина в груди: тёмная рамка, сквозь неё светится сердце-ягода
+    // crack in the chest: a dark frame, the berry heart glows through it
     B(this.torso, dark, 0.14, 0.75, 0.1, -0.36, 2.15, 0.76, 0, 0, 0.2);
     B(this.torso, dark, 0.14, 0.75, 0.1, 0.36, 2.15, 0.76, 0, 0, -0.2);
     B(this.torso, dark, 0.5, 0.12, 0.1, 0, 2.55, 0.76);
@@ -75,7 +76,7 @@ export class DruseGolem extends MiniBoss {
     const core = this.shimmer(RASP, PINK2, 0, 3);
     B(this.heart, core, 0.42, 0.5, 0.2, 0, 0, 0, 0, 0, Math.PI / 4);
     B(this.heart, core, 0.22, 0.22, 0.26, 0, 0, 0.04);
-    // друза: острые розовые кристаллы из спины и плеч
+    // druse: sharp pink crystals from the back and shoulders
     this.torso.add(this.druse);
     const cr = [this.shimmer(PINK, PINK2, 0, 1.4), this.shimmer(PINK, PINK2, 2, 1.4), this.shimmer(PINK, PINK2, 4, 1.4)];
     for (const [x, y, z, s, rx, rz] of [
@@ -86,7 +87,7 @@ export class DruseGolem extends MiniBoss {
       B(this.druse, m, 0.32 * s, 0.9 * s, 0.32 * s, x, y, z, rx, 0.785, rz);
       B(this.druse, m, 0.18 * s, 0.5 * s, 0.18 * s, x + 0.18 * s, y - 0.1, z + 0.05, rx * 0.6, 0.785, rz - 0.5);
     }
-    // голова: маленькая, глаза светятся, на макушке — венец из костянок
+    // head: small, glowing eyes, a crown of drupelets on top
     this.head.position.set(0, 2.85, 0.25);
     this.torso.add(this.head);
     B(this.head, stone, 0.85, 0.7, 0.8, 0, 0.35, 0);
@@ -94,7 +95,7 @@ export class DruseGolem extends MiniBoss {
     B(this.head, glowMat(PINK2), 0.55, 0.1, 0.05, 0, 0.42, 0.41);
     for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; B(this.head, core, 0.16, 0.16, 0.16, Math.cos(a) * 0.24, 0.85, Math.sin(a) * 0.24 - 0.05); }
     B(this.head, gold, 0.1, 0.16, 0.1, 0, 0.98, -0.05);
-    // руки: плечо, массивный кулак-глыба; ось — в плече
+    // arms: shoulder, a massive boulder fist; the pivot is at the shoulder
     for (const s of [-1, 1]) {
       const g = new THREE.Group();
       g.position.set(s * 1.5, 2.55, 0);
@@ -104,7 +105,7 @@ export class DruseGolem extends MiniBoss {
       B(g, stone, 1.0, 0.85, 1.0, 0, -1.7, 0);
       this.arms.push(g);
     }
-    // ноги: короткие столбы, ось — в бедре
+    // legs: short pillars, the pivot is at the hip
     for (const s of [-1, 1]) {
       const g = new THREE.Group();
       g.position.set(s * 0.6, 0.85, 0);
@@ -120,7 +121,7 @@ export class DruseGolem extends MiniBoss {
     return dist > 4.5 ? 'shard' : null;
   }
 
-  /** Кристаллы вырастают по полосе один за другим; ref — общий на весь разлом, чтобы бил один раз */
+  /** Crystals grow along the strip one after another; ref — shared by the whole rift so it hits once */
   private spikes(from: THREE.Vector3, dir: THREE.Vector3, len: number, ref: { hit: boolean }): void {
     const fx = this.h.fx, n = Math.round(len / 1.1);
     for (let i = 0; i < n; i++) {
@@ -149,7 +150,7 @@ export class DruseGolem extends MiniBoss {
           fx.burst(at.clone().setY(0.2), [PINK, ...DUST], 6, { speed: 2.5, up: 3, size: 0.1, life: 0.5, gravity: 8 });
           if (!ref.hit && !this.dead && this.inCircle(at, 0.8)) { ref.hit = true; this.hurt(18, at, 6); }
         }
-        // выстреливает за 0,1 с, стоит, к концу уходит в землю
+        // shoots up in 0.1 s, stands, sinks into the ground at the end
         g.scale.y = q < 0.1 ? q / 0.1 : q > 0.55 ? Math.max(0, 1 - (q - 0.55) / 0.35) : 1;
       }, () => mat.dispose());
     }
@@ -159,7 +160,7 @@ export class DruseGolem extends MiniBoss {
     const fx = this.h.fx;
     switch (name) {
       case 'rift': {
-        // замах над головой → кулаки в пол → полосы → кристаллы; кулаки застряли — оглушён
+        // wind-up overhead → fists into the floor → strips → crystals; fists stuck — dazed
         const RAISE = 0.5, MARK = 0.8, LEN = 14, W = 1.6;
         if (t < RAISE) { this.face(dt, 1.5); return false; }
         if (!this.hitDone) {
@@ -188,7 +189,7 @@ export class DruseGolem extends MiniBoss {
         return true;
       }
       case 'stomp': {
-        // поднял ногу — круг налился — топнул всем весом
+        // raised a leg — the circle filled — stomped with all its weight
         const WIND = 0.6;
         if (!this.hitDone) { this.hitDone = true; this.markCircle(this.pos, 3, WIND, () => undefined); }
         if (t >= WIND && t - dt < WIND) {
@@ -201,7 +202,7 @@ export class DruseGolem extends MiniBoss {
         return t > WIND + 0.5;
       }
       case 'shard': {
-        // тянется за спину, отламывает кристалл — и бросает по дуге
+        // reaches behind its back, breaks off a crystal — and lobs it
         const n = this.enraged ? 2 : 1;
         for (let i = 0; i < n; i++) {
           const at = 0.55 + i * 0.4;
@@ -236,7 +237,7 @@ export class DruseGolem extends MiniBoss {
     if (this.state !== 'daze') this.stuck = false;
     const atk = this.state === 'attack' ? this.attack : '';
     let legL = 0, legR = 0, armL = Math.sin(t * 1.3) * 0.06, armR = -armL, lean = 0, bodyY = 0, sway = 0, sq = 1;
-    // ходьба — тяжёлым шагом: ноги по очереди, туловище переваливается, на каждом шаге — гул и пыль
+    // walking — a heavy step: legs in turn, the body waddles, rumble and dust on every step
     if (walk) {
       const was = this.stepT;
       this.stepT += dt * 1.6 * this.speedK;
@@ -254,18 +255,18 @@ export class DruseGolem extends MiniBoss {
       }
     }
     if (atk === 'rift') {
-      // замах обеими над головой, потом кулаки в землю и наклон вперёд
+      // wind-up with both overhead, then fists into the ground and a lean forward
       if (S < 0.5) { const k = S / 0.5; armL = armR = -2.8 * k; lean = -0.15 * k; bodyY = 0.1 * k; }
       else { armL = armR = -0.75; lean = 0.38; bodyY = -0.25; sq = 0.94; }
     } else if (this.stuck) {
-      // кулаки в земле: дёргает, пытается вырвать
+      // fists in the ground: jerks, tries to pull them out
       armL = armR = -0.75 + Math.sin(t * 18) * 0.04; lean = 0.38 + Math.sin(t * 9) * 0.02; bodyY = -0.25;
     } else if (atk === 'stomp') {
-      // подъём ноги и вес назад — потом удар и присед
+      // leg lifted and weight back — then the blow and a crouch
       if (S < 0.6) { const k = S / 0.6; legL = -0.9 * k; bodyY = 0.35 * k; lean = -0.12 * k; armL = armR = -0.5 * k; sway = 0.1 * k; }
       else { const k = Math.max(0, 1 - (S - 0.6) / 0.4); bodyY = -0.15 * k; sq = 1 - 0.12 * k; armL = armR = -0.3 * k; }
     } else if (atk === 'shard') {
-      // правая рука за спину (отломить), рывок вперёд — бросок; на ярости вторая рука следом
+      // right arm behind the back (break off), a jerk forward — throw; in rage the second arm follows
       const hand = (t0: number) => { const q = S - t0; return q < 0 ? 0 : q < 0.45 ? 2.5 * (q / 0.45) : q < 0.6 ? 2.5 - 4.3 * ((q - 0.45) / 0.15) : -1.8 * Math.max(0, 1 - (q - 0.6) / 0.4); };
       armR = hand(0.1);
       if (this.enraged) armL = hand(0.5);
@@ -281,16 +282,16 @@ export class DruseGolem extends MiniBoss {
       this.body.rotation.x += (lean - this.body.rotation.x) * Math.min(1, k * 2);
       this.body.rotation.z += (sway - this.body.rotation.z) * Math.min(1, k * 2);
       this.body.scale.set(2 - sq, sq, 2 - sq);
-      // голова чуть оглядывается; во сне опущена
+      // the head looks around a little; lowered in sleep
       this.head.rotation.x = this.state === 'sleep' ? 0.35 : Math.sin(t * 0.7) * 0.04;
       this.head.rotation.y = Math.sin(t * 0.5) * 0.12;
     }
-    // друза: в ярости кристаллы дрожат и сыплют искры
+    // druse: in rage the crystals tremble and shed sparks
     this.druse.position.x = this.enraged ? Math.sin(t * 40) * 0.015 : 0;
     if (this.state !== 'dead' && this.state !== 'sleep' && rnd() < (this.enraged ? 0.25 : 0.08)) {
       fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-1, 1), this.body.position.y + rand(2, 3.2), 0)).addScaledVector(this.fwd(), -0.9), vel: new THREE.Vector3(0, rand(0.4, 1), 0), life: 0.5, size: rand(0.05, 0.1), color: rnd() < 0.5 ? PINK : PINK2, gravity: -0.5 });
     }
-    // сердце-ягода: в трещине ровно пульсирует, в оглушении — крупно бьётся
+    // berry heart: pulses evenly in the crack, beats hard when dazed
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.5 : 1));
   }

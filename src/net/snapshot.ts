@@ -1,10 +1,10 @@
 /**
- * Снимки мира и дельты — по образцу sv_snapshot.c и cl_parse.c Quake 3: сервер хранит кольцо последних снимков, клиенту уходит
- * разница с тем снимком, который тот подтвердил (`SnapAck` в его команде); подтверждения нет или оно старше кольца —
- * полный базовый снимок (`base: 0`). Клиент тоже хранит кольцо принятых состояний (`cl.snapshots[PACKET_BACKUP]`): пока его
- * подтверждение летит к серверу, дельты приходят от прежней базы — он восстанавливает её из истории, а не отбрасывает.
- * События (`ev`) — по группам на каждый снимок после базового: клиент играет только те, что новее уже применённого.
- * Сущность — плоский объект с коротким ключом `id` (вид + номер: `h1`, `m23`, `t4`, `td`) и примитивными полями
+ * World snapshots and deltas — modelled on Quake 3's sv_snapshot.c and cl_parse.c: the server keeps a ring of recent snapshots and sends the client
+ * the difference from the snapshot it acknowledged (`SnapAck` in its command); no ack, or one older than the ring —
+ * a full base snapshot (`base: 0`). The client also keeps a ring of received states (`cl.snapshots[PACKET_BACKUP]`): while its
+ * ack is in flight to the server, deltas arrive from the previous base — it restores that base from history instead of dropping them.
+ * Events (`ev`) come in groups per snapshot after the base: the client plays only those newer than the one already applied.
+ * An entity is a flat object with a short `id` key (kind + number: `h1`, `m23`, `t4`, `td`) and primitive fields
  */
 export type Prim = number | string | boolean;
 export type EntityState = { id: string } & Record<string, Prim>;
@@ -18,13 +18,13 @@ export interface Snapshot<E = unknown> {
 
 export interface Delta<E = unknown> {
   n: number;
-  /** Снимок, от которого считана разница; 0 — полный */
+  /** Snapshot the difference is computed from; 0 — full */
   base: number;
   tick: number;
   add: EntityState[];
   upd: ({ id: string } & Partial<Record<string, Prim>>)[];
   del: string[];
-  /** События снимков `base+1 … n`, группа на снимок (полный — одна группа: события снимка n) */
+  /** Events of snapshots `base+1 … n`, one group per snapshot (full — a single group: the events of snapshot n) */
   ev: E[][];
 }
 
@@ -37,7 +37,7 @@ export class SnapshotRing<E = unknown> {
 
   get last(): Snapshot<E> | null { return this.ring.length ? this.ring[this.ring.length - 1] : null; }
 
-  /** Новый снимок из списка сущностей; вернёт его номер */
+  /** New snapshot from an entity list; returns its number */
   push(tick: number, ents: Iterable<EntityState>, events: E[]): Snapshot<E> {
     const s: Snapshot<E> = { n: ++this.n, tick, ents: new Map(), events };
     for (const e of ents) s.ents.set(e.id, e);
@@ -48,7 +48,7 @@ export class SnapshotRing<E = unknown> {
 
   get(n: number): Snapshot<E> | null { return this.ring.find((s) => s.n === n) ?? null; }
 
-  /** Дельта последнего снимка от подтверждённого клиентом (0 или неизвестный — полный) */
+  /** Delta of the latest snapshot from the one the client acknowledged (0 or unknown — full) */
   delta(ack: number): Delta<E> | null {
     const cur = this.last;
     if (!cur) return null;
@@ -74,27 +74,27 @@ const empty = <E>(s: Snapshot<E>): Delta<E> => ({ n: s.n, base: s.n, tick: s.tic
 type State = Map<string, EntityState>;
 
 /**
- * Клиентская копия мира: применяет дельты и помнит последние `keep` принятых состояний. Текущие записи `ents` — одни и те же
- * объекты от снимка к снимку (поля правятся на месте), история — копии. Подтверждать серверу — `n`
+ * Client copy of the world: applies deltas and remembers the last `keep` received states. The current `ents` records are the same
+ * objects from snapshot to snapshot (fields are patched in place), the history holds copies. Acknowledge `n` to the server
  */
 export class SnapshotView<E = unknown> {
   n = 0;
   tick = 0;
   readonly ents: State = new Map();
-  /** Что изменилось относительно прежнего текущего состояния */
+  /** What changed relative to the previous current state */
   added: EntityState[] = [];
   updated: EntityState[] = [];
   removed: EntityState[] = [];
-  /** События, ещё не игранные: снимков новее прежнего `n` */
+  /** Events not yet played: from snapshots newer than the previous `n` */
   events: E[] = [];
-  /** Дельт от базы, которой нет в истории (нужен полный снимок) */
+  /** Deltas from a base missing in the history (a full snapshot is needed) */
   rejected = 0;
   private readonly history = new Map<number, State>();
   private readonly keep: number;
 
   constructor(keep = 32) { this.keep = keep; }
 
-  /** false — старый или дубль (`n` не больше текущего) либо база неизвестна (пропущена или старше истории) */
+  /** false — stale or duplicate (`n` not above the current) or the base is unknown (missed or older than the history) */
   apply(d: Delta<E>): boolean {
     if (d.n <= this.n && d.base !== 0) return false;
     let target: State;
@@ -114,7 +114,7 @@ export class SnapshotView<E = unknown> {
         for (const k in u) if (k !== 'id') e[k] = u[k] as Prim;
       }
       for (const id of d.del) target.delete(id);
-      // группы событий — снимков base+1 … n; уже игранные (до текущего n включительно) пропускаем
+      // event groups belong to snapshots base+1 … n; skip those already played (up to and including the current n)
       played = Math.max(0, Math.min(d.ev.length, this.n - d.base));
     }
     this.sync(target);
@@ -126,7 +126,7 @@ export class SnapshotView<E = unknown> {
     return true;
   }
 
-  /** Текущие записи ← целевое состояние: на месте, с разницей для вью */
+  /** Current records ← target state: in place, with the difference for the view */
   private sync(target: State): void {
     this.added = []; this.updated = []; this.removed = [];
     for (const [id, e] of this.ents) if (!target.has(id)) { this.ents.delete(id); this.removed.push(e); }

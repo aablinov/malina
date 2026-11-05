@@ -6,22 +6,23 @@ import { bell, boom, deg, hiss, pluck, semi, voice } from '../spell-audio.ts';
 import type { Spells } from '../spells.ts';
 import type { Target } from '../target.ts';
 import { C, rand, type Spell } from './kit.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Тьма, души и аркана (wiki/design-spells.md, раздел 3): хор мёртвых, гравитационный колодец, коса-череп, павшие стражи,
- * фаланга клинков. Призрачные фигуры — воксели из общего куба с аддитивным материалом (без тёмных непрозрачных кубов:
- * затенение AO рисует вокруг них квадраты). Звуки — тут же, из нот пентатоники и минора тьмы.
+ * Darkness, souls and arcana (wiki/design-spells.md, section 3): choir of the dead, gravity well, skull scythe, fallen guards,
+ * blade phalanx. Ghostly figures are voxels from a shared cube with an additive material (no dark opaque cubes:
+ * AO shading draws squares around them). Sounds are right here, from pentatonic notes and the minor of darkness.
  */
 
 const UNIT = new THREE.BoxGeometry(1, 1, 1);
 const VOID_ROOT = 130.81;
 
-/** Призрачный материал: светится и просвечивает */
+/** Ghostly material: glows and is translucent */
 const ghost = (c: THREE.Color, opacity = 0.85): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({
   color: c, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
 });
 
-/** Брусок из общего куба: w × h × d в точке (x, y, z) */
+/** Bar from the shared cube: w × h × d at point (x, y, z) */
 const box = (m: THREE.Material, w: number, h: number, d: number, x = 0, y = 0, z = 0): THREE.Mesh => {
   const o = new THREE.Mesh(UNIT, m);
   o.scale.set(w, h, d);
@@ -29,22 +30,22 @@ const box = (m: THREE.Material, w: number, h: number, d: number, x = 0, y = 0, z
   return o;
 };
 
-/** Убрать группу из сцены и освободить её материалы (форма общая) */
+/** Remove the group from the scene and dispose its materials (the shape is shared) */
 const drop = (g: THREE.Object3D, mats: THREE.Material[]): void => { g.parent?.remove(g); for (const m of mats) m.dispose(); };
 
-// ---------- звуки ----------
+// ---------- sounds ----------
 
-/** Шёпот: короткие шумы на частотах гласных, тихо и в зале */
+/** Whisper: short noises at vowel frequencies, quiet and in a hall */
 function whisper(dur = 1.2, vol = 0.05): void {
   const vowels = [700, 1100, 1800, 2600];
   for (let i = 0; i < 7; i++) hiss({ dur: rand(0.15, 0.35), vol: vol * rand(0.5, 1), f: vowels[(rnd() * 4) | 0], q: 7, attack: 0.06, delay: rand(0, dur), verb: 0.7 });
 }
-/** Минорный аккорд тьмы */
+/** Minor chord of darkness */
 const voidChord = (vol: number, dur: number, delay = 0): void => [0, 3, 7, 12].forEach((s, i) => voice({ type: 'triangle', f: semi(VOID_ROOT, s), dur, vol, detune: 10, lp: 1800, lp1: 500, delay: delay + i * 0.03, verb: 0.6 }));
 
-// ---------- 13. хор мёртвых ----------
+// ---------- 13. choir of the dead ----------
 
-/** Воксельная призрачная рука: предплечье, ладонь, четыре пальца (в шарнирах — чтобы сжимались) и большой палец */
+/** Voxel ghost hand: forearm, palm, four fingers (in joints — so they can clench) and a thumb */
 function hand(mat: THREE.Material): { g: THREE.Group; fingers: THREE.Group[] } {
   const g = new THREE.Group();
   g.add(box(mat, 0.2, 1, 0.2, 0, 0.5, 0), box(mat, 0.34, 0.3, 0.14, 0, 1.12, 0));
@@ -70,7 +71,7 @@ function deadchoir(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
   kit.groundSigil('void', c, R, tele, dur, 0.3);
   whisper(0.8, 0.05);
   voice({ type: 'sine', f: VOID_ROOT / 2, dur: dur + 0.6, vol: 0.06, attack: 0.4, verb: 0.5 });
-  // замах: из земли сочится зеленоватая дымка душ
+  // windup: a greenish mist of souls seeps from the ground
   let t0 = 0;
   kit.proc((dt) => {
     t0 += dt;
@@ -88,7 +89,7 @@ function deadchoir(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
     whisper(dur, 0.06);
     fx.shock(c, R * 1.1, s.a, 0.45, 0.2);
     fx.flash(c.clone().setY(c.y + 0.6), s.b.clone().multiplyScalar(0.5), R * 1.2, 0.3);
-    // руки: по одной под каждой целью в круге, остальные — где придётся
+    // hands: one under each target in the circle, the rest wherever
     const spots: { p: THREE.Vector3; t: Target | null }[] = kit.within(c, R).map((t) => ({ p: t.pos.clone().setY(c.y), t }));
     const n = Math.max(spots.length, 7 + Math.round(k * 5));
     while (spots.length < n) {
@@ -114,18 +115,18 @@ function deadchoir(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
         const curl = Math.min(1, Math.max(0, (tt - 0.2) / 0.4)) * 1.3;
         fingers.forEach((f, j) => { f.rotation.x = j < 4 ? curl : 0; });
         mat.opacity = 0.8 * (1 - sink) * (0.85 + Math.sin(kit.time * 20 + ph) * 0.15);
-        // держит цель: души сочатся вниз
+        // holds the target: souls seep downward
         if (t && rnd() < 0.3) fx.particle({ pos: t.pos.clone().setY(p.y + rand(0.3, 1.4)), vel: new THREE.Vector3(0, -rand(1, 2), 0), life: 0.5, size: 0.06, color: s.b, gravity: 0 });
       }, () => mat.dispose());
     });
-    // урон волнами, каждая — глухой удар и шёпот
+    // damage in waves, each one a dull thud and a whisper
     const ticks = Math.max(1, Math.round(dur / 0.5));
     for (let i = 0; i < ticks; i++) kit.later(0.15 + i * 0.5, () => {
       kit.h.aoe(c, R, Math.round(power), 0.15, false);
       boom(70, 35, 0.3, 0.16, 0, 0.3);
       if (i % 2 === 0) pluck(deg(VOID_ROOT * 2, i % 5), 0.04);
     });
-    // послевкусие: тёмный след и души, поднимающиеся после ухода рук
+    // aftertaste: a dark trace and souls rising after the hands leave
     fx.decal(c, kit.tex.scorch(), '#ffffff', R * 2.1, dur + 2.5, false, 0.6);
     fx.decal(c, kit.tex.glow(), s.a.clone().multiplyScalar(0.25), R * 2, dur + 1, true);
     kit.later(dur, () => {
@@ -142,7 +143,7 @@ function deadchoir(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vecto
   });
 }
 
-// ---------- 14. гравитационный колодец ----------
+// ---------- 14. gravity well ----------
 
 function gravitywell(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, s = kit.color('void');
@@ -151,10 +152,10 @@ function gravitywell(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
   kit.face(c);
   kit.windup('void', k);
   kit.groundSigil('void', c, R * 0.6, tele, dur + 0.2, 0.3);
-  // гул втягивания: низкий тон ползёт вниз, шипение нарастает
+  // suction hum: a low tone creeps down, hissing grows
   voice({ type: 'triangle', f: 220, f1: 55, dur: tele + dur, vol: 0.07, detune: 15, lp: 1200, lp1: 200, attack: 0.3, verb: 0.5 });
   hiss({ dur: tele + dur, vol: 0.14, f: 4000, f1: 300, q: 0.7, attack: tele + dur - 0.1, verb: 0.4 });
-  // сфера: тёмно-фиолетовое ядро (не чёрное), светящаяся оболочка, диск и ореол
+  // sphere: dark violet core (not black), glowing shell, disc and halo
   const g = new THREE.Group();
   const coreM = new THREE.MeshBasicMaterial({ color: C(0.22, 0.06, 0.36) });
   const shellM = ghost(s.a.clone().multiplyScalar(0.35), 0.6);
@@ -180,14 +181,14 @@ function gravitywell(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
     shell.rotation.y -= dt * 4; shell.rotation.z += dt * 2.5;
     disk.rotation.z += dt * (3 + e * 6);
     halo.scale.setScalar((3.5 + Math.sin(kit.time * 12) * 0.3) * (0.6 + e * 0.6));
-    // втягивание: частицы со всего круга летят в ядро
+    // suction: particles from the whole circle fly into the core
     for (let i = 0; i < 4 + k * 3; i++) {
       const an = rnd() * Math.PI * 2, r = rand(R * 0.5, R);
       const from = c.clone().add(new THREE.Vector3(Math.cos(an) * r, rand(0.1, 2.6), Math.sin(an) * r));
       const life = from.distanceTo(mid) / (6 + k * 4);
       fx.particle({ pos: from, vel: mid.clone().sub(from).divideScalar(life), life, size: rand(0.05, 0.09), color: rnd() < 0.5 ? s.a : s.b, gravity: 0, shrink: false });
     }
-    // и враги: каждые 0,35 с подтягивает к центру (без урона)
+    // and enemies: every 0.35 s pulled toward the centre (no damage)
     if (t > tele) {
       pullT -= dt;
       if (pullT <= 0) {
@@ -199,7 +200,7 @@ function gravitywell(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
       }
     }
     if (t < tele + dur) return true;
-    // схлопывание и выброс
+    // collapse and burst
     done = true;
     let tc = 0;
     kit.proc((dt2) => {
@@ -217,7 +218,7 @@ function gravitywell(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
 function wellBlast(kit: Spells, c: THREE.Vector3, R: number, power: number, k: number): void {
   const fx = kit.h.fx, s = kit.color('void'), mid = c.clone().setY(c.y + 1.4);
   kit.impact('void', c, k, 18, 0.7);
-  kit.pomp('legendary', c, 'void', 'Гравитационный колодец');
+  kit.pomp('legendary', c, 'void', t('Gravity well'));
   boom(110, 26, 1.3, 0.75, 0, 0.5);
   hiss({ dur: 0.9, vol: 0.32, f: 300, f1: 3000, q: 0.5, attack: 0.01, verb: 0.5 });
   [12, 7, 3, 0].forEach((st, i) => bell(semi(VOID_ROOT * 2, st), 1.4, 0.05, 0.05 + i * 0.05, 0.7));
@@ -225,13 +226,13 @@ function wellBlast(kit: Spells, c: THREE.Vector3, R: number, power: number, k: n
   fx.flash(mid, s.a.clone().multiplyScalar(0.5), R * 0.8, 0.5);
   fx.shock(c, R * 1.15, s.a, 0.45, 0.25);
   fx.shock(c, R * 0.75, s.b, 0.35, 0.15);
-  // осколки тьмы разлетаются кольцом
+  // shards of darkness fly out in a ring
   for (let i = 0; i < 50 + k * 30; i++) {
     const an = rnd() * Math.PI * 2, sp = rand(6, 12) + k * 4;
     fx.particle({ pos: mid.clone(), vel: new THREE.Vector3(Math.cos(an) * sp, rand(-1, 3), Math.sin(an) * sp), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: rnd() < 0.5 ? s.a : s.b, gravity: 4, drag: 2 });
   }
   kit.h.aoe(c, R, Math.round(power), 2.5 + k * 1.5, true);
-  // послевкусие: выжженный круг и медленный вихрь остатков
+  // aftertaste: a scorched circle and a slow vortex of remains
   fx.decal(c, kit.tex.scorch(), '#ffffff', R * 1.6, 4, false, 0.7);
   fx.decal(c, kit.tex.glow(), s.a.clone().multiplyScalar(0.3), R * 1.4, 1.8, true);
   let left = 1.4, an0 = 0;
@@ -245,7 +246,7 @@ function wellBlast(kit: Spells, c: THREE.Vector3, R: number, power: number, k: n
   });
 }
 
-// ---------- 15. коса-череп ----------
+// ---------- 15. skull scythe ----------
 
 function skullscythe(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, s = kit.color('void'), hero = kit.h.hero;
@@ -253,7 +254,7 @@ function skullscythe(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
   kit.windup('void', k);
   hiss({ dur: 0.4, vol: 0.18, f: 600, f1: 2400, q: 0.8, attack: 0.05, verb: 0.3 });
   voice({ type: 'triangle', f: semi(VOID_ROOT * 4, 7), f1: semi(VOID_ROOT * 2, 3), dur: 0.35, vol: 0.05, verb: 0.5 });
-  // воксельный череп: костяной (светлый, светится), глазницы и нос — фиолетовые огоньки, вокруг — лезвие косы
+  // voxel skull: bone (light, glowing), eye sockets and nose are violet lights, a scythe blade around it
   const size = 0.42 + k * 0.18;
   const bone = ghost(C(1.5, 1.7, 1.9), 0.95), eyes = ghost(s.a.clone().multiplyScalar(0.9), 1), blade = ghost(s.b.clone().multiplyScalar(0.6), 0.9);
   const skull = new THREE.Group();
@@ -286,7 +287,7 @@ function skullscythe(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
     fx.decal(p.clone().setY(kit.ground(p, 99).y), kit.tex.glow(), s.a.clone().multiplyScalar(0.3), 1.8, 1.2, true);
     if (!tg) return;
     kit.h.damage(tg, Math.round(power), hero.pos, 1 + k);
-    // жизнь возвращается к герою нитью душ
+    // life returns to the hero as a thread of souls
     const heal = Math.round(power * 0.25);
     const from = tg.pos.clone().setY(tg.pos.y + 1);
     for (let i = 0; i < 10; i++) {
@@ -318,17 +319,17 @@ function skullscythe(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vec
   });
 }
 
-// ---------- 16. павшие стражи ----------
+// ---------- 16. fallen guards ----------
 
 interface Guard { g: THREE.Group; sword: THREE.Group; mats: THREE.MeshBasicMaterial[]; t: number; cd: number; swing: number; hitDone: boolean; target: Target | null; i: number }
 
-/** Призрачный рыцарь: ноги, тело, шлем с прорезью, щит и меч в шарнире у плеча */
+/** Ghost knight: legs, body, helmet with a slit, shield and sword in a joint at the shoulder */
 function knight(body: THREE.MeshBasicMaterial, bright: THREE.MeshBasicMaterial): { g: THREE.Group; sword: THREE.Group } {
   const g = new THREE.Group();
   g.add(box(body, 0.18, 0.5, 0.2, -0.12, 0.25, 0), box(body, 0.18, 0.5, 0.2, 0.12, 0.25, 0));
   g.add(box(body, 0.52, 0.62, 0.32, 0, 0.82, 0), box(body, 0.4, 0.4, 0.4, 0, 1.33, 0), box(bright, 0.28, 0.06, 0.03, 0, 1.35, 0.21));
-  g.add(box(body, 0.1, 0.18, 0.1, 0, 1.6, 0)); // гребень шлема
-  g.add(box(body, 0.08, 0.5, 0.38, -0.36, 0.85, 0.05)); // щит
+  g.add(box(body, 0.1, 0.18, 0.1, 0, 1.6, 0)); // helmet crest
+  g.add(box(body, 0.08, 0.5, 0.38, -0.36, 0.85, 0.05)); // shield
   const sword = new THREE.Group();
   sword.position.set(0.34, 1.0, 0);
   sword.add(box(body, 0.14, 0.4, 0.14, 0, -0.15, 0), box(bright, 0.06, 0.06, 0.95, 0, -0.3, 0.5), box(bright, 0.28, 0.05, 0.05, 0, -0.3, 0.04));
@@ -343,7 +344,7 @@ function fallenguards(kit: Spells, a: ArtifactStats, power: number, _at: THREE.V
   whisper(0.6, 0.04);
   const spots = [fwd.clone().multiplyScalar(0.8).addScaledVector(right, -1.4), fwd.clone().multiplyScalar(0.8).addScaledVector(right, 1.4), fwd.clone().multiplyScalar(-1.3)]
     .map((o) => kit.ground(hero.pos.clone().add(o), 99));
-  // порталы: маленькие круги тьмы раскрываются, из них бьёт свет
+  // portals: small circles of darkness open, light shoots out of them
   spots.forEach((p, i) => kit.later(i * 0.08, () => { kit.groundSigil('void', p, 0.95, 0.25, 0.9, 0.35); fx.flash(p.clone().setY(p.y + 0.4), s.b.clone().multiplyScalar(0.6), 1.6, 0.3); bell(deg(VOID_ROOT * 4, i * 2), 0.8, 0.05); }));
   kit.later(0.3, () => {
     kit.impact('void', hero.pos, k, 12, 0.3);
@@ -365,7 +366,7 @@ function fallenguards(kit: Spells, a: ArtifactStats, power: number, _at: THREE.V
         if (gd.t < 0) continue;
         gd.t += dt;
         const g = gd.g;
-        // растворение в конце
+        // dissolve at the end
         if (gd.t > dur) {
           const e = (gd.t - dur) / 0.6;
           g.scale.set(1, Math.max(0.01, 1 - e), 1);
@@ -379,7 +380,7 @@ function fallenguards(kit: Spells, a: ArtifactStats, power: number, _at: THREE.V
         const fy = Number.isFinite(floor) ? floor : hero.pos.y;
         if (gd.t < 0.5) { g.position.y = fy - 1.7 * (1 - gd.t / 0.5) ** 2; continue; }
         g.position.y = fy + Math.sin(kit.time * 3 + gd.i) * 0.04;
-        // цель: ближайшая живая в 12 м, иначе держаться у героя
+        // target: the nearest living one within 12 m, otherwise stay near the hero
         if (!gd.target?.alive) gd.target = kit.nearest(g.position, 12);
         const tg = gd.target;
         const goal = tg ? tg.pos : hero.pos.clone().add(new THREE.Vector3(Math.cos(gd.i * 2.1) * 1.6, 0, Math.sin(gd.i * 2.1) * 1.6));
@@ -389,7 +390,7 @@ function fallenguards(kit: Spells, a: ArtifactStats, power: number, _at: THREE.V
         if (len > 0.05) g.rotation.y = Math.atan2(d.x, d.z);
         if (len > reach) {
           g.position.addScaledVector(d.normalize(), Math.min(len - reach, 4.2 * dt));
-          // шаг: покачивание
+          // step: swaying
           g.rotation.z = Math.sin(kit.time * 14 + gd.i) * 0.06;
         } else g.rotation.z = 0;
         gd.cd -= dt;
@@ -418,14 +419,14 @@ function fallenguards(kit: Spells, a: ArtifactStats, power: number, _at: THREE.V
   });
 }
 
-// ---------- 20. фаланга клинков ----------
+// ---------- 20. blade phalanx ----------
 
 function bladephalanx(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, s = kit.color('arcane'), hero = kit.h.hero;
   const N = 7, R = a.radius ?? 14, gap = 0.06, unfold = N * gap + 0.25;
   kit.face(at);
   kit.windup('arcane', k);
-  // цели: живые у курсора, ближние первыми
+  // targets: living ones at the cursor, nearest first
   const aimP = kit.ground(at, R);
   const list = kit.h.targets().filter((t) => t.alive && Math.hypot(t.pos.x - hero.pos.x, t.pos.z - hero.pos.z) < R && Math.hypot(t.pos.x - aimP.x, t.pos.z - aimP.z) < 4.5)
     .sort((x, y) => x.pos.distanceToSquared(aimP) - y.pos.distanceToSquared(aimP)).slice(0, 4);
@@ -446,7 +447,7 @@ function bladephalanx(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
     kit.proc((dt) => {
       t += dt;
       if (mode === 'hover') {
-        // веер над головой: позиция по дуге за спиной, остриём наружу
+        // fan above the head: position along an arc behind the back, point outward
         const fwd = new THREE.Vector3(Math.sin(hero.yaw), 0, Math.cos(hero.yaw)), right = new THREE.Vector3(fwd.z, 0, -fwd.x);
         pos.copy(hero.pos).addScaledVector(right, Math.sin(phi) * 1.4).addScaledVector(fwd, -0.4).setY(hero.pos.y + 2 + Math.cos(phi) * 0.7 + Math.sin(kit.time * 4 + i) * 0.05);
         g.position.copy(pos);
@@ -458,7 +459,7 @@ function bladephalanx(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
           fx.flash(pos, s.b.clone().multiplyScalar(0.5), 0.9, 0.18);
         }
         g.scale.setScalar(Math.max(0.01, e * (1 + k * 0.25)));
-        // перед выстрелом разворачивается к цели
+        // turns toward the target before firing
         const dest = target?.alive ? target.pos.clone().setY(target.pos.y + 1) : aimP.clone().add(spread).setY(aimP.y + 0.3);
         g.lookAt(t > fireAt - 0.12 ? dest : out);
         if (t >= fireAt) {
@@ -473,7 +474,7 @@ function bladephalanx(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
       g.lookAt(dest);
       if (rnd() < 0.9) fx.particle({ pos: g.position.clone(), vel: d.clone().normalize().multiplyScalar(-1.5), life: 0.25, size: 0.05, color: i % 2 ? s.b : s.a, gravity: 0 });
       if (len > step) { g.position.addScaledVector(d.normalize(), step); return t < fireAt + 2; }
-      // попал: урон, вспышка, нота — по очереди складывается аккорд
+      // hit: damage, flash, a note — one by one they build a chord
       drop(g, mats);
       const p = dest;
       if (firstHit) { firstHit = false; kit.impact('arcane', p, k, 12, 0.3); kit.pomp('rare', p, 'arcane'); boom(140, 50, 0.4, 0.35); }
@@ -490,11 +491,11 @@ function bladephalanx(kit: Spells, a: ArtifactStats, power: number, at: THREE.Ve
   }
 }
 
-// ---------- Разрыв (с Кота-могильщика) ----------
+// ---------- Blink (from the Grave Cat) ----------
 
 /**
- * Рывок-телепорт к курсору (до radius м, не сквозь стены): там, где герой исчез, и там, где появился, — взрыв арканы;
- * между точками — след из гаснущих силуэтов-кубов. Заряд — дальше рывок и шире взрывы.
+ * Teleport dash to the cursor (up to radius m, not through walls): where the hero vanished and where he appeared — an arcane burst;
+ * between the points — a trail of fading silhouette cubes. Charge — a longer dash and wider bursts.
  */
 function blink(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, k: number): void {
   const fx = kit.h.fx, s = kit.color('arcane'), hero = kit.h.hero, terr = kit.h.terrain;
@@ -504,7 +505,7 @@ function blink(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
   const want = Math.min(R, dir.length());
   if (dir.lengthSq() < 0.01) dir.set(Math.sin(hero.yaw), 0, Math.cos(hero.yaw));
   dir.normalize();
-  // шагаем по 0,4 м, пока нет стены и пол рядом по высоте
+  // step by 0.4 m while there is no wall and the floor is close in height
   let d = 0;
   for (let t = 0.4; t <= want; t += 0.4) {
     const x = from.x + dir.x * t, z = from.z + dir.z * t, y = terr.floorAt(x, z, from.y + 1);
@@ -526,7 +527,7 @@ function blink(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
     kit.h.aoe(p, r, Math.round(power), 1.4 + k, false);
   };
   burst(from, true);
-  // след: гаснущие кубы-силуэты вдоль пути
+  // trail: fading silhouette cubes along the path
   for (let t = 0.6; t < d; t += 0.8) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, 0.4), ghost(s.b.clone().multiplyScalar(0.35), 0.7));
     m.position.copy(from).addScaledVector(dir, t).setY(from.y + 0.8);
@@ -537,12 +538,12 @@ function blink(kit: Spells, a: ArtifactStats, power: number, at: THREE.Vector3, 
   kit.later(0.08, () => burst(to, false));
 }
 
-/** Тьма, души и аркана: хор мёртвых, гравитационный колодец, коса-череп, павшие стражи, фаланга клинков, разрыв */
+/** Darkness, souls and arcana: choir of the dead, gravity well, skull scythe, fallen guards, blade phalanx, blink */
 export const DARK_ARCANE = {
-  deadchoir: { school: 'void', tier: 'rare', title: 'Хор мёртвых', cast: deadchoir },
-  gravitywell: { school: 'void', tier: 'legendary', title: 'Гравитационный колодец', cast: gravitywell },
-  skullscythe: { school: 'void', tier: 'common', title: 'Коса-череп', cast: skullscythe },
-  fallenguards: { school: 'void', tier: 'rare', title: 'Павшие стражи', cast: fallenguards },
-  bladephalanx: { school: 'arcane', tier: 'rare', title: 'Фаланга клинков', cast: bladephalanx },
-  blink: { school: 'arcane', tier: 'rare', title: 'Разрыв', cast: blink },
+  deadchoir: { school: 'void', tier: 'rare', title: t('Choir of the dead'), cast: deadchoir },
+  gravitywell: { school: 'void', tier: 'legendary', title: t('Gravity well'), cast: gravitywell },
+  skullscythe: { school: 'void', tier: 'common', title: t('Skull scythe'), cast: skullscythe },
+  fallenguards: { school: 'void', tier: 'rare', title: t('Fallen guards'), cast: fallenguards },
+  bladephalanx: { school: 'arcane', tier: 'rare', title: t('Blade phalanx'), cast: bladephalanx },
+  blink: { school: 'arcane', tier: 'rare', title: t('Blink'), cast: blink },
 } satisfies Partial<Record<BossSpellKind, Spell>>;

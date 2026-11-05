@@ -7,7 +7,7 @@ export interface RoomRow {
 }
 export interface MemberRow { room_id: string; player_id: string; seat: number; ready: number; joined_at: number; gone_at: number | null }
 
-/** Комнаты и их места — копия того, что менеджер (server/rooms.ts) держит в памяти, чтобы пережить перезапуск */
+/** Rooms and their seats — a copy of what the manager (server/rooms.ts) keeps in memory, to survive a restart */
 export class Rooms {
   private readonly db: Db;
   constructor(db: Db) { this.db = db; }
@@ -24,7 +24,7 @@ export class Rooms {
 
   codeTaken(code: string): boolean { return !!this.db.prepare("SELECT 1 FROM rooms WHERE code = ? AND state != 'closed'").get(code); }
 
-  /** Освободить код закрытой комнаты: коды короткие, их переиспользуют */
+  /** Release a closed room's code: codes are short and get reused */
   releaseCode(id: string): void { this.db.prepare("UPDATE rooms SET code = 'x' || id WHERE id = ? AND state = 'closed'").run(id); }
 
   live(): RoomRow[] { return this.db.prepare("SELECT * FROM rooms WHERE state != 'closed'").all() as unknown as RoomRow[]; }
@@ -39,6 +39,6 @@ export class Rooms {
 
   removeMember(roomId: string, playerId: string): void { this.db.prepare('DELETE FROM room_members WHERE room_id = ? AND player_id = ?').run(roomId, playerId); }
 
-  /** Удалить закрытые комнаты старше `before` */
+  /** Delete closed rooms older than `before` */
   purge(before: number): number { return Number(this.db.prepare("DELETE FROM rooms WHERE state = 'closed' AND updated_at < ?").run(before).changes); }
 }

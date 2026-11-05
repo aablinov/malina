@@ -4,7 +4,7 @@ import { rng } from '../../src/rng.ts';
 import { Channel } from '../../src/net/channel.ts';
 import { loopbackPair } from '../../src/net/loopback.ts';
 
-/** Пара каналов над петлёй с часами; step(ms) двигает часы, доставляет созревшее и повторяет надёжное */
+/** Pair of channels over a loopback with a clock; step(ms) advances the clock, delivers what is due and resends reliable */
 function pair(o: { loss?: number; reorder?: number; delayMs?: number; jitterMs?: number; seed?: number } = {}) {
   const clock = { t: 0 };
   const lb = loopbackPair({ clock: () => clock.t, rng: rng(o.seed ?? 7), delayMs: o.delayMs ?? 20, jitterMs: o.jitterMs ?? 0, loss: o.loss, reorder: o.reorder });
@@ -19,19 +19,19 @@ function pair(o: { loss?: number; reorder?: number; delayMs?: number; jitterMs?:
   return { a, b, lb, clock, gotA, gotB, uB, step, run };
 }
 
-test('надёжные приходят по порядку и подтверждаются', () => {
+test('reliable messages arrive in order and get acknowledged', () => {
   const p = pair();
   for (let i = 0; i < 5; i++) assert.ok(p.a.sendReliable(`m${i}`));
   assert.equal(p.a.pending, 5);
   p.run(100);
   assert.deepEqual(p.gotB, ['m0', 'm1', 'm2', 'm3', 'm4']);
-  // подтверждение приходит только с кадром от b — b шлёт ненадёжное
+  // the ack only comes with a frame from b — b sends unreliable
   p.b.sendUnreliable({ x: 1 });
   p.run(100);
   assert.equal(p.a.pending, 0);
 });
 
-test('надёжные доходят через потери 30 % и перестановки, без дубликатов', () => {
+test('reliable messages get through 30 % loss and reordering, without duplicates', () => {
   const p = pair({ loss: 0.3, reorder: 0.2, seed: 3 });
   const want: string[] = [];
   for (let i = 0; i < 40; i++) {
@@ -43,14 +43,14 @@ test('надёжные доходят через потери 30 % и перес
   p.run(3000);
   assert.deepEqual(p.gotB, want);
   assert.equal(p.a.pending, 0);
-  assert.ok(p.b.stats.received < p.a.stats.sent, 'часть кадров потерялась');
+  assert.ok(p.b.stats.received < p.a.stats.sent, 'some frames were lost');
 });
 
-test('ненадёжное: старые кадры отбрасываются, ack растёт', () => {
+test('unreliable: stale frames are dropped, ack grows', () => {
   const p = pair({ reorder: 0.5, seed: 11, delayMs: 10 });
   for (let i = 1; i <= 30; i++) { p.a.sendUnreliable({ x: i }); p.step(5); }
   p.run(500);
-  // пришли не все (перестановка делает кадр устаревшим), но порядок строго возрастающий
+  // not all arrived (reordering makes a frame stale), but the order is strictly increasing
   for (let i = 1; i < p.uB.length; i++) assert.ok(p.uB[i] > p.uB[i - 1]);
   assert.ok(p.b.stats.stale > 0);
   assert.equal(p.b.lastRecv, 30);
@@ -59,7 +59,7 @@ test('ненадёжное: старые кадры отбрасываются, 
   assert.equal(p.a.peerAck, 30);
 });
 
-test('окно надёжных: сверх — отказ, после подтверждения снова можно', () => {
+test('reliable window: over it — refused, after an ack allowed again', () => {
   const p = pair();
   for (let i = 0; i < 64; i++) assert.ok(p.a.sendReliable(`w${i}`));
   assert.equal(p.a.sendReliable('extra'), false);
@@ -71,7 +71,7 @@ test('окно надёжных: сверх — отказ, после подт�
   assert.equal(p.gotB.length, 65);
 });
 
-test('закрытие транспорта доходит до канала', () => {
+test('transport close reaches the channel', () => {
   const p = pair();
   let code = 0;
   p.b.onClose = (c) => { code = c; };

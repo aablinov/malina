@@ -5,43 +5,44 @@ import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Морозный кабан — мини-босс (wiki/design-bosses.md, раздел 2): громадный кабан-опустошитель в инее, на спине — ледяные
- * кристаллы, на лбу — сердце-ягода, на макушке — малиновый венец из кубиков-костянок. Атаки: таран по полосе (влетел в стену —
- * оглушён, сердце открыто), удар клыками вблизи, топот — ледяные шипы из-под земли по меткам у героя; кого шип задел, тот
- * вмёрз в глыбу на 1,2 с, на полу остаётся скользкий лёд. В ярости таранит дважды подряд. Роняет «Ледяную гробницу».
- * Подвижных частей: туловище, голова, четыре ноги, хвост.
+ * Frost Boar — mini-boss (wiki/design-bosses.md, section 2): a huge frost-covered ravager boar, ice crystals on its back,
+ * a berry heart on its forehead, a raspberry crown of drupelet cubes on its head. Attacks: a charge along a strip (flew into a wall —
+ * dazed, heart open), a tusk strike up close, a stomp — ice spikes out of the ground on marks at the hero; whoever a spike touches
+ * is frozen in a block for 1.2 s, slippery ice stays on the floor. In rage it charges twice in a row. Drops "Ice Tomb".
+ * Moving parts: body, head, four legs, tail.
  */
 
 const ICE = C(1.4, 2.8, 4), FROST = C(2.6, 3.4, 4), PINK = C(4, 1.7, 2.4);
 const SHARDS = ['#cfe8ff', '#9fc8e8', '#ffffff', '#7f97a8'];
-/** Таран: метка, длина, ширина, скорость; заморозка шипом */
+/** Charge: mark, length, width, speed; freeze by a spike */
 const SCRAPE = 0.8, DASH_LEN = 14, DASH_W = 2.2, DASH_SPEED = 16, FREEZE = 1.2;
 
 const sfx = {
-  /** Скребёт копытом: короткие шорохи */
+  /** Scrapes a hoof: short rustles */
   scrape() { for (let i = 0; i < 3; i++) hiss({ dur: 0.12, vol: 0.12, f: 900, f1: 400, q: 1.2, delay: i * 0.22 }); },
-  /** Храп и рёв перед тараном */
+  /** Snort and roar before the charge */
   roar() { voice({ type: 'sawtooth', f: 160, f1: 70, dur: 0.6, vol: 0.07, detune: 20, lp: 1400, lp1: 300, verb: 0.4 }); boom(90, 40, 0.4, 0.4); },
-  /** Удар о стену: гул и звон расколотого льда */
+  /** Hits a wall: rumble and the ring of split ice */
   crash() {
     boom(60, 22, 1.2, 0.9, 0, 0.5);
     for (const [f, d] of [[1760, 0], [2349, 0.03], [2960, 0.06], [3520, 0.1]] as const) bell(f, 0.8, 0.03, d, 0.6);
   },
-  /** Клыки: свист замаха */
+  /** Tusks: whistle of the swing */
   gore() { hiss({ dur: 0.25, vol: 0.18, f: 600, f1: 2200, q: 0.8 }); voice({ type: 'sawtooth', f: 120, f1: 80, dur: 0.25, vol: 0.05, lp: 900 }); },
-  /** Топот */
+  /** Stomp */
   stomp() { boom(70, 28, 0.7, 0.7, 0, 0.4); },
-  /** Шипы прорвались: хруст и звон */
+  /** Spikes broke through: crunch and ring */
   spike() { hiss({ dur: 0.3, vol: 0.18, f: 3000, f1: 1200, q: 0.7, type: 'highpass' }); bell(rand(1500, 2100), 0.6, 0.03); },
-  /** Вмёрз */
+  /** Frozen */
   freeze() { bell(2637, 1.2, 0.04, 0, 0.7); bell(3136, 1.2, 0.03, 0.05, 0.7); },
 };
 
 export class FrostBoar extends MiniBoss {
   readonly radius = 1.6;
-  readonly title = 'Морозный кабан';
+  readonly title = t('Frost Boar');
   override readonly topY = 2.8;
   readonly drop = 'icetomb';
   private readonly trunk = new THREE.Group();
@@ -49,11 +50,11 @@ export class FrostBoar extends MiniBoss {
   private readonly legs: THREE.Group[] = [];
   private readonly tail = new THREE.Group();
   private readonly emblem = new THREE.Group();
-  /** Ледяная глыба вокруг вмёрзшего героя и материал шипов */
+  /** Ice block around the frozen hero and the spike material */
   private readonly iceBlock: THREE.Mesh;
   private readonly spikeMat = glowMat(FROST, 0.85);
   private trotT = 0;
-  // таран
+  // charge
   private phase: 'scrape' | 'dash' | 'skid' = 'scrape';
   private phaseT = 0;
   private chargesLeft = 0;
@@ -62,7 +63,7 @@ export class FrostBoar extends MiniBoss {
   private readonly dashDir = new THREE.Vector3();
   private readonly want = new THREE.Vector3();
   private hasWant = false;
-  // топот и заморозка
+  // stomp and freeze
   private spikeHit = false;
   private freezeT = 0;
   private readonly freezeAt = new THREE.Vector3();
@@ -88,16 +89,16 @@ export class FrostBoar extends MiniBoss {
     const heart = this.shimmer(RASP, PINK, 0, 3);
     const B = this.box.bind(this);
     this.body.add(this.trunk);
-    // туловище: глыба шерсти, тёмное брюхо, грива-гребень вдоль спины
+    // body: a block of fur, dark belly, mane crest along the back
     B(this.trunk, fur, 2.2, 1.4, 3, 0, 1.35, 0);
     B(this.trunk, dark, 2.0, 0.3, 2.8, 0, 0.6, 0);
     B(this.trunk, dark, 1.0, 0.35, 2.4, 0, 2.2, -0.1);
     B(this.trunk, dark, 2.3, 1.2, 0.5, 0, 1.45, 1.3);
-    // ледяные кристаллы на спине — переливаются «лёд ↔ малина»
+    // ice crystals on the back — shimmer "ice ↔ raspberry"
     for (const [x, z, hgt, rz, rx] of [[0, 0.8, 0.9, 0, 0.2], [-0.45, 0.2, 0.7, 0.35, 0], [0.45, -0.1, 0.75, -0.35, 0], [0, -0.6, 0.6, 0, -0.25], [-0.3, -1.1, 0.45, 0.3, 0]] as const) {
       B(this.trunk, this.shimmer(ICE, RASP, x * 4 + z, 2), 0.28, hgt, 0.28, x, 2.3 + hgt / 2, z, rx, 0.78, rz);
     }
-    // голова: лоб, рыло, пятак, клыки, глаза; на лбу — сердце-ягода, на макушке — малиновый венец
+    // head: forehead, snout, nose, tusks, eyes; the berry heart on the forehead, the raspberry crown on top
     this.head.position.set(0, 1.45, 1.5);
     this.trunk.add(this.head);
     B(this.head, fur, 1.4, 1.1, 1.2, 0, 0.05, 0.5);
@@ -117,7 +118,7 @@ export class FrostBoar extends MiniBoss {
       const a = (i / 7) * Math.PI * 2, k = i % 2 ? 0.16 : 0.22;
       B(this.head, this.shimmer(RASP, PINK, i, 2.4), k, k, k, Math.sin(a) * 0.36, 0.78 + (i % 2 ? 0.05 : 0.12), 0.4 + Math.cos(a) * 0.28);
     }
-    // ноги: короткие столбы с копытами, качаются на шарнире у брюха
+    // legs: short pillars with hooves, swing on a hinge at the belly
     for (const [x, z] of [[-0.7, 1.0], [0.7, 1.0], [-0.7, -1.0], [0.7, -1.0]]) {
       const g = new THREE.Group();
       g.position.set(x, 0.7, z);
@@ -126,7 +127,7 @@ export class FrostBoar extends MiniBoss {
       B(g, hoof, 0.6, 0.18, 0.6, 0, -0.62, 0.02);
       this.legs.push(g);
     }
-    // хвостик-крючок
+    // hook tail
     this.tail.position.set(0, 1.8, -1.5);
     this.trunk.add(this.tail);
     B(this.tail, dark, 0.15, 0.15, 0.5, 0, 0, -0.22, 0.6, 0, 0);
@@ -155,7 +156,7 @@ export class FrostBoar extends MiniBoss {
         if (!this.hitDone) { this.hitDone = true; this.chargesLeft = this.enraged ? 2 : 1; this.startScrape(); }
         this.phaseT += dt;
         if (this.phase === 'scrape') {
-          // скребёт копытом: пыль и иней из-под ноги, полоса наливается
+          // scrapes a hoof: dust and frost from under the leg, the strip fills
           if (rnd() < 0.4) fx.burst(this.pos.clone().add(this.dashDir.clone().multiplyScalar(1.2)).setY(0.1), ['#9fb4c4', '#e8f4ff'], 2, { speed: 1.5, up: 1.5, size: 0.08, life: 0.4, gravity: 6 });
           if (this.phaseT >= SCRAPE) {
             this.phase = 'dash'; this.phaseT = 0; this.dashLeft = DASH_LEN; this.rammed = false; this.hasWant = false;
@@ -164,7 +165,7 @@ export class FrostBoar extends MiniBoss {
           return false;
         }
         if (this.phase === 'dash') {
-          // упёрся (стена, колонна) — тело не дошло, куда бежало
+          // ran into something (wall, column) — the body did not get where it was running
           const a = this.arena, R = this.radius;
           const blocked = this.hasWant && Math.hypot(this.pos.x - this.want.x, this.pos.z - this.want.z) > 0.25;
           if (blocked || this.pos.x <= a.x0 + R || this.pos.x >= a.x1 - R || this.pos.z <= a.z0 + R || this.pos.z >= a.z1 - R) return this.crash();
@@ -181,14 +182,14 @@ export class FrostBoar extends MiniBoss {
           if (this.dashLeft <= 0) { this.phase = 'skid'; this.phaseT = 0; }
           return false;
         }
-        // занос: доскальзывает и тормозит; в ярости — сразу второй таран
+        // skid: slides on and brakes; in rage — the second charge right away
         this.move(this.dashDir, Math.max(0, 1 - this.phaseT / 0.45) * 6 * dt);
         if (this.phaseT < 0.45) return false;
         if (--this.chargesLeft > 0) { this.startScrape(); return false; }
         return true;
       }
       case 'gore': {
-        // голову вниз — и снизу вверх клыками по конусу перед собой
+        // head down — and tusks up from below along the cone ahead
         if (t < 0.45) { this.face(dt, 1.3); return false; }
         if (!this.hitDone) {
           this.hitDone = true;
@@ -199,7 +200,7 @@ export class FrostBoar extends MiniBoss {
         return t > 0.9;
       }
       case 'frost': {
-        // встаёт на дыбы → топот → метки у героя → из-под земли ледяные шипы
+        // rears up → stomp → marks at the hero → ice spikes out of the ground
         if (t < 0.4) return false;
         if (!this.hitDone) {
           this.hitDone = true;
@@ -231,7 +232,7 @@ export class FrostBoar extends MiniBoss {
     if (!this.quiet) sfx.scrape();
   }
 
-  /** Влетел в стену: лёд со спины осыпается, кабан оглушён — сердце открыто */
+  /** Flew into a wall: the ice falls off its back, the boar is dazed — heart open */
   private crash(): boolean {
     const fx = this.h.fx, at = this.pos.clone().addScaledVector(this.dashDir, this.radius).setY(1.4);
     if (!this.quiet) sfx.crash();
@@ -241,12 +242,12 @@ export class FrostBoar extends MiniBoss {
     fx.burst(at, SHARDS, 30, { speed: 7, up: 5, size: 0.16, life: 1, gravity: 12 });
     fx.burst(this.pos.clone().setY(2.5), [ICE, RASP], 18, { speed: 4, up: 5, size: 0.1, life: 0.8, glow: true, gravity: 6 });
     fx.shock(this.pos.clone().setY(0.1), 3, ICE, 0.4, 0.2);
-    fx.text(this.pos.clone().setY(this.topY + 0.8), 'оглушён!', 'crit');
+    fx.text(this.pos.clone().setY(this.topY + 0.8), t('stunned!'), 'crit');
     this.daze(2);
     return true;
   }
 
-  /** Шипы из-под земли: кто в круге — урон и вмерзает; на полу — скользкий лёд */
+  /** Spikes out of the ground: whoever is in the circle — damage and frozen; slippery ice on the floor */
   private spikes(p: THREE.Vector3, r: number): void {
     const fx = this.h.fx;
     if (this.dead) return;
@@ -258,7 +259,7 @@ export class FrostBoar extends MiniBoss {
       this.box(g, this.spikeMat, rand(0.25, 0.4), hgt, rand(0.25, 0.4), Math.cos(a) * d, hgt / 2, Math.sin(a) * d, rand(-0.3, 0.3), rand(0, 1.5), rand(-0.3, 0.3));
     }
     g.scale.y = 0.01;
-    // материал общий, геометрия UNIT — ничего не освобождаем
+    // material is shared, geometry is UNIT — nothing to free
     fx.custom(g, 1.1, (k) => { g.scale.y = Math.max(0.01, k < 0.12 ? k / 0.12 : k > 0.7 ? (1 - k) / 0.3 : 1); }, () => undefined);
     fx.burst(p.clone().setY(0.5), SHARDS, 12, { speed: 3, up: 5, size: 0.12, life: 0.7, gravity: 12 });
     fx.shock(p.clone().setY(0.06), r, ICE, 0.3, 0.12);
@@ -275,7 +276,7 @@ export class FrostBoar extends MiniBoss {
     this.freezeAt.copy(this.h.hero.pos);
     this.iceBlock.visible = true;
     if (!this.quiet) sfx.freeze();
-    this.h.fx.text(this.freezeAt.clone().setY(2.6), 'вмёрз!', '');
+    this.h.fx.text(this.freezeAt.clone().setY(2.6), t('frozen!'), '');
   }
 
   private unfreeze(shatter: boolean): void {
@@ -287,7 +288,7 @@ export class FrostBoar extends MiniBoss {
   override update(dt: number): void {
     super.update(dt);
     if (this.freezeT <= 0) return;
-    // вмёрзший герой стоит, где застал шип
+    // the frozen hero stands where the spike caught him
     this.freezeT -= dt;
     const hero = this.h.hero;
     hero.pos.copy(this.freezeAt);
@@ -300,7 +301,7 @@ export class FrostBoar extends MiniBoss {
   protected animate(dt: number, walk: boolean): void {
     const t = this.time, S = this.st, atk = this.state === 'attack' ? this.attack : '';
     const dash = atk === 'charge' && this.phase === 'dash';
-    // рысь: диагональные пары ног вперёд-назад; на таране — галоп
+    // trot: diagonal pairs of legs back and forth; on the charge — gallop
     let swing = 0;
     if (walk || dash) {
       this.trotT += dt * (dash ? 16 : this.speed * this.speedK * 2.4);
@@ -312,7 +313,7 @@ export class FrostBoar extends MiniBoss {
     if (this.state === 'sleep') { lean = 0.08; headX = 0.35; sy = 1 + Math.sin(t * 1.5) * 0.03; }
     if (atk === 'charge') {
       if (this.phase === 'scrape') {
-        // роет копытом, голову к земле, приседает на задние
+        // digs with a hoof, head to the ground, crouches on the hind legs
         this.legs[0].rotation.x = Math.sin(this.phaseT * 16) * 0.8;
         lean = -0.08; headX = 0.4; sy = 0.94; sx = 1.04;
       } else if (dash) { lean = 0.14; headX = 0.45; }
@@ -323,12 +324,12 @@ export class FrostBoar extends MiniBoss {
       else { const k = Math.min(1, (S - 0.45) / 0.15); headX = 0.55 - k * 1.2; headY = Math.sin(k * Math.PI) * 0.4; lean = -0.1 * k; }
     }
     if (atk === 'frost') {
-      // на дыбы — и всем весом вниз
+      // rears up — and down with all its weight
       if (S < 0.4) { lean = -0.4 * (S / 0.4); headX = -0.3; this.legs[0].rotation.x = this.legs[1].rotation.x = -0.9 * (S / 0.4); }
       else { const k = Math.min(1, (S - 0.4) / 0.25); lean = 0; sy = 0.85 + 0.15 * k; sx = 1.1 - 0.1 * k; headX = 0.3 * (1 - k); }
     }
     if (this.state === 'daze') {
-      // шатается, голова повисла, сердце бьётся крупно
+      // staggers, head hangs, the heart beats hard
       lean = 0.1; headX = 0.5; this.trunk.rotation.z = Math.sin(t * 5) * 0.12;
     } else this.trunk.rotation.z *= 0.85;
     if (this.state !== 'dead') {
@@ -339,7 +340,7 @@ export class FrostBoar extends MiniBoss {
     this.head.rotation.x += (headX - this.head.rotation.x) * Math.min(1, dt * 16);
     this.head.rotation.y = headY;
     this.tail.rotation.y = Math.sin(t * (walk ? 14 : 6)) * 0.45;
-    // иней с кристаллов
+    // frost from the crystals
     if (this.state !== 'dead' && this.state !== 'sleep' && rnd() < 0.15) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.6, 0.6), 2.6 + bob, rand(-1, 1))), vel: new THREE.Vector3(0, rand(0.3, 0.8), 0), life: 0.6, size: rand(0.06, 0.12), color: rnd() < 0.7 ? ICE : RASP, gravity: -0.3 });
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.emblem.scale.setScalar(beat * (this.heartOpen ? 1.6 : 1));

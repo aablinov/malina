@@ -14,20 +14,20 @@ import { TowerView } from './tower-view.ts';
 import { WallView } from './wall-view.ts';
 
 /**
- * Вид обороны куста — «cgame» (wiki/design-multiplayer.md): рисует то, что пришло в снимке (src/net/snapshot.ts),
- * и играет события (src/cgame/effects.ts). Своего состояния игры не держит: записи дают башни, снаряды, лужи, кучки,
- * стены, куст и логова по приставке id (src/sim/entities.ts); площадки, стены, дороги и куст стоят там, где говорит `spec`.
- * Меню, HUD и подсказки — не здесь (src/cgame/td-ui.ts)
+ * Bush Defence view — "cgame" (wiki/design-multiplayer.md): draws what came in the snapshot (src/net/snapshot.ts)
+ * and plays events (src/cgame/effects.ts). Keeps no game state of its own: records give towers, projectiles, pools, piles,
+ * walls, the bush and lairs by id prefix (src/sim/entities.ts); pads, walls, lanes and the bush stand where `spec` says.
+ * Menu, HUD and hints are not here (src/cgame/td-ui.ts)
  */
 export interface TdViewOpts { scene: THREE.Scene; fx: FX; quiet: () => boolean; spec: TdSpec; heroPos: () => THREE.Vector3; seat: () => number }
 
 interface View { set(ent: EntityState): void; update(dt: number): void; dispose(): void; onEvent?(e: SimEvent): void }
 
 export class TdView {
-  /** Подсветка площадок: под курсором и с открытым меню (номера площадок или null) */
+  /** Pad highlights: under the cursor and with the menu open (pad numbers or null) */
   hoverPad: number | null = null;
   menuPad: number | null = null;
-  /** Для тестов: вью башен по номеру площадки */
+  /** For tests: tower views by pad number */
   readonly towers = new Map<number, TowerView>();
   readonly pads: PadView[];
   private readonly views = new Map<string, View>();
@@ -46,7 +46,7 @@ export class TdView {
     this.bushPos = new THREE.Vector3(o.spec.bush.x, 0, o.spec.bush.z);
   }
 
-  /** Записи и события последнего применённого снимка → создать/обновить/убрать вью, сыграть события */
+  /** Records and events of the last applied snapshot → create/update/remove views, play events */
   apply(v: SnapshotView<SimEvent>): void {
     for (const e of v.removed) this.drop(e.id);
     for (const e of v.added) this.ensure(e);
@@ -55,7 +55,7 @@ export class TdView {
     playTdEvents(v.events, { fx: this.fx, quiet: this.quiet, heroPos: this.heroPos, bushPos: this.bushPos, seat: this.seat });
   }
 
-  /** Анимация за кадр/тик: качание, искры, полёт снарядов по k, лужи */
+  /** Per-frame/tick animation: swaying, sparks, projectile flight by k, pools */
   update(dt: number): void {
     this.time += dt;
     for (const p of this.pads) { p.hover = p.index === this.hoverPad || p.index === this.menuPad; p.occupied = this.towers.has(p.index); p.update(dt, this.time); }
@@ -67,7 +67,7 @@ export class TdView {
     for (const p of this.pads) p.dispose();
   }
 
-  /** Площадка под лучом камеры (ближайшая) — номер или null */
+  /** Pad under the camera ray (the nearest) — number or null */
   padAt(ray: THREE.Ray): number | null {
     let best: PadView | null = null, bd = Infinity;
     for (const p of this.pads) {
@@ -78,7 +78,7 @@ export class TdView {
     return best ? best.index : null;
   }
 
-  /** Вью записи: есть — обновить, нет — создать по приставке id */
+  /** View of a record: exists — update, otherwise create by id prefix */
   private ensure(e: EntityState): void {
     const w = this.views.get(e.id);
     if (w) { w.set(e); return; }

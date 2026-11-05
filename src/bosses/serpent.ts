@@ -6,41 +6,42 @@ import { boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
 import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
 import { MiniBoss, type MiniState } from './mini.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
- * Рдяный Змей — босс этажа (wiki/design-bosses.md, раздел 4): огромный огненный змей — тупая кубическая голова
- * с челюстью, клыками, горящими глазами и короной из костянок, за ней четыре горба-сегмента. Горбы не на IK: голова
- * пишет свой путь, горбы стоят на нём через равные отрезки. Чешуя — тлеющий уголь, трещины переливаются
- * огонь ↔ малина. Сердце-ягода — под челюстью.
- * Бой: ныряет в землю — под землёй видно только бегущий холм и искры (урон не проходит) → круг под героем 0,9 с →
- * выныривает (22, отброс 9), брызги лавы — горящие лужи; застрял, торчит наполовину — оглушён 2 с (главное окно).
- * Ползёт — за ним горящая колея; вплотную — укус конусом (18); плюётся огнём по меткам (3, в ярости 6; по 14 + лужа).
- * Ярость: в центре арены вспыхивает малиновый куст; раз в ~10 с змей обвивает его и пьёт — лечится 6 %/с три
- * секунды; срубить куст тремя ударами — питьё сорвано, змей оглушён 2,5 с. Роняет «Пламенного змея» / «Кровавый пакт».
- * Подвижных частей: голова, челюсть, сердце, четыре горба, холм под землёй.
+ * Crimson Serpent — floor boss (wiki/design-bosses.md, section 4): a huge fiery serpent — a blunt cubic head
+ * with a jaw, fangs, burning eyes and a crown of drupelets, four hump segments behind it. The humps are not on IK: the head
+ * records its path, the humps stand on it at equal intervals. The scales are smouldering coal, the cracks shimmer
+ * fire ↔ raspberry. The berry heart is under the jaw.
+ * Fight: dives into the ground — underground only a running mound and sparks are visible (damage does not pass) → a circle under the hero 0.9 s →
+ * surfaces (22, knockback 9), lava splashes — burning pools; stuck, sticking out halfway — dazed 2 s (the main window).
+ * Crawls — a burning track behind it; up close — a bite in a cone (18); spits fire on marks (3, in rage 6; 14 each + a pool).
+ * Rage: a raspberry bush bursts into flame in the centre of the arena; every ~10 s the serpent coils around it and drinks — heals 6 %/s for three
+ * seconds; chop the bush with three hits — the drinking is interrupted, the serpent is dazed 2.5 s. Drops "Flame Serpent" / "Blood Pact".
+ * Moving parts: head, jaw, heart, four humps, the mound underground.
  */
 
 const FIRE = C(4, 1.4, 0.3), EMBER = C(4, 2.6, 0.8), PINK = C(4, 1.7, 2.4);
 const DIRT = ['#5a3a22', '#3a2416', '#7a5232'];
 const Y = new THREE.Vector3(0, 1, 0);
-/** Горбы: размер и шаг вдоль пути головы */
+/** Humps: size and spacing along the head's path */
 const SEGS = [1.5, 1.35, 1.15, 0.9], GAP = 1.3;
 
 const sfx = {
-  /** Шипение змея: шум с фильтром и низкий хрип */
+  /** Serpent hiss: filtered noise and a low rasp */
   hiss() { hiss({ dur: 0.7, vol: 0.22, f: 3000, f1: 1200, q: 0.8, type: 'bandpass', attack: 0.05, verb: 0.4 }); voice({ type: 'sawtooth', f: 80, f1: 55, dur: 0.6, vol: 0.05, lp: 500 }); },
-  /** Ныряет / выныривает: грохот земли */
+  /** Dives / surfaces: rumble of earth */
   dig() { boom(60, 25, 0.9, 0.8, 0, 0.5); hiss({ dur: 0.8, vol: 0.25, f: 900, f1: 150, q: 0.5, type: 'lowpass' }); },
-  /** Укус: щелчок челюсти */
+  /** Bite: snap of the jaw */
   bite() { boom(160, 60, 0.15, 0.4); hiss({ dur: 0.2, vol: 0.2, f: 500, f1: 2500, q: 0.7, type: 'bandpass' }); },
-  /** Плевок огнём */
+  /** Fire spit */
   spit() { hiss({ dur: 0.35, vol: 0.18, f: 1200, f1: 400, q: 0.6, type: 'lowpass' }); boom(120, 50, 0.2, 0.25); },
   splat() { boom(100, 40, 0.35, 0.35); hiss({ dur: 0.4, vol: 0.15, f: 1500, f1: 200, q: 0.5, type: 'lowpass' }); },
-  /** Пьёт из куста: булькающие глотки */
+  /** Drinks from the bush: gurgling gulps */
   gulp() { voice({ type: 'sine', f: rand(110, 160), f1: rand(60, 90), dur: 0.18, vol: 0.06, verb: 0.3 }); },
 };
 
-/** Горящий малиновый куст второй фазы: цель — три удара рубят его, змей не допьёт */
+/** Burning raspberry bush of the second phase: a target — three hits chop it down, the serpent will not finish drinking */
 class Bush implements Target {
   readonly pos: THREE.Vector3;
   readonly radius = 0.8;
@@ -83,7 +84,7 @@ class Bush implements Target {
     if (this.hits >= 3) this.chopped();
   }
 
-  /** Кадр: горит, вздрагивает от ударов; срубленный — пень */
+  /** Frame: burns, flinches from hits; chopped — a stump */
   update(dt: number): void {
     this.flashT = Math.max(0, this.flashT - dt);
     this.leaf.emissive.setScalar(this.flashT > 0 ? 0.6 : 0);
@@ -92,7 +93,7 @@ class Bush implements Target {
     if (this.alive && rnd() < 0.4) this.h.fx.particle({ pos: this.pos.clone().add(new THREE.Vector3(rand(-0.6, 0.6), rand(0.6, 1.6), rand(-0.6, 0.6))), vel: new THREE.Vector3(0, rand(0.8, 1.6), 0), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: rnd() < 0.6 ? FIRE : RASP, gravity: -1 });
   }
 
-  /** Вырос заново */
+  /** Grew back */
   regrow(): void { this.hits = 0; }
 
   dispose(): void {
@@ -103,25 +104,25 @@ class Bush implements Target {
 
 export class CrimsonSerpent extends MiniBoss {
   readonly radius = 1.4;
-  readonly title = 'Рдяный Змей';
+  readonly title = t('Crimson Serpent');
   override readonly topY = 3.2;
   readonly drop = 'flameserpent';
   override readonly tier = 'boss' as const;
-  /** Ауры на выбор после победы, шанс % — огонь: жжение или кровь */
+  /** Auras to choose from after the victory, chance % — fire: burning or blood */
   override readonly auras = [['inferno', 50], ['pact', 50]] as const;
   private readonly head = new THREE.Group();
   private readonly jaw = new THREE.Group();
   private readonly heart = new THREE.Group();
   private readonly segs: THREE.Group[] = [];
   private readonly mound = new THREE.Group();
-  /** Путь головы: новые точки — в начале */
+  /** The head's path: new points at the front */
   private readonly path: THREE.Vector3[] = [];
   private readonly segAt: THREE.Vector3[] = SEGS.map(() => new THREE.Vector3());
-  /** Под землёй: урон не проходит, видно только холм */
+  /** Underground: damage does not pass, only the mound is visible */
   private under = false;
-  /** Застрял после выныривания — торчит наполовину */
+  /** Stuck after surfacing — sticks out halfway */
   private stuck = false;
-  /** Насколько ушёл в землю, м */
+  /** How far it has gone into the ground, m */
   private sink = 0;
   private bur = 0;
   private readonly mole = new THREE.Vector3();
@@ -150,7 +151,7 @@ export class CrimsonSerpent extends MiniBoss {
     const berry = this.shimmer(RASP, PINK, 0, 3);
     const B = this.box.bind(this);
     this.body.add(this.head);
-    // голова: череп, морда, шея к земле; глаза горят; трещины лавы; корона из костянок
+    // head: skull, muzzle, neck to the ground; the eyes burn; lava cracks; a crown of drupelets
     this.head.position.set(0, 1.7, 0.2);
     B(this.head, scale, 1.7, 1.0, 1.7, 0, 0.2, 0);
     B(this.head, dark, 1.3, 0.55, 0.8, 0, 0.05, 1.1);
@@ -158,16 +159,16 @@ export class CrimsonSerpent extends MiniBoss {
     for (const s of [-1, 1]) B(this.head, eye, 0.3, 0.18, 0.2, s * 0.55, 0.45, 0.78);
     B(this.head, this.shimmer(FIRE, RASP, 1, 2), 1.72, 0.08, 0.5, 0, 0.5, -0.3);
     for (const [x, z, k] of [[0, 0, 0.32], [0.45, -0.2, 0.24], [-0.45, -0.2, 0.24], [0.3, 0.35, 0.22], [-0.3, 0.35, 0.22]] as const) B(this.head, this.shimmer(RASP, PINK, x * 4, 2.5), k, k, k, x, 0.85, z);
-    // челюсть: петля сзади снизу, клыки вверх
+    // jaw: hinge at the back bottom, fangs up
     this.jaw.position.set(0, -0.3, -0.5);
     this.head.add(this.jaw);
     B(this.jaw, dark, 1.4, 0.35, 1.9, 0, -0.1, 0.95);
     for (const s of [-1, 1]) B(this.jaw, bone, 0.16, 0.36, 0.16, s * 0.48, 0.2, 1.75);
-    // сердце-ягода под челюстью
+    // berry heart under the jaw
     this.heart.position.set(0, -0.75, 0.25);
     this.head.add(this.heart);
     for (const [x, y, k] of [[0, 0, 0.36], [0.22, 0.12, 0.22], [-0.22, 0.12, 0.22], [0, -0.22, 0.22], [0, 0.26, 0.18]] as const) B(this.heart, berry, k, k, k, x, y, 0.12);
-    // горбы: кубы чешуи, гребень, светящаяся трещина
+    // humps: cubes of scales, a crest, a glowing crack
     SEGS.forEach((k, i) => {
       const g = new THREE.Group();
       this.body.add(g);
@@ -176,7 +177,7 @@ export class CrimsonSerpent extends MiniBoss {
       B(g, dark, k * 0.3, k * 0.35, k * 0.5, 0, k * 0.6, 0);
       this.segs.push(g);
     });
-    // холм над змеем под землёй
+    // the mound above the serpent underground
     this.group.add(this.mound);
     const dirt = this.lam(DIRT[0]);
     B(this.mound, dirt, 1.8, 0.5, 1.8, 0, 0.2, 0);
@@ -185,11 +186,11 @@ export class CrimsonSerpent extends MiniBoss {
   }
 
   override hit(dmg: number, dir: THREE.Vector3, point: THREE.Vector3, knock: number): void {
-    if (this.under && this.state !== 'daze') return; // под землёй — меч рубит землю
+    if (this.under && this.state !== 'daze') return; // underground — the sword hacks the ground
     super.hit(dmg, dir, point, knock);
   }
 
-  /** Под землёй — только бугор: героя не толкает */
+  /** Underground — only a mound: does not push the hero */
   protected override get solid(): boolean { return !this.under; }
   protected override daze(sec: number): void { this.under = false; this.stuck = false; this.drinking = false; super.daze(sec); }
 
@@ -206,7 +207,7 @@ export class CrimsonSerpent extends MiniBoss {
   protected override die(): void { this.under = false; this.drinking = false; this.killBush(); super.die(); }
 
   protected override onEnrage(): void {
-    // в центре арены вспыхивает куст — змей будет пить из него
+    // a bush bursts into flame in the centre of the arena — the serpent will drink from it
     const a = this.arena;
     this.killBush();
     this.bush = new Bush(this.h, new THREE.Vector3((a.x0 + a.x1) / 2, 0, (a.z0 + a.z1) / 2), () => this.chop());
@@ -221,12 +222,12 @@ export class CrimsonSerpent extends MiniBoss {
 
   private killBush(): void { this.bush?.dispose(); this.bush = null; }
 
-  /** Куст срублен: питьё сорвано — змей оглушён; иначе просто отсрочка */
+  /** The bush is chopped: the drinking is interrupted — the serpent is dazed; otherwise just a delay */
   private chop(): void {
     const b = this.bush;
     if (!b) return;
     this.h.fx.shock(b.pos.clone().setY(0.08), 2.4, RASP, 0.4, 0.15);
-    if (this.state === 'attack' && this.attack === 'drink') { this.h.fx.text(this.pos.clone().setY(this.topY + 0.8), 'питьё сорвано!', 'crit'); this.daze(2.5); }
+    if (this.state === 'attack' && this.attack === 'drink') { this.h.fx.text(this.pos.clone().setY(this.topY + 0.8), t('drinking interrupted!'), 'crit'); this.daze(2.5); }
     this.drinkCd = 10;
   }
 
@@ -237,11 +238,11 @@ export class CrimsonSerpent extends MiniBoss {
     return rnd() < 0.5 ? 'spit' : 'burrow';
   }
 
-  protected act(name: string, t: number, dt: number): boolean {
+  protected act(name: string, ta: number, dt: number): boolean {
     const fx = this.h.fx;
     switch (name) {
       case 'burrow': {
-        // ныряет (0,5 с) → холм бежит к герою (до 1,4 с) → круг под героем 0,9 с → выныривает → застрял, оглушён
+        // dives (0.5 s) → the mound runs to the hero (up to 1.4 s) → a circle under the hero 0.9 s → surfaces → stuck, dazed
         const DIVE = 0.5, RUN = 1.4, MARK = 0.9;
         if (!this.hitDone) {
           this.hitDone = true;
@@ -249,7 +250,7 @@ export class CrimsonSerpent extends MiniBoss {
           fx.shake = Math.max(fx.shake, 0.4);
           fx.burst(this.pos.clone().setY(0.4), DIRT, 26, { speed: 5, up: 6, size: 0.16, life: 0.9, gravity: 12 });
         }
-        if (t < DIVE) return false;
+        if (ta < DIVE) return false;
         if (this.bur === 0) { this.bur = 1; this.under = true; this.mole.copy(this.pos).setY(0); }
         const hero = this.heroAt();
         if (this.bur === 1) {
@@ -257,35 +258,35 @@ export class CrimsonSerpent extends MiniBoss {
           if (l > 0.8) this.mole.addScaledVector(d, Math.min(sp, l - 0.8) / l);
           this.clampIn(this.mole, 2);
           if (rnd() < 0.6) fx.burst(this.mole.clone().setY(0.3), DIRT, 2, { speed: 2, up: 3, size: 0.12, life: 0.5, gravity: 10 });
-          if (l < 1.2 || t > DIVE + RUN) {
+          if (l < 1.2 || ta > DIVE + RUN) {
             this.bur = 2;
             this.markAt.copy(this.clampIn(hero.clone(), 2));
             this.markCircle(this.markAt, 3, MARK, () => this.erupt(), FIRE);
           }
         } else if (this.bur === 2) this.mole.lerp(this.markAt, Math.min(1, dt * 6));
         if (rnd() < 0.5) fx.particle({ pos: this.mole.clone().add(new THREE.Vector3(rand(-0.8, 0.8), 0.4, rand(-0.8, 0.8))), vel: new THREE.Vector3(0, rand(1, 2.5), 0), life: 0.5, size: rand(0.08, 0.14), color: rnd() < 0.7 ? FIRE : RASP, gravity: -1 });
-        if (t > 5) { this.under = false; this.straighten(); return true; } // подстраховка: метку смахнуло — вылез сам
+        if (ta > 5) { this.under = false; this.straighten(); return true; } // safety: the mark was swept away — crawled out on its own
         return false;
       }
       case 'lunge': {
-        // откидывает голову (0,45 с) → бросок вперёд с укусом конусом
+        // throws the head back (0.45 s) → a lunge forward with a bite in a cone
         const WIND = 0.45;
-        if (t < WIND) { this.face(dt, 2); return false; }
-        if (t - dt < WIND) {
+        if (ta < WIND) { this.face(dt, 2); return false; }
+        if (ta - dt < WIND) {
           if (!this.quiet) sfx.bite();
           fx.arc(this.pos, this.yaw, FIRE, 3.6, 1.0, 1.2);
           if (this.inCone(this.pos, this.yaw, this.radius + 2.4, 0.75)) this.hurt(18, this.pos, 7);
         }
-        if (t < WIND + 0.2) this.move(this.fwd(), dt * 6);
-        return t > WIND + 0.65;
+        if (ta < WIND + 0.2) this.move(this.fwd(), dt * 6);
+        return ta > WIND + 0.65;
       }
       case 'spit': {
-        // вскидывает голову — комья огня по меткам вокруг героя
+        // raises the head — clumps of fire on marks around the hero
         const n = this.enraged ? 6 : 3;
         this.face(dt);
         for (let i = 0; i < n; i++) {
           const at = 0.4 + i * 0.2;
-          if (t >= at && t - dt < at) {
+          if (ta >= at && ta - dt < at) {
             const to = this.clampIn(this.heroAt().add(new THREE.Vector3(rand(-2.5, 2.5), 0, rand(-2.5, 2.5)).multiplyScalar(i === 0 ? 0.15 : 1)));
             const from = this.pos.clone().addScaledVector(this.fwd(), 1.2).setY(2.2 - this.sink);
             const mesh = new THREE.Mesh(UNIT, glowMat(rnd() < 0.6 ? FIRE : RASP));
@@ -300,25 +301,25 @@ export class CrimsonSerpent extends MiniBoss {
             if (!this.quiet) sfx.spit();
           }
         }
-        return t > 0.4 + n * 0.2 + 0.4;
+        return ta > 0.4 + n * 0.2 + 0.4;
       }
       case 'drink': {
-        // ползёт к кусту → обвивает его кольцом и пьёт 3 с, лечится 6 %/с
+        // crawls to the bush → coils around it in a ring and drinks for 3 s, heals 6 %/s
         const b = this.bush;
         if (!b || !b.alive) { this.drinkCd = 10; return true; }
         if (!this.hitDone) { this.hitDone = true; b.regrow(); if (!this.quiet) sfx.hiss(); }
         const d = b.pos.clone().sub(this.pos).setY(0), l = d.length();
         if (!this.drinking) {
-          if (l > 2.4 && t < 4) {
+          if (l > 2.4 && ta < 4) {
             this.yaw = Math.atan2(d.x, d.z);
             this.move(d.normalize(), this.speed * 1.5 * this.speedK * dt);
             return false;
           }
           this.drinking = true; this.st = 0; this.orbit = Math.atan2(-d.x, -d.z);
-          fx.text(this.pos.clone().setY(this.topY + 0.8), 'пьёт из куста!', 'crit');
+          fx.text(this.pos.clone().setY(this.topY + 0.8), t('drinks from the bush!'), 'crit');
           return false;
         }
-        // кольцо вокруг куста: голова кружит, горбы ложатся следом
+        // a ring around the bush: the head circles, the humps settle behind
         this.orbit += dt * 1.1;
         const R = 2.2, nx = b.pos.x + Math.sin(this.orbit) * R, nz = b.pos.z + Math.cos(this.orbit) * R;
         this.yaw = Math.atan2(b.pos.x - nx, b.pos.z - nz) + 1.0;
@@ -330,7 +331,7 @@ export class CrimsonSerpent extends MiniBoss {
           fx.particle({ pos: b.pos.clone().setY(1).lerp(mouth, rnd()), vel: mouth.sub(b.pos).setY(0.5).multiplyScalar(0.6), life: 0.4, size: rand(0.08, 0.15), color: rnd() < 0.6 ? RASP : FIRE, gravity: 0 });
         }
         if (rnd() < dt * 4 && !this.quiet) sfx.gulp();
-        if (t < 3) return false;
+        if (ta < 3) return false;
         this.drinking = false; this.drinkCd = 10;
         return true;
       }
@@ -338,7 +339,7 @@ export class CrimsonSerpent extends MiniBoss {
     return true;
   }
 
-  /** Выныривает под меткой: удар, брызги лавы — лужи; застрял наполовину — оглушён */
+  /** Surfaces under the mark: strike, lava splashes — pools; stuck halfway — dazed */
   private erupt(): void {
     if (this.state !== 'attack' || this.attack !== 'burrow' || this.dead) return;
     const fx = this.h.fx, at = this.markAt.clone();
@@ -347,7 +348,7 @@ export class CrimsonSerpent extends MiniBoss {
     fx.burst(at.clone().setY(0.6), [...DIRT, FIRE, RASP], 40, { speed: 7, up: 8, size: 0.16, life: 1, gravity: 12 });
     fx.shock(at.clone().setY(0.08), 3.4, FIRE, 0.45, 0.18);
     if (this.inCircle(at, 3)) this.hurt(22, at, 9);
-    // брызги лавы разлетаются и горят лужами
+    // lava splashes scatter and burn as pools
     const n = this.enraged ? 6 : 4;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + rand(-0.3, 0.3), r = rand(3, 5);
@@ -366,14 +367,14 @@ export class CrimsonSerpent extends MiniBoss {
     this.stuck = true;
   }
 
-  /** Путь заново: горбы вытянуты прямо за головой */
+  /** Path anew: the humps stretched straight behind the head */
   private straighten(): void {
     this.path.length = 0;
     const back = this.fwd().negate();
     for (let i = 0; i < 30; i++) this.path.push(this.pos.clone().setY(0).addScaledVector(back, i * 0.25));
   }
 
-  /** Точка на пути головы в s метрах позади */
+  /** Point on the head's path s metres behind */
   private along(s: number, out: THREE.Vector3): THREE.Vector3 {
     let prev = this.pos.clone().setY(0);
     for (const p of this.path) {
@@ -387,7 +388,7 @@ export class CrimsonSerpent extends MiniBoss {
   protected animate(dt: number, walk: boolean): void {
     const t = this.time, S = this.st, A = this.state === 'attack' ? this.attack : '', fx = this.h.fx;
     if (this.bush) { this.bush.update(dt); if (this.awake && this.state !== 'attack') this.drinkCd -= dt; }
-    // путь головы и горящая колея
+    // the head's path and the burning track
     const head = this.pos.clone().setY(0), moved = head.distanceTo(this.lastP);
     if (!this.path.length || head.distanceTo(this.path[0]) > 0.2) { this.path.unshift(head.clone()); if (this.path.length > 60) this.path.pop(); }
     if (moved < 2 && !this.under && this.state !== 'dead' && this.state !== 'sleep') {
@@ -395,7 +396,7 @@ export class CrimsonSerpent extends MiniBoss {
       if (this.trail > 1.6) { this.trail = 0; this.hazard(this.segAt[1], 0.85, 4, 10, FIRE); }
     }
     this.lastP.copy(head);
-    // ушёл в землю: ныряет, под землёй, застрял наполовину, вынырнул
+    // gone into the ground: dives, underground, stuck halfway, surfaced
     let sinkTo = 0;
     if (A === 'burrow') sinkTo = this.under ? 4 : Math.min(1, S / 0.5) * 4;
     else if (this.state === 'daze' && this.stuck) sinkTo = 1.0;
@@ -403,14 +404,14 @@ export class CrimsonSerpent extends MiniBoss {
     this.sink = THREE.MathUtils.lerp(this.sink, sinkTo, Math.min(1, dt * (A === 'burrow' ? 10 : 5)));
     this.body.position.y = -this.sink;
     this.body.visible = this.sink < 3.6 || this.state === 'dead';
-    // холм над змеем под землёй
+    // the mound above the serpent underground
     this.mound.visible = this.under && this.state !== 'dead';
     if (this.mound.visible) {
       const v = this.mole.clone().sub(head).applyAxisAngle(Y, -this.yaw);
       this.mound.position.set(v.x, Math.abs(Math.sin(t * 9)) * 0.12 - this.flyY, v.z);
       this.mound.rotation.y = t * 2;
     }
-    // горбы: на пути головы через равные отрезки, волной вверх-вниз
+    // humps: on the head's path at equal intervals, a wave up and down
     const wave = walk || A === 'drink' ? 1 : 0.3;
     this.segs.forEach((g, i) => {
       const p = this.along((i + 1) * GAP, this.segAt[i]), nxt = this.along((i + 1) * GAP - 0.5, new THREE.Vector3());
@@ -418,7 +419,7 @@ export class CrimsonSerpent extends MiniBoss {
       g.position.set(v.x, SEGS[i] * 0.45 + Math.max(0, Math.sin(t * 5 - i * 1.2)) * 0.35 * wave - this.flyY, v.z);
       g.rotation.y = Math.atan2(nxt.x - p.x, nxt.z - p.z) - this.yaw;
     });
-    // голова: качается; к укусу откидывается и бросается; плюёт — вскинута; застрял — задрана, повисла
+    // head: sways; for the bite throws back and lunges; spits — raised; stuck — tilted up, hanging
     let hz = 0.2, hy = 1.7 + Math.sin(t * 2.2) * 0.08, hx = 0, jaw = 0.1 + Math.max(0, Math.sin(t * 1.7)) * 0.1;
     if (A === 'lunge') { const k = S < 0.45 ? S / 0.45 : Math.max(0, 1 - (S - 0.45) / 0.4); hz = S < 0.45 ? 0.2 - k * 0.6 : 0.2 + k * 1.2; hx = S < 0.45 ? -0.35 * k : 0.2 * k; jaw = S < 0.45 ? 0.7 * k : 0.7 * k * k; }
     else if (A === 'spit') { hx = -0.4; jaw = 0.6; hy = 2.0; }
@@ -431,13 +432,13 @@ export class CrimsonSerpent extends MiniBoss {
     this.head.position.y = THREE.MathUtils.lerp(this.head.position.y, hy, 0.2);
     this.head.rotation.x = THREE.MathUtils.lerp(this.head.rotation.x, hx, 0.2);
     this.jaw.rotation.x = THREE.MathUtils.lerp(this.jaw.rotation.x, jaw, 0.3);
-    // угли с чешуи; застрял — земля сыплется
+    // embers from the scales; stuck — earth trickles down
     if (this.state !== 'dead' && !this.under && rnd() < 0.35) {
       const p = this.segAt[Math.floor(rnd() * SEGS.length)];
       fx.particle({ pos: p.clone().setY(rand(0.8, 1.6) - this.sink), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.6, 1.4), rand(-0.3, 0.3)), life: rand(0.4, 0.8), size: rand(0.06, 0.12), color: rnd() < 0.7 ? FIRE : RASP, gravity: -0.5 });
     }
     if (this.stuck && this.state === 'daze' && rnd() < 0.3) fx.burst(this.pos.clone().setY(0.3), DIRT, 1, { speed: 2, up: 2, size: 0.1, life: 0.5, gravity: 10 });
-    // сердце-ягода: оглушён — бьётся крупно
+    // berry heart: dazed — beats hard
     const beat = this.heartOpen ? 1 + Math.max(0, Math.sin(t * 14)) * 0.5 : 1 + Math.max(0, Math.sin(t * 5)) * 0.08;
     this.heart.scale.setScalar(beat * (this.heartOpen ? 1.7 : 1));
   }

@@ -1,10 +1,10 @@
 import { blockDef, type BlockDef } from './palette.ts';
 
 /**
- * Воксельная сетка уровня: чанки 16³, в клетке — индекс блока в палитре уровня и поворот.
- * Без зависимостей от three — этим же кодом карты экспортируются из node (scripts/export-map.ts).
+ * Voxel grid of the level: 16³ chunks, a cell holds the block index in the level palette and the rotation.
+ * No dependency on three — the same code exports maps from node (scripts/export-map.ts).
  *
- * Координаты блока — целые, блок занимает [x, x+1) × [y, y+1) × [z, z+1). Могут быть отрицательными.
+ * Block coordinates are integers, a block occupies [x, x+1) × [y, y+1) × [z, z+1). They may be negative.
  */
 
 export const CH = 16;
@@ -14,33 +14,33 @@ export interface LevelJSON {
   format: 'malina-level';
   version: 1;
   name: string;
-  /** Индекс в rows → имя блока; 0 всегда 'air' */
+  /** Index in rows → block name; 0 is always 'air' */
   palette: string[];
-  /** Ряды: [y, z, [[x0, длина, индекс, поворот], …]] */
+  /** Rows: [y, z, [[x0, length, index, rotation], …]] */
   rows: [number, number, [number, number, number, number][]][];
-  /** Точки появления, свет, предметы — заполняет редактор позже */
+  /** Spawn points, lights, items — the editor fills them later */
   entities: LevelEntity[];
   spawn?: [number, number, number];
-  /** Произвольные данные: у комнат-заготовок — тип и двери */
+  /** Arbitrary data: for room templates — type and doors */
   meta?: Record<string, unknown>;
-  /** Свободный декор поверх блоков (src/level/decor.ts); в старых картах поля нет */
+  /** Free decor on top of blocks (src/level/decor.ts); old maps lack the field */
   decor?: DecorItem[];
 }
 
 export interface LevelEntity { kind: string; x: number; y: number; z: number; rot?: number; data?: Record<string, unknown> }
 
 /**
- * Предмет декора: стоит где угодно с шагом 1/16 и под любым углом, но сделан «из блоков» (wiki/design-level-decor.md).
- * Логики у декора нет — что ломается или открывается, то предмет (props.ts) или сущность.
+ * Decor item: stands anywhere with a 1/16 step and at any angle, but is made "of blocks" (wiki/design-level-decor.md).
+ * Decor has no logic — whatever breaks or opens is a prop (props.ts) or an entity.
  */
 export interface DecorItem {
-  /** Имя из реестра декора (src/level/decor.ts) */
+  /** Name from the decor registry (src/level/decor.ts) */
   name: string;
-  /** Точка опоры в метрах, мировые координаты (x, z — как у центров клеток) */
+  /** Pivot point in metres, world coordinates (x, z — as for cell centres) */
   pos: [number, number, number];
-  /** [поворот, наклон, крен] в градусах; поворот как у блоков — 90° переводит +X в +Z */
+  /** [yaw, pitch, roll] in degrees; yaw as for blocks — 90° turns +X into +Z */
   rot?: number[];
-  /** Клетка, к которой предмет прикреплён (факел к стене): стёрли клетку в редакторе — предмет удаляется вместе с ней */
+  /** The cell the item is attached to (a torch to a wall): erase the cell in the editor — the item is removed with it */
   on?: [number, number, number];
 }
 
@@ -51,29 +51,29 @@ export const chunkKey = (cx: number, cy: number, cz: number): string => `${cx},$
 export class Level {
   name: string;
   readonly chunks = new Map<string, Uint16Array>();
-  /** Индекс → имя блока */
+  /** Index → block name */
   readonly palette: string[] = ['air'];
   private readonly index = new Map<string, number>([['air', 0]]);
   private readonly defs: BlockDef[] = [blockDef('air')];
   readonly entities: LevelEntity[] = [];
-  /** Декор; меняешь — вызови touchDecor(), чтобы рендер и столкновения пересобрались */
+  /** Decor; after changing it call touchDecor() so the renderer and collisions rebuild */
   readonly decor: DecorItem[] = [];
-  /** Растёт при каждом изменении декора */
+  /** Grows on every decor change */
   decorVersion = 0;
   spawn: [number, number, number] | null = null;
   meta: Record<string, unknown> = {};
-  /** Чанки, которые надо перестроить (ключи) */
+  /** Chunks that need rebuilding (keys) */
   readonly dirty = new Set<string>();
   version = 0;
   private bounds: Bounds | null = null;
 
-  constructor(name = 'Без имени') { this.name = name; }
+  constructor(name = 'Untitled') { this.name = name; }
 
   idOf(name: string): number {
     let id = this.index.get(name);
     if (id === undefined) {
       id = this.palette.length;
-      if (id >= 1 << 13) throw new Error('Палитра уровня переполнена');
+      if (id >= 1 << 13) throw new Error('Level palette overflow');
       this.palette.push(name);
       this.index.set(name, id);
       this.defs.push(blockDef(name));
@@ -81,7 +81,7 @@ export class Level {
     return id;
   }
 
-  /** Сырой код клетки: id << 2 | rot; 0 — воздух */
+  /** Raw cell code: id << 2 | rot; 0 — air */
   code(x: number, y: number, z: number): number {
     const c = this.chunks.get(chunkKey(x >> 4, y >> 4, z >> 4));
     return c ? c[((y & 15) * CH + (z & 15)) * CH + (x & 15)] : 0;
@@ -107,14 +107,14 @@ export class Level {
     if (c[i] === code) return;
     c[i] = code;
     this.version++;
-    // границы растут на месте, без обхода всех клеток; стирание их не сужает (надмножество безопасно: это диапазон поиска)
+    // bounds grow in place, without scanning all cells; erasing does not shrink them (a superset is safe: it is a search range)
     if (id !== 0 && this.bounds) {
       const b = this.bounds;
       if (x < b.minX) b.minX = x; if (x > b.maxX) b.maxX = x;
       if (y < b.minY) b.minY = y; if (y > b.maxY) b.maxY = y;
       if (z < b.minZ) b.minZ = z; if (z > b.maxZ) b.maxZ = z;
     }
-    // перестроить этот чанк и соседние, если клетка на границе
+    // rebuild this chunk and the neighbours if the cell is on the border
     const cx = x >> 4, cy = y >> 4, cz = z >> 4;
     this.dirty.add(key);
     const lx = x & 15, ly = y & 15, lz = z & 15;
@@ -123,7 +123,7 @@ export class Level {
     if (lz === 0) this.dirty.add(chunkKey(cx, cy, cz - 1)); else if (lz === 15) this.dirty.add(chunkKey(cx, cy, cz + 1));
   }
 
-  /** Положить готовый чанк (копия из карты-источника, src/world/map-source.ts): палитры должны совпадать */
+  /** Put a ready chunk (a copy from the source map, src/world/map-source.ts): the palettes must match */
   putChunk(key: string, data: Uint16Array): void {
     this.chunks.set(key, data);
     this.version++;
@@ -141,10 +141,10 @@ export class Level {
     }
   }
 
-  /** Та же палитра, что у другого уровня (чтобы копировать чанки без перекодирования) */
+  /** The same palette as another level (to copy chunks without re-encoding) */
   adoptPalette(from: Level): void { for (const name of from.palette) this.idOf(name); }
 
-  /** Убрать чанк целиком (выгрузка региона, src/world/regions.ts): рендер его снесёт, границы остаются надмножеством */
+  /** Remove a whole chunk (region unloading, src/world/regions.ts): the renderer tears it down, the bounds remain a superset */
   removeChunk(key: string): boolean {
     if (!this.chunks.delete(key)) return false;
     this.dirty.add(key);
@@ -152,7 +152,7 @@ export class Level {
     return true;
   }
 
-  /** Ключи чанков региона 32 × 32 м (2 × 2 чанка по X и Z, все по Y) */
+  /** Chunk keys of a 32 × 32 m region (2 × 2 chunks along X and Z, all along Y) */
   chunkKeysOf(rx: number, rz: number): string[] {
     const out: string[] = [];
     for (const k of this.chunks.keys()) {
@@ -162,7 +162,7 @@ export class Level {
     return out;
   }
 
-  /** Заполнить параллелепипед (включительно) */
+  /** Fill a box (inclusive) */
   fill(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, name: string, rot = 0): void {
     for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++)
       for (let z = Math.min(z0, z1); z <= Math.max(z0, z1); z++)
@@ -181,7 +181,7 @@ export class Level {
     this.bounds = null;
   }
 
-  /** Декор изменился: рендер и столкновения перестроятся */
+  /** Decor changed: the renderer and collisions will rebuild */
   touchDecor(): void { this.decorVersion++; }
   addDecor(d: DecorItem): DecorItem { this.decor.push(d); this.decorVersion++; return d; }
   removeDecor(d: DecorItem): void {
@@ -189,7 +189,7 @@ export class Level {
     if (i >= 0) { this.decor.splice(i, 1); this.decorVersion++; }
   }
 
-  /** Обойти все непустые клетки */
+  /** Visit all non-empty cells */
   forEach(cb: (x: number, y: number, z: number, id: number, rot: number) => void): void {
     for (const [key, c] of this.chunks) {
       const [cx, cy, cz] = key.split(',').map(Number);
@@ -202,7 +202,7 @@ export class Level {
     }
   }
 
-  /** Границы непустых клеток (включительно) или null, если уровень пуст */
+  /** Bounds of non-empty cells (inclusive) or null if the level is empty */
   getBounds(): Bounds | null {
     if (this.bounds) return this.bounds;
     let b: Bounds | null = null;
@@ -218,7 +218,7 @@ export class Level {
     return b;
   }
 
-  /** Самый высокий непустой блок в колонке не выше yMax: его y или null */
+  /** The highest non-empty block in the column not above yMax: its y or null */
   topAt(x: number, z: number, yMax = 255): number | null {
     const b = this.getBounds();
     if (!b) return null;
@@ -227,7 +227,7 @@ export class Level {
   }
 
   toJSON(): LevelJSON {
-    // ряды вдоль X, пробеги одинаковых кодов
+    // rows along X, runs of identical codes
     const rows = new Map<string, [number, number, number, number][]>();
     const cells: [number, number, number, number][] = [];
     this.forEach((x, y, z, id, rot) => cells.push([y, z, x, (id << 2) | rot]));
@@ -246,7 +246,7 @@ export class Level {
   }
 
   static fromJSON(j: LevelJSON): Level {
-    if (j.format !== 'malina-level') throw new Error('Это не карта «Малины»');
+    if (j.format !== 'malina-level') throw new Error('Not a Malina map');
     const L = new Level(j.name);
     for (const [y, z, runs] of j.rows) for (const [x0, n, idx, rot] of runs) {
       const name = j.palette[idx];

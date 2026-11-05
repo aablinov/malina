@@ -8,31 +8,31 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { sunOffset, tintVec, type WorldSettings } from './world.ts';
 
 /**
- * Свет и постобработка «как в Unreal» — узнаваемая картинка Minecraft Dungeons (wiki/style-lighting.md,
- * источники — wiki/sources/mcd-lighting.md):
+ * Light and post-processing "as in Unreal" — the recognisable look of Minecraft Dungeons (wiki/style-lighting.md,
+ * sources — wiki/sources/mcd-lighting.md):
  *
- *  1. Тёплое низкое солнце с мягкими длинными тенями, тени не чёрные — их заливает голубое небо (Hemisphere).
- *  2. Затенение в щелях и у подножий (GTAO) — у стен, под декором, у ног героя; вырезные листья и трава не затеняют.
- *  3. Bloom на огне, магии, светящихся грибах.
- *  4. Цветокоррекция после тонмаппинга ACES: тени уходят в бирюзу, светлое — в тепло, насыщенность чуть выше.
- *  5. Воздушная дымка: дальнее светлеет и голубеет (Fog от камеры), без серой мути.
+ *  1. A warm low sun with soft long shadows, the shadows are not black — the blue sky fills them (Hemisphere).
+ *  2. Shading in crevices and at bases (GTAO) — by walls, under decor, at the hero's feet; cut-out leaves and grass do not occlude.
+ *  3. Bloom on fire, magic, glowing mushrooms.
+ *  4. Colour grading after ACES tone mapping: shadows go turquoise, highlights go warm, saturation slightly higher.
+ *  5. Aerial haze: the distance gets lighter and bluer (Fog from the camera), without grey murk.
  *
- * Tilt-shift (размытие верха и низа кадра) был и убран 23.10.2026: два полноэкранных прохода на полном разрешении съедали кадры.
+ * Tilt-shift (blurring the top and bottom of the frame) existed and was removed on 23.10.2026: two full-screen passes at full resolution ate frames.
  *
- * `unreal = false` оставляет только солнце, небо и bloom — как было до этого слоя (сравнить: клавиша U).
+ * `unreal = false` leaves only the sun, sky and bloom — as it was before this layer (compare: the U key).
  */
 
 /**
- * Лёгкое затенение без вырезных и прозрачных сеток: трава и листья — плоскости, иначе они дают пятна.
- * Спрайты (вспышки заклинаний и взрывов, лут на полу) и точки тоже прячем: в проходе нормалей они рисовались
- * непрозрачными квадратами, и AO давал вокруг них чёрные квадраты.
+ * Light occlusion without cut-out and transparent meshes: grass and leaves are planes, otherwise they produce blotches.
+ * Sprites (spell and explosion flashes, loot on the floor) and points are hidden too: in the normals pass they were drawn
+ * as opaque squares, and AO produced black squares around them.
  */
-/** Качество AO: делитель разрешения буфера, сэмплов на пиксель, сэмплов шумоподавления (wiki/dev-performance.md) */
+/** AO quality: buffer resolution divisor, samples per pixel, denoise samples (wiki/dev-performance.md) */
 export const AO_QUALITY = { div: 2, samples: 6, denoise: 8 };
 
 class SolidAOPass extends GTAOPass {
-  // в типах three метода нет, в самом GTAOPass он есть и вызывается перед проходом нормалей. Свой обход вместо
-  // базового (он прятал только точки и линии): один проход по сцене за кадр вместо двух
+  // the method is missing from three's types, but GTAOPass itself has it and calls it before the normals pass. Our own traversal instead
+  // of the base one (it hid only points and lines): one pass over the scene per frame instead of two
   overrideVisibility(): void {
     const cache = (this as unknown as { _visibilityCache: Map<THREE.Object3D, boolean> })._visibilityCache;
     this.scene.traverse((o) => {
@@ -43,16 +43,16 @@ class SolidAOPass extends GTAOPass {
       if (m.alphaTest > 0 || m.transparent || (m as THREE.MeshBasicMaterial).isMeshBasicMaterial) o.visible = false;
     });
   }
-  /** AO мягкий и так — считаем в части разрешения буфера (в полном он один стоил ~15 мс на 2048 × 1536) */
+  /** AO is soft anyway — compute at a fraction of the buffer resolution (at full it alone cost ~15 ms at 2048 × 1536) */
   setSize(width: number, height: number): void {
     super.setSize(Math.max(1, Math.round(width / AO_QUALITY.div)), Math.max(1, Math.round(height / AO_QUALITY.div)));
   }
 }
 
 /**
- * Плотность пикселей буфера постобработки. На ретине (DPR 2) полноэкранный HDR-буфер — главная цена кадра:
- * замер 23.10.2026 (GPU, 2048 × 1536): DPR 2 — 20,8 мс, DPR 1,5 — 6,3 мс с AO и bloom. MSAA на этом буфере ещё дороже (35 мс).
- * Взяли 1,25 — запас по кадрам важнее последней доли резкости.
+ * Pixel density of the post-processing buffer. On retina (DPR 2) the full-screen HDR buffer is the main cost of a frame:
+ * measured 23.10.2026 (GPU, 2048 × 1536): DPR 2 — 20.8 ms, DPR 1.5 — 6.3 ms with AO and bloom. MSAA on this buffer is even dearer (35 ms).
+ * We took 1.25 — frame headroom matters more than the last bit of sharpness.
  */
 const POST_MAX_DPR = 1.25;
 
@@ -60,7 +60,7 @@ const FULLSCREEN_VERT = /* glsl */`
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 
-/** Цветокоррекция в экранных цветах (после OutputPass): раздельное тонирование, насыщенность, контраст, лёгкая виньетка */
+/** Colour grading in screen colours (after OutputPass): split toning, saturation, contrast, a light vignette */
 const GradeShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
@@ -97,10 +97,10 @@ interface Mood {
   shadow: [number, number, number]; high: [number, number, number]; sat: number;
 }
 const DAY: Mood = {
-  // мягкий свет MCD: неба много, солнца меньше — тени светлые, бока блоков тёплые от отражённого снизу (hemiGround)
+  // soft MCD light: lots of sky, less sun — light shadows, block sides warm from the bounce below (hemiGround)
   sky: '#9ed6f0', haze: '#d6ecf4', hemiSky: '#bfe4ff', hemiGround: '#d8c49a', hemi: 2.0, ambient: 0.2,
   sun: '#ffdcae', sunI: 2.2, bloom: 0.42, exposure: 1.02,
-  // пастель Minecraft Dungeons: насыщенность не поднимаем, светлое теплеет слегка (wiki/style-terrain.md)
+  // Minecraft Dungeons pastel: saturation is not raised, highlights warm up slightly (wiki/style-terrain.md)
   shadow: [-0.02, 0.012, 0.045], high: [0.02, 0.012, -0.004], sat: 1.0,
 };
 const NIGHT: Mood = {
@@ -118,12 +118,12 @@ export class Lighting {
   readonly ao: SolidAOPass;
   readonly grade = new ShaderPass(GradeShader);
   private readonly fog = new THREE.Fog('#ffffff', 30, 120);
-  /** Откуда светит солнце относительно точки, за которой следит камера: низко и сбоку — длинные тени */
+  /** Where the sun shines from relative to the point the camera follows: low and from the side — long shadows */
   readonly sunOffset = new THREE.Vector3(-20, 26, 12);
   private mood: Mood = DAY;
   private day: Mood = DAY;
   private unrealOn = true;
-  /** Настройки мира карты (src/world.ts): день, дымка в метрах, постобработка; null — как задумано в этом файле */
+  /** Map world settings (src/world.ts): day, haze in metres, post-processing; null — as designed in this file */
   private world: WorldSettings | null = null;
 
   private readonly renderer: THREE.WebGLRenderer;
@@ -135,8 +135,8 @@ export class Lighting {
     this.sun.shadow.bias = -0.0005;
     this.sun.shadow.normalBias = 0.03;
     scene.add(this.hemi, this.ambient, this.sun, this.sun.target);
-    // карту теней рисуем один раз за кадр: иначе three перерисовывает её на каждый renderer.render, а GTAO
-    // делает второй проход по сцене за нормалями — тени стоили вдвое
+    // the shadow map is drawn once per frame: otherwise three redraws it on every renderer.render, and GTAO
+    // makes a second pass over the scene for normals — shadows cost double
     renderer.shadowMap.autoUpdate = false;
 
     this.composer = new EffectComposer(renderer);
@@ -159,7 +159,7 @@ export class Lighting {
     this.unrealOn = on;
     this.ao.enabled = this.grade.enabled = on;
     this.scene.fog = on && (this.world?.fog.enabled ?? true) ? this.fog : null;
-    // солнце без цветокоррекции — прежнее, белее и выше
+    // the sun without colour grading — the old one, whiter and higher
     if (this.world && on) sunOffset(this.world, 35, this.sunOffset);
     else this.sunOffset.set(on ? -20 : -14, on ? 26 : 30, on ? 12 : 9);
     this.apply();
@@ -171,7 +171,7 @@ export class Lighting {
     this.unreal = this.unrealOn;
   }
 
-  /** Настройки мира карты: день берёт солнце, небо, дымку и цветокоррекцию из них; ночь (L) остаётся своей */
+  /** Map world settings: day takes the sun, sky, haze and colour grading from them; night (L) stays its own */
   applyWorld(ws: WorldSettings): void {
     const night = this.mood === NIGHT;
     this.world = ws;
@@ -213,23 +213,23 @@ export class Lighting {
     this.composer.setSize(w, h);
   }
 
-  /** Солнце и тени — за точкой интереса; дымка начинается за ней и густеет вдаль */
+  /** Sun and shadows follow the point of interest; the haze starts behind it and thickens into the distance */
   follow(target: THREE.Vector3, camDist: number): void {
     this.sun.position.copy(target).add(this.sunOffset);
     this.sun.target.position.copy(target);
-    // дымка из настроек мира задана для камеры игры (24 м до героя) — дальше камера, дальше и дымка
+    // the haze from the world settings is set for the game camera (24 m to the hero) — a farther camera, a farther haze
     const k = camDist / 24;
     this.fog.near = this.world ? this.world.fog.near * k : camDist * 0.9;
     this.fog.far = this.world ? this.world.fog.far * k : camDist * 4.2;
   }
 
-  /** Кадр через композер (AO, bloom, цветокоррекция); тени обновляются один раз, перед первым проходом */
+  /** A frame through the composer (AO, bloom, colour grading); shadows update once, before the first pass */
   render(): void {
     this.renderer.shadowMap.needsUpdate = true;
     this.composer.render();
   }
 
-  /** Кадр без постобработки (B в плейграунде, прочие вьюпорты редактора) — тени тоже обновляются */
+  /** A frame without post-processing (B in the playground, other editor viewports) — shadows update too */
   renderPlain(camera: THREE.Camera): void {
     this.renderer.shadowMap.needsUpdate = true;
     this.renderer.render(this.scene, camera);

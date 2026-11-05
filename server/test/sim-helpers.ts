@@ -13,7 +13,7 @@ export function loadMap(id: string): { level: Level; td: TdSpec } {
   return { level, td: level.meta.td as TdSpec };
 }
 
-/** Враг-заглушка: идёт по дороге к кусту, бьёт его в конце; умирает от урона башен */
+/** Stub enemy: walks the road to the bush, hits it at the end; dies from tower damage */
 export class StubMob implements Foe, MarchingMob {
   readonly pos: THREE.Vector3;
   readonly radius = 0.4;
@@ -30,7 +30,7 @@ export class StubMob implements Foe, MarchingMob {
   yaw = 0;
   readonly ghost = false;
   speed = 2.5;
-  /** Бьёт куст раз в секунду по 5 */
+  /** Hits the bush once a second for 5 */
   hitT = 0;
   chillK = 0; chillT = 0;
   stunT = 0;
@@ -42,7 +42,7 @@ export class StubMob implements Foe, MarchingMob {
   hit(dmg: number): void { if (this.dead) return; this.hp -= dmg; if (this.hp <= 0) { this.dead = true; } }
   chill(k: number, sec: number): void { this.chillK = k; this.chillT = sec; }
   stun(sec: number): void { this.stunT = Math.max(this.stunT, sec); }
-  expose(): void { /* нет */ }
+  expose(): void { /* none */ }
   step(dt: number, hurtBush: (dmg: number, from: THREE.Vector3) => void): void {
     if (this.dead) return;
     this.chillT -= dt; this.stunT -= dt;
@@ -55,7 +55,7 @@ export class StubMob implements Foe, MarchingMob {
   }
 }
 
-/** Мир обороны с заглушками врагов и героем у куста */
+/** Defence world with stub enemies and a hero by the bush */
 export function tdWorld(id: string, seed: number, o: { players?: number; personal?: boolean; mobHp?: number } = {}) {
   const { level, td } = loadMap(id);
   const mobs: StubMob[] = [];
@@ -70,15 +70,15 @@ export function tdWorld(id: string, seed: number, o: { players?: number; persona
   const world = new SimWorld(hooks, { seed, level, td, players: o.players ?? 1, personal: o.personal ?? false });
   const sim = world.td!;
   sim.fund(0);
-  /** Шаг мира и заглушек; павшие роняют малину, как стая */
-  /** События последнего шага (мир копит их до забора, как снимок) */
+  /** Step of the world and the stubs; the fallen drop raspberries, like the pack */
+  /** Events of the last step (the world accumulates them until taken, like a snapshot) */
   let events: import('../../src/sim/events.ts').SimEvent[] = [];
   const step = (dt = 1 / 60): void => {
     events = world.takeEvents();
     world.step(dt);
     for (const m of mobs) {
       const was = m.dead;
-      // в конце дороги бьёт стену замка, если она цела на этой дороге, иначе куст; пролом продлит дорогу внутрь
+      // at the end of the road hits the castle wall if it is intact on this road, else the bush; a breach extends the road inside
       m.step(dt, (dmg, from) => {
         const wl = m.laneId ? sim.lane(m.laneId)?.wall : undefined, wall = wl ? sim.wall(wl) : undefined;
         if (wall && !wall.dead && m.march && m.march.length <= (sim.lane(m.laneId!)?.points.length ?? 0)) wall.hurt(dmg * 10, from); else sim.bush.hurt(dmg, from);
