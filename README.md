@@ -6,6 +6,8 @@ A cosy co-op action game in the spirit of **Minecraft Dungeons** crossed with **
 
 *Malina* (малина) is Russian for *raspberry*: raspberries are the in-game currency, and the bush you defend is the heart of the game.
 
+![Bush Defence on the Crystal Glade](docs/screenshots/crystal-glade.webp)
+
 ## Why this game exists
 
 Malina was made for fun — to play with kids, nephews and nieces on a couple of laptops in the same room, or over the internet. It is not a product. It is a toy that keeps growing, and you are welcome to make it yours:
@@ -21,6 +23,23 @@ Malina was made for fun — to play with kids, nephews and nieces on a couple of
 - **Network play** — a small Node server with a server-authoritative battle modelled on Quake 3: the server runs the simulation, clients predict their own hero; rooms with a code, readiness, chat, friends, late joiners, battle history with rewards. Waves scale with the number of players.
 - **A big hand-made island** (256 × 256 m, seven biomes, a fort, a temple with a golem arena, a village with a blacksmith and a merchant), procedural dungeon floors from room templates, and a **level editor** in the spirit of Unreal Engine with a preset library of 179 ready-made pieces of world.
 - **Everything is code.** Textures are drawn by code, sounds and music are synthesised with Web Audio, block and decor shapes are generated into OBJ. No asset pipeline, no engine — TypeScript, three.js and Vite.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Main menu at the campfire](docs/screenshots/main-menu.webp) | ![Choosing a Bush Defence map](docs/screenshots/map-select.webp) |
+| Main menu at the campfire | Camp: choosing a Bush Defence map |
+| ![Playground with every block and prop](docs/screenshots/playground.webp) | ![Level editor](docs/screenshots/level-editor.webp) |
+| Playground: every block and prop in one place | Level editor: prefabs, outliner, details |
+| ![Weapon editor with balance table](docs/screenshots/weapon-editor.webp) | |
+| Weapon editor: combo, swings and the balance table | |
+
+## Making maps: editor, prefabs — and AI
+
+Malina ships with a **level editor** (`?dev=editor`, or *Editor* in the main menu) in the spirit of Unreal Engine: a prefab palette, an outliner, a details panel with transform and properties, move / rotate / scale gizmos, grid and angle snapping, undo, environment and lighting settings and a *Play* button to jump straight into the map. Next to it is a **weapon editor** with live combo previews and a balance table that compares every weapon. The editor comes with **a large set of prefabs**: dozens of block types (ground, stone, wood, water, acid…), free decor (ruins, nature, bones, lights) and 179 ready-made library pieces — roads, trees, ruins, houses and whole compositions.
+
+**But we recommend building maps with AI.** The wiki already describes in detail how maps are made: the block and decor formats ([design-level-blocks.md](wiki/design-level-blocks.md), [design-level-decor.md](wiki/design-level-decor.md)), the prefab catalogue ([design-prefab-library.md](wiki/design-prefab-library.md)), the visual style of the world, terrain and lighting ([style-world.md](wiki/style-world.md), [style-terrain.md](wiki/style-terrain.md), [style-lighting.md](wiki/style-lighting.md)), and how the three defence maps and the island were built ([design-tower-defence.md](wiki/design-tower-defence.md), [design-map-island.md](wiki/design-map-island.md)). That is exactly the context a coding agent needs, and it covers map making well: describe the map you want in plain words — "a snowy mountain pass with two roads and a frozen lake" — and the agent writes a map generator next to the existing ones (`src/level/*-map.ts`), exports it with `scripts/export-map.ts` and checks it in the game. The editor stays handy for polishing by hand.
 
 ## Quick start
 
@@ -89,6 +108,8 @@ End-to-end tests run on an installed Google Chrome (no `playwright install`, see
 
 Малина — валюта игры, а куст малины — её сердце.
 
+![Оборона куста на Кристальной поляне](docs/screenshots/crystal-glade.webp)
+
 ## Зачем эта игра
 
 Малина сделана для развлечения — чтобы играть с детьми и племянниками на паре ноутбуков в одной комнате или через интернет. Это не продукт, а игрушка, которая всё время растёт, и вы можете менять её по своему усмотрению:
@@ -104,6 +125,23 @@ End-to-end tests run on an installed Google Chrome (no `playwright install`, see
 - **Сетевая игра** — небольшой сервер на Node с серверно-авторитарным боем по образцу Quake 3: сервер считает симуляцию, клиенты предсказывают своего героя; комнаты с кодом, готовность, чат, друзья, опоздавшие, история боёв с наградами. Волны масштабируются по числу игроков.
 - **Большой рукотворный остров** (256 × 256 м, семь биомов, форт, храм с ареной голема, деревня с кузнецом и торговцем), процедурные этажи подземелья из комнат-заготовок и **редактор уровней** в духе Unreal Engine с библиотекой из 179 готовых кусков мира.
 - **Всё — код.** Текстуры рисуются кодом, звуки и музыка синтезируются через Web Audio, формы блоков и декора генерируются в OBJ. Ни пайплайна ассетов, ни движка — TypeScript, three.js и Vite.
+
+## Скриншоты
+
+| | |
+|---|---|
+| ![Главное меню у костра](docs/screenshots/main-menu.webp) | ![Выбор карты обороны куста](docs/screenshots/map-select.webp) |
+| Главное меню у костра | Лагерь: выбор карты обороны куста |
+| ![Плейграунд со всеми блоками и предметами](docs/screenshots/playground.webp) | ![Редактор уровней](docs/screenshots/level-editor.webp) |
+| Плейграунд: все блоки и предметы в одном месте | Редактор уровней: префабы, аутлайнер, свойства |
+| ![Редактор оружия с таблицей баланса](docs/screenshots/weapon-editor.webp) | |
+| Редактор оружия: комбо, удары и таблица баланса | |
+
+## Создание карт: редактор, префабы — и ИИ
+
+В комплекте с Малиной идёт **редактор карт** (`?dev=editor` или *Editor* в главном меню) в духе Unreal Engine: палитра префабов, аутлайнер, панель свойств с трансформом, гизмо перемещения / поворота / масштаба, привязка к сетке и углу, отмена действий, настройки окружения и света и кнопка *Play*, чтобы сразу запустить карту. Рядом — **редактор оружия** с живым просмотром комбо и таблицей баланса, сравнивающей всё оружие. С редактором поставляется **множество префабов**: десятки видов блоков (земля, камень, дерево, вода, кислота…), свободный декор (руины, природа, кости, светильники) и 179 готовых кусков из библиотеки — дороги, деревья, руины, дома и целые композиции.
+
+**Но создавать карты мы рекомендуем с помощью ИИ.** В вики уже подробно описано, как устроены карты: форматы блоков и декора ([design-level-blocks.md](wiki/design-level-blocks.md), [design-level-decor.md](wiki/design-level-decor.md)), каталог префабов ([design-prefab-library.md](wiki/design-prefab-library.md)), визуальный стиль мира, рельефа и света ([style-world.md](wiki/style-world.md), [style-terrain.md](wiki/style-terrain.md), [style-lighting.md](wiki/style-lighting.md)) и то, как строились три карты обороны и остров ([design-tower-defence.md](wiki/design-tower-defence.md), [design-map-island.md](wiki/design-map-island.md)). Это ровно тот контекст, который нужен ИИ-агенту, и создание карт он покрывает хорошо: опишите карту обычными словами — «заснеженный горный перевал с двумя дорогами и замёрзшим озером», — и агент напишет генератор рядом с существующими (`src/level/*-map.ts`), выгрузит карту через `scripts/export-map.ts` и проверит её в игре. А редактор остаётся под рукой, чтобы доводить детали вручную.
 
 ## Быстрый старт
 
