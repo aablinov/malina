@@ -1,0 +1,5 @@
+# Copy to inventory/group_vars/all/vault.yml and encrypt:  ansible-vault encrypt inventory/group_vars/all/vault.yml
+# then run playbooks with --ask-vault-pass (or ANSIBLE_VAULT_PASSWORD_FILE).
+registry_username: aablinov
+# GitHub token with read:packages (the server only pulls)
+registry_password: ghp_xxx

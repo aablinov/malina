@@ -436,3 +436,7 @@ Pages: [design-multiplayer.md](design-multiplayer.md).
 ## [2026-11-05] code | English code base, bilingual interface, MIT licence
 All comments, identifiers-as-strings, server messages, tests, scripts, Makefile and AGENTS.md are English; the wiki and the commit history were translated earlier. Every user-visible string goes through `t()` (`src/i18n/i18n.ts`), the Russian dictionary `src/i18n/ru.ts` (≈2000 entries) was built from the original Russian text. The main menu asks for the language on the first visit and keeps it in localStorage `malina.lang`; Settings have a Language row. Hero states, weapon categories and rarities, prefab groups and block/decor categories became English ids; maps and the preset library were regenerated with English titles. README in English and Russian, LICENSE — MIT.
 Pages: [project-brief.md](project-brief.md), [design-main-menu.md](design-main-menu.md), [index.md](index.md).
+
+## [2026-11-05] code | Docker and Ansible deploy
+`Dockerfile` (dev/build/runtime stages), `docker-compose.dev.yml`, `docker-compose.prod.yml`, `deploy/ansible/` — buildx build and push of a multi-platform image tagged by git commit, deploy with compose and a health check, rollback by tag; `make docker-dev`, `make docker-build`, `make deploy`.
+Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).

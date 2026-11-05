@@ -1,0 +1,37 @@
+# Malina — production: one container, the server serves both the game (/) and the API (/api, /ws, /game).
+# Ansible puts this file and .env into /opt/malina (deploy/ansible/playbooks/deploy.yml); by hand:
+#   MALINA_TAG=<git sha> docker compose -f docker-compose.prod.yml up -d
+# TLS is not here: put Caddy / nginx / a cloud balancer in front and proxy to MALINA_BIND:MALINA_PORT
+# (WebSocket upgrade must pass through for /ws and /game).
+name: malina
+
+services:
+  malina:
+    image: "${MALINA_IMAGE:-ghcr.io/aablinov/malina}:${MALINA_TAG:-latest}"
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 15s
+    environment:
+      PORT: 8787
+      HOST: 0.0.0.0
+      DB_PATH: /data/malina.db
+      STATIC: dist
+    ports:
+      - "${MALINA_BIND:-0.0.0.0}:${MALINA_PORT:-8787}:8787"
+    volumes:
+      - data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 15s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  # SQLite (WAL) lives here; it survives image updates and `docker compose down` (but not `down -v`)
+  data:

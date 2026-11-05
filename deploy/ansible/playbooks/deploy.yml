@@ -1,0 +1,69 @@
+# Deploy an already pushed image to the servers of group "malina".
+#   ansible-playbook playbooks/deploy.yml                      — tag of the current commit
+#   ansible-playbook playbooks/deploy.yml -e malina_tag=<sha>  — a specific one (rollback)
+# Needs on the server: docker with the compose plugin, the ssh user in group docker (or become).
+- name: Deploy Malina
+  hosts: malina
+  gather_facts: false
+  vars:
+    compose: [docker, compose, --project-directory, "{{ malina_dir }}", -f, "{{ malina_dir }}/docker-compose.yml"]
+  tasks:
+    - name: Check docker compose
+      ansible.builtin.command: docker compose version
+      changed_when: false
+      check_mode: false
+
+    - name: Create {{ malina_dir }}
+      ansible.builtin.file:
+        path: "{{ malina_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Put docker-compose.yml
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../docker-compose.prod.yml"
+        dest: "{{ malina_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Put .env with the image tag
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/env.j2"
+        dest: "{{ malina_dir }}/.env"
+        mode: "0644"
+
+    - name: Log in to {{ registry_host }}
+      ansible.builtin.command:
+        argv: [docker, login, "{{ registry_host }}", --username, "{{ registry_username }}", --password-stdin]
+        stdin: "{{ registry_password }}"
+      when: registry_username | length > 0
+      no_log: true
+      changed_when: false
+
+    - name: Pull {{ malina_image }}:{{ malina_tag }}
+      ansible.builtin.command:
+        argv: "{{ compose + ['pull', '--quiet'] }}"
+      changed_when: true
+
+    - name: Start the new container
+      ansible.builtin.command:
+        argv: "{{ compose + ['up', '-d', '--remove-orphans', '--wait', '--wait-timeout', (malina_health_retries * 2) | string] }}"
+      changed_when: true
+
+    - name: Wait for /api/health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ malina_port }}/api/health"
+        return_content: true
+      register: health
+      until: health.status == 200 and (health.json.ok | default(false))
+      retries: "{{ malina_health_retries }}"
+      delay: 2
+
+    - name: Remove old images
+      ansible.builtin.command: docker image prune -af --filter label=org.opencontainers.image.source=https://github.com/aablinov/malina
+      when: malina_prune_images | bool
+      register: prune
+      changed_when: "'Total reclaimed space: 0B' not in prune.stdout"
+
+    - name: Deployed
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ malina_image }}:{{ malina_tag }}, protocol {{ health.json.protocol }}, maps {{ health.json.maps | join(', ') }}"

@@ -1,0 +1,9 @@
+# Copy to hosts.yml (it is in .gitignore) and put your server here.
+all:
+  children:
+    malina:
+      hosts:
+        malina-prod:
+          ansible_host: 203.0.113.10
+          ansible_user: deploy
+          # ansible_port: 22
