@@ -440,3 +440,7 @@ Pages: [project-brief.md](project-brief.md), [design-main-menu.md](design-main-m
 ## [2026-11-05] code | Docker and Ansible deploy
 `Dockerfile` (dev/build/runtime stages), `docker-compose.dev.yml`, `docker-compose.prod.yml`, `deploy/ansible/` — buildx build and push of a multi-platform image tagged by git commit, deploy with compose and a health check, rollback by tag; `make docker-dev`, `make docker-build`, `make deploy`.
 Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
+
+## [2026-11-05] code | Caddy in front of the server, make targets for image and Ansible
+Caddy (profile `caddy` in `docker-compose.prod.yml`, `deploy/caddy/Caddyfile`) gives HTTPS from Let's Encrypt, the game server listens on 127.0.0.1 only; `deploy.yml` puts the Caddyfile, reloads Caddy and checks https://<domain>/api/health. Make: `image-build/run/stop/login/push`, `ansible-ping/check/deploy/vault/logs`, `deploy`.
+Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).

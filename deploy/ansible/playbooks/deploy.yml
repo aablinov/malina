@@ -8,6 +8,12 @@
   vars:
     compose: [docker, compose, --project-directory, "{{ malina_dir }}", -f, "{{ malina_dir }}/docker-compose.yml"]
   tasks:
+    - name: Check the Caddy settings
+      ansible.builtin.assert:
+        that: malina_domain | length > 0 and acme_email | length > 0
+        fail_msg: Set malina_domain (the game's domain) and acme_email for {{ inventory_hostname }} in inventory/hosts.yml, or malina_caddy=false
+      when: malina_caddy | bool
+
     - name: Check docker compose
       ansible.builtin.command: docker compose version
       changed_when: false
@@ -15,7 +21,7 @@
 
     - name: Create {{ malina_dir }}
       ansible.builtin.file:
-        path: "{{ malina_dir }}"
+        path: "{{ malina_dir }}/deploy/caddy"
         state: directory
         mode: "0755"
 
@@ -24,6 +30,13 @@
         src: "{{ playbook_dir }}/../../../docker-compose.prod.yml"
         dest: "{{ malina_dir }}/docker-compose.yml"
         mode: "0644"
+
+    - name: Put the Caddyfile
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../caddy/Caddyfile"
+        dest: "{{ malina_dir }}/deploy/caddy/Caddyfile"
+        mode: "0644"
+      register: caddyfile
 
     - name: Put .env with the image tag
       ansible.builtin.template:
@@ -58,6 +71,22 @@
       retries: "{{ malina_health_retries }}"
       delay: 2
 
+    # compose does not restart Caddy for a changed config in a mounted directory
+    - name: Reload Caddy with the new Caddyfile
+      ansible.builtin.command:
+        argv: "{{ compose + ['exec', '-T', 'caddy', 'caddy', 'reload', '--config', '/etc/caddy/Caddyfile'] }}"
+      when: malina_caddy | bool and caddyfile.changed
+      changed_when: true
+
+    - name: Check https://{{ malina_domain }}/api/health
+      ansible.builtin.uri:
+        url: "https://{{ malina_domain }}{{ '' if caddy_https_port | int == 443 else ':' ~ caddy_https_port }}/api/health"
+      register: https_health
+      until: https_health.status == 200
+      retries: "{{ malina_health_retries }}"
+      delay: 2
+      when: malina_caddy | bool and malina_check_https | bool
+
     - name: Remove old images
       ansible.builtin.command: docker image prune -af --filter label=org.opencontainers.image.source=https://github.com/aablinov/malina
       when: malina_prune_images | bool
@@ -66,4 +95,4 @@
 
     - name: Deployed
       ansible.builtin.debug:
-        msg: "{{ inventory_hostname }}: {{ malina_image }}:{{ malina_tag }}, protocol {{ health.json.protocol }}, maps {{ health.json.maps | join(', ') }}"
+        msg: "{{ inventory_hostname }}: {{ malina_image }}:{{ malina_tag }}{{ ' at https://' ~ malina_domain if malina_caddy | bool else '' }}, protocol {{ health.json.protocol }}, maps {{ health.json.maps | join(', ') }}"

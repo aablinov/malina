@@ -20,8 +20,20 @@ registry_password: ""
 
 # ---- server
 malina_dir: /opt/malina
-malina_bind: 0.0.0.0
+# the game server port on the host; 127.0.0.1 — reachable only through Caddy (and for the health check)
+malina_bind: 127.0.0.1
 malina_port: 8787
+
+# ---- Caddy (HTTPS). The domain's A/AAAA record must point at the server, ports 80 and 443 (tcp+udp) open.
+malina_caddy: true
+# the game's domain, e.g. malina.example.com — set it in inventory/hosts.yml for the host
+malina_domain: ""
+# Let's Encrypt account email: expiry warnings and problems with certificates
+acme_email: ""
+caddy_http_port: 80
+caddy_https_port: 443
+# check https://<domain>/api/health after a deploy (needs DNS already pointing at the server)
+malina_check_https: true
 # how long to wait for /api/health after start
 malina_health_retries: 30
 # remove old images after a successful deploy

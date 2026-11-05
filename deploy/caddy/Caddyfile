@@ -1,0 +1,32 @@
+# Caddy in front of Malina: HTTPS from Let's Encrypt (automatically), HTTP → HTTPS, HTTP/3.
+# MALINA_DOMAIN and ACME_EMAIL (both required) come from .env (docker-compose.prod.yml).
+# MALINA_DOMAIN=localhost gives a certificate from Caddy's own local CA — for trying it out without a domain.
+{
+	email {$ACME_EMAIL}
+}
+
+{$MALINA_DOMAIN} {
+	# WebSocket: lobby (/ws) and battle (/game) — straight to the server; /game compresses itself (permessage-deflate)
+	@ws path /ws /game
+	handle @ws {
+		reverse_proxy malina:8787
+	}
+
+	# the game (one 4.6 MB index.html) and /api — compressed
+	handle {
+		encode zstd gzip
+		reverse_proxy malina:8787
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

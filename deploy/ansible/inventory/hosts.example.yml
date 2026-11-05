@@ -7,3 +7,5 @@ all:
           ansible_host: 203.0.113.10
           ansible_user: deploy
           # ansible_port: 22
+          malina_domain: malina.example.com
+          acme_email: you@example.com

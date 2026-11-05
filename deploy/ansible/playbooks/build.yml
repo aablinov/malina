@@ -1,6 +1,6 @@
 # Build the image with docker buildx on this machine and push it to the registry.
 #   ansible-playbook playbooks/build.yml
-#   ansible-playbook playbooks/build.yml -e '{"malina_platforms": ["linux/amd64"]}'
+#   ansible-playbook playbooks/build.yml -e malina_platforms=linux/amd64     (make image-push PLATFORMS=linux/amd64)
 # Needs: docker with buildx, `docker login <registry>` done on this machine.
 - name: Build and push the Malina image
   hosts: localhost
@@ -8,6 +8,8 @@
   gather_facts: false
   vars:
     repo_root: "{{ (playbook_dir ~ '/../../..') | realpath }}"
+    # a list in group_vars, or "linux/amd64,linux/arm64" from the command line
+    platforms: "{{ malina_platforms.split(',') if malina_platforms is string else malina_platforms }}"
     tags_list: "{{ [malina_image ~ ':' ~ malina_tag] + ([malina_image ~ ':latest'] if malina_push_latest | bool else []) }}"
   tasks:
     - name: Refuse to push an image of uncommitted code under :latest
@@ -35,7 +37,7 @@
       when: builder.rc != 0
       changed_when: true
 
-    - name: Build {{ malina_platforms | join(', ') }} and push {{ tags_list | join(', ') }}
+    - name: Build {{ platforms | join(', ') }} and push {{ tags_list | join(', ') }}
       ansible.builtin.command:
         chdir: "{{ repo_root }}"
         argv: "{{ argv }}"
@@ -43,7 +45,7 @@
         argv: >-
           {{ ['docker', 'buildx', 'build',
               '--builder', malina_buildx_builder,
-              '--platform', malina_platforms | join(','),
+              '--platform', platforms | join(','),
               '--target', 'runtime',
               '--label', 'org.opencontainers.image.revision=' ~ malina_tag,
               '--label', 'org.opencontainers.image.source=https://github.com/aablinov/malina',
