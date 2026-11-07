@@ -9,7 +9,7 @@ import { MAX_PLAYERS } from '../bosses/scaling.ts';
  */
 
 /** Protocol version: on mismatch the server closes the connection with code CLOSE.protocol */
-export const PROTOCOL = 2;
+export const PROTOCOL = 3;
 
 /** Up to four heroes in a party, as with the wardens */
 export { MAX_PLAYERS };
@@ -28,7 +28,14 @@ export const NET_LIMITS = {
   pingMs: 15_000,
   /** Largest profile, bytes */
   maxProfile: 256 * 1024,
+  /** Voice signalling (src/net/voice.ts): SDP and ICE candidate length, characters */
+  sdpMax: 16 * 1024,
+  iceMax: 1024,
 } as const;
+
+/** STUN by default; the server may replace it with its own list (env RTC_ICE_SERVERS, given in /api/health) */
+export const DEFAULT_ICE: IceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+export interface IceServer { urls: string | string[]; username?: string; credential?: string }
 
 /** WebSocket close codes */
 export const CLOSE = {
@@ -69,6 +76,8 @@ export interface SeatInfo {
   /** Connection alive; false — the seat is held for NET_LIMITS.graceMs */
   online: boolean;
   host: boolean;
+  /** Microphone on (voice chat, key T) */
+  voice: boolean;
 }
 
 export interface MatchSummary {
@@ -103,7 +112,16 @@ export type ClientMsg =
   /** "Again" after a battle — host only: a new battle with the same party, no ready check */
   | { t: 'room.again' }
   /** Room chat (camp and battle) */
-  | { t: 'chat'; text: string };
+  | { t: 'chat'; text: string }
+  /** Voice: WebRTC signal to the seat `to` in one's room — the server only forwards it */
+  | { t: 'rtc'; to: number; data: RtcSignal }
+  /** Voice: one's microphone on / off — goes into SeatInfo.voice */
+  | { t: 'voice'; on: boolean };
+
+/** WebRTC signalling between two seats of a room (src/net/voice.ts) */
+export type RtcSignal =
+  | { k: 'offer' | 'answer'; sdp: string }
+  | { k: 'ice'; c: { candidate: string; sdpMid: string | null; sdpMLineIndex: number | null } | null };
 
 export type ServerMsg =
   | { t: 'welcome'; playerId: string; name: string }
@@ -116,6 +134,7 @@ export type ServerMsg =
   | { t: 'battle.start'; matchId: string; map: string; players: number; seed: number; hostSeat: number; seats: SeatInfo[] }
   | { t: 'battle.over'; matchId: string; result: MatchResult; wave: number }
   | { t: 'chat'; seat: number; name: string; text: string }
+  | { t: 'rtc'; from: number; data: RtcSignal }
   | { t: 'profile.updated'; version: number; data: unknown };
 
 export type ErrorCode =

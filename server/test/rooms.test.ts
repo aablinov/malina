@@ -301,3 +301,44 @@ test('restart: the lobby remains, the battle is abandoned, seats are held for RE
   assert.equal(s.app.rooms.roomOfPlayer(g.id)?.hostId, g.id);
   assert.equal(s.app.rooms.roomOfPlayer(h2.id), null, 'empty room closed');
 });
+
+test('voice: rtc signals go only to a seat of one\'s own room, the mic flag is in the seats and resets on a drop', async () => {
+  s = await startServer();
+  const { heroes: [h, g] } = await party(2);
+  const other = await hero('Stranger');
+  other.p.send({ t: 'room.create', map: 'td', max: 4, private: false });
+  await other.p.state();
+  const offer = { k: 'offer', sdp: 'v=0 fake' } as const;
+  h.p.send({ t: 'rtc', to: 1, data: offer });
+  const got = await g.p.next('rtc');
+  assert.equal(got.from, 0);
+  assert.deepEqual(got.data, offer);
+  g.p.send({ t: 'rtc', to: 0, data: { k: 'ice', c: { candidate: 'candidate:1 1 udp 1 1.2.3.4 5 typ host', sdpMid: '0', sdpMLineIndex: 0 } } });
+  assert.equal((await h.p.next('rtc')).data.k, 'ice');
+  // to oneself, to an empty seat — dropped; the stranger in another room hears nothing
+  h.p.send({ t: 'rtc', to: 0, data: offer });
+  h.p.send({ t: 'rtc', to: 3, data: offer });
+  other.p.send({ t: 'rtc', to: 0, data: offer });
+  // junk — "bad-message": unknown kind, too long an SDP, a seat out of range
+  h.p.send({ t: 'rtc', to: 1, data: { k: 'bye' } } as Record<string, unknown>);
+  assert.equal((await h.p.next('error')).code, 'bad-message');
+  h.p.send({ t: 'rtc', to: 1, data: { k: 'offer', sdp: 'x'.repeat(NET_LIMITS.sdpMax + 1) } });
+  assert.equal((await h.p.next('error')).code, 'bad-message');
+  h.p.send({ t: 'rtc', to: 9, data: offer });
+  assert.equal((await h.p.next('error')).code, 'bad-message');
+  await sleep(100);
+  assert.equal(g.p.inbox.filter((m) => m.t === 'rtc').length, 0);
+  assert.equal(h.p.inbox.filter((m) => m.t === 'rtc').length, 0);
+  assert.equal(other.p.inbox.filter((m) => m.t === 'rtc').length, 0);
+
+  // the microphone: the flag reaches the whole room
+  g.p.send({ t: 'voice', on: true });
+  await h.p.state((m) => m.seats[1].voice);
+  g.p.send({ t: 'voice', on: false });
+  await h.p.state((m) => !m.seats[1].voice);
+  g.p.send({ t: 'voice', on: true });
+  await h.p.state((m) => m.seats[1].voice);
+  // the connection dropped — the mic is off
+  g.p.close();
+  await h.p.state((m) => !m.seats[1].online && !m.seats[1].voice);
+});

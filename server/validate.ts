@@ -1,5 +1,5 @@
 import { ITEMS, type ProfileData } from '../src/items.ts';
-import { MAX_PLAYERS, NET_LIMITS, type ClientMsg } from '../src/net/protocol.ts';
+import { MAX_PLAYERS, NET_LIMITS, type ClientMsg, type RtcSignal } from '../src/net/protocol.ts';
 
 /**
  * Validation of incoming data without external libraries: rejects junk, overflows and dangling references
@@ -65,6 +65,19 @@ export function checkClientMsg(v: unknown): ClientMsg | null {
     case 'room.ready': return typeof v.ready === 'boolean' ? (v as ClientMsg) : null;
     case 'room.map': return isStr(v.map, 32) ? (v as ClientMsg) : null;
     case 'room.kick': return isStr(v.playerId, 64) ? (v as ClientMsg) : null;
+    case 'voice': return typeof v.on === 'boolean' ? (v as ClientMsg) : null;
+    case 'rtc': return isInt(v.to, 0, MAX_PLAYERS - 1) && checkRtc(v.data) ? { t: 'rtc', to: v.to, data: v.data } : null;
     default: return null;
   }
+}
+
+/** WebRTC signal: offer/answer with SDP or an ICE candidate (null — the end of candidates) */
+function checkRtc(d: unknown): d is RtcSignal {
+  if (!isObj(d)) return false;
+  if (d.k === 'offer' || d.k === 'answer') return isStr(d.sdp, NET_LIMITS.sdpMax) && Object.keys(d).length === 2;
+  if (d.k !== 'ice') return false;
+  if (d.c === null) return true;
+  const c = d.c;
+  return isObj(c) && isStr(c.candidate, NET_LIMITS.iceMax) && (c.sdpMid === null || isStr(c.sdpMid, 64))
+    && (c.sdpMLineIndex === null || isInt(c.sdpMLineIndex, 0, 64)) && Object.keys(c).length === 3;
 }

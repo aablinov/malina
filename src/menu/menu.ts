@@ -6,7 +6,7 @@ import { makeTextures } from '../textures.ts';
 import { Lobby } from './lobby.ts';
 import { MenuScene } from './scene.ts';
 import { applyAudio, SettingsPanel } from './settings-panel.ts';
-import { loadMenuState, saveMenuState, type GameMode } from './session.ts';
+import { loadMenuState, saveMenuState, VOICE, type GameMode } from './session.ts';
 import '../style.css';
 import '../hud/hud.css';
 import './menu.css';
@@ -125,6 +125,8 @@ export function runMenu(): void {
     get screen() { return langPick ? 'lang' : lobby.open ? 'lobby' : 'start'; },
     lobby,
     settings: settingsPanel,
+    /** Room voice chat (src/net/voice.ts) */
+    voice: VOICE,
   };
 }
 

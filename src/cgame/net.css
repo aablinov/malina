@@ -8,7 +8,7 @@
 /* Player list and chat (src/net/battle-ui.ts) */
 .net-roster { position: fixed; right: 12px; top: 120px; z-index: 7; display: flex; flex-direction: column; gap: 4px; pointer-events: none;
   font: 600 12px/1.2 system-ui, sans-serif; color: #fff; }
-.net-row { display: grid; grid-template-columns: 9em 5em 4em; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(20, 18, 28, 0.6); border-radius: 4px; }
+.net-row { display: grid; grid-template-columns: 1.3em 9em 5em 4em; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(20, 18, 28, 0.6); border-radius: 4px; }
 .net-row.me b { color: #ffd76a; }
 .net-row.down { opacity: 0.55; }
 .net-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -16,6 +16,8 @@
 .net-row u { display: block; height: 100%; background: #e2405f; }
 .net-row span { text-align: right; color: #9fe39a; font-weight: 500; }
 .net-row span.bad { color: #ff8a6b; }
+.net-row em { font-style: normal; text-align: center; opacity: 0.6; transition: opacity 0.1s, transform 0.1s; }
+.net-row em.talk { opacity: 1; transform: scale(1.25); filter: drop-shadow(0 0 3px #9fe39a); }
 .net-chat { position: fixed; left: 12px; bottom: 150px; z-index: 7; width: 360px; display: flex; flex-direction: column; gap: 4px;
   font: 500 13px/1.3 system-ui, sans-serif; color: #fff; pointer-events: none; }
 .net-chat-log { display: flex; flex-direction: column; gap: 2px; }

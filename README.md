@@ -59,7 +59,7 @@ More scripts (`npm run …`): `typecheck`, `build`, `test:net` (server, network 
 ## How to play
 
 - **LMB on the ground** — walk there (pathfinding around walls, up stairs, through shallow water); **LMB on an enemy** — close in and strike, hold for the three-hit combo; **Shift + LMB** — strike in place.
-- **WASD** — walk by keys, **Space** — dodge roll, **RMB** — bow, **Q** — weapon art, **1 / 2 / 3** — artifacts, **E** — potion, **F** — use / talk / build / repair, **I** — inventory, **M** / **Tab** — map, **G** — call the next wave early (bonus), **Esc** — pause.
+- **WASD** — walk by keys, **Space** — dodge roll, **RMB** — bow, **Q** — weapon art, **1 / 2 / 3** — artifacts, **E** — potion, **F** — use / talk / build / repair, **I** — inventory, **M** / **Tab** — map, **G** — call the next wave early (bonus), **T** — microphone in a network room (voice chat), **Esc** — pause.
 - Bush Defence: walk up to a pad and press **F** (or click it) to open the tower menu; number keys pick a tower, the same menu upgrades to level III or sells for 70 %. Keep the bush alive through all waves.
 
 Developer keys (**F1**–**F10**: tuning panel, colliders, telemetry, god mode, slow motion, FPS, editor and more) and the full editor manual are in the wiki: [design-editor.md](wiki/design-editor.md), [design-inventory.md](wiki/design-inventory.md), [design-tower-defence.md](wiki/design-tower-defence.md).
@@ -161,7 +161,7 @@ make play        # собирает игру и поднимает один се
 ## Как играть
 
 - **ЛКМ по земле** — идти туда (путь в обход стен, по ступеням, вброд через воду); **ЛКМ по врагу** — подойти и ударить, держать — комбо из трёх; **Shift + ЛКМ** — бить на месте.
-- **WASD** — ходьба клавишами, **Space** — перекат, **ПКМ** — лук, **Q** — спец-удар оружия, **1 / 2 / 3** — артефакты, **E** — зелье, **F** — использовать / говорить / строить / чинить, **I** — инвентарь, **M** / **Tab** — карта, **G** — позвать следующую волну раньше срока (бонус), **Esc** — пауза.
+- **WASD** — ходьба клавишами, **Space** — перекат, **ПКМ** — лук, **Q** — спец-удар оружия, **1 / 2 / 3** — артефакты, **E** — зелье, **F** — использовать / говорить / строить / чинить, **I** — инвентарь, **M** / **Tab** — карта, **G** — позвать следующую волну раньше срока (бонус), **T** — микрофон в сетевой комнате (голосовой чат), **Esc** — пауза.
 - Оборона куста: подойдите к площадке и нажмите **F** (или кликните по ней) — откроется меню башен; цифры выбирают башню, то же меню улучшает до III уровня или продаёт за 70 %. Уберегите куст до конца всех волн.
 
 Клавиши разработчика (**F1**–**F10**: панель параметров, коллайдеры, телеметрия, бессмертие, замедление, FPS, редактор и прочее) и полное руководство по редактору — в вики: [design-editor.md](wiki/design-editor.md), [design-inventory.md](wiki/design-inventory.md), [design-tower-defence.md](wiki/design-tower-defence.md).

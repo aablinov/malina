@@ -62,6 +62,8 @@ export interface NetBattleHooks {
   quiet(): boolean;
   /** Client event queue: network frames are applied when it is drained before the ticks */
   events: EventQueue;
+  /** Voice chat (src/net/voice.ts): own mic and who is talking — for the player list */
+  voice?: { readonly on: boolean; speaking(seat: number): boolean };
   /** The battle is over (the server's result) */
   onOver(result: 'won' | 'lost' | 'abandoned', wave: number): void;
 }
@@ -456,9 +458,11 @@ export class NetBattleClient {
 
   private rows(): RosterRow[] {
     const h = this.h, me = h.battle.seat, hs = h.battle.hostSeat;
+    const mic = (seat: number): boolean => (seat === me ? !!h.voice?.on : !!h.battle.seats.find((s) => s.seat === seat)?.voice);
+    const talk = (seat: number): boolean => mic(seat) && !!h.voice?.speaking(seat);
     return [
-      { seat: me, name: this.nameOf(me), hp: h.hero.hp, maxHp: h.hero.maxHp, ping: h.net.rtt, host: me === hs, me: true, down: h.hero.down },
-      ...[...this.heroes.values()].map((r): RosterRow => ({ seat: r.seat, name: this.nameOf(r.seat), hp: r.hp, maxHp: r.maxHp, ping: r.ping, host: r.seat === hs, me: false, down: r.down })),
+      { seat: me, name: this.nameOf(me), hp: h.hero.hp, maxHp: h.hero.maxHp, ping: h.net.rtt, host: me === hs, me: true, down: h.hero.down, voice: mic(me), speaking: talk(me) },
+      ...[...this.heroes.values()].map((r): RosterRow => ({ seat: r.seat, name: this.nameOf(r.seat), hp: r.hp, maxHp: r.maxHp, ping: r.ping, host: r.seat === hs, me: false, down: r.down, voice: mic(r.seat), speaking: talk(r.seat) })),
     ];
   }
 

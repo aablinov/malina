@@ -460,3 +460,7 @@ Pages: [dev-deploy.md](dev-deploy.md).
 ## [2026-11-07] code | Match loot, own gear in defence, camp shop
 Two wallets: the battle purse and the match loot (kills, ¼ of wave bounties, +50 % for victory), paid to the account only for a defended bush — solo and online. The hero goes into defence with their own gear on a battle copy of the profile (no more `tdKit` and the sessionStorage stash); waves and loot grow with the heroes' strength (gear power + half the level). The camp's "Gear" tab got the shop and the blacksmith.
 Pages: [design-tower-defence.md](design-tower-defence.md), [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md), [design-inventory.md](design-inventory.md).
+
+## [2026-11-07] code | Voice chat on T
+Room voice chat: T turns one's mic on / off in the camp and in a network battle, WebRTC mesh with signalling over `/ws` (`rtc`, `voice`), 🎤 in seats and the player list, the mic state survives the switch into battle, `RTC_ICE_SERVERS` for TURN, `PROTOCOL = 3`. Tests: `rooms.test.ts` (relay), `tests/voice.spec.ts`.
+Pages: [design-multiplayer.md](design-multiplayer.md).

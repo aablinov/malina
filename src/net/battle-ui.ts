@@ -2,9 +2,9 @@ import { t } from '../i18n/i18n.ts';
 
 /**
  * Network battle on top of the game (src/cgame/net-battle.ts): the player list — name, health, ping, host — and the room chat.
- * Enter — write (Enter again — send, Esc — close), messages live 12 s
+ * Enter — write (Enter again — send, Esc — close), messages live 12 s; T — one's microphone (voice chat, src/net/voice.ts), 🎤 in the list
  */
-export interface RosterRow { seat: number; name: string; hp: number; maxHp: number; ping: number; host: boolean; me: boolean; down: boolean }
+export interface RosterRow { seat: number; name: string; hp: number; maxHp: number; ping: number; host: boolean; me: boolean; down: boolean; /** Mic on */ voice: boolean; /** Talking right now */ speaking: boolean }
 
 const LIFE_MS = 12_000;
 
@@ -58,7 +58,8 @@ export class BattleNetUi {
     const html = rows.sort((a, b) => a.seat - b.seat).map((r) => {
       const k = r.maxHp > 0 ? Math.max(0, Math.min(1, r.hp / r.maxHp)) : 0;
       const ping = r.ping > 0 ? t('{ms} ms', { ms: Math.round(r.ping) }) : '—';
-      return `<div class="net-row${r.me ? ' me' : ''}${r.down ? ' down' : ''}"><b>${r.host ? '♛ ' : ''}${esc(r.name)}</b><i><u style="width:${(k * 100).toFixed(0)}%"></u></i><span class="${r.ping > 200 ? 'bad' : ''}">${ping}</span></div>`;
+      const mic = r.voice ? `<em class="${r.speaking ? 'talk' : ''}">🎤</em>` : '<em></em>';
+      return `<div class="net-row${r.me ? ' me' : ''}${r.down ? ' down' : ''}">${mic}<b>${r.host ? '♛ ' : ''}${esc(r.name)}</b><i><u style="width:${(k * 100).toFixed(0)}%"></u></i><span class="${r.ping > 200 ? 'bad' : ''}">${ping}</span></div>`;
     }).join('');
     if (html !== this.rosterHtml) { this.rosterHtml = html; this.roster.innerHTML = html; }
   }

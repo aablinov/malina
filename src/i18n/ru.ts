@@ -2098,5 +2098,14 @@ const ru: Record<string, string> = {
   "SkyLight": "Свет неба",
   "HeightFog": "Высотная дымка",
   "PostProcessVolume": "Постобработка",
+  // voice chat (src/net/voice.ts)
+  "Microphone on": "Микрофон включён",
+  "Microphone off": "Микрофон выключен",
+  "Microphone access denied": "Доступ к микрофону запрещён",
+  "No microphone found": "Микрофон не найден",
+  "Microphone unavailable": "Микрофон недоступен",
+  "Voice needs HTTPS or localhost": "Голосу нужен HTTPS или localhost",
+  "T — turn on the microphone (voice chat)": "T — включить микрофон (голосовой чат)",
+  "🎤 Microphone on — T to turn off": "🎤 Микрофон включён — T, чтобы выключить",
 };
 export default ru;
