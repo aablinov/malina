@@ -79,7 +79,7 @@ export class HeadlessBattle {
       hurtKnight: (k: Knight, dmg: number, from: THREE.Vector3, knock: number) => this.hurt(k, dmg, from, knock),
       route: (from: THREE.Vector3, to: THREE.Vector3) => this.route(from, to),
     };
-    this.pack = new Pack(bossHooks, (at, n) => { if (this.world.td) this.world.td.fallen++; this.world.piles.drop(at, n); });
+    this.pack = new Pack(bossHooks, (at, n, base) => { if (this.world.td) this.world.td.killed(at, n, base); else this.world.piles.drop(at, n); });
     const hooks: SimHooks = {
       foes: () => this.pack.mobs.filter((m) => m.alive),
       heroes: () => [...this.heroes.values()].map((h) => ({ pos: h.knight.pos, get down() { return h.knight.down; }, seat: h.seat })),

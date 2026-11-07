@@ -4,7 +4,7 @@ import { addDecoy } from '../decoys.ts';
 import type { EntityState } from '../net/snapshot.ts';
 import type { TdCommand } from '../net/protocol.ts';
 import type { Target } from '../target.ts';
-import { scaledBounty, scaledCount, waveLevel } from '../td/scaling.ts';
+import { LOOT_WAVE, LOOT_WIN, scaledBounty, scaledCount, waveLevel } from '../td/scaling.ts';
 import { BASE_TOWERS, SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from '../td/towers.ts';
 import type { TdLane, TdPad, TdSpec, TdWave } from '../td/types.ts';
 import { SimBush } from './bush.ts';
@@ -53,6 +53,8 @@ export class SimTd {
   /** Shared battle: each seat has its own raspberries; otherwise one treasury (seat 0) */
   readonly personal: boolean;
   private readonly purses = new Map<number, number>();
+  /** Match loot (wiki/design-tower-defence.md, section 13): raspberries for the account — kills, waves, victory; not spendable in battle, paid only on victory */
+  private readonly loots = new Map<number, number>();
   /** Hint to the player: not enough raspberries, tower at its limit (seat, text) */
   onToast: ((seat: number, text: string) => void) | null = null;
   /** A tower is being gnawed, frozen or broken */
@@ -112,6 +114,23 @@ export class SimTd {
   /** Mirror of a network battle: a seat's raspberries — from the server snapshot */
   setBerries(seat: number, n: number): void { this.purses.set(this.key(seat), Math.max(0, n)); }
   get seats(): number[] { return [...this.purses.keys()]; }
+
+  // ---------- match loot ----------
+  /** A seat's loot so far */
+  lootOf(seat = 0): number { return this.loots.get(this.key(seat)) ?? 0; }
+  /** Loot to every seat (the battle is a team one: kills and waves count for everyone) */
+  addLoot(n: number): void {
+    if (n <= 0) return;
+    for (const seat of this.purses.keys()) this.loots.set(seat, this.lootOf(seat) + n);
+  }
+  /** Mirror of a network battle: a seat's loot — from the server snapshot */
+  setLoot(seat: number, n: number): void { this.loots.set(this.key(seat), Math.max(0, n)); }
+  /** An enemy fell: the pile of raspberries for the purse on the ground, its own loot (before scaling) — into the match loot */
+  killed(at: THREE.Vector3, pile: number, base: number): void {
+    this.fallen++;
+    this.w.piles.drop(at, pile);
+    if (this.state === 'play') this.addLoot(base);
+  }
 
   // ---------- geometry ----------
   get solids(): Obstacle[] {
@@ -317,8 +336,14 @@ export class SimTd {
       // wave beaten: bounty to everyone and rest; the last one — victory
       const w = this.waves[this.wave - 1], bounty = this.personal ? w.bounty : scaledBounty(w.bounty, this.players);
       for (const seat of this.purses.keys()) this.gain(seat, bounty);
+      this.addLoot(Math.round(w.bounty * LOOT_WAVE));
       this.w.piles.harvest();
-      if (this.wave >= this.waves.length) { this.state = 'won'; this.w.emit({ t: 'td.won', n: bounty }); return; }
+      if (this.wave >= this.waves.length) {
+        for (const seat of this.purses.keys()) this.loots.set(seat, Math.round(this.lootOf(seat) * (1 + LOOT_WIN)));
+        this.state = 'won';
+        this.w.emit({ t: 'td.won', n: bounty });
+        return;
+      }
       this.w.emit({ t: 'wave.won', wave: this.wave, n: bounty, rest });
       this.next = rest - 0.001;
       return;
@@ -356,6 +381,7 @@ export class SimTd {
     this.bush.reset();
     this.w.piles.clear();
     for (const seat of this.purses.keys()) this.fund(seat);
+    this.loots.clear();
     this.state = 'play';
     this.w.emit({ t: 'td.reset' });
   }
@@ -367,5 +393,6 @@ export class SimTd {
     for (const l of this.lairs) l.entity(out);
     for (const t of this.towers) t.entities(out);
     for (const [seat, n] of this.purses) out.push({ id: `purse${seat}`, seat, n });
+    for (const seat of this.purses.keys()) out.push({ id: `loot${seat}`, seat, n: this.lootOf(seat) });
   }
 }

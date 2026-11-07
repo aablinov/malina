@@ -400,6 +400,8 @@ export class NetBattleClient {
       if (this.h.profile.data.berries === this.purseMirror) this.h.profile.data.berries = n;
       this.purseMirror = n;
     }
+    const loot = v.ents.get(`loot${me}`);
+    if (loot) sim.setLoot(me, loot.n as number);
     for (const p of sim.pads) {
       const e = v.ents.get(`t${p.index}`) as (EntityState & { kind: string; level: number; hp: number; maxHp: number; frozen: number; spent: number }) | undefined;
       let t = p.tower;

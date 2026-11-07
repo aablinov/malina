@@ -70,3 +70,28 @@ test('all defence maps: waves run to the end with towers on every pad, no hangs'
     assert.ok(w.world.piles.list.length === 0 || w.world.piles.harvestT > 0, `${id}: harvest`);
   }
 });
+
+test('match loot: kills and beaten waves add to it, victory adds half, it is not spent on towers, restart clears it', () => {
+  const w = tdWorld('td', 7, { mobHp: 1 });
+  const s = w.sim;
+  for (const p of s.pads) { s.gain(0, 1000); s.command(0, { t: 'td', a: 'build:arrow', pad: p.index }); }
+  assert.equal(s.lootOf(0), 0);
+  s.command(0, { t: 'td', a: 'wave' });
+  let ticks = 0;
+  while (s.state === 'play' && s.wave === 1 && ticks < 60 * 120) { w.step(); ticks++; if (!s.waveRunning && s.next < (s.spec.rest ?? 20) - 1) break; }
+  const afterWave = s.lootOf(0);
+  // stubs drop base loot 2: the wave gives its kills and a quarter of the bounty
+  assert.equal(afterWave, s.fallen * 2 + Math.round(s.waves[0].bounty * 0.25));
+  const purse = s.berries(0);
+  s.command(0, { t: 'td', a: 'upgrade', pad: 0 });
+  assert.ok(s.berries(0) < purse, 'towers are paid from the purse');
+  assert.equal(s.lootOf(0), afterWave, 'loot is not spent');
+  // waves come by themselves after the rest: every beaten wave is counted
+  while (s.state === 'play' && ticks < 60 * 60 * 30) { w.step(); ticks++; }
+  assert.equal(s.state, 'won');
+  const bounties = s.waves.reduce((n, wv) => n + Math.round(wv.bounty * 0.25), 0);
+  assert.equal(s.lootOf(0), Math.round((s.fallen * 2 + bounties) * 1.5));
+  assert.ok(w.world.entities().some((e) => e.id === 'loot0' && e.n === s.lootOf(0)));
+  s.reset();
+  assert.equal(s.lootOf(0), 0);
+});

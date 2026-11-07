@@ -875,7 +875,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   /** The client copy of the snapshot: in single player — from its own world, by the same path as a network battle guest */
   const snapView = new SnapshotView<SimEvent>();
   if (tdSpec) {
-    const pk = new Pack(bossHooks, (at, n) => { if (sim && world) { sim.fallen++; world.piles.drop(at, n); } });
+    const pk = new Pack(bossHooks, (at, n, base) => { sim?.killed(at, n, base); });
     tdPack = pk;
     world = new SimWorld({
       foes: () => pk.mobs.filter((m) => m.alive),
