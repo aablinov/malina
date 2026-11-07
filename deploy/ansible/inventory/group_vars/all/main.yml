@@ -1,28 +1,25 @@
-# ---- image
-# repository in the registry (without a tag)
-malina_image: ghcr.io/aablinov/malina
-# tag = git commit of the working copy the playbook runs from ("-dirty" if there are uncommitted changes);
-# override for a rollback: -e malina_tag=<old sha>
-malina_tag: "{{ lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir ~ '/../../..') ~ ' describe --always --dirty --abbrev=12 --match=NO-TAGS') }}"
-# also push :latest when building
-malina_push_latest: true
-# target platforms for buildx; one platform is faster — put only the server's one
-malina_platforms: [linux/amd64, linux/arm64]
-malina_buildx_builder: malina-builder
-# build cache in the registry (speeds up builds on CI and other machines); empty — no registry cache
-malina_cache_ref: "{{ malina_image }}:buildcache"
-
-# ---- registry login (the server needs it for a private image; for a public one leave empty)
-registry_host: "{{ malina_image.split('/')[0] }}"
-registry_username: ""
-# put into inventory/group_vars/all/vault.yml with ansible-vault, never in plain text
-registry_password: ""
+# ---- image: no registry — built on this machine and copied to the servers over ssh (playbooks/push.yml)
+# local image name (on this machine and on the servers)
+malina_image: malina
+# git commit of the working copy the playbooks run from ("-dirty" if there are uncommitted changes)
+malina_git_tag: "{{ lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir ~ '/../../..') ~ ' describe --always --dirty --abbrev=12 --match=NO-TAGS') }}"
+# the tag to deploy; rollback: -e malina_tag=<old sha> (make ansible-deploy TAG=<old sha>) — if the server still has it
+malina_tag: "{{ malina_git_tag }}"
+malina_ref: "{{ malina_image }}:{{ malina_tag }}"
+malina_dirty: "{{ malina_tag is search('-dirty$') }}"
+# Caddy is shipped the same way, so the server does not go to Docker Hub at all
+caddy_image: caddy:2.10.2-alpine
+malina_ship_images: "{{ [malina_ref] + ([caddy_image] if malina_caddy | bool else []) }}"
+# archives on this machine (in .gitignore); the current ones are kept for the next server
+malina_images_dir: "{{ playbook_dir }}/../.images"
 
 # ---- server
 malina_dir: /opt/malina
 # the game server port on the host; 127.0.0.1 — reachable only through Caddy (and for the health check)
 malina_bind: 127.0.0.1
 malina_port: 8787
+# how many malina images to keep on the server for a rollback (the current one included)
+malina_keep_images: 5
 
 # ---- Caddy (HTTPS). The domain's A/AAAA record must point at the server, ports 80 and 443 (tcp+udp) open.
 malina_caddy: true
@@ -36,5 +33,3 @@ caddy_https_port: 443
 malina_check_https: true
 # how long to wait for /api/health after start
 malina_health_retries: 30
-# remove old images after a successful deploy
-malina_prune_images: true

@@ -1,0 +1,148 @@
+# Ship the images to the servers without any registry: build here, `docker save | gzip`, copy over ssh, `docker load`.
+#   ansible-playbook playbooks/push.yml                       — image of the current commit (+ Caddy) to every server
+#   ansible-playbook playbooks/push.yml --limit malina-prod
+# Only what a server lacks is built and copied; the platform is taken from the server (uname -m).
+# Containers are not restarted — that is deploy.yml (which runs this first).
+
+- name: Find out what the servers lack
+  hosts: malina
+  gather_facts: false
+  tasks:
+    - name: Server architecture
+      ansible.builtin.command: uname -m
+      register: uname
+      changed_when: false
+      check_mode: false
+
+    - name: Images that are already on the server
+      ansible.builtin.command: docker image inspect --format ok {{ item }}
+      loop: "{{ malina_ship_images }}"
+      register: present
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Remember the platform and the missing images
+      ansible.builtin.set_fact:
+        malina_platform: "{{ {'x86_64': 'linux/amd64', 'amd64': 'linux/amd64', 'aarch64': 'linux/arm64', 'arm64': 'linux/arm64'}[uname.stdout] }}"
+        # a "-dirty" build has the same tag but other contents — always shipped again
+        malina_missing: >-
+          {{ present.results | rejectattr('rc', 'eq', 0) | map(attribute='item') | list
+             + ([malina_ref] if malina_dirty and malina_ref not in (present.results | rejectattr('rc', 'eq', 0) | map(attribute='item')) else []) }}
+
+    - name: Remember what to build for this server
+      ansible.builtin.set_fact:
+        malina_wanted: "{{ malina_missing | product([malina_platform]) | map('list') | list }}"
+
+    # a rollback to a tag the server no longer has would otherwise build the CURRENT code under the OLD tag
+    - name: Refuse to build an image of another commit
+      ansible.builtin.assert:
+        that: malina_tag == malina_git_tag or malina_ref not in malina_missing
+        fail_msg: >-
+          {{ malina_ref }} is not on {{ inventory_hostname }}, and the working copy is at {{ malina_git_tag }}.
+          Check out that commit and deploy from it (git switch --detach {{ malina_tag | regex_replace('-dirty$', '') }}).
+
+- name: Build and save the images here
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_root: "{{ (playbook_dir ~ '/../../..') | realpath }}"
+    servers: "{{ groups['malina'] | map('extract', hostvars) | selectattr('malina_missing', 'defined') | list }}"
+    # [[image, platform], …] that some server lacks
+    wanted: "{{ servers | map(attribute='malina_wanted') | flatten(levels=1) | unique | list }}"
+    build_platforms: "{{ wanted | selectattr(0, 'eq', malina_ref) | map(attribute=1) | unique | list }}"
+  tasks:
+    - name: Nothing to ship
+      ansible.builtin.meta: end_play
+      when: wanted | length == 0
+
+    - name: Warn about uncommitted changes
+      ansible.builtin.debug:
+        msg: "The working copy has uncommitted changes — the image {{ malina_ref }} will contain them."
+      when: malina_dirty and build_platforms | length > 0
+
+    # `docker save --platform` and a multi-platform `--load` need the containerd image store
+    - name: Check the Docker image store
+      ansible.builtin.command: docker info --format "{{ '{{' }}json .DriverStatus{{ '}}' }}"
+      register: store
+      changed_when: false
+      check_mode: false
+      failed_when: "'containerd' not in store.stdout"
+
+    - name: Create {{ malina_images_dir }}
+      ansible.builtin.file:
+        path: "{{ malina_images_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Build {{ malina_ref }} for {{ build_platforms | join(', ') }}
+      ansible.builtin.command:
+        chdir: "{{ repo_root }}"
+        argv:
+          - docker
+          - buildx
+          - build
+          - --platform={{ build_platforms | join(',') }}
+          - --target=runtime
+          - --label=org.opencontainers.image.revision={{ malina_tag }}
+          - --tag={{ malina_ref }}
+          - --load
+          - .
+      when: build_platforms | length > 0
+      changed_when: true
+
+    - name: Pull the other images here
+      ansible.builtin.command: docker pull --quiet --platform {{ item.1 }} {{ item.0 }}
+      loop: "{{ wanted | rejectattr(0, 'eq', malina_ref) | list }}"
+      changed_when: true
+
+    - name: Save to {{ malina_images_dir }}
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          docker save --platform {{ item.1 }} {{ item.0 }} | gzip -1 > {{ file }}.part && mv {{ file }}.part {{ file }}
+        executable: /bin/bash
+        # the same tag is the same contents — except a "-dirty" build
+        creates: "{{ omit if (item.0 == malina_ref and malina_dirty) else file }}"
+      vars:
+        file: "{{ malina_images_dir }}/{{ item.0 | regex_replace('[/:@]', '_') }}_{{ item.1 | regex_replace('^linux/', '') }}.tar.gz"
+      loop: "{{ wanted }}"
+
+    - name: Find old archives
+      ansible.builtin.find:
+        paths: "{{ malina_images_dir }}"
+        patterns: ["*.tar.gz", "*.part"]
+      register: archives
+
+    - name: Remove archives of other builds
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ archives.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      # <image>_<arch>.tar.gz of an image that is not shipped any more (an older malina tag, an older Caddy)
+      when: >-
+        item.path.endswith('.part')
+        or (item.path | basename | regex_replace('_[a-z0-9]+\.tar\.gz$', ''))
+           not in (malina_ship_images | map('regex_replace', '[/:@]', '_') | list)
+
+- name: Upload and load the images
+  hosts: malina
+  gather_facts: false
+  tasks:
+    - name: Create {{ malina_dir }}/images
+      ansible.builtin.file:
+        path: "{{ malina_dir }}/images"
+        state: directory
+        mode: "0755"
+
+    - name: Load {{ malina_missing | join(', ') or 'nothing' }}
+      ansible.builtin.include_tasks: ../tasks/load-image.yml
+      loop: "{{ malina_missing }}"
+      loop_control:
+        loop_var: ref
+      vars:
+        file: "{{ ref | regex_replace('[/:@]', '_') }}_{{ malina_platform | regex_replace('^linux/', '') }}.tar.gz"
+      when: not ansible_check_mode

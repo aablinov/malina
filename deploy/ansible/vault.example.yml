@@ -1,5 +1,6 @@
-# Copy to inventory/group_vars/all/vault.yml and encrypt:  ansible-vault encrypt inventory/group_vars/all/vault.yml
-# then run playbooks with --ask-vault-pass (or ANSIBLE_VAULT_PASSWORD_FILE).
-registry_username: aablinov
-# GitHub token with read:packages (the server only pulls)
-registry_password: ghp_xxx
+# Secrets for the playbooks, encrypted with ansible-vault. Create with `make ansible-vault`
+# (copies this file to inventory/group_vars/all/vault.yml, opens $EDITOR, encrypts).
+# Images go over ssh, so nothing is required here today. Typical contents:
+#   ansible_become_password: …   — if the ssh user needs sudo with a password
+#   ansible_ssh_pass: …          — only if there is no ssh key (better: use a key)
+{}

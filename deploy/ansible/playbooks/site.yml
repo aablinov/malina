@@ -1,5 +1,0 @@
-# Build + push + deploy in one go:  ansible-playbook playbooks/site.yml
-- name: Build
-  ansible.builtin.import_playbook: build.yml
-- name: Deploy
-  ansible.builtin.import_playbook: deploy.yml

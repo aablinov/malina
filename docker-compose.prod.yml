@@ -1,5 +1,6 @@
 # Malina — production: the server serves both the game (/) and the API (/api, /ws, /game), Caddy in front gives HTTPS.
-# Ansible puts this file, deploy/caddy/Caddyfile and .env into /opt/malina (deploy/ansible/playbooks/deploy.yml).
+# No registry: Ansible builds the images on the developer machine, copies them over ssh and `docker load`s them,
+# then puts this file, deploy/caddy/Caddyfile and .env into /opt/malina (deploy/ansible/playbooks/deploy.yml).
 # By hand, from a directory with the same layout:
 #   MALINA_TAG=<git sha> MALINA_DOMAIN=game.example.com ACME_EMAIL=me@example.com COMPOSE_PROFILES=caddy \
 #     docker compose -f docker-compose.prod.yml up -d
@@ -8,7 +9,9 @@ name: malina
 
 services:
   malina:
-    image: "${MALINA_IMAGE:-ghcr.io/aablinov/malina}:${MALINA_TAG:-latest}"
+    image: "${MALINA_IMAGE:-malina}:${MALINA_TAG:-local}"
+    # images come from `docker load` (deploy/ansible/playbooks/push.yml), never from a registry
+    pull_policy: never
     restart: unless-stopped
     init: true
     stop_grace_period: 15s
@@ -35,7 +38,8 @@ services:
         max-file: "5"
 
   caddy:
-    image: caddy:2.10.2-alpine
+    image: "${CADDY_IMAGE:-caddy:2.10.2-alpine}"
+    pull_policy: never
     profiles: [caddy]
     restart: unless-stopped
     depends_on:

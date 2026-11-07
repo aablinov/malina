@@ -1,0 +1,15 @@
+# One image archive: copy to the server, docker load, remove the archive (the image now lives in docker).
+- name: Copy {{ ref }} ({{ malina_platform }})
+  ansible.builtin.copy:
+    src: "{{ malina_images_dir }}/{{ file }}"
+    dest: "{{ malina_dir }}/images/{{ file }}"
+    mode: "0644"
+
+- name: Load {{ ref }}
+  ansible.builtin.command: docker load --quiet --input {{ malina_dir }}/images/{{ file }}
+  changed_when: true
+
+- name: Remove the archive of {{ ref }}
+  ansible.builtin.file:
+    path: "{{ malina_dir }}/images/{{ file }}"
+    state: absent

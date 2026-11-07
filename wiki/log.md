@@ -444,3 +444,7 @@ Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
 ## [2026-11-05] code | Caddy in front of the server, make targets for image and Ansible
 Caddy (profile `caddy` in `docker-compose.prod.yml`, `deploy/caddy/Caddyfile`) gives HTTPS from Let's Encrypt, the game server listens on 127.0.0.1 only; `deploy.yml` puts the Caddyfile, reloads Caddy and checks https://<domain>/api/health. Make: `image-build/run/stop/login/push`, `ansible-ping/check/deploy/vault/logs`, `deploy`.
 Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
+
+## [2026-11-07] code | Deploy without a registry: images over ssh
+`push.yml` builds the image here for the servers' platform, `docker save | gzip`, copies it over ssh and `docker load`s it; Caddy goes the same way, compose never pulls. `build.yml`, `site.yml`, `image-login` and the registry settings are gone; the server keeps the last 5 images for a rollback.
+Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
