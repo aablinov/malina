@@ -21,7 +21,7 @@ import { Outliner, type TreeNode } from './editor/outliner.ts';
 import { Viewports, type Viewport } from './editor/viewports.ts';
 import { PropGrid, closeMenus, h, icon, menuButton, popupMenu, splitter, type MenuItem } from './editor/ui.ts';
 import './editor.css';
-import { t } from '../i18n/i18n.ts';
+import { LANG, setLang, t, untranslate } from '../i18n/i18n.ts';
 
 /**
  * Level editor in the spirit of Unreal Engine (?dev=editor, F10 in the playground).
@@ -185,7 +185,7 @@ export function runEditor(): void {
   // ---------- menu bar ----------
   const mbtn = (label: string, items: () => MenuItem[]) => menuButton(h('button.ue-mb', { text: label }), items);
   const nameInput = h('input.ue-mapname', { spellcheck: 'false', title: t('Map name') });
-  nameInput.addEventListener('input', () => { level.name = nameInput.value; dirtyAutosave = true; outliner.invalidate(); docTabs.querySelector('.lvl span')!.textContent = level.name; });
+  nameInput.addEventListener('input', () => { level.name = nameInput.value; dirtyAutosave = true; outliner.invalidate(); docTabs.querySelector('.lvl span')!.textContent = t(level.name); });
   nameInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') nameInput.blur(); });
   menubar.append(
     h('span.ue-logo', { html: '<b>M</b>' }),
@@ -194,7 +194,7 @@ export function runEditor(): void {
       { label: t('Open JSON…'), icon: 'folder', shortcut: 'Ctrl+O', action: open },
       { label: t('Download JSON'), icon: 'save', shortcut: 'Ctrl+S', action: save },
       { sep: true },
-      { label: t('Built-in maps'), icon: 'world', sub: () => Object.keys(maps).sort().map((p) => ({ label: `${t(maps[p].name)}  ·  ${p}`, action: () => { setLevel(Level.fromJSON(maps[p])); toast(t('Opened "{name}"', { name: level.name })); } })) },
+      { label: t('Built-in maps'), icon: 'world', sub: () => Object.keys(maps).sort().map((p) => ({ label: `${t(maps[p].name)}  ·  ${p}`, action: () => { setLevel(Level.fromJSON(maps[p])); toast(t('Opened "{name}"', { name: t(level.name) })); } })) },
       { label: t('Dungeon floor…'), icon: 'grid', action: floorDialog },
       { sep: true },
       { label: t('Play this map'), icon: 'play', shortcut: 'F5', action: play },
@@ -221,6 +221,10 @@ export function runEditor(): void {
       { label: t('Turntable: the scene rotates'), icon: 'turntable', checked: vps.list[0].controls.autoRotate, action: () => { const c = vps.list[0].controls; c.autoRotate = !c.autoRotate; } },
       { label: t('To the selection'), icon: 'focus', shortcut: 'F', action: focusSel },
       { label: t('Show the whole map'), icon: 'world', shortcut: 'Home', action: frameAll },
+      { sep: true },
+      { head: t('Language') },
+      { label: 'English', checked: LANG === 'en', action: () => { if (LANG !== 'en') { setLang('en'); location.reload(); } } },
+      { label: 'Русский', checked: LANG === 'ru', action: () => { if (LANG !== 'ru') { setLang('ru'); location.reload(); } } },
     ]),
     mbtn(t('Window'), () => [
       { label: t('Prefabs'), icon: 'prefab', checked: !left.hidden, action: () => { left.hidden = !left.hidden; root.classList.toggle('no-left', left.hidden); } },
@@ -450,7 +454,7 @@ export function runEditor(): void {
     level.forEach((x, y, z, id) => { const n = level.palette[id]; let a = byType.get(n); if (!a) byType.set(n, a = []); a.push([x, y, z]); nBlocks++; });
     const decorBy = new Map<string, DecorItem[]>();
     for (const d of level.decor) { const c = decorDef(d.name).category; let a = decorBy.get(c); if (!a) decorBy.set(c, a = []); a.push(d); }
-    return [node('root', level.name || t('Unnamed'), 'world', 'World', null, {
+    return [node('root', level.name ? t(level.name) : t('Unnamed'), 'world', 'World', null, {
       kids: () => [
         node('world', t('Environment'), 'sun', 'Folder', WORLD_PARTS.map(([part]) => ({ t: 'world', part }) as Sel), {
           kids: () => WORLD_PARTS.map(([part, title, ic, type]) => node(`w:${part}`, part === 'weather' ? `${title}: ${WEATHER_TITLES[world.weather.kind]}` : title, ic, type, [{ t: 'world', part }],
@@ -1510,7 +1514,7 @@ export function runEditor(): void {
     view.rebuildAll();
     undo.length = redo.length = 0;
     nameInput.value = level.name;
-    docTabs.querySelector('.lvl span')!.textContent = level.name;
+    docTabs.querySelector('.lvl span')!.textContent = t(level.name);
     world = worldOf(level);
     applyWorldNow();
     entVersion++;
@@ -1526,7 +1530,7 @@ export function runEditor(): void {
   }
   function newMap(): void {
     if (!confirm(t('Start a new map? Unsaved changes will be lost.'))) return;
-    const L = new Level(t('New map')); L.fill(-8, -1, -8, 8, -1, 8, 'grass'); L.spawn = [0, 0, 0]; setLevel(L);
+    const L = new Level('New map'); L.fill(-8, -1, -8, 8, -1, 8, 'grass'); L.spawn = [0, 0, 0]; setLevel(L);
   }
   function floorDialog(): void {
     const raw = prompt(t('Dungeon floor: seed (and the floor number after a space)'), `${Math.floor(Math.random() * 100000)} 1`);
@@ -1541,10 +1545,10 @@ export function runEditor(): void {
   function loadInitial(): Level {
     try {
       const raw = localStorage.getItem(EDITOR_STORAGE);
-      if (raw) return Level.fromJSON(JSON.parse(raw) as LevelJSON);
+      if (raw) { const L = Level.fromJSON(JSON.parse(raw) as LevelJSON); L.name = untranslate(L.name); return L; }
     } catch { /* corrupted autosave — take a built-in map */ }
     const first = maps['playground.json'] ?? maps[Object.keys(maps)[0]];
-    return first ? Level.fromJSON(first) : new Level(t('New map'));
+    return first ? Level.fromJSON(first) : new Level('New map');
   }
   function autosave(): void {
     try { localStorage.setItem(EDITOR_STORAGE, JSON.stringify(level.toJSON())); } catch { toast(t('Could not save to localStorage')); }
@@ -2067,7 +2071,7 @@ export function runEditor(): void {
     vps.home(level.spawn ? new THREE.Vector3(...level.spawn) : b ? new THREE.Vector3((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2) : new THREE.Vector3(0, 0, 2), 38);
   }
   nameInput.value = level.name;
-  docTabs.querySelector('.lvl span')!.textContent = level.name;
+  docTabs.querySelector('.lvl span')!.textContent = t(level.name);
   buildDetails();
   refreshToolbar();
   vps.resize();

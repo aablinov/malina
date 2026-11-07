@@ -2080,5 +2080,15 @@ const ru: Record<string, string> = {
   "Knuckle bow": "Дужка",
   "Band": "Обруч",
   "Knuckles": "Кастет",
+  "World": "Мир",
+  "Folder": "Папка",
+  "PlayerStart": "Точка старта",
+  "SpotLight": "Прожектор",
+  "PointLight": "Точечный свет",
+  "BlockType": "Тип блока",
+  "DirectionalLight": "Направленный свет",
+  "SkyLight": "Свет неба",
+  "HeightFog": "Высотная дымка",
+  "PostProcessVolume": "Постобработка",
 };
 export default ru;

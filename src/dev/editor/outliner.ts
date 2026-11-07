@@ -65,7 +65,7 @@ export class Outliner {
     this.dirty = false;
     this.rows = [];
     const f = this.filter;
-    const match = (n: TreeNode): boolean => n.label.toLowerCase().includes(f) || n.type.toLowerCase().includes(f);
+    const match = (n: TreeNode): boolean => n.label.toLowerCase().includes(f) || n.type.toLowerCase().includes(f) || t(n.type).toLowerCase().includes(f);
     const walk = (nodes: TreeNode[], depth: number): void => {
       for (const n of nodes) {
         if (f) {
@@ -123,7 +123,7 @@ export class Outliner {
       const tri = h('span.ue-outl-tri', { html: r.leaf ? '' : icon('chevron', r.open ? 'open' : '') });
       tri.addEventListener('click', (e) => { e.stopPropagation(); this.toggle(n.id); });
       const label = h('span.ue-outl-l', { style: `padding-left:${r.depth * 12}px` }, tri, h('span.ue-outl-ic', { html: icon(n.icon) }), h('span.ue-outl-name', { text: n.label }), n.count !== undefined ? h('span.ue-outl-n', { text: ` (${n.count})` }) : null);
-      row.append(eye, label, h('span.ue-outl-t', { text: n.type }));
+      row.append(eye, label, h('span.ue-outl-t', { text: t(n.type) }));
       row.addEventListener('click', (e) => this.o.onSelect(n, e));
       row.addEventListener('dblclick', () => { if (!r.leaf && !n.eye) this.toggle(n.id); this.o.onDbl(n); });
       row.addEventListener('contextmenu', (e) => { e.preventDefault(); this.o.onContext(n, e); });
