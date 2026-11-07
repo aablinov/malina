@@ -214,7 +214,7 @@ export class Lobby {
     this.el.addEventListener('input', (e) => {
       const f = e.target as HTMLInputElement;
       if (f.dataset.field === 'name') this.nameDraft = f.value;
-      if (f.dataset.field === 'code') this.codeDraft = f.value.toUpperCase();
+      if (f.dataset.field === 'code') { f.value = f.value.replace(/\D/g, ''); this.codeDraft = f.value; }
       if (f.dataset.field === 'friend') this.friendDraft = f.value;
       if (f.dataset.field === 'chat') this.chatDraft = f.value;
     });
@@ -435,7 +435,7 @@ export class Lobby {
       <button class="mm-btn host" data-act="host">${t('Create an online session')}</button>
       <label class="mm-toggle" data-act="private">${t('Private game')}<i class="${this.privateGame ? 'on' : ''}"></i></label>
       <div class="mm-online-h"><b>${t('Room code')}</b></div>
-      <div class="mm-join"><input class="mm-field" data-field="code" data-enter="join" maxlength="6" placeholder="ABCDEF" value="${esc(this.codeDraft)}"><button class="mm-btn small" data-act="join">${t('Join')}</button></div>
+      <div class="mm-join"><input class="mm-field" data-field="code" data-enter="join" inputmode="numeric" maxlength="5" placeholder="12345" value="${esc(this.codeDraft)}"><button class="mm-btn small" data-act="join">${t('Join')}</button></div>
       <div class="mm-online-h"><b>${t('Sessions')}</b><button class="mm-btn small" data-act="refresh">${t('Refresh')}</button></div>
       ${list}
       ${this.friendsHtml(esc)}

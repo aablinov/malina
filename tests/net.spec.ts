@@ -47,7 +47,7 @@ test('net: login by name, room by code, readiness, server battle for two', async
 
   await host.locator('.mm-online [data-act="host"]').click();
   const code = (await host.locator('.mm-code').textContent())?.trim() ?? '';
-  expect(code).toMatch(/^[A-Z]{6}$/);
+  expect(code).toMatch(/^[1-9]\d{4}$/);
   await guest.locator('.mm-online [data-field="code"]').fill(code);
   await guest.locator('.mm-online [data-field="code"]').press('Enter');
   await expect(guest.locator('.mm-seat')).toHaveCount(2 + 2);

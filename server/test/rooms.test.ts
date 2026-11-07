@@ -51,7 +51,7 @@ test('room: create, join by code, list, seats, full room', async () => {
   const a = await hero('Anya'), b = await hero('Borya'), c = await hero('Vika');
   a.p.send({ t: 'room.create', map: 'td2', max: 2, private: false });
   const st = await a.p.state();
-  assert.match(st.room.code, /^[A-Z]{6}$/);
+  assert.match(st.room.code, /^[1-9]\d{4}$/);
   assert.equal(st.room.map, 'td2');
   assert.equal(st.you, 0);
   assert.equal((await api(s, 'GET', '/api/rooms')).body.length, 1);

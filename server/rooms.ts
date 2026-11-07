@@ -61,7 +61,8 @@ export interface RoomDeps {
 export const RESTORE_MS = 10 * 60_000;
 /** Closed rooms are deleted after a day (battle history stays in matches) */
 export const PURGE_MS = 24 * 3600_000;
-const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+/** Room code — 5 digits without a leading zero: easy to dictate and type on any keyboard */
+const CODE_LEN = 5;
 
 export class RoomError extends Error {
   readonly code: ErrorCode;
@@ -123,7 +124,7 @@ export class RoomManager {
   }
 
   join(c: Conn, code: string): void {
-    const room = [...this.byId.values()].find((r) => r.row.code === code.trim().toUpperCase());
+    const room = [...this.byId.values()].find((r) => r.row.code === code.replace(/\s+/g, '').toUpperCase());
     if (!room || room.row.state === 'closed') throw new RoomError('no-room', 'No room with that code');
     if (this.byPlayer.get(c.playerId) === room) { this.attach(c); return; }
     if (room.members.length >= room.row.max) throw new RoomError('room-full', 'Room is full');
@@ -362,8 +363,7 @@ export class RoomManager {
 
   private freeCode(): string {
     for (;;) {
-      let s = '';
-      for (let i = 0; i < 6; i++) s += CODE_ABC[randomInt(CODE_ABC.length)];
+      const s = String(randomInt(10 ** (CODE_LEN - 1), 10 ** CODE_LEN));
       if (!this.d.rooms.codeTaken(s)) return s;
     }
   }

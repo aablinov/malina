@@ -55,7 +55,7 @@ So that the server can import the item catalogue (`src/items.ts`) for profile va
 
 - `players` — id, name, `name_key` (lower case: NOCASE in SQLite does not understand Cyrillic), token hash, time.
 - `profiles` — the whole `ProfileData` as JSON and `version`.
-- `rooms` — a six-letter code, host, map, `max`, `private`, `state` (`lobby | battle | closed`), seed.
+- `rooms` — a five-digit code (no leading zero, typed on any keyboard; the lobby field takes digits only), host, map, `max`, `private`, `state` (`lobby | battle | closed`), seed.
 - `room_members` — seat, readiness, `gone_at`.
 - `matches` — map, player count, seed, start and end, result (`won | lost | abandoned`), wave.
 - `match_players` — hero seat, raspberries and experience for the battle.
