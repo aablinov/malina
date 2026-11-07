@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Obstacle } from '../collision.ts';
 import { Gear } from '../gear.ts';
 import { nullFx } from '../headless.ts';
-import { Profile, xpToNext, type ProfileData } from '../items.ts';
+import { BATTLE_ARROWS, Profile, xpToNext, type ProfileData } from '../items.ts';
 import { emptyInput, Knight, type KnightInput, type Strike } from '../knight.ts';
 import { obstaclesOf, terrainOf, type Terrain } from '../level/collide.ts';
 import { Pathfinder } from '../level/pathfind.ts';
@@ -109,7 +109,7 @@ export class HeadlessBattle {
     return this.foeCache;
   }
 
-  /** Hero of seat `seat` from the profile (a copy; the defence kit goes into battle, as in the browser). Appears at the map's point */
+  /** Hero of seat `seat` from the profile (a copy: own gear goes into battle, as in the browser). Appears at the map's point */
   addHero(seat: number, data: ProfileData): BattleHero {
     const knight = new Knight(this.scene, textures!);
     knight.tune = structuredClone(SWORD);
@@ -117,7 +117,7 @@ export class HeadlessBattle {
     const a = (seat / 4) * Math.PI * 2;
     knight.place(sp[0] + Math.cos(a) * 1.2, sp[2] + Math.sin(a) * 1.2, Math.PI, sp[1]);
     const profile = new Profile(structuredClone(data), false);
-    profile.tdKit();
+    profile.data.arrows = Math.max(profile.data.arrows, BATTLE_ARROWS);
     const gear = new Gear({
       scene: this.scene, fx: this.fx, hero: knight, terrain: this.terrain, targets: () => this.targets(), blast: () => {},
       sound: () => {}, toast: () => {}, banner: () => {}, quiet: () => true,

@@ -84,6 +84,8 @@ body.menu #c.mm-canvas { cursor: default; }
 .mm-power { display: flex; align-items: center; gap: 1.6em; }
 .mm-power span { display: block; font: 400 0.65em/1 var(--mcd-px); text-transform: uppercase; }
 .mm-power > div > b { font: 400 2.6em/1.2 var(--mcd-px); color: var(--mm-cyan); text-shadow: 0 0.1em 0 #000; }
+.mm-power > div > small { display: block; margin-top: 0.2em; font-size: 0.75em; color: #ff8ab0; }
+.mm-shops { display: flex; gap: 0.5em; margin-top: 0.5em; }
 .mm-stats { display: flex; gap: 1.1em; }
 .mm-stats span { display: flex; flex-direction: column; align-items: center; gap: 0.3em; font: 400 0.75em/1 var(--mcd-px); color: var(--mm-cyan); }
 .mm-stats img { width: 1.8em; height: 1.8em; }

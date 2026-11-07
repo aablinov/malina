@@ -42,7 +42,6 @@ export function headlessBattle(mapId: string, seed: number, o: { players?: numbe
   hero.place(spawn[0], spawn[2], Math.PI, spawn[1]);
   const input = emptyInput();
   const profile = new Profile(Profile.starter(), false);
-  profile.tdKit();
   let world: SimWorld | null = null;
   let pack: Pack | null = null;
   const out = { heroHurt: 0 } as HeadlessBattle;

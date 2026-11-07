@@ -456,3 +456,7 @@ Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
 ## [2026-11-07] code | Cross-building the image without emulation
 An amd64 server deployed from an arm64 Mac failed with `exec format error`: `npm ci` ran in the amd64 stage and Docker Desktop had no amd64 emulation. All `RUN` steps now run on `$BUILDPLATFORM`, the `runtime` stage only copies files (`/data` comes from the build stage with `--chown`).
 Pages: [dev-deploy.md](dev-deploy.md).
+
+## [2026-11-07] code | Match loot, own gear in defence, camp shop
+Two wallets: the battle purse and the match loot (kills, ¼ of wave bounties, +50 % for victory), paid to the account only for a defended bush — solo and online. The hero goes into defence with their own gear on a battle copy of the profile (no more `tdKit` and the sessionStorage stash); waves and loot grow with the heroes' strength (gear power + half the level). The camp's "Gear" tab got the shop and the blacksmith.
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md), [design-inventory.md](design-inventory.md).

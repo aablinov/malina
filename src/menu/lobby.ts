@@ -3,6 +3,8 @@ import { t } from '../i18n/i18n.ts';
 import { iconImg, iconURL } from '../icons.ts';
 import { itemDef, RARITY, xpToNext, type Item, type ItemSlot, type Profile } from '../items.ts';
 import { Inventory } from '../hud/inventory.ts';
+import { Shop } from '../hud/shop.ts';
+import type { MerchantKind } from '../merchants.ts';
 import type { Textures } from '../textures.ts';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
 import type { MenuScene } from './scene.ts';
@@ -35,6 +37,8 @@ const STAT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', arm
 export class Lobby {
   readonly el: HTMLDivElement;
   private readonly inventory: Inventory;
+  /** Camp shops (wiki/design-inventory.md, "Merchants"): the merchant and the blacksmith for the account raspberries — what is bought stays with the hero */
+  readonly shop: Shop;
   private pane: Pane = 'gear';
   private mode: GameMode = 'solo';
   private slot: SlotId = 'melee';
@@ -87,6 +91,10 @@ export class Lobby {
     this.inventory = new Inventory(document.body, profile, T);
     this.inventory.onClose = () => { this.scene.start(); this.render(); };
     this.inventory.onChange = () => this.scene.dress(this.profile);
+    this.shop = new Shop(document.body, profile);
+    this.shop.onClose = () => { this.scene.start(); this.render(); };
+    this.shop.onChange = () => { this.scene.dress(this.profile); this.render(); };
+    this.shop.onSound = (ok) => { if (ok) sfx.twinkle(); };
     this.bind();
     NET.onError = (text) => this.flash(text);
     NET.on((m) => this.onNet(m));
@@ -136,6 +144,12 @@ export class Lobby {
     this.inventory.show(slot ? SLOT_KIND(slot) : undefined);
   }
 
+  /** Open a camp shop: the merchant (everything at the hero's power) or the blacksmith (forge, reforge the equipped) */
+  openShop(kind: MerchantKind = 'merchant'): void {
+    this.scene.stop();
+    this.shop.show(kind);
+  }
+
   /** To battle: solo — at once; online — the host leads the room into battle, a guest marks itself ready */
   startGame(): void {
     if (this.mode === 'online') {
@@ -152,6 +166,7 @@ export class Lobby {
 
   key(e: KeyboardEvent): void {
     if (this.inventory.open) { this.inventory.key(e); return; }
+    if (this.shop.open) { this.shop.key(e); return; }
     // in the online panel fields keys are for text, Enter — the field's button
     const field = (e.target as HTMLElement | null)?.closest?.('input');
     if (field) { if (e.code === 'Enter') { e.preventDefault(); this.netAct(field.dataset.enter); } return; }
@@ -159,6 +174,7 @@ export class Lobby {
       case 'Escape': this.onBack?.(); break;
       case 'KeyQ': case 'KeyE': this.setPane(this.pane === 'gear' ? 'map' : 'gear'); break;
       case 'KeyI': this.openInventory(this.pane === 'gear' ? this.slot : undefined); break;
+      case 'KeyB': this.openShop('merchant'); break;
       case 'Enter': e.preventDefault(); this.startGame(); break;
       case 'ArrowRight': case 'ArrowDown': this.step(1); break;
       case 'ArrowLeft': case 'ArrowUp': this.step(-1); break;
@@ -186,6 +202,8 @@ export class Lobby {
         case 'start': this.startGame(); break;
         case 'change': this.openInventory(this.slot); break;
         case 'inventory': this.openInventory(); break;
+        case 'shop': this.openShop('merchant'); break;
+        case 'smith': this.openShop('smith'); break;
         case 'friend-del': { const id = t.closest<HTMLElement>('[data-player]')?.dataset.player; if (id) void NET.removeFriend(id).then(() => this.loadFriends()); break; }
         case 'private': this.privateGame = !this.privateGame; this.renderSel(); break;
         case 'join-room': { const code = t.closest<HTMLElement>('[data-code]')?.dataset.code; if (code) NET.joinRoom(code); break; }
@@ -256,7 +274,7 @@ export class Lobby {
     startBtn.firstChild!.textContent = guest ? (ready ? `${t('Not ready')} ` : `${t('Ready')} `) : `${t('Start game')} `;
     this.q('hint').classList.remove('warn');
     this.q('hint').textContent = this.pane === 'gear'
-      ? t('Click — slot · double click or I — change · Q / E — tabs')
+      ? t('Click — slot · double click or I — change · B — shop · Q / E — tabs')
       : t('Map: {map} · double click — straight to battle', { map: campaignMap(this.map).title });
   }
 
@@ -264,11 +282,12 @@ export class Lobby {
     const p = this.profile;
     const stat = (s: ItemSlot, v: number): string => `<span>${iconImg(STAT_ICON[s], '', '#7fe0ff')}<b>${v}</b></span>`;
     const arts = p.artifacts().filter((x): x is Item => !!x);
-    const head = `<div class="mm-power"><div><span>${t('Gear power')}</span><b>${p.power}</b></div>
+    const head = `<div class="mm-power"><div><span>${t('Gear power')}</span><b>${p.power}</b><small title="${t('Gear power plus half the level: the Order grows stronger, the loot grows bigger')}">${t('defence strength {n}', { n: p.rating })}</small></div>
       <div class="mm-stats">${stat('melee', p.equipped('melee')?.power ?? 0)}${stat('ranged', p.equipped('ranged')?.power ?? 0)}${stat('armor', p.equipped('armor')?.power ?? 0)}${stat('artifact', arts.length ? Math.round(arts.reduce((a, x) => a + x.power, 0) / arts.length) : 0)}</div></div>`;
     const groups = GROUPS.map((g) => `<div class="mm-group"><h4>${iconImg(g.icon, '', '#cfd8e0')}${g.title}</h4><div class="mm-slots">${g.slots.map((s) => this.slotHtml(s)).join('')}</div></div>`).join('');
     const total = p.data.items.length, fresh = p.data.items.filter((x) => x.isNew).length;
-    return `${head}${groups}<button class="mm-btn small" data-act="inventory">${iconImg('chest')}${t('All items')} · ${total}${fresh ? ` <i class="mm-new">${t('+{n} new', { n: fresh })}</i>` : ''} <kbd>I</kbd></button>`;
+    const shops = `<div class="mm-shops"><button class="mm-btn small primary" data-act="shop">${iconImg('berry')}${t('Shop')} <kbd>B</kbd></button><button class="mm-btn small" data-act="smith">${iconImg('sword')}${t('Blacksmith')}</button></div>`;
+    return `${head}${groups}<button class="mm-btn small" data-act="inventory">${iconImg('chest')}${t('All items')} · ${total}${fresh ? ` <i class="mm-new">${t('+{n} new', { n: fresh })}</i>` : ''} <kbd>I</kbd></button>${shops}`;
   }
 
   private slotHtml(s: SlotId): string {

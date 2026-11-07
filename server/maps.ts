@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Level, type LevelJSON } from '../src/level/level.ts';
-import { crowdMult } from '../src/td/scaling.ts';
+import { crowdMult, lootK, MAX_RATING } from '../src/td/scaling.ts';
 import type { TdSpec } from '../src/td/types.ts';
 
 /**
@@ -39,7 +39,7 @@ export class MapCatalog {
    */
   maxBerries(id: string, players: number): number {
     const m = this.maps.get(id);
-    return m ? Math.ceil(m.bounty * crowdMult(players) * 2) : 0;
+    return m ? Math.ceil(m.bounty * crowdMult(players) * 2 * lootK(MAX_RATING)) : 0;
   }
 
   waves(id: string): number { return this.maps.get(id)?.waves ?? 0; }

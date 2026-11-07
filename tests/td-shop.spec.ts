@@ -30,8 +30,8 @@ test('defence: the sutler on every map, prices by rarity, buying with the battle
     });
     expect(ok, map).toBe(true);
   }
-  // the hero's gear before the battles — stashed at the first battle (in battle the hero has the defence kit)
-  const camp0 = await page.evaluate(() => { const g = JSON.parse(sessionStorage.getItem('malina.stash.gear') ?? '{}'); return { items: g.items?.length, melee: g.equip?.melee, arrows: g.arrows }; });
+  // the hero's gear in the camp — the stored profile is not touched by battles (Profile.enterBattle)
+  const camp0 = await page.evaluate(() => { const g = JSON.parse(localStorage.getItem('malina.profile') ?? '{}'); return { items: g.items?.length, melee: g.equip?.melee, arrows: g.arrows }; });
   expect(camp0.items).toBeGreaterThan(6);
   // battle from the menu: buy an axe, equip it, return to the camp
   await page.goto(`${URL}?map=td&from=menu`, { waitUntil: 'domcontentloaded' });
@@ -40,7 +40,7 @@ test('defence: the sutler on every map, prices by rarity, buying with the battle
     const m = (window as any).__malina, D = m.profile.data;
     await m.ready;
     const def = (uid: string | null): string => D.items.find((i: any) => i.uid === uid)?.def ?? '';
-    const kit = { items: D.items.length, melee: def(D.equip.melee), armor: def(D.equip.armor), ranged: def(D.equip.ranged), arts: D.equip.artifacts.map(def), aura: D.equip.aura, power: Math.max(...D.items.map((i: any) => i.power)) };
+    const kit = { items: D.items.length, melee: D.equip.melee };
     const before = { items: D.items.length, melee: D.equip.melee };
     m.profile.data.berries = 3000;
     const open = m.trade('sutler');
@@ -62,8 +62,11 @@ test('defence: the sutler on every map, prices by rarity, buying with the battle
     m.profile.equip(axe.uid);
     const inBattle = { items: D.items.length, melee: D.equip.melee };
     m.shop.hide();
+    // restart: the sutler's goods are gone, the battle copy is taken anew from the stored profile
+    m.td.reset();
+    const restarted = { items: m.profile.data.items.length, melee: m.profile.data.equip.melee, axe: m.profile.data.items.some((i: any) => i.uid === axe.uid), berries: m.berries };
     m.td.state = 'won';
-    return { open, title, prices, arrows, bought, paid, before, inBattle, axe: axe.uid, kit, spells, auras, auraBought };
+    return { restarted, open, title, prices, arrows, bought, paid, before, inBattle, axe: axe.uid, kit, spells, auras, auraBought };
   });
   expect(r.open).toBe(true);
   expect(r.title).toBe('Sutler');
@@ -74,8 +77,9 @@ test('defence: the sutler on every map, prices by rarity, buying with the battle
   expect(r.bought).toBe(true);
   expect(r.paid).toBe(240);
   expect(r.inBattle).toEqual({ items: r.before.items + 2, melee: r.axe });
-  // into battle — a new hero's kit of power 1
-  expect(r.kit).toEqual({ items: 6, melee: 'sword', armor: 'tunic', ranged: 'bow', arts: ['fireball', 'spark', 'heal'], aura: null, power: 1 });
+  // into battle — the hero's own gear, as in the camp
+  expect(r.kit).toEqual({ items: camp0.items, melee: camp0.melee });
+  expect(r.restarted).toEqual({ items: camp0.items, melee: camp0.melee, axe: false, berries: 300 });
   // all spells and auras — for raspberries by rarity
   expect(r.spells.fireball).toBe(240);
   expect(r.spells.meteor).toBe(480);

@@ -81,7 +81,7 @@ test('match loot: kills and beaten waves add to it, victory adds half, it is not
   while (s.state === 'play' && s.wave === 1 && ticks < 60 * 120) { w.step(); ticks++; if (!s.waveRunning && s.next < (s.spec.rest ?? 20) - 1) break; }
   const afterWave = s.lootOf(0);
   // stubs drop base loot 2: the wave gives its kills and a quarter of the bounty
-  assert.equal(afterWave, s.fallen * 2 + Math.round(s.waves[0].bounty * 0.25));
+  assert.equal(afterWave, Math.floor(s.fallen * 2 + s.waves[0].bounty * 0.25));
   const purse = s.berries(0);
   s.command(0, { t: 'td', a: 'upgrade', pad: 0 });
   assert.ok(s.berries(0) < purse, 'towers are paid from the purse');
@@ -89,9 +89,21 @@ test('match loot: kills and beaten waves add to it, victory adds half, it is not
   // waves come by themselves after the rest: every beaten wave is counted
   while (s.state === 'play' && ticks < 60 * 60 * 30) { w.step(); ticks++; }
   assert.equal(s.state, 'won');
-  const bounties = s.waves.reduce((n, wv) => n + Math.round(wv.bounty * 0.25), 0);
+  const bounties = s.waves.reduce((n, wv) => n + wv.bounty * 0.25, 0);
   assert.equal(s.lootOf(0), Math.round((s.fallen * 2 + bounties) * 1.5));
   assert.ok(w.world.entities().some((e) => e.id === 'loot0' && e.n === s.lootOf(0)));
   s.reset();
   assert.equal(s.lootOf(0), 0);
+});
+
+test('heroes\' strength: rating raises the pack level of every wave and the loot', () => {
+  const a = tdWorld('td', 7, { mobHp: 1 }), b = tdWorld('td', 7, { mobHp: 1 });
+  b.sim.setRating(4);
+  assert.equal(b.sim.base, a.sim.base + 3);
+  a.sim.killed(a.hero.pos.clone(), 1, 10);
+  b.sim.killed(b.hero.pos.clone(), 1, 10);
+  assert.equal(a.sim.lootOf(0), 10);
+  assert.equal(b.sim.lootOf(0), Math.floor(10 * 1.24));
+  b.sim.setRating(999);
+  assert.equal(b.sim.rating, 40, 'rating is capped');
 });

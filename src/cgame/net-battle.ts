@@ -383,6 +383,7 @@ export class NetBattleClient {
       sim.next = td.next as number;
       sim.netRunning = !!td.running;
       sim.players = td.players as number;
+      sim.rating = (td.rating as number) ?? 1;
       sim.spawned = td.spawned as number;
       sim.fallen = td.fallen as number;
     }

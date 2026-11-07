@@ -46,6 +46,7 @@ export class Match {
   private readonly ring = new SnapshotRing<SimEvent>(SNAP_RING);
   private acc = 0;
   private endT = -1;
+  private readonly ratings = new Map<number, number>();
   ended: MatchEnd | null = null;
   /** The battle is over (result, rewards) — the room closes the match */
   onEnd: ((e: MatchEnd) => void) | null = null;
@@ -67,6 +68,9 @@ export class Match {
     const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false, acts: [] };
     this.seats.set(p.seat, s);
     this.td.setPlayers(this.seats.size);
+    // strength — from the gear the hero came with (the sutler's goods do not raise it)
+    this.ratings.set(p.seat, hero.profile.rating);
+    this.rerate();
     this.broadcast(this.kitOf(s), p.seat);
     return s;
   }
@@ -78,7 +82,13 @@ export class Match {
     this.detach(seat);
     this.battle.removeHero(seat);
     this.seats.delete(seat);
-    if (this.seats.size) this.td.setPlayers(this.seats.size);
+    this.ratings.delete(seat);
+    if (this.seats.size) { this.td.setPlayers(this.seats.size); this.rerate(); }
+  }
+
+  /** The party's strength — the average of the heroes' */
+  private rerate(): void {
+    if (this.ratings.size) this.td.setRating([...this.ratings.values()].reduce((a, b) => a + b, 0) / this.ratings.size);
   }
 
   /** Battle page connection: the channel goes to the seat; a greeting and everyone's kits right away */
