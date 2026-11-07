@@ -1,6 +1,6 @@
 # Deploy: Docker, Caddy and Ansible
 
-> Version 4 · 2026-11-07
+> Version 5 · 2026-11-07
 
 One image runs the whole game: `node server/main.ts` serves the built `dist/index.html` at `/` and the API at `/api`, `/ws`, `/game` (see [design-multiplayer.md](design-multiplayer.md)). SQLite lives in the `/data` volume. In production Caddy stands in front: HTTPS from Let's Encrypt, HTTP → HTTPS, compression of the game and `/api`, WebSocket passed through.
 
@@ -78,6 +78,7 @@ make deploy
 - Dev in Docker: the client on port 5173 looks for the server at `localhost:8787`, with a different `SERVER_PORT` open `?server=http://localhost:<port>`. After changing `package.json` — `--renew-anon-volumes`. The dev DB is in the `malina-dev_data` volume, not `./data`: SQLite WAL locks over a macOS bind mount are unreliable.
 
 ## Pitfalls
+- A server of another architecture (amd64 server, arm64 Mac): all `RUN` steps happen in stages on `$BUILDPLATFORM`, the target-platform `runtime` stage only copies — so no QEMU is needed (otherwise `exec format error` on `npm ci`). It holds while production dependencies are pure JS (`three`, `ws`); a native one would need `npm ci --omit=dev` on the target platform.
 - A file with mode `600` in the working copy is unreadable for user `node`: the `build` stage runs `chmod -R a+rX` on `server src assets`, `runtime` copies them from there.
 - `docker compose down -v` deletes the database and the certificates (`caddy_data`); Let's Encrypt limits re-issuing.
 - An empty `ACME_EMAIL` breaks the Caddyfile — `deploy.yml` checks it.

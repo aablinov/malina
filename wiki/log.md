@@ -452,3 +452,7 @@ Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
 ## [2026-11-07] code | Server provisioning
 `make provisioning`: `bin/copy-ssh-key.sh` puts the ssh key to root with ssh-copy-id (one password prompt), `provisioning.yml` installs Docker from Docker's apt repository, creates the `deploy` user (docker, sudo, key), checks key login, switches ssh to keys only, enables ufw (sshd ports, 80, 443) and security updates. Deploys now go as `deploy`.
 Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
+
+## [2026-11-07] code | Cross-building the image without emulation
+An amd64 server deployed from an arm64 Mac failed with `exec format error`: `npm ci` ran in the amd64 stage and Docker Desktop had no amd64 emulation. All `RUN` steps now run on `$BUILDPLATFORM`, the `runtime` stage only copies files (`/data` comes from the build stage with `--chown`).
+Pages: [dev-deploy.md](dev-deploy.md).
