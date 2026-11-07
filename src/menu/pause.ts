@@ -10,6 +10,7 @@ import type { SettingsPanel } from './settings-panel.ts';
 export class BattleMenu {
   readonly el: HTMLDivElement;
   private state: 'pause' | 'won' | 'lost' = 'pause';
+  private loot = 0;
   onRestart?: () => void;
   onLeave?: () => void;
 
@@ -38,8 +39,9 @@ export class BattleMenu {
   pause(): void { this.state = 'pause'; this.render(); this.el.classList.add('open'); }
 
   /** Defence result: summary and buttons over the frozen map */
-  end(won: boolean, summary: string): void {
+  end(won: boolean, summary: string, loot = 0): void {
     this.state = won ? 'won' : 'lost';
+    this.loot = loot;
     this.render(summary);
     this.el.classList.add('open');
   }
@@ -73,6 +75,7 @@ export class BattleMenu {
          <button class="mm-btn" data-act="leave">${t('Leave to camp')}</button>`
       : `<button class="mm-btn primary" data-act="restart">${t('Once more')} <kbd>Enter</kbd></button>
          <button class="mm-btn" data-act="leave">${t('To camp')}</button>`;
-    this.el.innerHTML = `<div class="pz-win"><h2>${head}</h2><p>${this.mapTitle}${summary ? ` · ${summary}` : ''}</p>${btns}</div>`;
+    const loot = p === 'won' ? `<p class="pz-loot">${t('Loot: +{n} raspberries to the camp', { n: this.loot })}</p>` : p === 'lost' ? `<p class="pz-loot lost">${t('Loot lost: {n} raspberries', { n: this.loot })}</p>` : '';
+    this.el.innerHTML = `<div class="pz-win"><h2>${head}</h2><p>${this.mapTitle}${summary ? ` · ${summary}` : ''}</p>${loot}${btns}</div>`;
   }
 }

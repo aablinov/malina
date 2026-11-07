@@ -210,10 +210,11 @@ export class HeadlessBattle {
   /** Battle step */
   step(dt: number): void { this.world.step(dt); }
 
-  /** Reward to everyone: unspent raspberries and the battle experience */
+  /** Reward to everyone: the match loot — only for a defended bush (lost — it burns), and the battle experience */
   rewards(): Map<number, { berries: number; xp: number }> {
     const out = new Map<number, { berries: number; xp: number }>();
-    for (const h of this.heroes.values()) out.set(h.seat, { berries: Math.max(0, Math.floor(this.world.td?.berries(h.seat) ?? 0)), xp: Math.max(0, Math.floor(xpTotal(h.profile.data) - h.xp0)) });
+    const td = this.world.td, won = td?.state === 'won';
+    for (const h of this.heroes.values()) out.set(h.seat, { berries: won ? Math.max(0, Math.floor(td.lootOf(h.seat))) : 0, xp: Math.max(0, Math.floor(xpTotal(h.profile.data) - h.xp0)) });
     return out;
   }
 }

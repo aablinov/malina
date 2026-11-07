@@ -102,6 +102,11 @@ export function takeGear(): GearStash | null {
   } catch { return null; }
 }
 
+/** Victory loot to the raspberries set aside: the camp returns them together (src/menu/menu.ts) */
+export function creditStash(n: number): void {
+  try { const raw = sessionStorage.getItem(STASH_KEY); if (raw !== null && n > 0) sessionStorage.setItem(STASH_KEY, String(Number(raw) + n)); } catch { /* closed storage */ }
+}
+
 /** Take the raspberries that were set aside; null — nothing was set aside */
 export function takeStash(): number | null {
   try {

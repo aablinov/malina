@@ -173,13 +173,16 @@ test('match: build with own raspberries, hero action goes to others, a wave appe
   // result: bush defended — after LOOT_DELAY the match ends with a reward for everyone
   let end: Parameters<NonNullable<Match['onEnd']>>[0] | null = null;
   match.onEnd = (e) => { end = e; };
+  match.td.addLoot(33);
   match.td.state = 'won';
   for (let i = 0; i < Math.ceil(LOOT_DELAY / 0.05) + 2 && !end; i++) run(1);
   run(2);
   assert.ok(end, 'battle ended');
   const e = end as unknown as NonNullable<typeof end>;
   assert.equal(e.result, 'won');
-  assert.equal(e.rewards.get(1)!.berries, b.ent('purse1')!.n);
+  // the reward is the match loot (the wave still running may add its kills), not the purse
+  assert.equal(e.rewards.get(1)!.berries, match.td.lootOf(1));
+  assert.ok(match.td.lootOf(1) >= 33);
   assert.ok(a.got.some((m) => m.t === 'over' && m.result === 'won'));
   void clock;
 });

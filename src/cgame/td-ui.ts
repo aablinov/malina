@@ -223,7 +223,7 @@ export class TdUi {
     const sub = sim.state !== 'play' || !n ? '' : running ? t('enemies on the map {n}', { n: this.alive() }) : sim.wave >= n ? '' : t('next in {s} s — {from} · <kbd>G</kbd> now (+{bonus})', { s: Math.ceil(sim.next), from, bonus: sim.earlyBonus });
     const walls = sim.walls.length ? `<div class="td-walls">${sim.walls.map((w) => `<span class="${w.dead ? 'dead' : ''}" title="${t(w.title)}"><b>${w.kind === 'gate' ? '⌂' : t(w.title).slice(0, 1)}</b><i style="width:${(w.k * 100).toFixed(0)}%;background:${wallBarColor(w.k)}"></i></span>`).join('')}</div>` : '';
     const preview = sim.state === 'play' && !running ? this.wavePreview() : '';
-    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}${preview}${this.alarmLine()}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">${t('raspberry bush {hp} / {max}', { hp: Math.ceil(b.hp), max: b.maxHp })}</div>${walls}`;
+    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}${preview}${this.alarmLine()}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">${t('raspberry bush {hp} / {max}', { hp: Math.ceil(b.hp), max: b.maxHp })}</div>${walls}<div class="td-loot" title="${t('Raspberries for the camp — only if the bush is saved')}">${t('Loot: {n} raspberries', { n: `<span>${sim.lootOf(this.seat)}</span>` })}</div>`;
     if (html !== this.hudHtml) { this.hudHtml = html; this.hudEl.innerHTML = html; }
     this.hudEl.classList.toggle('lost', sim.state === 'lost');
     this.hudEl.classList.toggle('won', sim.state === 'won');

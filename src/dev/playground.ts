@@ -51,7 +51,7 @@ import { DEV_TOOLS, fromMenu, openEditor } from '../devflag.ts';
 import { loadSettings, pixelRatio } from '../menu/settings.ts';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel.ts';
 import { BattleMenu } from '../menu/pause.ts';
-import { markWon, NET, netBattleUrl, stashBerries, stashGear } from '../menu/session.ts';
+import { creditStash, markWon, NET, netBattleUrl, stashBerries, stashGear } from '../menu/session.ts';
 import { netBattle } from '../net/client.ts';
 import { SnapshotView } from '../net/snapshot.ts';
 import { campaignMap } from '../menu/campaign.ts';
@@ -1203,8 +1203,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     music.update(real, inFight(), hero.down ? 0 : hero.hp / hero.maxHp);
     if (battle && sim && sim.state !== tdEndShown) {
       tdEndShown = sim.state;
-      if (sim.state === 'won') markWon(mapName);
-      if (sim.state !== 'play') battle.end(sim.state === 'won', t('{n} of {total} waves repelled, {fallen} enemies slain', { n: sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1), total: sim.waves.length, fallen: sim.fallen }));
+      const me = nb?.seat ?? 0;
+      // the match loot goes to the camp only for a defended bush; in a network battle the server pays it (server/rooms.ts)
+      if (sim.state === 'won') { markWon(mapName); if (!netClient) creditStash(sim.lootOf(me)); }
+      if (sim.state !== 'play') battle.end(sim.state === 'won', t('{n} of {total} waves repelled, {fallen} enemies slain', { n: sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1), total: sim.waves.length, fallen: sim.fallen }), sim.lootOf(me));
     }
     perf.renderStart();
     render(real);

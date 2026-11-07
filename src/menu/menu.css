@@ -181,6 +181,8 @@ body.menu #c.mm-canvas { cursor: default; }
 .pz-win { width: min(26em, 90vw); display: flex; flex-direction: column; gap: 1em; padding: 2em; background: #10242e; border: 0.2em solid var(--mm-line); box-shadow: 0 0.4em 0 #000; text-align: center; }
 .pz-win h2 { margin: 0 0 0.4em; font: 400 1.5em/1.2 var(--mcd-px); text-transform: uppercase; }
 .pz-win p { margin: 0 0 0.6em; color: #c9d3d8; font-weight: 500; }
+.pz-win .pz-loot { color: #ff8ab0; font-weight: 700; }
+.pz-win .pz-loot.lost { color: #9aa4a8; text-decoration: line-through; }
 .pz.won h2 { color: var(--mcd-gold); }
 .pz.lost h2 { color: #ff7a6b; }
 .pz .mm-btn { width: 100%; }

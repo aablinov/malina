@@ -35,6 +35,9 @@
 .td-hud .td-bush { width: 220px; height: 9px; margin: 5px auto 0; border: 2px solid #3a2a36; border-radius: 6px; background: #241020; overflow: hidden; }
 .td-hud .td-bush i { display: block; height: 100%; background: linear-gradient(#ff5a8a, #c8124a); transition: width 0.2s; }
 .td-hud .td-bush-t { font-size: 11px; opacity: 0.85; }
+.td-hud .td-loot { margin-top: 3px; font-size: 12px; }
+.td-hud .td-loot span { color: #ff8ab0; font-weight: 700; }
+.td-hud.lost .td-loot { opacity: 0.5; text-decoration: line-through; }
 .td-hud.lost .td-wave { color: #ff6a5a; }
 .td-hud.won .td-wave { color: #9ad87a; }
 
