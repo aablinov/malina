@@ -448,3 +448,7 @@ Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
 ## [2026-11-07] code | Deploy without a registry: images over ssh
 `push.yml` builds the image here for the servers' platform, `docker save | gzip`, copies it over ssh and `docker load`s it; Caddy goes the same way, compose never pulls. `build.yml`, `site.yml`, `image-login` and the registry settings are gone; the server keeps the last 5 images for a rollback.
 Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
+
+## [2026-11-07] code | Server provisioning
+`make provisioning`: `bin/copy-ssh-key.sh` puts the ssh key to root with ssh-copy-id (one password prompt), `provisioning.yml` installs Docker from Docker's apt repository, creates the `deploy` user (docker, sudo, key), checks key login, switches ssh to keys only, enables ufw (sshd ports, 80, 443) and security updates. Deploys now go as `deploy`.
+Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).

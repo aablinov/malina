@@ -50,13 +50,15 @@ e2e: build
 #   make image-build       — build the production image for this machine (malina:<commit> and malina:local)
 #   make image-run         — run it with Caddy at https://localhost:8443 (Caddy's own CA, curl -k); image-stop — stop
 #   make image-push        — build for the servers' platform and upload the images they lack, no restart
+#   make provisioning      — prepare a fresh server once: ssh key (asks the root password), Docker, user deploy,
+#                            ssh by key only, ufw, security updates; LIMIT=<host>, ASK_BECOME=1 for sudo with a password
 #   make ansible-ping      — check ssh to the servers
 #   make ansible-check     — dry run of the deploy with a diff of the files
 #   make ansible-deploy    — image-push + compose up + health checks; rollback: TAG=<sha the server still has>
 #   make deploy            — the same as ansible-deploy
 #   make ansible-vault     — create or edit the encrypted vault (sudo password etc.)
 #   make ansible-logs      — the last 100 lines of the server logs
-# Extra Ansible arguments: ARGS='-e malina_check_https=false --limit malina-prod'
+# Extra Ansible arguments: ARGS='-e malina_check_https=false --limit malina-prod'; INVENTORY=<file> — another inventory
 IMAGE ?= malina
 ANSIBLE_DIR := deploy/ansible
 VAULT_FILE := inventory/group_vars/all/vault.yml
@@ -64,10 +66,11 @@ LOCAL_TAG := $(shell git describe --always --dirty --abbrev=12 --match=NO-TAGS 2
 # vault password: deploy/ansible/.vault-pass if there is one, else ask — only when the vault is encrypted
 VAULT_ARGS = $(shell cd $(ANSIBLE_DIR) && if [ -f .vault-pass ]; then echo --vault-password-file .vault-pass; \
 	elif [ -f $(VAULT_FILE) ] && head -1 $(VAULT_FILE) | grep -q ANSIBLE_VAULT; then echo --ask-vault-pass; fi)
-PLAYBOOK = cd $(ANSIBLE_DIR) && ansible-playbook $(VAULT_ARGS) $(if $(TAG),-e malina_tag=$(TAG)) $(ARGS)
+INV_ARGS = $(if $(INVENTORY),-i $(INVENTORY)) $(if $(LIMIT),--limit $(LIMIT))
+PLAYBOOK = cd $(ANSIBLE_DIR) && ansible-playbook $(VAULT_ARGS) $(INV_ARGS) $(if $(TAG),-e malina_tag=$(TAG)) $(ARGS)
 COMPOSE_PROD = docker compose -p malina-local -f docker-compose.prod.yml
 
-.PHONY: docker-dev image-build image-run image-stop image-push ansible-ping ansible-check ansible-deploy deploy ansible-vault ansible-logs
+.PHONY: docker-dev image-build image-run image-stop image-push provisioning ansible-ping ansible-check ansible-deploy deploy ansible-vault ansible-logs
 
 docker-dev:
 	docker compose -f docker-compose.dev.yml up --build
@@ -86,8 +89,12 @@ image-stop:
 image-push:
 	$(PLAYBOOK) playbooks/push.yml
 
+provisioning:
+	cd $(ANSIBLE_DIR) && INVENTORY=$(INVENTORY) bin/copy-ssh-key.sh $(LIMIT)
+	$(PLAYBOOK) $(if $(ASK_BECOME),--ask-become-pass) playbooks/provisioning.yml
+
 ansible-ping:
-	cd $(ANSIBLE_DIR) && ansible malina -m ansible.builtin.ping $(ARGS)
+	cd $(ANSIBLE_DIR) && ansible malina $(INV_ARGS) -m ansible.builtin.ping $(ARGS)
 
 ansible-check:
 	$(PLAYBOOK) playbooks/deploy.yml --check --diff
@@ -101,4 +108,4 @@ ansible-vault:
 	&& ansible-vault encrypt $(if $(wildcard $(ANSIBLE_DIR)/.vault-pass),--vault-password-file .vault-pass) $(VAULT_FILE); fi
 
 ansible-logs:
-	cd $(ANSIBLE_DIR) && ansible malina $(VAULT_ARGS) -a "docker compose --project-directory /opt/malina logs --tail 100" $(ARGS)
+	cd $(ANSIBLE_DIR) && ansible malina $(VAULT_ARGS) $(INV_ARGS) -a "docker compose --project-directory /opt/malina logs --tail 100" $(ARGS)

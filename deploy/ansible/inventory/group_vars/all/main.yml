@@ -33,3 +33,24 @@ caddy_https_port: 443
 malina_check_https: true
 # how long to wait for /api/health after start
 malina_health_retries: 30
+
+# ---- ssh users and provisioning (playbooks/provisioning.yml, make provisioning)
+# the user everything is deployed as; provisioning creates it (docker group, sudo, the ssh key below)
+deploy_user: deploy
+ansible_user: "{{ deploy_user }}"
+# who provisioning logs in as on a fresh server (by key — make provisioning copies it with ssh-copy-id first)
+provision_user: root
+# this machine's public key that goes to the servers; more keys (teammates) — ssh_extra_public_keys: ["ssh-ed25519 AAAA… name"]
+ssh_public_key_file: >-
+  {{ lookup('ansible.builtin.first_found', [lookup('env', 'HOME') ~ '/.ssh/id_ed25519.pub',
+     lookup('env', 'HOME') ~ '/.ssh/id_ecdsa.pub', lookup('env', 'HOME') ~ '/.ssh/id_rsa.pub'], errors='ignore') }}
+ssh_extra_public_keys: []
+# root over ssh: prohibit-password — by key only (default), no — not at all (then provision as deploy_user: -e provision_user=deploy)
+ssh_permit_root_login: prohibit-password
+deploy_user_sudo: true
+# Docker's apt repository; a mirror with the same layout if download.docker.com is unreachable,
+# e.g. https://mirror.yandex.ru/mirrors/docker
+docker_apt_url: https://download.docker.com/linux
+# ufw: only ssh, 80, 443 (tcp+udp) from outside
+firewall: true
+unattended_upgrades: true

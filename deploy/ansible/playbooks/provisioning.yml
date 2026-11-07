@@ -1,0 +1,197 @@
+# Prepare a fresh Debian/Ubuntu server once (make provisioning — it first copies the ssh key with ssh-copy-id):
+#   Docker Engine + compose plugin, user `deploy_user` (docker group, sudo, this machine's ssh key),
+#   ssh: keys only (no passwords, root by key only), ufw: 22/80/443, automatic security updates.
+# Connects as `provision_user` (root by default) by key; safe to run again.
+#   ansible-playbook playbooks/provisioning.yml
+#   ansible-playbook playbooks/provisioning.yml -e provision_user=ubuntu --ask-become-pass
+- name: Provision the servers
+  hosts: malina
+  become: true
+  vars:
+    ansible_user: "{{ provision_user }}"
+    distro: "{{ ansible_facts.distribution | lower }}"
+    deb_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts.architecture] }}"
+    ssh_keys: "{{ [lookup('ansible.builtin.file', ssh_public_key_file)] + ssh_extra_public_keys }}"
+    ssh_port: "{{ ansible_port | default(22) }}"
+    # the same ssh as Ansible's, but as the deploy user and with keys only
+    ssh_check: >-
+      ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
+      -p {{ ssh_port }} {{ ansible_ssh_common_args | default('') }}
+      {{ ('-i ' ~ ansible_ssh_private_key_file) if ansible_ssh_private_key_file is defined else '' }}
+  handlers:
+    - name: Restart ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+  tasks:
+    - name: Check the system
+      ansible.builtin.assert:
+        that:
+          - distro in ['debian', 'ubuntu']
+          - ansible_facts.architecture in ['x86_64', 'aarch64']
+        fail_msg: Debian or Ubuntu on amd64/arm64 is expected, this is {{ ansible_facts.distribution }} {{ ansible_facts.architecture }}
+
+    - name: Base packages
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, sudo, ufw, unattended-upgrades]
+        update_cache: true
+        cache_valid_time: 3600
+
+    # ---- Docker from Docker's apt repository (docker_apt_url — a mirror if download.docker.com is unreachable)
+    - name: Directory for apt keys
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Docker apt key
+      ansible.builtin.get_url:
+        url: "{{ docker_apt_url }}/{{ distro }}/gpg"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Docker apt repository
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/docker.sources
+        mode: "0644"
+        content: |
+          Types: deb
+          URIs: {{ docker_apt_url }}/{{ distro }}
+          Suites: {{ ansible_facts.distribution_release }}
+          Components: stable
+          Architectures: {{ deb_arch }}
+          Signed-By: /etc/apt/keyrings/docker.asc
+      register: docker_repo
+
+    - name: Docker Engine and the compose plugin
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+        update_cache: "{{ docker_repo.changed }}"
+
+    - name: Docker is running
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    # ---- the deploy user
+    - name: User {{ deploy_user }}
+      ansible.builtin.user:
+        name: "{{ deploy_user }}"
+        shell: /bin/bash
+        groups: [docker]
+        append: true
+        password: "!"
+        update_password: on_create
+
+    - name: Sudo without a password for {{ deploy_user }}
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/90-{{ deploy_user }}
+        content: "{{ deploy_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        mode: "0440"
+        validate: visudo -cf %s
+      when: deploy_user_sudo | bool
+
+    - name: ssh keys of {{ deploy_user }}
+      ansible.posix.authorized_key:
+        user: "{{ deploy_user }}"
+        key: "{{ item }}"
+      loop: "{{ ssh_keys }}"
+      loop_control:
+        label: "{{ item.split()[2] | default(item[:40]) }}"
+
+    - name: ssh keys of {{ provision_user }} (kept for the next provisioning)
+      ansible.posix.authorized_key:
+        user: "{{ provision_user }}"
+        key: "{{ item }}"
+      loop: "{{ ssh_keys }}"
+      loop_control:
+        label: "{{ item.split()[2] | default(item[:40]) }}"
+
+    - name: Create {{ malina_dir }}
+      ansible.builtin.file:
+        path: "{{ malina_dir }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+
+    # ---- ssh: keys only. First make sure the key really works, so the server is not locked
+    - name: Check that {{ deploy_user }} logs in by key
+      ansible.builtin.command: "{{ ssh_check }} {{ deploy_user }}@{{ ansible_host | default(inventory_hostname) }} docker version --format ok"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: sshd reads /etc/ssh/sshd_config.d
+      ansible.builtin.command: grep -Eq '^Include /etc/ssh/sshd_config.d/\*.conf' /etc/ssh/sshd_config
+      changed_when: false
+
+    # 00- so it comes before cloud-init's 50-cloud-init.conf (in sshd the first value wins)
+    - name: ssh — keys only
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/00-malina.conf
+        mode: "0644"
+        content: |
+          # Managed by Ansible (deploy/ansible/playbooks/provisioning.yml)
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitEmptyPasswords no
+          PubkeyAuthentication yes
+          PermitRootLogin {{ ssh_permit_root_login }}
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Restart ssh
+
+    # ---- firewall: Docker publishes ports past ufw, so the game server listens on 127.0.0.1 only
+    # the port sshd really listens on (ansible_port may be a forwarded one)
+    - name: sshd ports
+      ansible.builtin.shell: /usr/sbin/sshd -T | awk '$1 == "port" { print $2 }'
+      register: sshd_ports
+      changed_when: false
+      check_mode: false
+
+    - name: Firewall rules
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+      loop: >-
+        {{ sshd_ports.stdout_lines | map('community.general.dict_kv', 'port') | map('combine', {'proto': 'tcp'}) | list
+           + [{'port': '80', 'proto': 'tcp'}, {'port': '443', 'proto': 'tcp'}, {'port': '443', 'proto': 'udp'}] }}
+      when: firewall | bool
+
+    - name: Firewall on, incoming denied by default
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+      when: firewall | bool
+
+    - name: Automatic security updates
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: "0644"
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+      when: unattended_upgrades | bool
+
+    - name: Apply the ssh settings
+      ansible.builtin.meta: flush_handlers
+
+    - name: Check that a password is refused
+      ansible.builtin.command: >-
+        {{ ssh_check }} -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive
+        {{ deploy_user }}@{{ ansible_host | default(inventory_hostname) }} true
+      delegate_to: localhost
+      become: false
+      register: pw
+      changed_when: false
+      # must be refused by sshd itself ("Permission denied (publickey)"), not a timeout
+      failed_when: pw.rc == 0 or 'Permission denied' not in pw.stderr or 'password' in pw.stderr.split('Permission denied')[-1]
+
+    - name: Provisioned
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }} {{ deb_arch }},
+          deploy as {{ deploy_user }} by key, passwords off{{ ', ufw on' if firewall | bool else '' }}. Next: make deploy

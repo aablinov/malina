@@ -14,7 +14,7 @@ Links of the form `claude/…` in older documents point to files in this folder 
 | Page | What it covers |
 |---|---|
 | [dev-testing.md](dev-testing.md) | How to run the Playwright tests: node via mise, browser — Google Chrome via `PW_CHROMIUM`, no `playwright install` |
-| [dev-deploy.md](dev-deploy.md) | Docker (dev and prod compose, the multi-stage Dockerfile), Caddy with HTTPS, Ansible without a registry: build here, copy the image over ssh, docker load, deploy, rollback by tag; make targets; what to prepare and where the settings go |
+| [dev-deploy.md](dev-deploy.md) | Docker (dev and prod compose, the multi-stage Dockerfile), Caddy with HTTPS, Ansible without a registry: server provisioning (Docker, deploy user, ssh by key only, ufw), build here, copy the image over ssh, docker load, deploy, rollback by tag; make targets; what to prepare and where the settings go |
 | [arch-layers.md](arch-layers.md) | System layers (sim, game, net, server, cgame, client) and how they map to Quake III Arena: what was carried over (netchan, snapshots, usercmd, prediction), what was not (event queue, botlib); client and server frame order |
 | [dev-performance.md](dev-performance.md) | Performance: the F8 overlay and the perf test, before/after measurements, shader warm-up, pools and instanced effects, berry fountain in waves, shadows once per frame; rules for new code and the roadmap (regions, network); battle traffic — measurements, compression, why not a binary codec |
 
