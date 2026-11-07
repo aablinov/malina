@@ -57,6 +57,7 @@
         url: "http://127.0.0.1:{{ malina_port }}/api/health"
         return_content: true
       register: health
+      check_mode: false
       until: health.status == 200 and (health.json.ok | default(false))
       retries: "{{ malina_health_retries }}"
       delay: 2
@@ -72,6 +73,7 @@
       ansible.builtin.uri:
         url: "https://{{ malina_domain }}{{ '' if caddy_https_port | int == 443 else ':' ~ caddy_https_port }}/api/health"
       register: https_health
+      check_mode: false
       until: https_health.status == 200
       retries: "{{ malina_health_retries }}"
       delay: 2

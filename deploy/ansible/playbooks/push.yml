@@ -25,10 +25,12 @@
     - name: Remember the platform and the missing images
       ansible.builtin.set_fact:
         malina_platform: "{{ {'x86_64': 'linux/amd64', 'amd64': 'linux/amd64', 'aarch64': 'linux/arm64', 'arm64': 'linux/arm64'}[uname.stdout] }}"
-        # a "-dirty" build has the same tag but other contents — always shipped again
+        # a "-dirty" build of the working copy has the same tag but other contents — always shipped again
+        # (a rollback to an old "-dirty" tag uses what the server has)
         malina_missing: >-
           {{ present.results | rejectattr('rc', 'eq', 0) | map(attribute='item') | list
-             + ([malina_ref] if malina_dirty and malina_ref not in (present.results | rejectattr('rc', 'eq', 0) | map(attribute='item')) else []) }}
+             + ([malina_ref] if malina_dirty and malina_tag == malina_git_tag
+                 and malina_ref not in (present.results | rejectattr('rc', 'eq', 0) | map(attribute='item')) else []) }}
 
     - name: Remember what to build for this server
       ansible.builtin.set_fact:
