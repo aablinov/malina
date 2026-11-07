@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize } from 'node:path';
-import { PROTOCOL, validName, type AuthReply, type FriendInfo } from '../src/net/protocol.ts';
+import { DEFAULT_ICE, PROTOCOL, validName, type AuthReply, type FriendInfo, type IceServer } from '../src/net/protocol.ts';
 import type { Auth } from './auth.ts';
 import type { Friends } from './repo/friends.ts';
 import { nameKey, type PlayerRow, type Players } from './repo/players.ts';
@@ -21,6 +21,8 @@ export interface HttpDeps {
   online: (playerId: string) => boolean;
   /** Directory of the built game (dist) — served at `/`; unset — API only */
   staticDir?: string;
+  /** ICE servers for voice (STUN/TURN); unset — DEFAULT_ICE */
+  ice?: IceServer[];
   now?: () => number;
 }
 
@@ -44,7 +46,7 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
   };
 
   const routes: Record<string, (req: IncomingMessage, url: URL) => Promise<[number, unknown]> | [number, unknown]> = {
-    'GET /api/health': () => [200, { ok: true, protocol: PROTOCOL, maps: d.maps.ids() }],
+    'GET /api/health': () => [200, { ok: true, protocol: PROTOCOL, maps: d.maps.ids(), ice: d.ice ?? DEFAULT_ICE }],
 
     'POST /api/auth': async (req) => {
       const body = (await readJson(req)) as { name?: unknown };

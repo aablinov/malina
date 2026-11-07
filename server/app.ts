@@ -10,6 +10,7 @@ import { Friends } from './repo/friends.ts';
 import { Profiles } from './repo/profiles.ts';
 import { Rooms } from './repo/rooms.ts';
 import { RoomManager } from './rooms.ts';
+import type { IceServer } from '../src/net/protocol.ts';
 import { GameHub } from './game/game-hub.ts';
 import { MatchRunner } from './game/runner.ts';
 
@@ -21,6 +22,8 @@ export interface AppConfig {
   dbPath: string;
   mapsDir: string;
   staticDir?: string;
+  /** ICE servers for voice (env RTC_ICE_SERVERS) */
+  ice?: IceServer[];
   now?: () => number;
 }
 
@@ -46,7 +49,7 @@ export function createApp(cfg: AppConfig): App {
   const hub = new Hub({ auth, players, rooms, now: cfg.now });
   const gameHub = new GameHub({ auth, runner: games, seatOf: (m, p) => rooms.seatOf(m, p), now: cfg.now });
   const friends = new Friends(db);
-  const http = createServer(httpHandler({ auth, players, profiles, matches, rooms, maps, friends, online: (id) => hub.isOnline(id), staticDir: cfg.staticDir, now: cfg.now }));
+  const http = createServer(httpHandler({ auth, players, profiles, matches, rooms, maps, friends, online: (id) => hub.isOnline(id), staticDir: cfg.staticDir, ice: cfg.ice, now: cfg.now }));
   http.on('upgrade', (req, socket, head) => {
     const path = new URL(req.url ?? '/', 'http://x').pathname;
     if (path === '/ws') hub.wss.handleUpgrade(req, socket, head, (ws) => hub.wss.emit('connection', ws, req));

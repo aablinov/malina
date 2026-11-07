@@ -8,7 +8,7 @@ import type { MerchantKind } from '../merchants.ts';
 import type { Textures } from '../textures.ts';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
 import type { MenuScene } from './scene.ts';
-import { battleUrl, loadMenuState, NET, netBattleUrl, saveMenuState, type GameMode } from './session.ts';
+import { battleUrl, loadMenuState, NET, netBattleUrl, saveMenuState, VOICE, type GameMode } from './session.ts';
 import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
 
 /**
@@ -175,6 +175,8 @@ export class Lobby {
       case 'KeyQ': case 'KeyE': this.setPane(this.pane === 'gear' ? 'map' : 'gear'); break;
       case 'KeyI': this.openInventory(this.pane === 'gear' ? this.slot : undefined); break;
       case 'KeyB': this.openShop('merchant'); break;
+      // voice chat in the room: one's microphone on / off
+      case 'KeyT': if (NET.room) void VOICE.toggle().then((err) => { this.flash(err ?? (VOICE.on ? t('Microphone on') : t('Microphone off'))); this.render(); }); break;
       case 'Enter': e.preventDefault(); this.startGame(); break;
       case 'ArrowRight': case 'ArrowDown': this.step(1); break;
       case 'ArrowLeft': case 'ArrowUp': this.step(-1); break;
@@ -417,12 +419,13 @@ export class Lobby {
     const r = NET.room;
     if (r) {
       const seats = r.seats.map((x) => `<li class="mm-seat${x.online ? '' : ' off'}${x.seat === r.you ? ' me' : ''}" data-player="${x.playerId}">
-        <b>${x.host ? '♛ ' : ''}${esc(x.name)}</b><i>${x.host ? t('host') : x.ready ? t('ready') : t('not ready')}${x.online ? '' : ` · ${t('no connection')}`}</i>
+        <b>${x.host ? '♛ ' : ''}${esc(x.name)}${(x.seat === r.you ? VOICE.on : x.voice) ? ` <span class="mm-mic" title="${t('Microphone on')}">🎤</span>` : ''}</b><i>${x.host ? t('host') : x.ready ? t('ready') : t('not ready')}${x.online ? '' : ` · ${t('no connection')}`}</i>
         ${NET.isHost && !x.host ? `<button class="mm-btn small" data-act="kick" title="${t('Remove from the room')}">✕</button>` : ''}</li>`).join('');
       return `<div class="mm-online">${who}
       <div class="mm-online-h"><b>${t('Room')}</b><span class="mm-code" title="${t('Code for friends')}">${r.room.code}</span></div>
       <ul class="mm-seats">${seats}${`<li class="mm-seat empty">${t('free')}</li>`.repeat(Math.max(0, r.room.max - r.seats.length))}</ul>
       <p class="mm-note">${campaignMap(r.room.map).title}${r.room.private ? ` · ${t('private')}` : ''} · ${NET.isHost ? t('everyone ready — "Start game"') : t('"Ready" — then wait for the host')}</p>
+      <p class="mm-note">${VOICE.on ? t('🎤 Microphone on — T to turn off') : t('T — turn on the microphone (voice chat)')}</p>
       ${this.chatHtml(esc)}
       <button class="mm-btn small" data-act="leave">${t('Leave the room')}</button>
       ${this.friendsHtml(esc)}

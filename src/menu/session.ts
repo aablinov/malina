@@ -1,4 +1,5 @@
 import { NetClient } from '../net/client.ts';
+import { VoiceChat } from '../net/voice.ts';
 import type { RoomInfo } from '../net/protocol.ts';
 
 /**
@@ -21,6 +22,9 @@ export type OnlineLobby = RoomInfo;
 
 /** Network layer: `available` — the server answered, `list()` — open rooms (src/net/client.ts) */
 export const NET = new NetClient();
+
+/** Room voice chat (src/net/voice.ts): key T in the camp and in battle — one's microphone on / off */
+export const VOICE = new VoiceChat(NET);
 
 /** Battle address: map and the "from menu" mark — the game shows pause on Esc and the "To camp" button */
 export function battleUrl(s: GameSession): string {

@@ -51,7 +51,7 @@ import { DEV_TOOLS, fromMenu, openEditor } from '../devflag.ts';
 import { loadSettings, pixelRatio } from '../menu/settings.ts';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel.ts';
 import { BattleMenu } from '../menu/pause.ts';
-import { markWon, NET, netBattleUrl } from '../menu/session.ts';
+import { markWon, NET, netBattleUrl, VOICE } from '../menu/session.ts';
 import { netBattle } from '../net/client.ts';
 import { SnapshotView } from '../net/snapshot.ts';
 import { campaignMap } from '../menu/campaign.ts';
@@ -655,6 +655,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (shop.open) { shop.key(e); return true; }
     if (netClient?.typing) return true;
     if (netClient && e.code === 'Enter' && !battle?.open) { gi.clear(); netClient.openChat(); return true; }
+    // voice chat: one's microphone on / off (only in a network battle)
+    if (netClient && e.code === 'KeyT') { void VOICE.toggle().then((err) => toast(err ?? (VOICE.on ? t('Microphone on') : t('Microphone off')))); return true; }
     // the defence pad menu: digits — pick a tower, Esc / F — close
     if (tdUi?.menuOpen && tdUi.key(e)) return true;
     if (e.code === 'F10' && DEV_TOOLS) { openEditor(); return true; }
@@ -937,7 +939,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   if (nb && sim && world && tdView && tdUi && tdPack && NET.auth) {
     netClient = new NetBattleClient({
       net: NET, battle: nb, token: NET.auth.token, base: NET.base, scene, T, fx, hero, gear, profile, input, bow: () => gi.mouse.rmb && !scripted, events,
-      sim, world, pack: tdPack, tdView, tdUi, terrain, solids, makeGear, toast,
+      sim, world, pack: tdPack, tdView, tdUi, terrain, solids, makeGear, toast, voice: VOICE,
       swing: (k, g, step) => { if (hears(k)) weaponSwing(g.arts.category, step); },
       quiet: () => scripted,
       onOver: (result) => { if (result === 'abandoned') toast(t('Everyone left — battle abandoned')); },
@@ -1309,6 +1311,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     mode: 'playground',
     /** Network battle client (src/cgame/net-battle.ts); null — the battle is local */
     get net() { return netClient; },
+    /** Room voice chat (src/net/voice.ts) */
+    voice: VOICE,
     hero, input, dummies, obstacles, camera, HERO, SWORD, props, level, terrain,
     /** Level and decor renderer */
     view,

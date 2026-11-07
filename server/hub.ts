@@ -116,6 +116,8 @@ export class Hub {
       case 'room.kick': R.kick(c, m.playerId); break;
       case 'room.start': R.start(c); break;
       case 'room.again': R.start(c, true); break;
+      case 'rtc': R.rtc(c, m.to, m.data); break;
+      case 'voice': R.voice(c, m.on); break;
       case 'chat': {
         if (now() - c.chatAt < NET_LIMITS.chatMs) return;
         c.chatAt = now();

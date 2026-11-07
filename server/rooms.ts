@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { Profile, type ProfileData } from '../src/items.ts';
-import { MAX_PLAYERS, NET_LIMITS, type ErrorCode, type RoomInfo, type SeatInfo, type ServerMsg } from '../src/net/protocol.ts';
+import { MAX_PLAYERS, NET_LIMITS, type ErrorCode, type RoomInfo, type RtcSignal, type SeatInfo, type ServerMsg } from '../src/net/protocol.ts';
 import { Match, type MatchEnd } from '../src/game/match.ts';
 import { newId } from './auth.ts';
 import { tx, type Db } from './db.ts';
@@ -35,6 +35,8 @@ interface Member {
   conn: Conn | null;
   /** Disconnected: when to free the seat */
   deadline: number | null;
+  /** Microphone on (voice chat); not saved — after a reconnect the client says it again */
+  voice: boolean;
 }
 
 interface Room {
@@ -101,6 +103,7 @@ export class RoomManager {
     const m = this.member(room, c.playerId);
     if (m.conn !== c) return; // already signed in from another tab
     m.conn = null;
+    m.voice = false;
     m.deadline = this.now() + NET_LIMITS.graceMs;
     this.saveMember(room, m);
     this.broadcast(room);
@@ -148,6 +151,29 @@ export class RoomManager {
     const t = text.replace(/\s+/g, ' ').trim().slice(0, NET_LIMITS.chatMax);
     if (!t) return;
     this.each(room, (x) => x.conn?.send({ t: 'chat', seat: m.seat, name: m.name, text: t }));
+  }
+
+  /**
+   * Voice (src/net/voice.ts): a WebRTC signal to a seat of one's own room — only forwarded, audio goes peer to peer.
+   * No such seat or it is offline — dropped silently: the peer may have just left
+   */
+  rtc(c: Conn, to: number, data: RtcSignal): void {
+    const room = this.byPlayer.get(c.playerId);
+    if (!room) return;
+    const from = room.members.find((x) => x.playerId === c.playerId);
+    const peer = room.members.find((x) => x.seat === to);
+    if (!from || !peer || peer === from) return;
+    peer.conn?.send({ t: 'rtc', from: from.seat, data });
+  }
+
+  /** Voice: the player's microphone is on / off — shown to the room in the seats */
+  voice(c: Conn, on: boolean): void {
+    const room = this.byPlayer.get(c.playerId);
+    if (!room) return;
+    const m = this.member(room, c.playerId);
+    if (m.voice === on) return;
+    m.voice = on;
+    this.broadcast(room);
   }
 
   /** Leave on one's own (reason 'leave') or by the host's kick */
@@ -298,7 +324,7 @@ export class RoomManager {
         const room: Room = { row, members: [], matchId: null };
         if (row.state === 'battle') { row.state = 'lobby'; row.updated_at = now; this.d.rooms.update(row); }
         for (const mr of this.d.rooms.members(row.id)) {
-          const m: Member = { playerId: mr.player_id, name: this.d.nameOf(mr.player_id), seat: mr.seat, ready: false, joinedAt: mr.joined_at, conn: null, deadline: now + RESTORE_MS };
+          const m: Member = { playerId: mr.player_id, name: this.d.nameOf(mr.player_id), seat: mr.seat, ready: false, joinedAt: mr.joined_at, conn: null, deadline: now + RESTORE_MS, voice: false };
           room.members.push(m);
           this.byPlayer.set(m.playerId, room);
           this.saveMember(room, m);
@@ -313,7 +339,7 @@ export class RoomManager {
     const taken = new Set(room.members.map((m) => m.seat));
     let seat = 0;
     while (taken.has(seat)) seat++;
-    const m: Member = { playerId: c.playerId, name: c.name, seat, ready: false, joinedAt: this.now(), conn: c, deadline: null };
+    const m: Member = { playerId: c.playerId, name: c.name, seat, ready: false, joinedAt: this.now(), conn: c, deadline: null, voice: false };
     room.members.push(m);
     this.byPlayer.set(c.playerId, room);
     this.saveMember(room, m);
@@ -402,7 +428,7 @@ export class RoomManager {
   }
 
   private seats(r: Room): SeatInfo[] {
-    return r.members.map((m) => ({ seat: m.seat, playerId: m.playerId, name: m.name, ready: m.ready, online: !!m.conn, host: m.playerId === r.row.host_id })).sort((a, b) => a.seat - b.seat);
+    return r.members.map((m) => ({ seat: m.seat, playerId: m.playerId, name: m.name, ready: m.ready, online: !!m.conn, host: m.playerId === r.row.host_id, voice: m.voice })).sort((a, b) => a.seat - b.seat);
   }
 
   private each(room: Room, f: (m: Member) => void): void { for (const m of room.members) f(m); }
