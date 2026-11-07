@@ -42,3 +42,10 @@ export function t(s: string, params?: Record<string, string | number>): string {
   if (params) for (const k of Object.keys(params)) r = r.split(`{${k}}`).join(String(params[k]));
   return r;
 }
+
+/** Russian → English source key for a stored string (e.g. a map name saved while the page ran in Russian); unknown strings pass through */
+let back: Map<string, string> | null = null;
+export function untranslate(s: string): string {
+  back ??= new Map(Object.entries(ru).map(([k, v]) => [v, k]));
+  return back.get(s) ?? s;
+}

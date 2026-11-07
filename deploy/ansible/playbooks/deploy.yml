@@ -1,0 +1,94 @@
+# Deploy to the servers of group "malina": ship the images (push.yml), then compose up and health checks.
+#   ansible-playbook playbooks/deploy.yml                      — the current commit
+#   ansible-playbook playbooks/deploy.yml -e malina_tag=<sha>  — rollback to an image the server still has
+# Needs on the server: docker with the compose plugin, the ssh user in group docker, python3.
+- name: Ship the images
+  ansible.builtin.import_playbook: push.yml
+
+- name: Deploy Malina
+  hosts: malina
+  gather_facts: false
+  vars:
+    compose: [docker, compose, --project-directory, "{{ malina_dir }}", -f, "{{ malina_dir }}/docker-compose.yml"]
+  tasks:
+    - name: Check the Caddy settings
+      ansible.builtin.assert:
+        that: malina_domain | length > 0 and acme_email | length > 0
+        fail_msg: Set malina_domain (the game's domain) and acme_email for {{ inventory_hostname }} in inventory/hosts.yml, or malina_caddy=false
+      when: malina_caddy | bool
+
+    - name: Check docker compose
+      ansible.builtin.command: docker compose version
+      changed_when: false
+      check_mode: false
+
+    - name: Create {{ malina_dir }}
+      ansible.builtin.file:
+        path: "{{ malina_dir }}/deploy/caddy"
+        state: directory
+        mode: "0755"
+
+    - name: Put docker-compose.yml
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../docker-compose.prod.yml"
+        dest: "{{ malina_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Put the Caddyfile
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../caddy/Caddyfile"
+        dest: "{{ malina_dir }}/deploy/caddy/Caddyfile"
+        mode: "0644"
+      register: caddyfile
+
+    - name: Put .env with the image tag
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/env.j2"
+        dest: "{{ malina_dir }}/.env"
+        mode: "0644"
+
+    - name: Start the containers
+      ansible.builtin.command:
+        argv: "{{ compose + ['up', '-d', '--remove-orphans', '--wait', '--wait-timeout', (malina_health_retries * 2) | string] }}"
+      changed_when: true
+
+    - name: Wait for /api/health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ malina_port }}/api/health"
+        return_content: true
+      register: health
+      check_mode: false
+      until: health.status == 200 and (health.json.ok | default(false))
+      retries: "{{ malina_health_retries }}"
+      delay: 2
+
+    # compose does not restart Caddy for a changed config in a mounted directory
+    - name: Reload Caddy with the new Caddyfile
+      ansible.builtin.command:
+        argv: "{{ compose + ['exec', '-T', 'caddy', 'caddy', 'reload', '--config', '/etc/caddy/Caddyfile'] }}"
+      when: malina_caddy | bool and caddyfile.changed
+      changed_when: true
+
+    - name: Check https://{{ malina_domain }}/api/health
+      ansible.builtin.uri:
+        url: "https://{{ malina_domain }}{{ '' if caddy_https_port | int == 443 else ':' ~ caddy_https_port }}/api/health"
+      register: https_health
+      check_mode: false
+      until: https_health.status == 200
+      retries: "{{ malina_health_retries }}"
+      delay: 2
+      when: malina_caddy | bool and malina_check_https | bool
+
+    # newest first; the running tag is always kept, the next ones stay for a rollback
+    - name: Remove old malina images (keep {{ malina_keep_images }})
+      ansible.builtin.shell:
+        cmd: >-
+          docker images {{ malina_image }} --format '{{ '{{' }}.Repository{{ '}}' }}:{{ '{{' }}.Tag{{ '}}' }}'
+          | grep -vxF '{{ malina_ref }}' | tail -n +{{ malina_keep_images | int }} | xargs -r docker rmi;
+          docker image prune -f
+      register: prune
+      changed_when: "'Untagged' in prune.stdout or 'Deleted' in prune.stdout"
+
+    - name: Deployed
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ malina_ref }}{{ ' at https://' ~ malina_domain if malina_caddy | bool else '' }}, protocol {{ health.json.protocol }}, maps {{ health.json.maps | join(', ') }}"

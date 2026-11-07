@@ -436,3 +436,19 @@ Pages: [design-multiplayer.md](design-multiplayer.md).
 ## [2026-11-05] code | English code base, bilingual interface, MIT licence
 All comments, identifiers-as-strings, server messages, tests, scripts, Makefile and AGENTS.md are English; the wiki and the commit history were translated earlier. Every user-visible string goes through `t()` (`src/i18n/i18n.ts`), the Russian dictionary `src/i18n/ru.ts` (≈2000 entries) was built from the original Russian text. The main menu asks for the language on the first visit and keeps it in localStorage `malina.lang`; Settings have a Language row. Hero states, weapon categories and rarities, prefab groups and block/decor categories became English ids; maps and the preset library were regenerated with English titles. README in English and Russian, LICENSE — MIT.
 Pages: [project-brief.md](project-brief.md), [design-main-menu.md](design-main-menu.md), [index.md](index.md).
+
+## [2026-11-05] code | Docker and Ansible deploy
+`Dockerfile` (dev/build/runtime stages), `docker-compose.dev.yml`, `docker-compose.prod.yml`, `deploy/ansible/` — buildx build and push of a multi-platform image tagged by git commit, deploy with compose and a health check, rollback by tag; `make docker-dev`, `make docker-build`, `make deploy`.
+Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
+
+## [2026-11-05] code | Caddy in front of the server, make targets for image and Ansible
+Caddy (profile `caddy` in `docker-compose.prod.yml`, `deploy/caddy/Caddyfile`) gives HTTPS from Let's Encrypt, the game server listens on 127.0.0.1 only; `deploy.yml` puts the Caddyfile, reloads Caddy and checks https://<domain>/api/health. Make: `image-build/run/stop/login/push`, `ansible-ping/check/deploy/vault/logs`, `deploy`.
+Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
+
+## [2026-11-07] code | Deploy without a registry: images over ssh
+`push.yml` builds the image here for the servers' platform, `docker save | gzip`, copies it over ssh and `docker load`s it; Caddy goes the same way, compose never pulls. `build.yml`, `site.yml`, `image-login` and the registry settings are gone; the server keeps the last 5 images for a rollback.
+Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).
+
+## [2026-11-07] code | Server provisioning
+`make provisioning`: `bin/copy-ssh-key.sh` puts the ssh key to root with ssh-copy-id (one password prompt), `provisioning.yml` installs Docker from Docker's apt repository, creates the `deploy` user (docker, sudo, key), checks key login, switches ssh to keys only, enables ufw (sshd ports, 80, 443) and security updates. Deploys now go as `deploy`.
+Pages: [dev-deploy.md](dev-deploy.md), [index.md](index.md).

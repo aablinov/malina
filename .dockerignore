@@ -1,0 +1,14 @@
+.git
+.claude
+.DS_Store
+node_modules
+dist
+data
+test-results
+playwright-report
+docs
+wiki
+deploy
+docker-compose.*.yml
+Dockerfile
+*.log

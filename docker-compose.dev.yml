@@ -1,0 +1,47 @@
+# Malina — development in Docker: the same as `make dev`, but node and npm live in the container.
+#   docker compose -f docker-compose.dev.yml up --build
+#   game (Vite, hot reload): http://localhost:5173   server: http://localhost:8787
+# Sources are mounted from the working copy; node_modules stays in a volume (Linux binaries, not macOS ones).
+# After changing package.json: docker compose -f docker-compose.dev.yml up --build --renew-anon-volumes
+name: malina-dev
+
+x-app: &app
+  build:
+    context: .
+    target: dev
+  image: malina:dev
+  working_dir: /app
+  volumes:
+    - .:/app
+    - node_modules:/app/node_modules
+
+services:
+  server:
+    <<: *app
+    command: ["node", "--watch-path=server", "--watch-path=src", "server/main.ts"]
+    environment:
+      PORT: 8787
+      HOST: 0.0.0.0
+      # own volume, not ./data: SQLite WAL locks over a macOS bind mount are unreliable
+      DB_PATH: /data/malina.db
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - data:/data
+    ports:
+      - "${SERVER_PORT:-8787}:8787"
+
+  client:
+    <<: *app
+    command: ["npx", "vite", "--host", "0.0.0.0", "--port", "5173", "--strictPort"]
+    environment:
+      # file events from a macOS bind mount do not always reach the container
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "${CLIENT_PORT:-5173}:5173"
+    depends_on:
+      - server
+
+volumes:
+  node_modules:
+  data:

@@ -1,0 +1,56 @@
+# ---- image: no registry — built on this machine and copied to the servers over ssh (playbooks/push.yml)
+# local image name (on this machine and on the servers)
+malina_image: malina
+# git commit of the working copy the playbooks run from ("-dirty" if there are uncommitted changes)
+malina_git_tag: "{{ lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir ~ '/../../..') ~ ' describe --always --dirty --abbrev=12 --match=NO-TAGS') }}"
+# the tag to deploy; rollback: -e malina_tag=<old sha> (make ansible-deploy TAG=<old sha>) — if the server still has it
+malina_tag: "{{ malina_git_tag }}"
+malina_ref: "{{ malina_image }}:{{ malina_tag }}"
+malina_dirty: "{{ malina_tag is search('-dirty$') }}"
+# Caddy is shipped the same way, so the server does not go to Docker Hub at all
+caddy_image: caddy:2.10.2-alpine
+malina_ship_images: "{{ [malina_ref] + ([caddy_image] if malina_caddy | bool else []) }}"
+# archives on this machine (in .gitignore); the current ones are kept for the next server
+malina_images_dir: "{{ playbook_dir }}/../.images"
+
+# ---- server
+malina_dir: /opt/malina
+# the game server port on the host; 127.0.0.1 — reachable only through Caddy (and for the health check)
+malina_bind: 127.0.0.1
+malina_port: 8787
+# how many malina images to keep on the server for a rollback (the current one included)
+malina_keep_images: 5
+
+# ---- Caddy (HTTPS). The domain's A/AAAA record must point at the server, ports 80 and 443 (tcp+udp) open.
+malina_caddy: true
+# the game's domain, e.g. malina.example.com — set it in inventory/hosts.yml for the host
+malina_domain: ""
+# Let's Encrypt account email: expiry warnings and problems with certificates
+acme_email: ""
+caddy_http_port: 80
+caddy_https_port: 443
+# check https://<domain>/api/health after a deploy (needs DNS already pointing at the server)
+malina_check_https: true
+# how long to wait for /api/health after start
+malina_health_retries: 30
+
+# ---- ssh users and provisioning (playbooks/provisioning.yml, make provisioning)
+# the user everything is deployed as; provisioning creates it (docker group, sudo, the ssh key below)
+deploy_user: deploy
+ansible_user: "{{ deploy_user }}"
+# who provisioning logs in as on a fresh server (by key — make provisioning copies it with ssh-copy-id first)
+provision_user: root
+# this machine's public key that goes to the servers; more keys (teammates) — ssh_extra_public_keys: ["ssh-ed25519 AAAA… name"]
+ssh_public_key_file: >-
+  {{ lookup('ansible.builtin.first_found', [lookup('env', 'HOME') ~ '/.ssh/id_ed25519.pub',
+     lookup('env', 'HOME') ~ '/.ssh/id_ecdsa.pub', lookup('env', 'HOME') ~ '/.ssh/id_rsa.pub'], errors='ignore') }}
+ssh_extra_public_keys: []
+# root over ssh: prohibit-password — by key only (default), no — not at all (then provision as deploy_user: -e provision_user=deploy)
+ssh_permit_root_login: prohibit-password
+deploy_user_sudo: true
+# Docker's apt repository; a mirror with the same layout if download.docker.com is unreachable,
+# e.g. https://mirror.yandex.ru/mirrors/docker
+docker_apt_url: https://download.docker.com/linux
+# ufw: only ssh, 80, 443 (tcp+udp) from outside
+firewall: true
+unattended_upgrades: true
