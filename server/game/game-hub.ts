@@ -36,7 +36,7 @@ export class GameHub {
   constructor(deps: GameHubDeps) {
     this.d = deps;
     // permessage-deflate with a shared context: snapshots look alike frame to frame and compress several times over; low threshold — frames are small
-    this.wss = new WebSocketServer({ noServer: true, maxPayload: NET_LIMITS.maxMessage, perMessageDeflate: DEFLATE });
+    this.wss = new WebSocketServer({ noServer: true, maxPayload: NET_LIMITS.maxGameFrame, perMessageDeflate: DEFLATE });
     this.wss.on('connection', (ws: WebSocket) => this.greet(ws));
   }
 
@@ -47,6 +47,8 @@ export class GameHub {
   }
 
   private greet(ws: WebSocket): void {
+    // without a listener a socket error (oversized frame — 1009, bad deflate) is thrown and kills the process; ws closes the socket itself
+    ws.on('error', (e) => console.warn(`game ws: ${e.message}`));
     const now = this.d.now ?? Date.now;
     const chan: GameChannel = new Channel(new WebSocketTransport(ws as unknown as ConstructorParameters<typeof WebSocketTransport>[0]), { clock: now });
     const timer = setTimeout(() => chan.close(CLOSE.hello), HELLO_MS);

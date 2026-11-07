@@ -17,6 +17,11 @@ export { MAX_PLAYERS };
 export const NET_LIMITS = {
   /** Largest message, bytes */
   maxMessage: 64 * 1024,
+  /**
+   * Largest battle frame on `/game`, bytes after inflate: a frame carries every reliable in flight, and a `kit` is the whole
+   * inventory (up to maxProfile) — room for a couple of those plus the rest
+   */
+  maxGameFrame: 1024 * 1024,
   /** Messages per second per connection */
   perSecond: 100,
   /** How long to hold a disconnected player's seat, ms */

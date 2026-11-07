@@ -137,6 +137,8 @@ export class NetBattleClient {
   private rosterT = 0;
   private kitT = 0;
   private kitDirty = true;
+  /** Last kit sent (items + equip): profile.save() fires on arrows and berries too — an unchanged kit is not resent */
+  private kitSent = '';
   private purseMirror = 0;
   private readonly off: (() => void)[] = [];
   /** Snapshots applied (for tests) */
@@ -193,6 +195,7 @@ export class NetBattleClient {
       };
       chan.sendReliable({ t: 'hello', token: this.h.token, matchId: this.h.battle.matchId, protocol: PROTOCOL });
       this.kitDirty = true;
+      this.kitSent = '';
     };
     ws.onerror = () => { /* onclose reconnects */ };
   }
@@ -237,9 +240,12 @@ export class NetBattleClient {
     const d = this.h.profile.data;
     // the sutler took raspberries from the profile — the payment goes to the server with the kit
     const cost = Math.max(0, this.purseMirror - d.berries);
-    this.chan.sendReliable({ t: 'kit', items: d.items, equip: d.equip, cost: cost > 0 ? cost : undefined });
     this.kitDirty = false;
     this.kitT = KIT_S;
+    // every frame carries all reliables in flight: an ~8 KB kit on every save piled frames past maxPayload (1009)
+    const key = JSON.stringify([d.items, d.equip]);
+    if (key === this.kitSent && cost <= 0) return;
+    if (this.chan.sendReliable({ t: 'kit', items: d.items, equip: d.equip, cost: cost > 0 ? cost : undefined })) this.kitSent = key;
   }
 
   // ---------- snapshots ----------

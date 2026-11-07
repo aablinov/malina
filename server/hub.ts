@@ -59,6 +59,8 @@ export class Hub {
   }
 
   private greet(ws: WebSocket, _req: IncomingMessage): void {
+    // without a listener a socket error (oversized frame — 1009) is thrown and kills the process; ws closes the socket itself
+    ws.on('error', (e) => console.warn(`ws: ${e.message}`));
     const timer = setTimeout(() => ws.close(CLOSE.hello, 'hello'), HELLO_MS);
     ws.once('message', (raw: RawData) => {
       clearTimeout(timer);
