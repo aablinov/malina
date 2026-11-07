@@ -1,6 +1,6 @@
 # HUD, inventory and gear progression in the spirit of Minecraft Dungeons
 
-Version 1.4 of 2026-10-25: ~~the merchant has an "Auras" tab~~ — removed the same day, auras drop from the floor's bosses (section 9). Version 1.3 of 2026-10-25: merchants — a grid of all goods with prices by stats, all weapons in the inventory (section 9). Version 1.2 of 2026-10-24: magic chests, bright loot and raspberries with special effects and sound (section 12). Version 1.1: armour and bow on the hero, blacksmith and merchant, a Diablo-style map, black squares around spells. Complements [design-dungeon.md](design-dungeon.md) (weapons, buffs) and [design-editor.md](design-editor.md) (the "Weapons" tab — melee models and strikes). How to test — [dev-testing.md](dev-testing.md).
+Version 1.5 of 2026-11-07: the merchant and the blacksmith are also in the camp, "Gear" tab — the only way to buy permanent gear for the defence (section 9). Version 1.4 of 2026-10-25: ~~the merchant has an "Auras" tab~~ — removed the same day, auras drop from the floor's bosses (section 9). Version 1.3 of 2026-10-25: merchants — a grid of all goods with prices by stats, all weapons in the inventory (section 9). Version 1.2 of 2026-10-24: magic chests, bright loot and raspberries with special effects and sound (section 12). Version 1.1: armour and bow on the hero, blacksmith and merchant, a Diablo-style map, black squares around spells. Complements [design-dungeon.md](design-dungeon.md) (weapons, buffs) and [design-editor.md](design-editor.md) (the "Weapons" tab — melee models and strikes). How to test — [dev-testing.md](dev-testing.md).
 
 The goal is to be as close as possible to Minecraft Dungeons in look and rules, but for a PC in a browser: everything is controlled with mouse and keyboard, gamepad hints (LB/RB, A/B/X/Y) are replaced with keys.
 
@@ -105,6 +105,8 @@ The purchase is shown on the right — "Equip" (Enter) or "To inventory". Keys: 
 
 **All weapons in the inventory:** on the playground all 16 melee weapons lie in the inventory from the start (the starter set), old saves get the missing ones added on load.
 
+
+**In the camp** (2026-11-07): the "Gear" tab has **Shop** (B) and **Blacksmith** — the same windows and prices for the account raspberries; what is bought is permanent and goes into the defence battle ([design-main-menu.md](design-main-menu.md), section 3). The defence sutler sells only for the battle.
 ## 10. Black squares around spells (fixed)
 
 Spell and explosion flashes are sprites (`fx.flash`). The GTAO pass hid transparent meshes but not sprites, and those got into the normal buffer as opaque squares — AO drew dark rectangles around them. Now `SolidAOPass` hides sprites and points too (`src/lighting.ts`). Also artifact explosions (fire arrow, soul reaper) — without the dark smoke of `fx.explosion`, and the cooldown on a slot — a light shade and a grey icon instead of an almost black fill.

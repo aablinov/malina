@@ -51,7 +51,7 @@ import { DEV_TOOLS, fromMenu, openEditor } from '../devflag.ts';
 import { loadSettings, pixelRatio } from '../menu/settings.ts';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel.ts';
 import { BattleMenu } from '../menu/pause.ts';
-import { markWon, NET, netBattleUrl, stashBerries, stashGear } from '../menu/session.ts';
+import { markWon, NET, netBattleUrl } from '../menu/session.ts';
 import { netBattle } from '../net/client.ts';
 import { SnapshotView } from '../net/snapshot.ts';
 import { campaignMap } from '../menu/campaign.ts';
@@ -793,7 +793,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     for (const g of grimoires.splice(0)) g.dispose();
     pack.clear();
     for (const r of mobRooms) fillRoom(r);
-    if (sim) { sim.reset(); tdPack?.clear(); syncPurse(); }
+    // sutler purchases are gone with the restart: the battle copy is taken anew, the treasury is full again
+    if (sim) { sim.reset(); tdPack?.clear(); profile.restartBattle(); profile.data.berries = purseMirror; syncPurse(); }
     toast(sim ? t('Defence restarted: towers razed, treasury full') : t('Dummies and storage yard back in place'));
   }
 
@@ -854,10 +855,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   hud.setGoal(t(questGoal[0]), t(questGoal[1]));
   // castle walls change blocks (breach, repair): enemy obstacles are rebuilt
   const levelChanged = (): void => { if (STREAM) return; obstacles.length = 0; obstacles.push(...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)); foeObsKey = null; };
-  // from the menu: the hero's raspberries are stashed — the defence puts its treasury into the profile, the camp returns what was collected (src/menu/session.ts)
-  // gear is always stashed (also with ?map=td without the menu — the camp returns it), into battle — a new hero's kit (Profile.tdKit)
-  if (tdSpec && FROM_MENU) stashBerries(profile.data.berries);
-  if (tdSpec) { stashGear(JSON.parse(JSON.stringify({ items: profile.data.items, equip: profile.data.equip, arrows: profile.data.arrows }))); profile.tdKit(); }
+  // defence: the hero goes in with their own gear, on a battle copy of the profile (Profile.enterBattle) — the sutler's goods, the battle treasury
+  // and inventory shuffles stay in the battle, the stored profile gets the experience and the victory loot
+  if (tdSpec) profile.enterBattle();
   // the party's player count: ?players=N
   if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
   /**
@@ -875,7 +875,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   /** The client copy of the snapshot: in single player — from its own world, by the same path as a network battle guest */
   const snapView = new SnapshotView<SimEvent>();
   if (tdSpec) {
-    const pk = new Pack(bossHooks, (at, n) => { if (sim && world) { sim.fallen++; world.piles.drop(at, n); } });
+    const pk = new Pack(bossHooks, (at, n, base) => { sim?.killed(at, n, base); });
     tdPack = pk;
     world = new SimWorld({
       foes: () => pk.mobs.filter((m) => m.alive),
@@ -886,8 +886,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       levelChanged,
     }, { seed: Number(query.get('seed')) || Date.now() % 2 ** 31, level, td: tdSpec, players: bossPlayers, personal: false });
     sim = world.td!;
+    // strength — from the gear the hero came with (src/td/scaling.ts); sutler purchases do not raise it
+    sim.setRating(profile.rating);
     sim.fund(0);
-    // the map's starting treasury replaces the profile's raspberries (in the camp one's own raspberries return from the stash — src/menu/session.ts)
+    // the map's starting treasury replaces the battle copy's raspberries (the stored profile keeps its own — Profile.enterBattle)
     profile.data.berries = purseMirror = sim.berries(0);
     syncPurse();
     tdView = new TdView({ scene, fx, quiet: () => scripted, spec: tdSpec, heroPos: () => hero.pos, seat: () => nb?.seat ?? 0 });
@@ -1203,8 +1205,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     music.update(real, inFight(), hero.down ? 0 : hero.hp / hero.maxHp);
     if (battle && sim && sim.state !== tdEndShown) {
       tdEndShown = sim.state;
-      if (sim.state === 'won') markWon(mapName);
-      if (sim.state !== 'play') battle.end(sim.state === 'won', t('{n} of {total} waves repelled, {fallen} enemies slain', { n: sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1), total: sim.waves.length, fallen: sim.fallen }));
+      const me = nb?.seat ?? 0;
+      // the match loot goes to the camp only for a defended bush; in a network battle the server pays it (server/rooms.ts)
+      if (sim.state === 'won') { markWon(mapName); if (!netClient) Profile.creditStored(sim.lootOf(me)); }
+      if (sim.state !== 'play') battle.end(sim.state === 'won', t('{n} of {total} waves repelled, {fallen} enemies slain', { n: sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1), total: sim.waves.length, fallen: sim.fallen }), sim.lootOf(me));
     }
     perf.renderStart();
     render(real);
@@ -1293,7 +1297,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     wall: (id: string) => s.wall(id), lane: (id: string) => s.lane(id),
     nearPad: (pos: THREE.Vector3) => s.nearPad(pos), nearWall: (pos: THREE.Vector3) => s.nearWall(pos), repairCost: (w: SimWall) => s.repairCost(w),
     approach: (p: SimPad, from: THREE.Vector3) => s.approach(p, from), targets: () => s.targets(), preview: () => s.preview(),
-    setPlayers(n: number) { s.setPlayers(n); }, reset() { s.reset(); pk.clear(); syncPurse(); },
+    setPlayers(n: number) { s.setPlayers(n); }, reset() { s.reset(); pk.clear(); profile.restartBattle(); profile.data.berries = purseMirror; syncPurse(); },
+    /** Match loot (seat 0): add — as if collected */
+    get loot() { return s.lootOf(0); }, addLoot(n: number) { s.addLoot(n); },
     prompt: (p: SimPad) => ui.prompt(p), wallPrompt: (w: SimWall) => ui.wallPrompt(w),
     openMenu: (p: SimPad) => ui.openMenu(p), closeMenu: () => ui.closeMenu(), key: (e: KeyboardEvent) => ui.key(e),
     /** Network battle: commands go to the server (src/cgame/net-battle.ts); null — the battle is local */

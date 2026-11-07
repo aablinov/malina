@@ -31,11 +31,6 @@ export class Matches {
     return (this.db.prepare('SELECT map, players, ended_at FROM matches WHERE id = ?').get(id) as { map: string; players: number; ended_at: number | null } | undefined) ?? null;
   }
 
-  /** Player's battle reward — once; false — already credited or the player is not in the match */
-  loot(id: string, playerId: string, berries: number, xp: number): boolean {
-    return !!this.db.prepare('UPDATE match_players SET berries = ?, xp = ?, paid = 1 WHERE match_id = ? AND player_id = ? AND paid = 0').run(berries, xp, id, playerId).changes;
-  }
-
   /** Battles interrupted by a server restart */
   abandonOpen(now: number): number {
     return Number(this.db.prepare("UPDATE matches SET result = 'abandoned', ended_at = ? WHERE ended_at IS NULL").run(now).changes);

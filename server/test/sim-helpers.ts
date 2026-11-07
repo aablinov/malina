@@ -83,7 +83,7 @@ export function tdWorld(id: string, seed: number, o: { players?: number; persona
         const wl = m.laneId ? sim.lane(m.laneId)?.wall : undefined, wall = wl ? sim.wall(wl) : undefined;
         if (wall && !wall.dead && m.march && m.march.length <= (sim.lane(m.laneId!)?.points.length ?? 0)) wall.hurt(dmg * 10, from); else sim.bush.hurt(dmg, from);
       });
-      if (!was && m.dead) { sim.fallen++; world.piles.drop(m.pos, 3); }
+      if (!was && m.dead) sim.killed(m.pos, 3, 2);
     }
     for (let i = mobs.length - 1; i >= 0; i--) if (mobs[i].dead) mobs.splice(i, 1);
   };

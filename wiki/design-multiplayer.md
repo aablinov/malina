@@ -1,6 +1,6 @@
 # Multiplayer — server
 
-Version 2.2 of 2026-11-04: deltas are applied from the event queue before ticks, `act` actions carrying a command number are executed by the server in order with movement (section 7, [arch-layers.md](arch-layers.md)). Version 2.1 of 2026-11-04: a ring of received snapshots on the client (deltas from an older base are not lost under latency), command batches, interpolation by server time, the hero stands still after a disconnect (section 7); layers and the Quake 3 correspondence — [arch-layers.md](arch-layers.md). Version 2.0 of 2026-11-04: the battle is computed by the server ([adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md)) — simulation without rendering, a channel with seq/ack, snapshot deltas over `/game`, prediction of own hero on the client, rewards from the server; the host model, host migration, `relay`, `battle.end`/`battle.loot` and `CoopHost`/`CoopGuest` are removed, `PROTOCOL = 2` (sections 1, 3, 6–8). ~~Versions 1.0–1.4 (2026-11-02 – 2026-11-03): host-authoritative model — the host's browser computes the battle, the server relays and trusts the outcome~~ — replaced. Camp — [design-main-menu.md](design-main-menu.md), wave scaling — [design-tower-defence.md](design-tower-defence.md), section 5, the split of simulation and view — same page, section 15.
+Version 2.3 of 2026-11-07: the reward is the match loot and only for victory; heroes go in with their own gear; the party's strength scales the waves (sections 6, 7). Version 2.2 of 2026-11-04: deltas are applied from the event queue before ticks, `act` actions carrying a command number are executed by the server in order with movement (section 7, [arch-layers.md](arch-layers.md)). Version 2.1 of 2026-11-04: a ring of received snapshots on the client (deltas from an older base are not lost under latency), command batches, interpolation by server time, the hero stands still after a disconnect (section 7); layers and the Quake 3 correspondence — [arch-layers.md](arch-layers.md). Version 2.0 of 2026-11-04: the battle is computed by the server ([adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md)) — simulation without rendering, a channel with seq/ack, snapshot deltas over `/game`, prediction of own hero on the client, rewards from the server; the host model, host migration, `relay`, `battle.end`/`battle.loot` and `CoopHost`/`CoopGuest` are removed, `PROTOCOL = 2` (sections 1, 3, 6–8). ~~Versions 1.0–1.4 (2026-11-02 – 2026-11-03): host-authoritative model — the host's browser computes the battle, the server relays and trusts the outcome~~ — replaced. Camp — [design-main-menu.md](design-main-menu.md), wave scaling — [design-tower-defence.md](design-tower-defence.md), section 5, the split of simulation and view — same page, section 15.
 
 ## 1. Model
 
@@ -75,13 +75,13 @@ Time is Unix milliseconds everywhere. A new schema — only via a new migration 
   - unknown items are thrown away, as in `Profile.load`.
 
   This does not protect against cheats in the host model — it filters out garbage.
-- **Sync** (`NetClient.syncProfile`, in the camp after the stashed raspberries and gear are returned):
+- **Sync** (`NetClient.syncProfile`, in the camp):
   - the client remembers the version of the last sync (`malina.net.version`);
   - the server's version is newer → the server profile is taken;
   - otherwise the local one is sent to the server;
   - further changes in the camp are sent with a 0.8 s delay.
 
-  The battle page does not touch the profile: in battle it is replaced by the defence kit (`Profile.tdKit`).
+  The battle page does not touch the stored profile: it works on a battle copy (`Profile.enterBattle`, [design-tower-defence.md](design-tower-defence.md), section 12).
 
 ## 6. Rooms
 
@@ -106,7 +106,7 @@ Time is Unix milliseconds everywhere. A new schema — only via a new migration 
 
 ## 7. Battle
 
-- **Start.** `room.start` creates a match (`Match`): the map world with a seed, a hero for each seat from their server-side profile (defence kit `Profile.tdKit`), a starting treasury for each (every player has their own raspberries). The match goes into the runner; the battle page opens `/game`, sends `hello {token, matchId, protocol}` and receives `welcome`, everyone's kits and a full snapshot.
+- **Start.** `room.start` creates a match (`Match`): the map world with a seed, a hero for each seat from their server-side profile (own gear, at least 40 arrows; the party's strength — the average `Profile.rating`, `Match.rerate`), a starting treasury for each (every player has their own raspberries). The match goes into the runner; the battle page opens `/game`, sends `hello {token, matchId, protocol}` and receives `welcome`, everyone's kits and a full snapshot.
 - **Channel** (`src/net/channel.ts`): in one frame a reliable lane (`td` builds, `act` actions — with the number of the client's last command, the server executes it after that one and before the next, `kit` kits, `welcome`, `over`) and an unreliable one (`Cmd` ↔ snapshot delta; over a lossy transport — a batch of the last three commands). `Cmd.snap` — the last snapshot the client applied: the server computes the next delta from it, none such in the ring (32 snapshots) — full. While the acknowledgement is in flight, deltas come from the older base — the client restores it from its history (32 states) and applies; events in a delta are grouped by snapshot, only those newer than the applied one are played — no duplicates and no losses under latency.
 - **Snapshot** — entity records (`src/sim/entities.ts`, `src/net/game-protocol.ts`): heroes `h<seat>` (position, facing, health, exhausted, input, dodge roll, bow, input `ack`, ping), enemies `m<id>` (kind, position, health, flags, attack and its number, target, road), defence `td`, towers, walls, bush, lairs, projectiles, pools, piles `p<n>`, purses `purse<seat>`; events (`src/sim/events.ts`) — of all snapshots after the base.
 - **Own hero** is predicted: stepped locally from input, a command leaves every tick; by the `ack` from a snapshot the position is reconciled against where the hero was at that input, the discrepancy is removed at 20 % per snapshot (more than 2.5 m — at once). Health and "exhausted" — the server's.
@@ -115,7 +115,7 @@ Time is Unix milliseconds everywhere. A new schema — only via a new migration 
 - **Defence** — a `SimTd` mirror from records (`TdUi` and hints work as in single-player), menu commands and `G` — reliably to the server (`SimTd.remote`); towers, walls, piles are drawn by `TdView` from the same records as in single-player.
 - **Sutler**: a purchase takes raspberries from the mirror, the difference goes to the server with the kit (`kit.cost`).
 - **Time does not stop in a network battle**: inventory, shop, hitstop and spell slow-motion (`fx.hitstop`/`slowmo`) do not stop ticks or commands — own hero stands with empty input, the others play. Client-side defence events are played only by `TdView.apply` (once); the number for picked-up raspberries — above the hero of own seat.
-- **Result.** The bush held or withered — after 4.5 s (the harvest has flown in) the match sends `over`, the room closes the match: history, a reward to each — unspent raspberries and battle experience capped per map, `profile.updated`, `battle.over`, the room is a lobby again. "Again" — `room.again`. Joining a running battle — the hero at the spawn point and a full snapshot; disconnect — the command queue is reset, the hero stands in place until `graceMs`, then is removed; a new connection — new command numbering (`seq` from zero) and a full snapshot.
+- **Result.** The bush held or withered — after 4.5 s (the harvest has flown in) the match sends `over`, the room closes the match: history, a reward to each — the **match loot only for a defended bush** (defeat — 0; [design-tower-defence.md](design-tower-defence.md), section 16) and battle experience, capped per map (`maxBerries`), `profile.updated`, `battle.over`, the room is a lobby again. "Again" — `room.again`. Joining a running battle — the hero at the spawn point and a full snapshot; disconnect — the command queue is reset, the hero stands in place until `graceMs`, then is removed; a new connection — new command numbering (`seq` from zero) and a full snapshot.
 
 ## 8. Tests
 

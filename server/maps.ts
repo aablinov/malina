@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Level, type LevelJSON } from '../src/level/level.ts';
-import { crowdMult } from '../src/td/scaling.ts';
+import { crowdMult, lootK, MAX_RATING } from '../src/td/scaling.ts';
 import type { TdSpec } from '../src/td/types.ts';
 
 /**
@@ -34,12 +34,12 @@ export class MapCatalog {
   ids(): string[] { return [...this.maps.keys()].sort(); }
 
   /**
-   * Maximum raspberries per hero per battle — a cap against cheating, not balance: starting treasury plus all wave bounties with the party multiplier,
-   * times three — with headroom for raspberries from enemies (the server does not count those)
+   * Maximum loot per hero per battle — a cap against bugs, not balance: the share of the wave bounties with the victory bonus is ~0.4 of them,
+   * enemies give about as much again (more with the party — more enemies); all wave bounties with the party multiplier times two is ample
    */
   maxBerries(id: string, players: number): number {
     const m = this.maps.get(id);
-    return m ? Math.ceil((m.berries + m.bounty * crowdMult(players)) * 3) : 0;
+    return m ? Math.ceil(m.bounty * crowdMult(players) * 2 * lootK(MAX_RATING)) : 0;
   }
 
   waves(id: string): number { return this.maps.get(id)?.waves ?? 0; }

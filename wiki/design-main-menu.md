@@ -1,6 +1,6 @@
 # Main menu
 
-Version 1.3 of 2026-11-05: language picker on the first visit and a Language row in Settings (section 6). Version 1.2 of 2026-11-03: friends and room chat in the camp, joining a running battle (section 4). Version 1.1 of 2026-11-02: multiplayer — the camp panel works with the server (section 4, [design-multiplayer.md](design-multiplayer.md)). Version 1.0 of 2026-10-31: start screen, camp (gear and Bush Defence map selection), settings, pause and battle result, multiplayer stubs. The model is the Minecraft Dungeons menu (hero screen with gear slots, tabs on top, online lobby by the campfire). Inventory — [design-inventory.md](design-inventory.md), maps — [design-tower-defence.md](design-tower-defence.md).
+Version 1.4 of 2026-11-07: shop and blacksmith in the camp, the battle on a copy of the profile instead of the stash (section 3). Version 1.3 of 2026-11-05: language picker on the first visit and a Language row in Settings (section 6). Version 1.2 of 2026-11-03: friends and room chat in the camp, joining a running battle (section 4). Version 1.1 of 2026-11-02: multiplayer — the camp panel works with the server (section 4, [design-multiplayer.md](design-multiplayer.md)). Version 1.0 of 2026-10-31: start screen, camp (gear and Bush Defence map selection), settings, pause and battle result, multiplayer stubs. The model is the Minecraft Dungeons menu (hero screen with gear slots, tabs on top, online lobby by the campfire). Inventory — [design-inventory.md](design-inventory.md), maps — [design-tower-defence.md](design-tower-defence.md).
 
 ## 1. Routing
 
@@ -25,7 +25,8 @@ Version 1.3 of 2026-11-05: language picker on the first visit and a Language row
 - **Esc** — pause (`src/menu/pause.ts`): time stops; "Continue", "Settings", "Restart", "Exit to camp".
 - End of defence — a result over the map: "The bush held!" / "The bush withered", how many waves repelled and enemies defeated; "Again" (Enter) and "To camp". Victory marks the map completed.
 - No debug telemetry and no F-key line in the hint; the tab title is the map name.
-- **Hero's raspberries.** The defence keeps its treasury in the profile's raspberries and puts the map's treasury there at the start. Before battle, the hero's raspberries are stashed in sessionStorage (`stashBerries`) and returned on entering the menu (`takeStash`) — the battle does not eat them.
+- **Hero's raspberries.** ~~Stashed in sessionStorage before battle (`stashBerries`/`takeStash`)~~ — replaced 2026-11-07: the battle works on a copy of the profile (`Profile.enterBattle`), the stored raspberries are not touched; victory adds the match loot ([design-tower-defence.md](design-tower-defence.md), section 16).
+- **Shop and blacksmith** in the "Gear" tab (button or **B**): the merchant and the blacksmith windows (`src/hud/shop.ts`) for the account raspberries — what is bought stays with the hero and goes into battle. Under the gear power — the defence strength (`Profile.rating`).
 
 ## 4. Multiplayer
 

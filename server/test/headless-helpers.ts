@@ -42,7 +42,6 @@ export function headlessBattle(mapId: string, seed: number, o: { players?: numbe
   hero.place(spawn[0], spawn[2], Math.PI, spawn[1]);
   const input = emptyInput();
   const profile = new Profile(Profile.starter(), false);
-  profile.tdKit();
   let world: SimWorld | null = null;
   let pack: Pack | null = null;
   const out = { heroHurt: 0 } as HeadlessBattle;
@@ -62,7 +61,7 @@ export function headlessBattle(mapId: string, seed: number, o: { players?: numbe
   const gear = new Gear({
     scene, fx, hero, terrain, targets, blast: () => {}, sound: () => {}, toast: () => {}, banner: () => {}, quiet: () => true,
   }, profile);
-  pack = new Pack(bossHooks, (at, n) => { if (world?.td) world.td.fallen++; world?.piles.drop(at, n); });
+  pack = new Pack(bossHooks, (at, n, base) => { if (world?.td) world.td.killed(at, n, base); else world?.piles.drop(at, n); });
   const pk = pack;
   const hooks: SimHooks = {
     foes: () => pk.mobs.filter((m) => m.alive),

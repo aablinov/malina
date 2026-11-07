@@ -4,7 +4,7 @@ import { addDecoy } from '../decoys.ts';
 import type { EntityState } from '../net/snapshot.ts';
 import type { TdCommand } from '../net/protocol.ts';
 import type { Target } from '../target.ts';
-import { scaledBounty, scaledCount, waveLevel } from '../td/scaling.ts';
+import { clampRating, LOOT_WAVE, LOOT_WIN, lootK, scaledBounty, scaledCount, waveLevel } from '../td/scaling.ts';
 import { BASE_TOWERS, SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from '../td/towers.ts';
 import type { TdLane, TdPad, TdSpec, TdWave } from '../td/types.ts';
 import { SimBush } from './bush.ts';
@@ -50,9 +50,13 @@ export class SimTd {
   spawned = 0;
   fallen = 0;
   players: number;
+  /** The heroes' strength (src/td/scaling.ts): +1 pack level per unit, more loot */
+  rating = 1;
   /** Shared battle: each seat has its own raspberries; otherwise one treasury (seat 0) */
   readonly personal: boolean;
   private readonly purses = new Map<number, number>();
+  /** Match loot (wiki/design-tower-defence.md, section 16): raspberries for the account — kills, waves, victory; not spendable in battle, paid only on victory */
+  private readonly loots = new Map<number, number>();
   /** Hint to the player: not enough raspberries, tower at its limit (seat, text) */
   onToast: ((seat: number, text: string) => void) | null = null;
   /** A tower is being gnawed, frozen or broken */
@@ -90,7 +94,7 @@ export class SimTd {
     }
     this.bush.onDeath = () => { this.state = 'lost'; w.emit({ t: 'td.lost' }); };
     this.w.piles.onPick = (seat, n) => this.gain(seat, n);
-    w.h.setScale(spec.level ?? 1, this.players);
+    w.h.setScale(this.base, this.players);
   }
 
   dispose(): void { for (const f of this.undecoy) f(); for (const t of this.towers) { t.dispose(); this.undecoyTower(t); } }
@@ -112,6 +116,24 @@ export class SimTd {
   /** Mirror of a network battle: a seat's raspberries — from the server snapshot */
   setBerries(seat: number, n: number): void { this.purses.set(this.key(seat), Math.max(0, n)); }
   get seats(): number[] { return [...this.purses.keys()]; }
+
+  // ---------- match loot ----------
+  /** A seat's loot so far */
+  lootOf(seat = 0): number { return Math.floor(this.loots.get(this.key(seat)) ?? 0); }
+  /** Loot to every seat (the battle is a team one: kills and waves count for everyone) */
+  addLoot(n: number): void {
+    if (n <= 0) return;
+    // fractions accumulate: a 1-raspberry enemy at rating 3 gives 1.16
+    for (const seat of this.purses.keys()) this.loots.set(seat, (this.loots.get(seat) ?? 0) + n);
+  }
+  /** Mirror of a network battle: a seat's loot — from the server snapshot */
+  setLoot(seat: number, n: number): void { this.loots.set(this.key(seat), Math.max(0, n)); }
+  /** An enemy fell: the pile of raspberries for the purse on the ground, its own loot (before scaling) — into the match loot */
+  killed(at: THREE.Vector3, pile: number, base: number): void {
+    this.fallen++;
+    this.w.piles.drop(at, pile);
+    if (this.state === 'play') this.addLoot(base * lootK(this.rating));
+  }
 
   // ---------- geometry ----------
   get solids(): Obstacle[] {
@@ -243,8 +265,17 @@ export class SimTd {
   /** Player count: the next waves use the new scale, living enemies right away */
   setPlayers(n: number): void {
     this.players = Math.max(1, Math.round(n));
-    this.w.h.setScale(this.wave ? waveLevel(this.wave, this.spec.level) : (this.spec.level ?? 1), this.players);
+    this.w.h.setScale(this.wave ? waveLevel(this.wave, this.base) : this.base, this.players);
   }
+
+  /** The heroes' strength: the next waves use the new level, living enemies right away */
+  setRating(r: number): void {
+    this.rating = clampRating(r);
+    this.setPlayers(this.players);
+  }
+
+  /** Pack level of the first wave: the map's base plus the heroes' strength */
+  get base(): number { return (this.spec.level ?? 1) + this.rating - 1; }
 
   // ---------- enemies and waves ----------
   /** Enemy at a point (no lane: stands and waits for the hero) */
@@ -294,7 +325,7 @@ export class SimTd {
     const w = this.waves[this.wave];
     if (!w) return;
     this.wave++;
-    this.w.h.setScale(waveLevel(this.wave, this.spec.level), this.players);
+    this.w.h.setScale(waveLevel(this.wave, this.base), this.players);
     for (const g of w.groups) this.queue.push({ kind: g.kind, lane: g.lane, left: isChief(g.kind) ? g.count : scaledCount(g.count, this.players), t: g.delay ?? 0, every: g.every });
     this.w.emit({ t: 'wave.start', wave: this.wave, of: this.waves.length, title: w.title ?? '' });
   }
@@ -317,8 +348,14 @@ export class SimTd {
       // wave beaten: bounty to everyone and rest; the last one — victory
       const w = this.waves[this.wave - 1], bounty = this.personal ? w.bounty : scaledBounty(w.bounty, this.players);
       for (const seat of this.purses.keys()) this.gain(seat, bounty);
+      this.addLoot(w.bounty * LOOT_WAVE * lootK(this.rating));
       this.w.piles.harvest();
-      if (this.wave >= this.waves.length) { this.state = 'won'; this.w.emit({ t: 'td.won', n: bounty }); return; }
+      if (this.wave >= this.waves.length) {
+        for (const seat of this.purses.keys()) this.loots.set(seat, Math.round((this.loots.get(seat) ?? 0) * (1 + LOOT_WIN)));
+        this.state = 'won';
+        this.w.emit({ t: 'td.won', n: bounty });
+        return;
+      }
       this.w.emit({ t: 'wave.won', wave: this.wave, n: bounty, rest });
       this.next = rest - 0.001;
       return;
@@ -351,21 +388,23 @@ export class SimTd {
     this.next = this.spec.rest ?? 20;
     this.spawned = this.fallen = 0;
     for (const l of this.lairs) { l.warn = 0; l.spawned = 0; }
-    this.w.h.setScale(this.spec.level ?? 1, this.players);
+    this.w.h.setScale(this.base, this.players);
     for (const wl of this.walls) if (wl.hp < wl.maxHp) wl.repair();
     this.bush.reset();
     this.w.piles.clear();
     for (const seat of this.purses.keys()) this.fund(seat);
+    this.loots.clear();
     this.state = 'play';
     this.w.emit({ t: 'td.reset' });
   }
 
   entities(out: EntityState[]): void {
-    out.push({ id: 'td', state: this.state, wave: this.wave, next: r1(this.next), running: this.waveRunning ? 1 : 0, players: this.players, spawned: this.spawned, fallen: this.fallen, early: this.earlyBonus });
+    out.push({ id: 'td', state: this.state, wave: this.wave, next: r1(this.next), running: this.waveRunning ? 1 : 0, players: this.players, rating: this.rating, spawned: this.spawned, fallen: this.fallen, early: this.earlyBonus });
     this.bush.entity(out);
     for (const wl of this.walls) wl.entity(out);
     for (const l of this.lairs) l.entity(out);
     for (const t of this.towers) t.entities(out);
     for (const [seat, n] of this.purses) out.push({ id: `purse${seat}`, seat, n });
+    for (const seat of this.purses.keys()) out.push({ id: `loot${seat}`, seat, n: this.lootOf(seat) });
   }
 }

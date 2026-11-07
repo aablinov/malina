@@ -6,7 +6,7 @@ import { makeTextures } from '../textures.ts';
 import { Lobby } from './lobby.ts';
 import { MenuScene } from './scene.ts';
 import { applyAudio, SettingsPanel } from './settings-panel.ts';
-import { loadMenuState, saveMenuState, takeGear, takeStash, type GameMode } from './session.ts';
+import { loadMenuState, saveMenuState, type GameMode } from './session.ts';
 import '../style.css';
 import '../hud/hud.css';
 import './menu.css';
@@ -22,12 +22,6 @@ export function runMenu(): void {
   document.title = t('Malina');
   document.body.classList.add('menu');
   const profile = new Profile();
-  // the battle gave the hero's raspberries to the defence treasury — return them (src/menu/session.ts)
-  const stash = takeStash();
-  if (stash !== null) { profile.data.berries = stash; profile.save(); }
-  // what was bought from the defence sutler stays in the battle: gear is as it was before it
-  const gear = takeGear();
-  if (gear) { profile.data.items = gear.items as typeof profile.data.items; profile.data.equip = gear.equip as typeof profile.data.equip; profile.data.arrows = gear.arrows; profile.save(); }
 
   const app = document.getElementById('app') as HTMLElement;
   const canvas = document.getElementById('c') as HTMLCanvasElement;

@@ -411,6 +411,8 @@ export function armorHealth(it: Item): number { return Math.round((itemDef(it.de
 // ---------- hero profile ----------
 
 const KEY = 'malina.profile';
+/** Arrows into a defence battle — at least this many */
+export const BATTLE_ARROWS = 40;
 
 /** Gear summary — the scene reads it */
 export interface GearStats {
@@ -445,6 +447,8 @@ export class Profile {
   private rand: Rand;
 
   private readonly persist: boolean;
+  /** A battle copy (`enterBattle`): saving keeps only the growth */
+  private battleMode = false;
 
   constructor(data?: ProfileData, persist = true) {
     this.persist = persist;
@@ -491,17 +495,49 @@ export class Profile {
   }
 
   /**
-   * Bush Defence kit (wiki/design-tower-defence.md, section 12): into battle as a new hero, everything at power 1 — warden sword,
-   * wanderer jacket, bow and the three starter spells, no aura; the rest is bought from the sutler for battle raspberries.
-   * The hero's own gear is set aside for the battle and returned in the camp (src/menu/session.ts)
+   * Bush Defence battle (wiki/design-tower-defence.md, section 12): the hero goes in with their own gear, but works on a copy —
+   * what the sutler sells, the battle raspberries and the inventory shuffles live only in this battle. The stored profile
+   * gets only the growth (experience, level, enchant points for new levels, `keepGrowth`) and the victory loot (`creditStored`).
+   * A closed tab mid-battle loses nothing of the camp
    */
-  tdKit(): void {
-    const D = this.data;
-    D.items = [];
-    const eq = (def: string): string => this.add(def, 1, false).uid;
-    D.equip = { melee: eq('sword'), armor: eq('tunic'), ranged: eq('bow'), artifacts: [eq('fireball'), eq('spark'), eq('heal')], aura: null };
-    D.arrows = 40;
+  enterBattle(): void {
+    // a hero never saved yet (a fresh starter) — stored first, otherwise the growth and the loot would have nowhere to go
+    if (this.persist && !Profile.load()) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* closed storage */ }
+    this.battleMode = true;
+    this.data = structuredClone(this.data);
+    this.data.arrows = Math.max(this.data.arrows, BATTLE_ARROWS);
     this.save();
+  }
+
+  /** "Once more" / restart: the battle copy is taken anew from the stored profile — sutler purchases are gone */
+  restartBattle(): void {
+    if (!this.battleMode) return;
+    const stored = Profile.load();
+    if (!stored) return;
+    const keep = this.data.berries;
+    this.data = stored;
+    this.data.equip.aura ??= null;
+    this.data.berries = keep;
+    this.data.arrows = Math.max(this.data.arrows, BATTLE_ARROWS);
+    this.save();
+  }
+
+  /** Battle growth into the stored profile: experience and level, +1 enchant point per new level */
+  static keepGrowth(d: ProfileData): void {
+    const s = Profile.load();
+    if (!s || (d.level < s.level || (d.level === s.level && d.xp <= s.xp))) return;
+    s.points += Math.max(0, d.level - s.level);
+    s.level = d.level;
+    s.xp = d.xp;
+    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* closed storage */ }
+  }
+
+  /** Victory loot into the stored profile's raspberries (solo battle; online the server pays it) */
+  static creditStored(n: number): void {
+    const s = Profile.load();
+    if (!s || n <= 0) return;
+    s.berries += Math.round(n);
+    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* closed storage */ }
   }
 
   static load(): ProfileData | null {
@@ -517,7 +553,8 @@ export class Profile {
   }
 
   save(): void {
-    if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* closed storage */ }
+    if (this.battleMode) Profile.keepGrowth(this.data);
+    else if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* closed storage */ }
     for (const f of this.listeners) f();
   }
 
@@ -653,6 +690,9 @@ export class Profile {
     const art = arts.length ? arts.reduce((a, x) => a + x.power, 0) / arts.length : 0;
     return Math.max(1, Math.round((p(this.equipped('melee')) + p(this.equipped('armor')) + p(this.equipped('ranged')) + art) / 4));
   }
+
+  /** Strength for the defence balance (src/td/scaling.ts): gear power plus half the level */
+  get rating(): number { return this.power + Math.floor((this.data.level - 1) / 2); }
 
   stats(): GearStats {
     const m = this.equipped('melee'), r = this.equipped('ranged'), a = this.equipped('armor');

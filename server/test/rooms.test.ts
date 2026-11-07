@@ -129,9 +129,11 @@ test('battle result: the server runs the match — bush defended, history, cappe
   frames(10);
   assert.ok(match.tick > 0, 'battle is running');
   s.clock.t += 60_000;
-  // the guest spent on a tower — their reward is smaller; the host gets the whole starting treasury
+  // the reward is the match loot, not the purse: the guest's tower does not cut it
   assert.ok(match.td.command(1, { t: 'td', a: 'build:arrow', pad: 0 }));
-  const left = match.td.berries(1), full = match.td.berries(0);
+  match.td.addLoot(40);
+  const left = match.td.lootOf(1), full = match.td.lootOf(0);
+  assert.equal(left, 40);
   match.td.state = 'won';
   frames(120);
   const over = await g.p.next('battle.over');
@@ -151,7 +153,7 @@ test('battle result: the server runs the match — bush defended, history, cappe
   assert.deepEqual(rec.body, { map: 'td', bestWave: 10, wins: 1, fastestWinMs: 60_000 });
   const prof = await api(s, 'GET', '/api/profile', undefined, g.token);
   assert.equal(prof.body.version, 2);
-  assert.ok(new MapCatalog(MAPS).maxBerries('td', 2) >= full, 'cap is above the starting treasury');
+  assert.ok(new MapCatalog(MAPS).maxBerries('td', 2) >= 1000, 'the cap leaves room for a real victory loot');
 });
 
 test('connection drop: the seat is held, return with the same token; deadline passed — seat freed, host handed over', async () => {
@@ -210,8 +212,11 @@ test('"Once more": the host starts a new battle with the same party without read
   const { heroes: [h, g] } = await party(2);
   h.p.send({ t: 'room.start' });
   const first = await g.p.next('battle.start');
+  // defeat: the collected loot burns
+  s.app.games.get(first.matchId)!.td.addLoot(70);
   s.app.games.get(first.matchId)!.td.state = 'lost';
   frames(120);
+  assert.equal(((await g.p.next('profile.updated')).data as { berries: number }).berries, 250);
   await g.p.next('battle.over');
   g.p.send({ t: 'room.again' });
   assert.equal((await g.p.next('error')).code, 'not-host');

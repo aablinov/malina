@@ -84,6 +84,8 @@ body.menu #c.mm-canvas { cursor: default; }
 .mm-power { display: flex; align-items: center; gap: 1.6em; }
 .mm-power span { display: block; font: 400 0.65em/1 var(--mcd-px); text-transform: uppercase; }
 .mm-power > div > b { font: 400 2.6em/1.2 var(--mcd-px); color: var(--mm-cyan); text-shadow: 0 0.1em 0 #000; }
+.mm-power > div > small { display: block; margin-top: 0.2em; font-size: 0.75em; color: #ff8ab0; }
+.mm-shops { display: flex; gap: 0.5em; margin-top: 0.5em; }
 .mm-stats { display: flex; gap: 1.1em; }
 .mm-stats span { display: flex; flex-direction: column; align-items: center; gap: 0.3em; font: 400 0.75em/1 var(--mcd-px); color: var(--mm-cyan); }
 .mm-stats img { width: 1.8em; height: 1.8em; }
@@ -181,6 +183,8 @@ body.menu #c.mm-canvas { cursor: default; }
 .pz-win { width: min(26em, 90vw); display: flex; flex-direction: column; gap: 1em; padding: 2em; background: #10242e; border: 0.2em solid var(--mm-line); box-shadow: 0 0.4em 0 #000; text-align: center; }
 .pz-win h2 { margin: 0 0 0.4em; font: 400 1.5em/1.2 var(--mcd-px); text-transform: uppercase; }
 .pz-win p { margin: 0 0 0.6em; color: #c9d3d8; font-weight: 500; }
+.pz-win .pz-loot { color: #ff8ab0; font-weight: 700; }
+.pz-win .pz-loot.lost { color: #9aa4a8; text-decoration: line-through; }
 .pz.won h2 { color: var(--mcd-gold); }
 .pz.lost h2 { color: #ff7a6b; }
 .pz .mm-btn { width: 100%; }

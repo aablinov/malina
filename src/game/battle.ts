@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Obstacle } from '../collision.ts';
 import { Gear } from '../gear.ts';
 import { nullFx } from '../headless.ts';
-import { Profile, xpToNext, type ProfileData } from '../items.ts';
+import { BATTLE_ARROWS, Profile, xpToNext, type ProfileData } from '../items.ts';
 import { emptyInput, Knight, type KnightInput, type Strike } from '../knight.ts';
 import { obstaclesOf, terrainOf, type Terrain } from '../level/collide.ts';
 import { Pathfinder } from '../level/pathfind.ts';
@@ -79,7 +79,7 @@ export class HeadlessBattle {
       hurtKnight: (k: Knight, dmg: number, from: THREE.Vector3, knock: number) => this.hurt(k, dmg, from, knock),
       route: (from: THREE.Vector3, to: THREE.Vector3) => this.route(from, to),
     };
-    this.pack = new Pack(bossHooks, (at, n) => { if (this.world.td) this.world.td.fallen++; this.world.piles.drop(at, n); });
+    this.pack = new Pack(bossHooks, (at, n, base) => { if (this.world.td) this.world.td.killed(at, n, base); else this.world.piles.drop(at, n); });
     const hooks: SimHooks = {
       foes: () => this.pack.mobs.filter((m) => m.alive),
       heroes: () => [...this.heroes.values()].map((h) => ({ pos: h.knight.pos, get down() { return h.knight.down; }, seat: h.seat })),
@@ -109,7 +109,7 @@ export class HeadlessBattle {
     return this.foeCache;
   }
 
-  /** Hero of seat `seat` from the profile (a copy; the defence kit goes into battle, as in the browser). Appears at the map's point */
+  /** Hero of seat `seat` from the profile (a copy: own gear goes into battle, as in the browser). Appears at the map's point */
   addHero(seat: number, data: ProfileData): BattleHero {
     const knight = new Knight(this.scene, textures!);
     knight.tune = structuredClone(SWORD);
@@ -117,7 +117,7 @@ export class HeadlessBattle {
     const a = (seat / 4) * Math.PI * 2;
     knight.place(sp[0] + Math.cos(a) * 1.2, sp[2] + Math.sin(a) * 1.2, Math.PI, sp[1]);
     const profile = new Profile(structuredClone(data), false);
-    profile.tdKit();
+    profile.data.arrows = Math.max(profile.data.arrows, BATTLE_ARROWS);
     const gear = new Gear({
       scene: this.scene, fx: this.fx, hero: knight, terrain: this.terrain, targets: () => this.targets(), blast: () => {},
       sound: () => {}, toast: () => {}, banner: () => {}, quiet: () => true,
@@ -210,10 +210,11 @@ export class HeadlessBattle {
   /** Battle step */
   step(dt: number): void { this.world.step(dt); }
 
-  /** Reward to everyone: unspent raspberries and the battle experience */
+  /** Reward to everyone: the match loot — only for a defended bush (lost — it burns), and the battle experience */
   rewards(): Map<number, { berries: number; xp: number }> {
     const out = new Map<number, { berries: number; xp: number }>();
-    for (const h of this.heroes.values()) out.set(h.seat, { berries: Math.max(0, Math.floor(this.world.td?.berries(h.seat) ?? 0)), xp: Math.max(0, Math.floor(xpTotal(h.profile.data) - h.xp0)) });
+    const td = this.world.td, won = td?.state === 'won';
+    for (const h of this.heroes.values()) out.set(h.seat, { berries: won ? Math.max(0, Math.floor(td.lootOf(h.seat))) : 0, xp: Math.max(0, Math.floor(xpTotal(h.profile.data) - h.xp0)) });
     return out;
   }
 }
