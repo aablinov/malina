@@ -37,3 +37,9 @@ export function priceOf(def: string, power: number): number {
   if (d.spell === 'shop') return PRICE.spell(power);
   return r5(worth(d) * RARITY_K[d.rarity] * powerK(power));
 }
+
+/** Defence sutler prices (wiki/design-tower-defence.md, section 12): by rarity, expensive — invest in the hero or in two or three towers. The server charges the same */
+export const SUTLER_PRICE: Record<Rarity, number> = { common: 240, rare: 480, unique: 780 };
+export const SUTLER_ARROWS = 45;
+/** Arrows in one bundle at the merchant and the sutler */
+export const ARROW_BUNDLE = 24;

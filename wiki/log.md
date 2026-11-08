@@ -476,3 +476,7 @@ Pages: [design-multiplayer.md](design-multiplayer.md).
 ## [2026-11-08] code | Server profile, phase 2: the client keeps the hero only on the server
 `Profile` no longer touches localStorage: the storage is pluggable (`setProfileStorage`) — `ServerProfileStore` in the game, memory on dev pages. Page start (`src/menu/boot.ts`): server check, the "Hero name" card on first entry, the profile from the server; the old browser save is moved to the server once. The Online panel lost its login form.
 Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md), [design-inventory.md](design-inventory.md).
+
+## [2026-11-08] code | Server profile, phase 3: gear commands instead of the kit
+The battle client sends `gear` commands (equip, unequip, salvage, enchant, sutler buy and arrows) instead of the whole kit; the server checks and repeats them and charges the sutler; others get only the equipped items; the kit is taken from the database on joining, `mine` on a reconnect after changes. `PROTOCOL = 5`.
+Pages: [design-multiplayer.md](design-multiplayer.md).

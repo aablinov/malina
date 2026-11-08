@@ -236,3 +236,61 @@ test('match: over a lossy loopback the client duplicates commands (cl_packetdup)
   assert.ok(match.heroPos(1)!.x - x0 > 3, `hero walked despite the loss: ${match.heroPos(1)!.x - x0}`);
   assert.ok(match.seats.get(1)!.lastSeq > 100, `commands got through: ${match.seats.get(1)!.lastSeq}`);
 });
+
+test('match: gear changes are small commands — equip, sutler purchase from the treasury, junk refused; others see only the equipped', () => {
+  const { match, clients, run } = setup(2);
+  const [a, b] = clients;
+  run(2);
+  const hero = match.seats.get(0)!.hero.profile, d = hero.data;
+  const other = b.got.filter((m) => m.t === 'kit' && m.seat === 0).at(-1) as Extract<GameServerMsg, { t: 'kit' }>;
+  assert.ok(other.items.length <= 7 && other.items.length < d.items.length, `only the equipped: ${other.items.length}`);
+  // equip the claymore by uid
+  const clay = d.items.find((i) => i.def === 'claymore')!.uid;
+  a.chan.sendReliable({ t: 'gear', op: 'equip', uid: clay });
+  run(2);
+  assert.equal(d.equip.melee, clay);
+  assert.equal((b.got.filter((m) => m.t === 'kit' && m.seat === 0).at(-1) as { equip: { melee: string } }).equip.melee, clay, 'the other sees the new sword');
+  // junk: an unknown uid, an unknown def, a bad slot — nothing changes
+  for (const m of [{ op: 'equip', uid: 'nope' }, { op: 'buy', def: 'no-such' }, { op: 'unequip', slot: 7 }, { op: 'enchant', uid: clay, slot: 'x', option: 0 }]) a.chan.sendReliable({ t: 'gear', ...m } as GameClientMsg);
+  const n = d.items.length;
+  run(2);
+  assert.equal(d.items.length, n);
+  assert.equal(d.equip.melee, clay);
+  // the sutler: the price comes from the seat's treasury, the item at the hero's power with the same uid as on the client
+  match.td.gain(0, 2000);
+  const purse = match.td.berries(0), want = new Profile(structuredClone(d));
+  const mine = want.add('champion', want.power);
+  a.chan.sendReliable({ t: 'gear', op: 'buy', def: 'champion' });
+  run(2);
+  const got = d.items.at(-1)!;
+  assert.deepEqual({ uid: got.uid, power: got.power, enchants: got.enchants }, { uid: mine.uid, power: mine.power, enchants: mine.enchants }, 'the client predicts the same item');
+  assert.ok(match.td.berries(0) < purse, 'paid from the treasury');
+  // not enough raspberries — nothing bought, a hint
+  match.td.spend(0, match.td.berries(0));
+  a.chan.sendReliable({ t: 'gear', op: 'buy', def: 'champion' });
+  run(2);
+  assert.equal(d.items.at(-1)!.uid, got.uid);
+  assert.ok(a.got.some((m) => m.t === 'toast' && /raspberries/.test(m.text)));
+});
+
+test('match: the battle page joins — the kit is the stored one; reconnecting after changes — the server copy comes back whole', () => {
+  const clock = { t: 0 }, now = () => clock.t;
+  const stored = Profile.starter();
+  const clay = stored.items.find((i) => i.def === 'claymore')!.uid;
+  const match = new Match({ id: 'm2', map: loadMap('td'), seed: 7, players: [{ seat: 0, playerId: 'p0', name: 'A', profile: Profile.starter() }], stored: () => stored });
+  // the camp saved the claymore after the match started: the battle page connects — the hero has it
+  stored.equip.melee = clay;
+  const lb = loopbackPair({ clock: now, delayMs: 0 }), c = new FakeClient(lb, now);
+  match.attach(0, new Channel<R, U>(lb.a, { clock: now }));
+  assert.equal(match.seats.get(0)!.hero.profile.data.equip.melee, clay);
+  // a change in battle, then a new connection: no longer the database kit, the client gets its own whole
+  c.chan.sendReliable({ t: 'gear', op: 'unequip', slot: 0 });
+  c.chan.flush(); lb.pump(clock.t);
+  assert.equal(match.seats.get(0)!.hero.profile.data.equip.artifacts[0], null);
+  const lb2 = loopbackPair({ clock: now, delayMs: 0 }), c2 = new FakeClient(lb2, now);
+  match.attach(0, new Channel<R, U>(lb2.a, { clock: now }));
+  assert.equal(match.seats.get(0)!.hero.profile.data.equip.artifacts[0], null, 'not restocked from the database');
+  match.frame(0.05); lb2.pump(clock.t);
+  const m = c2.got.find((x) => x.t === 'mine') as Extract<GameServerMsg, { t: 'mine' }> | undefined;
+  assert.ok(m && (m.equip as { artifacts: unknown[] }).artifacts[0] === null && m.items.length === stored.items.length);
+});

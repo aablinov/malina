@@ -455,8 +455,25 @@ export interface GearStats {
   arrowBundle: number;
 }
 
+/**
+ * A change of the gear in an online battle (wiki/design-multiplayer.md, section 7): the client does it on its own copy and sends
+ * only this — the server repeats it on the hero's copy from the database (src/game/match.ts) and charges the sutler itself
+ */
+export type KitOp =
+  | { op: 'equip'; uid: string; at?: number }
+  /** Artifact slot 0–2; -1 — the aura */
+  | { op: 'unequip'; slot: number }
+  | { op: 'salvage'; uid: string }
+  | { op: 'enchant'; uid: string; slot: number; option: number }
+  /** A sutler item at the hero's power */
+  | { op: 'buy'; def: string }
+  /** A sutler arrow bundle */
+  | { op: 'arrows' };
+
 export class Profile {
   data: ProfileData;
+  /** Gear changes for the battle server (src/cgame/net-battle.ts); unset — nobody listens */
+  onOp?: (op: KitOp) => void;
   private readonly listeners = new Set<() => void>();
   private rand: Rand;
 
@@ -599,6 +616,23 @@ export class Profile {
     return true;
   }
 
+  /** Buy an item: paid, into the inventory at the hero's power; null — not enough raspberries */
+  buy(def: string, price: number): Item | null {
+    if (!this.pay(price)) return null;
+    const it = this.add(def, this.power);
+    this.save();
+    this.onOp?.({ op: 'buy', def });
+    return it;
+  }
+
+  /** Buy an arrow bundle; false — not enough raspberries */
+  buyArrows(n: number, price: number): boolean {
+    if (!this.pay(price)) return false;
+    this.addArrows(n);
+    this.onOp?.({ op: 'arrows' });
+    return true;
+  }
+
   /** Reforging at the blacksmith: +1 item power */
   reforge(uid: string, price: number): boolean {
     const it = this.get(uid);
@@ -631,15 +665,21 @@ export class Profile {
     else e[slot] = uid;
     it.isNew = false;
     this.save();
+    this.onOp?.(at === undefined ? { op: 'equip', uid } : { op: 'equip', uid, at });
     return true;
   }
 
   /** Unequip an artifact from its slot (weapons and armour cannot be unequipped — only replaced) */
-  unequipArtifact(i: number): void { this.data.equip.artifacts[i] = null; this.save(); }
+  unequipArtifact(i: number): void {
+    if (!Number.isInteger(i) || i < 0 || i >= this.data.equip.artifacts.length) return;
+    this.data.equip.artifacts[i] = null;
+    this.save();
+    this.onOp?.({ op: 'unequip', slot: i });
+  }
 
   /** Equipped aura */
   aura(): Item | null { return this.get(this.data.equip.aura); }
-  unequipAura(): void { this.data.equip.aura = null; this.save(); }
+  unequipAura(): void { this.data.equip.aura = null; this.save(); this.onOp?.({ op: 'unequip', slot: -1 }); }
 
   /** Salvage: raspberries and the spent points back. Equipped items cannot be salvaged */
   salvage(uid: string): { berries: number; points: number } | null {
@@ -650,6 +690,7 @@ export class Profile {
     this.data.berries += res.berries;
     this.data.points += res.points;
     this.save();
+    this.onOp?.({ op: 'salvage', uid });
     return res;
   }
 
@@ -673,6 +714,7 @@ export class Profile {
     s.tier++;
     this.data.points -= cost;
     this.save();
+    this.onOp?.({ op: 'enchant', uid, slot, option });
     return true;
   }
 
