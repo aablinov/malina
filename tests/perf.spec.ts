@@ -9,6 +9,9 @@ import { resolve } from 'node:path';
  */
 
 // warm=1: an automated run skips the shader warm-up (src/devflag.ts AUTOMATED), here it is measured
+// switched off (2026-11-08): runs on the playground scene — no tests there, wiki/dev-testing.md
+test.skip(true, 'perf tests are switched off');
+
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&warm=1';
 const MAX_MS = Number(process.env.PERF_MAX_MS || 40);
 /** Frame time is meaningful only on a real GPU (PERF_GPU=1, see playwright.config.ts); in SwiftShader we check leaks and programs */

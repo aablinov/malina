@@ -10,6 +10,9 @@ import { readFileSync } from 'node:fs';
  * a patrol walks, an ambush sees the hero only up close.
  */
 
+// switched off for now (2026-11-08): the whole island file is skipped — remove this line to bring the tests back
+test.skip(true, 'island tests are switched off');
+
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=island';
 const MAP = JSON.parse(readFileSync(resolve('assets/maps/island.json'), 'utf8')) as { entities: { kind: string }[]; meta: { mobRooms: unknown[]; arenas: unknown[]; merchants: unknown[] } };
 

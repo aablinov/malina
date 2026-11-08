@@ -1,8 +1,10 @@
 # Tests: how to run Playwright
 
-> Version 4 · 2026-11-08: fast run — no frames drawn by themselves, real GPU on macOS, fully parallel, font hosts blocked. Version 3 · 2026-11-08: the camp and battles from it need a server — `tests/game-server.ts`
+> Version 5 · 2026-11-08: no tests for the playground, the editor, the world and Soller. Version 4 · 2026-11-08: fast run — no frames drawn by themselves, real GPU on macOS, fully parallel, font hosts blocked. Version 3 · 2026-11-08: the camp and battles from it need a server — `tests/game-server.ts`
 
 Tests — `tests/playground.spec.ts`, config — `playwright.config.ts`. They open the built `dist/index.html`, the simulation is driven through `window.__malina`.
+
+**What we do not test.** No Playwright tests are written for the **playground** (`?dev=playground` scenes: the hero, weapons, spells, mobs, wardens, HUD, inventory), the **level editor** (`?dev=editor`), the **open world** (`map=world`, region streaming) and **Soller**. The existing ones are switched off with `test.skip` (`tests/playground.spec.ts`, the editor test in `tests/prefabs.spec.ts`, `tests/world.spec.ts`, `tests/perf.spec.ts` — it runs on the playground scene; the island `tests/island.spec.ts` too), the Soller test is removed. New tests go to the game itself: the camp and the server, Bush Defence (`map=td…`), the network.
 
 - **No frames by themselves:** an automated run (`navigator.webdriver`, `AUTOMATED` in `src/devflag.ts`) simulates and updates the view and the HUD but does not draw; `__malina.render()` draws a frame, `render(false)` only syncs the view (camera, regions, chunks). No shader warm-up either — `?warm=1` brings it back (perf tests count programs).
 - **Held time:** while the test is in control (`script(true)`) game time moves only by `step()` — what the page does between two test calls does not depend on machine load.

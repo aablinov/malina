@@ -34,7 +34,8 @@ test('preset showcase: every preset from assets/prefabs stands, each has decor',
   expect(r.cats).toBeGreaterThanOrEqual(CATS);
 });
 
-test('editor: the "Library" tab, placement with a 90° turn and undo', async ({ page }) => {
+// switched off (2026-11-08): no tests for the editor — wiki/dev-testing.md
+test.skip('editor: the "Library" tab, placement with a 90° turn and undo', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(pathToFileURL(resolve('dist/index.html')).href + '?dev=editor', { waitUntil: 'domcontentloaded' });

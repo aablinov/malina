@@ -7,6 +7,9 @@ import { resolve } from 'node:path';
  * dodge roll, stairs without jumping, living water, a storage yard. No enemies and no guns.
  */
 
+// switched off (2026-11-08): no tests for the playground and the editor — wiki/dev-testing.md
+test.skip(true, 'playground and editor tests are switched off');
+
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground';
 
 async function open(page: Page): Promise<void> {

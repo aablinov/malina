@@ -488,3 +488,7 @@ Pages: [dev-testing.md](dev-testing.md).
 ## [2026-11-08] code | Faster Playwright run
 An automated run does not draw frames by itself and holds game time while the test is in control; Metal GPU on macOS, 640 × 400, fully parallel, test servers on free ports, Google Fonts blocked. The island roads test is split into parallel tests, posts and loot load only the level data. The Soller test is removed. Tests finish in ~1.5 min instead of ~18; the run still lingers after the last test.
 Pages: [dev-testing.md](dev-testing.md).
+
+## [2026-11-08] decision | No tests for the playground, the editor, the world and Soller
+The playground and editor tests, the world and island tests are switched off with `test.skip`, the Soller test is removed; new tests are written only for the game itself — the camp, the server, Bush Defence, the network.
+Pages: [dev-testing.md](dev-testing.md).
