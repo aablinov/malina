@@ -55,7 +55,7 @@ test('determinism: same seed — same hashes every second, another seed — diff
 });
 
 test('all defence maps: waves run to the end with towers on every pad, no hangs', () => {
-  for (const id of ['td', 'td2', 'td3']) {
+  for (const id of ['td', 'td2', 'td3', 'td4']) {
     // stub enemies with 1 hp: any tower kills outright — checks that waves and rules reach victory
     const w = tdWorld(id, 7, { mobHp: 1 });
     const s = w.sim;

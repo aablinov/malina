@@ -43,7 +43,7 @@ export class TdView {
   constructor(o: TdViewOpts) {
     this.scene = o.scene; this.fx = o.fx; this.quiet = o.quiet; this.spec = o.spec; this.heroPos = o.heroPos; this.seat = o.seat;
     this.pads = o.spec.pads.map((p, i) => new PadView(o.scene, p, i));
-    this.bushPos = new THREE.Vector3(o.spec.bush.x, 0, o.spec.bush.z);
+    this.bushPos = new THREE.Vector3(o.spec.bush.x, o.spec.bush.y ?? 0, o.spec.bush.z);
   }
 
   /** Records and events of the last applied snapshot → create/update/remove views, play events */

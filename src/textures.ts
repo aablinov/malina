@@ -217,6 +217,8 @@ export interface Textures {
   water: THREE.Texture;
   // Bush Defence lava map (wiki/design-tower-defence.md, section 7): ash ground, basalt, scorched rock, lava
   ashTop: THREE.Texture; ashSide: THREE.Texture; basalt: THREE.Texture; cliffLava: THREE.Texture; lava: THREE.Texture;
+  // Raspberry Spiral (wiki/design-tower-defence.md, section 17): a mauve rock of the floating island, with a grass rim on top
+  cliffViolet: THREE.Texture; cliffVioletGrass: THREE.Texture;
   /** Fire: 3 frames of 16 × 16 stacked vertically */
   fire: THREE.Texture;
 }
@@ -741,6 +743,15 @@ export function makeTextures(): Textures {
   T.cliffDark = canvasTex(16, (g, s, r) => strata(CLIFF_DARK, r, g, s), 171);
   // scorched rock of the lava map: brown layers
   T.cliffLava = canvasTex(16, (g, s, r) => strata('#5c3e38', r, g, s), 194);
+  // the spiral's floating island: mauve layers like the reference cliffs, a grass rim on the top block
+  T.cliffViolet = canvasTex(16, (g, s, r) => strata('#6e4a76', r, g, s), 195);
+  T.cliffVioletGrass = canvasTex(16, (g, s, r) => {
+    strata('#6e4a76', r, g, s);
+    for (let x = 0; x < s; x++) {
+      const d = 3 + ((r() * 4) | 0);
+      for (let y = 0; y < d; y++) px(g, x, y, jitter(y === d - 1 ? GRASS_DARK : GRASS_BASE, r, 3));
+    }
+  }, 196);
   T.cliffGrassSide = canvasTex(16, (g, s, r) => {
     strata(CLIFF, r, g, s);
     for (let x = 0; x < s; x++) {

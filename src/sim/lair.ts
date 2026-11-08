@@ -18,12 +18,12 @@ export class SimLair {
     this.w = w;
     this.lane = lane;
     this.id = `lair:${lane.id}`;
-    this.pos = new THREE.Vector3(lane.points[0][0], 0, lane.points[0][1]);
+    this.pos = new THREE.Vector3(lane.points[0][0], w.floor(lane.points[0][0], lane.points[0][1]), lane.points[0][1]);
   }
 
   burst(): void {
     this.spawned++;
-    this.w.emit({ t: 'lair.burst', id: this.id, x: this.pos.x, y: 0, z: this.pos.z });
+    this.w.emit({ t: 'lair.burst', id: this.id, x: this.pos.x, y: this.pos.y, z: this.pos.z });
   }
 
   entity(out: EntityState[]): void { out.push({ id: this.id, lane: this.lane.id, warn: r2(this.warn) }); }

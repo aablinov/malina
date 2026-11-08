@@ -210,7 +210,7 @@ export class Wisp extends Mob {
       this.field.markCircle(c, 1.6, 0.45, () => {
         if (this.dead) return;
         if (!this.quiet) hiss({ dur: 0.4, vol: 0.15, f: 4000, f1: 800, q: 0.7, type: 'bandpass' });
-        this.h.fx.burst(c.clone().setY(1), [SOUL, '#ffffff'], 16, { speed: 4, up: 2, size: 0.1, life: 0.5, glow: true, gravity: 0 });
+        this.h.fx.burst(c.clone().setY(this.ground + 1), [SOUL, '#ffffff'], 16, { speed: 4, up: 2, size: 0.1, life: 0.5, glow: true, gravity: 0 });
         if (this.inCircle(c, 1.6)) this.hurt(6, c, 3);
         // cold puddle: slows briefly
         this.field.hazard(c, 1.4, 1.5, 0, SOUL, 0.35);
@@ -352,7 +352,7 @@ export class Scarecrow extends Mob {
       if (t - dt <= 0) this.field.markCircle(this.pos.clone(), 2.3, 0.6, () => {
         if (this.dead) return;
         if (!this.quiet) hiss({ dur: 0.4, vol: 0.12, f: 900, f1: 2400, q: 0.8, type: 'bandpass' });
-        this.h.fx.burst(this.pos.clone().setY(1.6), ['#e0c060', '#c8a070'], 14, { speed: 4, up: 1, size: 0.1, life: 0.5, gravity: 4 });
+        this.h.fx.burst(this.pos.clone().setY(this.ground + 1.6), ['#e0c060', '#c8a070'], 14, { speed: 4, up: 1, size: 0.1, life: 0.5, gravity: 4 });
         if (this.inCircle(this.pos, 2.3)) this.hurt(8, this.pos, 6);
       });
       return t > 1.1;

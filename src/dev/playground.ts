@@ -312,9 +312,9 @@ export function runPlayground(profile: Profile): void {
   const tdSpec = level.meta.td as TdSpec | undefined;
   // mist at the enemy camps (src/td/mist-fx.ts): the exit points are hidden
   const mistFx = tdSpec?.mist ? new MistFx(scene, tdSpec.lanes, tdSpec.mist) : null;
-  // on a map — from meta.merchants ({ kind, x, z, yaw }), on the playground — in the north-west corner
-  const merchantSpecs = hasMap ? ((level.meta.merchants as { kind: 'smith' | 'merchant'; x: number; z: number; yaw: number }[] | undefined) ?? []) : [{ kind: 'smith' as const, x: -17, z: -13, yaw: 0 }, { kind: 'merchant' as const, x: -19, z: -6, yaw: Math.PI / 2 }];
-  const merchants: Merchant[] = merchantSpecs.map((m) => new Merchant(scene, overlayEl, T, m.kind, m.x, m.z, m.yaw));
+  // on a map — from meta.merchants ({ kind, x, y?, z, yaw }; y — the floor of the stall, the plateau of map 4), on the playground — in the north-west corner
+  const merchantSpecs: { kind: 'smith' | 'merchant'; x: number; y?: number; z: number; yaw: number }[] = hasMap ? ((level.meta.merchants as { kind: 'smith' | 'merchant'; x: number; y?: number; z: number; yaw: number }[] | undefined) ?? []) : [{ kind: 'smith' as const, x: -17, z: -13, yaw: 0 }, { kind: 'merchant' as const, x: -19, z: -6, yaw: Math.PI / 2 }];
+  const merchants: Merchant[] = merchantSpecs.map((m) => new Merchant(scene, overlayEl, T, m.kind, m.x, m.z, m.yaw, m.y ?? 0));
   /** Flat obstacles for the hero and paths: storage-yard props, decor and shops (rebuilt when one of them changes) */
   let solidsCache: Obstacle[] = [], solidsKey: [Obstacle[], number] | null = null;
   const solids = (): Obstacle[] => {
@@ -1358,7 +1358,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Open-world regions (?map=world): loaded, stats, kill(id), save() */
     regions,
     /** Walk up to a merchant and press F */
-    trade(kind: 'smith' | 'merchant' | 'sutler') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI); interactReq = true; tick(STEP); return shop.open; },
+    trade(kind: 'smith' | 'merchant' | 'sutler') { const m = merchants.find((x) => x.kind === kind); if (!m) return false; hero.place(m.front.x, m.front.z, Math.PI, m.front.y); interactReq = true; tick(STEP); return shop.open; },
     /** RMB: a shot towards a point */
     shoot(x: number, z: number) { return gear.shoot(new THREE.Vector3(x, hero.pos.y, z)); },
     /** Keys 1/2/3: an artifact towards a point; charge 0..1 — a charged spell, without holding */

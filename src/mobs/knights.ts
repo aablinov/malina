@@ -363,7 +363,7 @@ class Standard implements Target {
 
   get alive(): boolean { return this.up && !this.owner.dead; }
 
-  plant(at: THREE.Vector3): void { this.pos.copy(at).setY(0); this.group.position.copy(this.pos); this.group.visible = true; this.up = true; this.hits = 0; }
+  plant(at: THREE.Vector3): void { this.pos.copy(at); this.group.position.copy(this.pos); this.group.visible = true; this.up = true; this.hits = 0; }
 
   hit(_dmg: number, dir: THREE.Vector3): void {
     if (!this.alive) return;
@@ -423,7 +423,7 @@ export class BannerBearer extends Mob {
     this.plantCd -= dt;
     const was = this.standard.up;
     super.update(dt);
-    if (was && !this.standard.up && !this.dead) { this.plantCd = 6; this.h.fx.burst(this.standard.pos.clone().setY(1.5), ['#b3122e', '#e8b84a'], 12, { speed: 3, up: 2, size: 0.1, life: 0.6, gravity: 6 }); }
+    if (was && !this.standard.up && !this.dead) { this.plantCd = 6; this.h.fx.burst(this.standard.pos.clone().setY(this.ground + 1.5), ['#b3122e', '#e8b84a'], 12, { speed: 3, up: 2, size: 0.1, life: 0.6, gravity: 6 }); }
     this.carried.visible = !this.standard.up;
     // the banner inspires knights within 6 m, and the bannerman himself
     if (this.standard.alive) {
@@ -439,7 +439,7 @@ export class BannerBearer extends Mob {
         const at = this.pos.clone().addScaledVector(this.fwd(), 0.9);
         this.standard.plant(at);
         if (!this.quiet) { boom(140, 60, 0.4, 0.4); voice({ type: 'triangle', f: 392, f1: 523, dur: 0.6, vol: 0.05, verb: 0.5 }); }
-        this.h.fx.shock(at.clone().setY(0.1), 6, RASP.clone().multiplyScalar(0.4), 0.5, 0.12);
+        this.h.fx.shock(at.clone().setY(this.ground + 0.1), 6, RASP.clone().multiplyScalar(0.4), 0.5, 0.12);
       }
       return t > 0.9;
     }
@@ -499,8 +499,8 @@ export class Hammerer extends Mob {
         if (this.dead) return;
         if (!this.quiet) { boom(70, 25, 0.8, 0.8, 0, 0.4); hiss({ dur: 0.4, vol: 0.15, f: 800, f1: 150, q: 0.5, type: 'lowpass' }); }
         this.h.fx.shake = Math.max(this.h.fx.shake, 0.5);
-        this.h.fx.shock(this.smashAt.clone().setY(0.1), 2.4, C(1.6, 1.4, 1.2), 0.35, 0.15);
-        this.h.fx.burst(this.smashAt.clone().setY(0.2), ['#8a8a8a', '#c8b89a'], 14, { speed: 4, up: 3, size: 0.12, life: 0.5, gravity: 8 });
+        this.h.fx.shock(this.smashAt.clone().setY(this.ground + 0.1), 2.4, C(1.6, 1.4, 1.2), 0.35, 0.15);
+        this.h.fx.burst(this.smashAt.clone().setY(this.ground + 0.2), ['#8a8a8a', '#c8b89a'], 14, { speed: 4, up: 3, size: 0.12, life: 0.5, gravity: 8 });
         if (this.inCircle(this.smashAt, 2.2)) this.hurt(16, this.smashAt, 9);
       });
     }

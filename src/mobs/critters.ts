@@ -138,7 +138,7 @@ export class WitheredGardener extends Mob {
       this.field.markLine(from, dir, 2.6, 1.2, 0.85, () => {
         if (this.dead) return;
         if (!this.quiet) boom(110, 50, 0.3, 0.35);
-        this.h.fx.burst(from.clone().addScaledVector(dir, 2).setY(0.1), ['#8a6a40', '#5a4428'], 8, { speed: 2, up: 2, size: 0.1, life: 0.4, gravity: 8 });
+        this.h.fx.burst(from.clone().addScaledVector(dir, 2).setY(this.ground + 0.1), ['#8a6a40', '#5a4428'], 8, { speed: 2, up: 2, size: 0.1, life: 0.4, gravity: 8 });
         if (this.inLine(from, dir, 2.6, 1.2)) this.hurt(11, from, 3);
       });
     }

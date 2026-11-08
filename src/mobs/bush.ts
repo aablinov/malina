@@ -69,7 +69,7 @@ export class BerrySlime extends Mob {
       this.field.markCircle(this.hopTo, r, 0.55, () => {
         if (this.dead) return;
         if (!this.quiet) voice({ type: 'sine', f: 180 + 80 * (2 - this.size), f1: 90, dur: 0.15, vol: 0.05 });
-        this.h.fx.burst(this.hopTo.clone().setY(0.1), ['#e0306a', '#9a1240'], 6, { speed: 2, up: 1.5, size: 0.08, life: 0.4, gravity: 8 });
+        this.h.fx.burst(this.hopTo.clone().setY(this.ground + 0.1), ['#e0306a', '#9a1240'], 6, { speed: 2, up: 1.5, size: 0.08, life: 0.4, gravity: 8 });
         if (this.inCircle(this.hopTo, r)) this.hurt([3, 4, 6][this.size], this.hopTo, 2);
         // sticky puddle
         if (this.size > 0) this.field.hazard(this.hopTo, r * 0.8, 1.5, 2, JAM);
@@ -179,7 +179,7 @@ export class ThornBall extends Mob {
     this.rolled += 11 * dt;
     // touched the hero — knocked him down and stopped
     if (this.inCircle(this.pos, this.radius + 0.2)) { this.hurt(9, this.pos, 6); if (!this.quiet) boom(200, 80, 0.2, 0.25); return true; }
-    if (rnd() < 0.5) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1, rand(-1, 1)), life: 0.3, size: 0.08, color: '#8a6a40', gravity: 6 });
+    if (rnd() < 0.5) this.h.fx.particle({ pos: this.pos.clone().setY(this.ground + 0.1), vel: new THREE.Vector3(rand(-1, 1), 1, rand(-1, 1)), life: 0.3, size: 0.08, color: '#8a6a40', gravity: 6 });
     if (blocked) {
       // into a wall: bounce and stars
       if (!this.quiet) boom(120, 40, 0.4, 0.5);
@@ -252,7 +252,7 @@ export class VineWhip extends Mob {
     if (t - dt <= 0) this.field.markCircle(this.pos.clone(), 3, 0.6, () => {
       if (this.dead) return;
       if (!this.quiet) hiss({ dur: 0.25, vol: 0.14, f: 2600, f1: 600, q: 1, type: 'bandpass' });
-      this.h.fx.shock(this.pos.clone().setY(0.4), 3, C(1, 2, 0.6), 0.3, 0.12);
+      this.h.fx.shock(this.pos.clone().setY(this.ground + 0.4), 3, C(1, 2, 0.6), 0.3, 0.12);
       if (this.inCircle(this.pos, 3)) this.hurt(7, this.pos, 5);
     });
     return t > 1;
@@ -325,8 +325,8 @@ export class BudSpitter extends Mob {
         seed.scale.set(0.16, 0.22, 0.16);
         if (!this.quiet) voice({ type: 'square', f: 520, f1: 260, dur: 0.06, vol: 0.03, lp: 1800 });
         this.field.markCircle(to, 1, 0.8, () => undefined);
-        this.field.lob(seed, this.head.getWorldPosition(new THREE.Vector3()).setY(1.7), to, 0.8, 2.4, C(1.6, 0.6, 0.8), (p) => {
-          this.h.fx.burst(p.clone().setY(0.2), ['#f4e0b0', '#c8245a'], 6, { speed: 2, up: 2, size: 0.07, life: 0.4, gravity: 8 });
+        this.field.lob(seed, this.head.getWorldPosition(new THREE.Vector3()).setY(this.ground + 1.7), to, 0.8, 2.4, C(1.6, 0.6, 0.8), (p) => {
+          this.h.fx.burst(p.clone().setY(this.ground + 0.2), ['#f4e0b0', '#c8245a'], 6, { speed: 2, up: 2, size: 0.07, life: 0.4, gravity: 8 });
           if (this.inCircle(p, 1)) this.hurt(6, p, 2);
         });
       }
@@ -417,7 +417,7 @@ export class ThornHorror extends Mob {
         if (this.dead) return;
         if (!this.quiet) boom(60, 25, 0.6, 0.7);
         this.h.fx.shake = Math.max(this.h.fx.shake, 0.4);
-        this.h.fx.shock(this.pos.clone().setY(0.1), 2.6, C(1.2, 1.6, 0.6), 0.35, 0.15);
+        this.h.fx.shock(this.pos.clone().setY(this.ground + 0.1), 2.6, C(1.2, 1.6, 0.6), 0.35, 0.15);
         if (this.inCircle(this.pos, 2.6)) this.hurt(10, this.pos, 7);
       });
       return t > 1;
@@ -441,8 +441,8 @@ export class ThornHorror extends Mob {
     const len = t < 0.8 ? 0 : t < 1 ? (t - 0.8) / 0.2 * 7 : Math.max(0, 7 - (t - 1) * 14);
     this.lash.visible = len > 0.05;
     if (this.lash.visible) {
-      const a = this.pos.clone().setY(2).addScaledVector(this.lashDir, 0.6);
-      this.lash.position.copy(a).addScaledVector(this.lashDir, len / 2).setY(1.6);
+      const a = this.pos.clone().setY(this.ground + 2).addScaledVector(this.lashDir, 0.6);
+      this.lash.position.copy(a).addScaledVector(this.lashDir, len / 2).setY(this.ground + 1.6);
       this.lash.rotation.set(0, Math.atan2(this.lashDir.x, this.lashDir.z), 0);
       this.lash.scale.set(0.16, 0.16, len);
     }

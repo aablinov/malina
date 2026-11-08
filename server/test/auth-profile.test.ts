@@ -75,6 +75,6 @@ test('profile: junk rejected, unknown items dropped', async () => {
 
 test('health and maps', async () => {
   const r = await api(s, 'GET', '/api/health');
-  assert.deepEqual(r.body.maps, ['td', 'td2', 'td3']);
+  assert.deepEqual(r.body.maps, ['td', 'td2', 'td3', 'td4']);
   assert.equal((await api(s, 'GET', '/api/records?map=none')).status, 400);
 });

@@ -70,7 +70,7 @@ export class DruseGolemling extends Mob {
         if (!this.quiet) { boom(80, 30, 0.6, 0.7); hiss({ dur: 0.5, vol: 0.12, f: 2400, f1: 600, q: 0.8, type: 'bandpass' }); }
         this.h.fx.shake = Math.max(this.h.fx.shake, 0.35);
         // spikes grow along the strip
-        for (let d = 1; d <= 6.5; d += 0.8) this.h.fx.burst(from.clone().addScaledVector(this.wave, d).setY(0.2), [RASP, '#ffd0e0'], 4, { speed: 1, up: 5, size: 0.12, life: 0.45, glow: true, gravity: 12 });
+        for (let d = 1; d <= 6.5; d += 0.8) this.h.fx.burst(from.clone().addScaledVector(this.wave, d).setY(this.ground + 0.2), [RASP, '#ffd0e0'], 4, { speed: 1, up: 5, size: 0.12, life: 0.45, glow: true, gravity: 12 });
         if (this.inLine(from, this.wave, 6.5, 1.3)) this.hurt(12, from, 5);
       });
     }
@@ -141,7 +141,7 @@ export class HopPot extends Mob {
       if (t - dt <= 0) this.field.markCircle(this.pos.clone(), 2.2, 0.7, () => {
         if (this.dead) return;
         if (!this.quiet) hiss({ dur: 0.6, vol: 0.15, f: 600, f1: 2400, q: 0.5, type: 'lowpass' });
-        this.h.fx.burst(this.pos.clone().setY(1), [FIRE, RASP], 16, { speed: 4, up: 3, size: 0.1, life: 0.5, glow: true, gravity: 6 });
+        this.h.fx.burst(this.pos.clone().setY(this.ground + 1), [FIRE, RASP], 16, { speed: 4, up: 3, size: 0.1, life: 0.5, glow: true, gravity: 6 });
         if (this.inCircle(this.pos, 2.2)) this.hurt(7, this.pos, 6);
       });
       return t > 1;
@@ -154,7 +154,7 @@ export class HopPot extends Mob {
         if (this.dead) return;
         if (!this.quiet) boom(110, 40, 0.5, 0.5);
         this.h.fx.shake = Math.max(this.h.fx.shake, 0.2);
-        this.h.fx.burst(this.to.clone().setY(0.3), [FIRE, RASP, '#ffd0a0'], 14, { speed: 4, up: 4, size: 0.1, life: 0.5, glow: true, gravity: 8 });
+        this.h.fx.burst(this.to.clone().setY(this.ground + 0.3), [FIRE, RASP, '#ffd0a0'], 14, { speed: 4, up: 4, size: 0.1, life: 0.5, glow: true, gravity: 8 });
         if (this.inCircle(this.to, 1.5)) this.hurt(8, this.to, 4);
         this.field.hazard(this.to, 1.2, 2, 4, FIRE);
       });
@@ -239,7 +239,7 @@ export class WardObelisk extends Mob {
     if (t - dt <= 0) this.field.markCircle(this.pos.clone(), 2.6, 0.6, () => {
       if (this.dead) return;
       if (!this.quiet) voice({ type: 'sine', f: 440, f1: 220, dur: 0.5, vol: 0.05, verb: 0.5 });
-      this.h.fx.shock(this.pos.clone().setY(0.2), 2.6, VIOLET.clone().multiplyScalar(0.5), 0.35, 0.12);
+      this.h.fx.shock(this.pos.clone().setY(this.ground + 0.2), 2.6, VIOLET.clone().multiplyScalar(0.5), 0.35, 0.12);
       if (this.inCircle(this.pos, 2.6)) this.hurt(4, this.pos, 8);
     }, VIOLET);
     return t > 0.8;
@@ -303,7 +303,7 @@ export class BasketMimic extends Mob {
     super.notice();
     if (!was && this.alerted) {
       // came alive: slammed the lid, "surprise!"
-      this.h.fx.text(this.pos.clone().setY(1.6), t('surprise!'), 'crit');
+      this.h.fx.text(this.pos.clone().setY(this.ground + 1.6), t('surprise!'), 'crit');
       if (!this.quiet) { boom(220, 90, 0.2, 0.3); voice({ type: 'square', f: 300, f1: 600, dur: 0.15, vol: 0.04, lp: 2000 }); }
     }
   }
@@ -386,13 +386,13 @@ export class JamKeg extends Mob {
     const c = this.pos.clone();
     if (!this.quiet) { boom(70, 25, 0.9, 0.9, 0, 0.5); hiss({ dur: 0.6, vol: 0.2, f: 1600, f1: 200, q: 0.4, type: 'lowpass' }); }
     this.h.fx.shake = Math.max(this.h.fx.shake, 0.5);
-    this.h.fx.shock(c.clone().setY(0.2), JamKeg.R, JAM, 0.4, 0.2);
-    this.h.fx.burst(c.clone().setY(0.6), [JAM, '#e0306a', '#8a5a32'], 26, { speed: 6, up: 5, size: 0.12, life: 0.7, glow: true, gravity: 10 });
+    this.h.fx.shock(c.clone().setY(this.ground + 0.2), JamKeg.R, JAM, 0.4, 0.2);
+    this.h.fx.burst(c.clone().setY(this.ground + 0.6), [JAM, '#e0306a', '#8a5a32'], 26, { speed: 6, up: 5, size: 0.12, life: 0.7, glow: true, gravity: 10 });
     if (this.inCircle(c, JamKeg.R)) this.hurt(12, c, 7);
     for (const m of this.mh.allies()) {
       if (m === this || Math.hypot(m.pos.x - c.x, m.pos.z - c.z) > JamKeg.R + m.radius) continue;
       const dir = new THREE.Vector3(m.pos.x - c.x, 0, m.pos.z - c.z);
-      m.hit(30, dir.lengthSq() > 1e-4 ? dir.normalize() : new THREE.Vector3(0, 0, 1), m.pos.clone().setY(1), 1);
+      m.hit(30, dir.lengthSq() > 1e-4 ? dir.normalize() : new THREE.Vector3(0, 0, 1), m.pos.clone().setY(m.ground + 1), 1);
     }
     // sticky puddle: lives while the keg crumbles (the field goes with it)
     this.field.hazard(c, 1.8, 1.5, 0, JAM, 0.4);

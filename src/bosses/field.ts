@@ -57,17 +57,23 @@ export class Field {
   private readonly h: BossHooks;
   constructor(h: BossHooks) { this.h = h;}
 
+  /** Floor under a point (marks, landings and zones lie on the terrain: the plateau, a terrace); a chasm — 0 */
+  private floor(p: THREE.Vector3): number {
+    const f = this.h.terrain.floorAt(p.x, p.z, p.y + 0.5);
+    return f > -Infinity ? f : 0;
+  }
+
   /** Circle mark: fills for dur seconds, then done (that is where they hit) */
   markCircle(at: THREE.Vector3, r: number, dur: number, done: () => void, color = RED): void {
     const m = circleMesh(r, color);
-    m.position.set(at.x, 0.06, at.z);
+    m.position.set(at.x, this.floor(at) + 0.06, at.z);
     this.h.scene.add(m);
     this.marks.push({ mesh: m, t: 0, dur, done, pulse: true });
   }
   /** Strip mark from `from` along dir */
   markLine(from: THREE.Vector3, dir: THREE.Vector3, len: number, w: number, dur: number, done: () => void, color = RED): void {
     const m = lineMesh(len, w, color);
-    m.position.set(from.x, 0.06, from.z);
+    m.position.set(from.x, this.floor(from) + 0.06, from.z);
     // after rotating the plane onto the floor local +Y points to −Z; rotation about Z turns the strip along dir
     m.rotation.z = Math.atan2(-dir.x, -dir.z);
     this.h.scene.add(m);
@@ -77,12 +83,13 @@ export class Field {
   lob(mesh: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, dur: number, h: number, trail: THREE.Color, land: (at: THREE.Vector3) => void): void {
     mesh.position.copy(from);
     this.h.scene.add(mesh);
-    this.lobs.push({ mesh, from: from.clone(), to: to.clone().setY(0), t: 0, dur, h, trail, land });
+    this.lobs.push({ mesh, from: from.clone(), to: to.clone().setY(this.floor(to)), t: 0, dur, h, trail, land });
   }
   /** Hazard zone: dps damage per second, slow — hero slowdown inside */
   hazard(pos: THREE.Vector3, r: number, t: number, dps: number, color: THREE.Color, slow = 0): void {
-    this.hazards.push({ pos: pos.clone().setY(0), r, t, dps, color, slow });
-    this.h.fx.decal(pos.clone().setY(0.03), glowTex(), color.clone().multiplyScalar(0.3), r * 2.4, t, true, 0.85);
+    const y = this.floor(pos);
+    this.hazards.push({ pos: pos.clone().setY(y), r, t, dps, color, slow });
+    this.h.fx.decal(pos.clone().setY(y + 0.03), glowTex(), color.clone().multiplyScalar(0.3), r * 2.4, t, true, 0.85);
   }
   /** Remove everything from the floor */
   clear(): void {
@@ -98,8 +105,9 @@ export class Field {
     o.traverse((x) => { if (x instanceof THREE.Mesh) { x.geometry !== UNIT && x.geometry.dispose(); (x.material as THREE.Material).dispose(); } });
   }
 
-  /** Shot from `from` along dir for len metres at speed, at height y */
-  shot(from: THREE.Vector3, dir: THREE.Vector3, len: number, color: THREE.Color, speed = 60, y = 1.2): void {
+  /** Shot from `from` along dir for len metres at speed, at height y above the floor under `from` */
+  shot(from: THREE.Vector3, dir: THREE.Vector3, len: number, color: THREE.Color, speed = 60, up = 1.2): void {
+    const y = this.floor(from) + up;
     const mesh = new THREE.Mesh(UNIT, glowMat(color));
     mesh.scale.set(0.06, 0.06, 0.7);
     mesh.rotation.y = Math.atan2(dir.x, dir.z);
@@ -128,7 +136,7 @@ export class Field {
       l.t += dt;
       const k = Math.min(1, l.t / l.dur);
       l.mesh.position.lerpVectors(l.from, l.to, k);
-      l.mesh.position.y = THREE.MathUtils.lerp(l.from.y, 0.3, k) + Math.sin(Math.PI * k) * l.h;
+      l.mesh.position.y = THREE.MathUtils.lerp(l.from.y, l.to.y + 0.3, k) + Math.sin(Math.PI * k) * l.h;
       l.mesh.rotation.set(l.t * 6, l.t * 4, 0);
       if (rnd() < 0.7) this.h.fx.particle({ pos: l.mesh.position.clone(), vel: new THREE.Vector3(rand(-0.3, 0.3), rand(0.2, 0.8), rand(-0.3, 0.3)), life: 0.4, size: rand(0.08, 0.16), color: l.trail, gravity: -0.5 });
       if (k >= 1) { this.lobs.splice(i, 1); this.disposeMesh(l.mesh); l.land(l.to.clone()); }
@@ -140,7 +148,7 @@ export class Field {
       z.t -= dt;
       if (z.t <= 0) { this.hazards.splice(i, 1); continue; }
       if (rnd() < 0.3 * Math.min(1, z.t)) this.h.fx.particle({ pos: z.pos.clone().add(new THREE.Vector3(rand(-z.r, z.r) * 0.6, 0.05, rand(-z.r, z.r) * 0.6)), vel: new THREE.Vector3(0, rand(0.8, 1.8), 0), life: rand(0.3, 0.6), size: rand(0.06, 0.12), color: z.color, gravity: -1 });
-      if (Math.hypot(hero.x - z.pos.x, hero.z - z.pos.z) < z.r) { dps = Math.max(dps, z.dps); slow = Math.max(slow, z.slow); }
+      if (Math.hypot(hero.x - z.pos.x, hero.z - z.pos.z) < z.r && Math.abs(hero.y - z.pos.y) < 1.5) { dps = Math.max(dps, z.dps); slow = Math.max(slow, z.slow); }
     }
     this.heroSlow = slow;
     this.hazardTick = dps > 0 ? this.hazardTick - dt : 0;

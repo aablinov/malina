@@ -30,6 +30,8 @@ const BASE: Omit<CampaignMap, 'waves' | 'lanes' | 'bush' | 'berries'>[] = [
     blurb: t('A raspberry bush among lava rifts. Three roads lead from the caves over bridges — build towers by the bridges.') },
   { id: 'td2', title: t('Crystal Glade'), difficulty: 2, icon: 'spark', bg: 'linear-gradient(160deg, #134a5c, #101d2e 70%)',
     blurb: t('Night, blue portals and moats. Shellbacks shrug off hits, sporelings heal their neighbours, hoppers leap along the road.') },
+  { id: 'td4', title: t('Raspberry Spiral'), difficulty: 2, icon: 'spiral', bg: 'linear-gradient(160deg, #5a2a7a, #1c1036 70%)',
+    blurb: t('A floating island at dusk. One road winds up to the raspberry plateau — towers on the ridge reach two turns at once. The Golden Warden and the Frost Queen lead the last wave.') },
   { id: 'td3', title: t('Castle on the Meadow'), difficulty: 3, icon: 'helmet', bg: 'linear-gradient(160deg, #3c5a24, #1d2616 70%)',
     blurb: t('A siege from four sides. Sappers break walls, ballistae break the gate; repair the breaches and hold the courtyard.') },
 ];

@@ -82,7 +82,7 @@ export class SimTd {
     this.personal = personal;
     this.pads = spec.pads.map((p, i) => new SimPad(p, i));
     this.next = spec.rest ?? 20;
-    this.bush = new SimBush(w, spec.bush.x, spec.bush.z, spec.bush.hp);
+    this.bush = new SimBush(w, spec.bush.x, spec.bush.z, spec.bush.hp, spec.bush.y ?? 0);
     this.undecoy.push(addDecoy(this.bush, w.decoys));
     this.lairs = spec.lanes.map((l) => new SimLair(w, l));
     this.kinds = (spec.towers ?? TOWER_ORDER.slice(0, BASE_TOWERS)).filter((k): k is TowerKind => k in TOWERS);
@@ -286,7 +286,8 @@ export class SimTd {
     const lane = this.lane(laneId);
     if (!lane) return null;
     const [sx, sz] = lane.points[0], r = this.w.rng;
-    const m = this.w.h.spawnMob(kind, new THREE.Vector3(sx + (r() - 0.5) * 1.2, 0, sz + (r() - 0.5) * 1.2));
+    const px = sx + (r() - 0.5) * 1.2, pz = sz + (r() - 0.5) * 1.2;
+    const m = this.w.h.spawnMob(kind, new THREE.Vector3(px, this.w.floor(px, pz), pz));
     if (!m) return null;
     this.spawned++;
     const wl = lane.wall ? this.wall(lane.wall) : undefined;

@@ -492,3 +492,35 @@ Pages: [dev-testing.md](dev-testing.md).
 ## [2026-11-08] decision | No tests for the playground, the editor, the world and Soller
 The playground and editor tests, the world and island tests are switched off with `test.skip`, the Soller test is removed; new tests are written only for the game itself — the camp, the server, Bush Defence, the network.
 Pages: [dev-testing.md](dev-testing.md).
+
+## [2026-11-08] code | Mobs walk on the terrain
+A mob stands on `ground` — the floor under its feet by `Terrain.floorAt`, like the hero: up a step of 0.5 m, down any height; `flyY` is now a height above that floor. Level blocks push mobs out height-aware (`Terrain.resolve`), the flat block slice at y = 0 (`Obstacle.grid`) stays for wardens and bullets only. Marks, landings, zones and shots of the `Field` lie on the floor under them, mob effects rise with it. Groundwork for the raised Raspberry Spiral map.
+Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Towers, piles and the bush at floor height
+The simulation knows the level terrain (`SimWorld.floor`): splash, tar, meteor and frost hits land on the floor under the target, raspberry piles land on the floor, lairs and spawned enemies stand on it, the bush takes its height from `meta.td.bush.y`. Tar pools carry `y` in the snapshot; hit effects and the bush view are drawn relative to the event height.
+Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Golden Warden on the march
+`chief_warden` (`GoldenWardenChief`, `src/mobs/td-chiefs.ts`) — the arena mini-boss's horse and rider as a defence chief: 1600 health, a shield ×0.3 from the front, every 6 s a halberd sweep at towers nearby, a phalanx of seven swords at towers farther away or a gallop. The model is shared with the arena warden (`riderModel`, `src/bosses/golden-rider.ts`).
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-bosses.md](design-bosses.md).
+
+## [2026-11-08] code | Map 4 "Raspberry Spiral"
+A floating island in a violet dusk (`src/level/td-spiral-map.ts`, `npm run map:td4`): one road from a rune portal on the north edge winds 1¾ turns up to a mound with the bush (+2 m); the second turn climbs half a block at a time, the ridge between the turns stands at the inner turn's height. From the fifth wave a west portal opens a shortcut. 24 pads — on the ridge, on the meadow, on the mound; three radial stairways for the hero; mauve cliff blocks (`cliff_violet`, `cliff_violet_grass`), giant roots over the edge. Twelve waves for "Medium" (`src/td/waves-spiral.ts`, pack from level 4), the last — the Golden Warden. The sutler stands on a raised floor (`sutlerSpot(…, top)`, `meta.merchants[].y`).
+Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Raspberry Spiral in the camp
+The camp map list offers four maps by difficulty: Lava Basin, Crystal Glade, Raspberry Spiral ("Medium", a spiral icon, a violet card), Castle on the Meadow. Russian strings for the map, its roads, waves and blocks.
+Pages: [design-main-menu.md](design-main-menu.md), [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Raspberry Spiral: tests and the wiki
+`tests/td4.spec.ts`: the map, the climb along both roads, the moth over the slope, splash and piles on the plateau, the Golden Warden's shield, sweep, swords and climb. The design page gets section 17; the menu page and the index list the fourth map.
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-main-menu.md](design-main-menu.md), [index.md](index.md).
+
+## [2026-11-08] code | Frost Queen on the march
+`chief_frostqueen` (`FrostQueenChief`, `src/mobs/td-chiefs.ts`) — the Mistress of Eternal Winter's model as a defence chief: hovers along the road, 1400 health, frost does not slow her, every 6 s icicles freeze and wound up to five towers within 12 m, with no towers around two ice warlocks join her road. The model is shared through `winterModel` (`src/bosses/winter-mistress.ts`).
+Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Raspberry Spiral: dense waves, two final bosses
+The spiral's waves are ≈ 1.6× denser (≈ 650 enemies solo), a mini-boss in every wave from the third, two or three from the sixth; the last wave — the Golden Warden from the north and the Frost Queen from the west. Tests check the chief schedule and the queen.
+Pages: [design-tower-defence.md](design-tower-defence.md).

@@ -214,7 +214,7 @@ export class SimTower implements Decoy {
     const dmg = this.dmg, from = this.muzzle(1.3, 1.0);
     const dir = new THREE.Vector3(t.pos.x - this.pos.x, 0, t.pos.z - this.pos.z).normalize();
     const len = this.range + 1;
-    const end = this.pos.clone().addScaledVector(dir, len).setY(0.9);
+    const end = this.pos.clone().addScaledVector(dir, len); end.y = this.w.floor(end.x, end.z, t.pos.y) + 0.9;
     this.ev('tower.fire', { fx: from.x, fy: from.y, fz: from.z, tx: end.x, ty: end.y, tz: end.z });
     let n = 0;
     for (const f of this.w.h.foes()) {
@@ -233,10 +233,10 @@ export class SimTower implements Decoy {
   private fireOil(t: Foe): void {
     const from = this.muzzle(1.9, 0.6), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
     this.ev('tower.fire');
-    this.bolt('oil', from, t.pos.clone().setY(0), 0.5 + dist * 0.05, 2 + dist * 0.2, null, (at) => {
+    this.bolt('oil', from, t.pos.clone().setY(this.w.floor(t.pos.x, t.pos.z, t.pos.y)), 0.5 + dist * 0.05, 2 + dist * 0.2, null, (at) => {
       const r = 2.2 + (this.level - 1) * 0.3;
       this.pools.push({ id: this.w.id('pool'), at: at.clone(), t: 5, tick: 0, r });
-      this.w.emit({ t: 'hit.oil', x: at.x, y: 0, z: at.z, r });
+      this.w.emit({ t: 'hit.oil', x: at.x, y: at.y, z: at.z, r });
     });
   }
 
@@ -250,10 +250,10 @@ export class SimTower implements Decoy {
       const n = foes.filter((o) => Math.hypot(o.pos.x - f.pos.x, o.pos.z - f.pos.z) < R).length + (f.progress ?? 0) * 0.5;
       if (n > bn) { bn = n; best = f; }
     }
-    const to = best.pos.clone().setY(0), from = to.clone().add(new THREE.Vector3(-4, 22, -4));
-    this.ev('tower.fire', { tx: to.x, ty: 0, tz: to.z, r: R });
+    const to = best.pos.clone().setY(this.w.floor(best.pos.x, best.pos.z, best.pos.y)), from = to.clone().add(new THREE.Vector3(-4, 22, -4));
+    this.ev('tower.fire', { tx: to.x, ty: to.y, tz: to.z, r: R });
     this.bolt('meteor', from, to, 0.8, 0, null, (at) => {
-      this.w.emit({ t: 'hit.meteor', x: at.x, y: 0, z: at.z, r: R });
+      this.w.emit({ t: 'hit.meteor', x: at.x, y: at.y, z: at.z, r: R });
       for (const f of this.around(at, R)) {
         const d = Math.hypot(f.pos.x - at.x, f.pos.z - at.z), k = Math.max(0.5, 1 - d / R);
         this.strike(f, Math.round(dmg * k), 3 * k, f.pos.clone().setY(1), 'crit');
@@ -307,10 +307,10 @@ export class SimTower implements Decoy {
     const from = this.muzzle(2.9 + lvl * 0.2, 0.3);
     this.ev('tower.fire', { fx: from.x, fy: from.y, fz: from.z });
     this.bolt('frost', from, to, from.distanceTo(to) / 22, 0, null, () => {
-      const at = t.pos.clone().setY(0.6);
+      const at = t.pos.clone().setY(t.pos.y + 0.6);
       this.strike(t, dmg, 0.2, to);
       t.chill?.(0.45, 2.2);
-      if (lvl >= 3) for (const f of this.around(at, 2, t)) { this.strike(f, Math.round(dmg * 0.5), 0, f.pos.clone().setY(1)); f.chill?.(0.45, 2.2); }
+      if (lvl >= 3) for (const f of this.around(at, 2, t)) { this.strike(f, Math.round(dmg * 0.5), 0, f.pos.clone().setY(f.pos.y + 1)); f.chill?.(0.45, 2.2); }
       this.w.emit({ t: 'hit.frost', x: at.x, y: at.y, z: at.z, area: lvl >= 3 });
     });
   }
@@ -320,8 +320,8 @@ export class SimTower implements Decoy {
     const dmg = this.dmg, R = 2.4;
     const from = this.muzzle(2.0, -0.3), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
     this.ev('tower.fire');
-    this.bolt('splash', from, t.pos.clone().setY(0), 0.6 + dist * 0.05, 3 + dist * 0.25, null, (at) => {
-      this.w.emit({ t: 'hit.splash', x: at.x, y: 0, z: at.z, r: R });
+    this.bolt('splash', from, t.pos.clone().setY(this.w.floor(t.pos.x, t.pos.z, t.pos.y)), 0.6 + dist * 0.05, 3 + dist * 0.25, null, (at) => {
+      this.w.emit({ t: 'hit.splash', x: at.x, y: at.y, z: at.z, r: R });
       for (const f of this.around(at, R)) {
         const d = Math.hypot(f.pos.x - at.x, f.pos.z - at.z), k = Math.max(0.4, 1 - d / R);
         this.strike(f, Math.round(dmg * k), 2.5 * k, f.pos.clone().setY(1), k > 0.8 ? 'crit' : '');
@@ -394,7 +394,7 @@ export class SimTower implements Decoy {
       p.tick = 0.5;
       for (const f of this.around(p.at, p.r)) {
         f.chill?.(0.5, 0.6);
-        this.strike(f, this.dmg, 0, f.pos.clone().setY(0.8));
+        this.strike(f, this.dmg, 0, f.pos.clone().setY(f.pos.y + 0.8));
         this.burn(f, 2, Math.round(this.dmg * 0.5), true);
       }
     }
@@ -403,13 +403,13 @@ export class SimTower implements Decoy {
       b.t -= dt; b.tick -= dt; b.fxT -= dt;
       if (!b.foe.alive || b.foe.dead || b.t <= 0) { this.burns.splice(i, 1); continue; }
       if (b.fxT <= 0) { b.fxT = 0.2; this.w.emit({ t: 'burn', x: b.foe.pos.x, y: b.foe.pos.y, z: b.foe.pos.z, top: b.foe.topY ?? 1.2 }); }
-      if (b.tick <= 0) { b.tick = 1; this.strike(b.foe, b.dmg, 0, b.foe.pos.clone().setY(1.2)); }
+      if (b.tick <= 0) { b.tick = 1; this.strike(b.foe, b.dmg, 0, b.foe.pos.clone().setY(b.foe.pos.y + 1.2)); }
     }
   }
 
   entities(out: EntityState[]): void {
     out.push({ id: this.id, pad: this.pad, kind: this.def.id, level: this.level, hp: Math.round(this.hp), maxHp: this.maxHp, frozen: r1(this.frozen), yaw: r2(this.yaw), x: this.pos.x, y: this.pos.y, z: this.pos.z, spent: this.spent, shots: this.shots });
     for (const b of this.bolts) out.push({ id: b.id, kind: b.kind, fx: r2(b.from.x), fy: r2(b.from.y), fz: r2(b.from.z), tx: r2(b.to.x), ty: r2(b.to.y), tz: r2(b.to.z), k: r2(Math.min(1, b.t / b.dur)), h: r2(b.h) });
-    for (const p of this.pools) out.push({ id: p.id, x: r2(p.at.x), z: r2(p.at.z), r: r2(p.r), t: r1(p.t) });
+    for (const p of this.pools) out.push({ id: p.id, x: r2(p.at.x), y: r2(p.at.y), z: r2(p.at.z), r: r2(p.r), t: r1(p.t) });
   }
 }
