@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { AuthReply } from '../src/net/protocol.ts';
 import type { PlayerRow, Players } from './repo/players.ts';
 
@@ -9,6 +9,20 @@ import type { PlayerRow, Players } from './repo/players.ts';
 export const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 export const newToken = (): string => randomBytes(32).toString('base64url');
 export const newId = (): string => randomUUID();
+
+/** Room password: scrypt with a salt, stored as `salt:hash` (hex) */
+export function hashPass(pass: string): string {
+  const salt = randomBytes(16);
+  return `${salt.toString('hex')}:${scryptSync(pass, salt, 32).toString('hex')}`;
+}
+
+export function checkPass(pass: string, stored: string): boolean {
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const want = Buffer.from(hash, 'hex');
+  const got = scryptSync(pass, Buffer.from(salt, 'hex'), want.length);
+  return got.length === want.length && timingSafeEqual(got, want);
+}
 
 export class Auth {
   private readonly players: Players;

@@ -464,3 +464,7 @@ Pages: [design-tower-defence.md](design-tower-defence.md), [design-multiplayer.m
 ## [2026-11-07] code | Voice chat on T
 Room voice chat: T turns one's mic on / off in the camp and in a network battle, WebRTC mesh with signalling over `/ws` (`rtc`, `voice`), 🎤 in seats and the player list, the mic state survives the switch into battle, `RTC_ICE_SERVERS` for TURN, `PROTOCOL = 3`. Tests: `rooms.test.ts` (relay), `tests/voice.spec.ts`.
 Pages: [design-multiplayer.md](design-multiplayer.md).
+
+## [2026-11-08] code | Rooms like a server browser: everyone sees them, password, return to battle
+`GET /api/rooms` lists every live room (locked and full too) with creator, map, wave and players; the camp got the "Rooms" tab with a CS-style table. "Private game" is replaced by a room password (migration 004, scrypt, a pause after a wrong one). Closed the tab during a battle — the camp offers "Return to battle" (`battle.start {resume}`), in a battle the seat is held 2 min (`battleGraceMs`) instead of 30 s, after that — "Return" in the list, into a locked room without the password to the old seat. `PROTOCOL = 4`.
+Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md).

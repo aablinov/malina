@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterEach, test } from 'node:test';
 import { CLOSE, NET_LIMITS, PROTOCOL } from '../../src/net/protocol.ts';
 import { MapCatalog } from '../maps.ts';
-import { RESTORE_MS } from '../rooms.ts';
+import { PASS_RETRY_MS, RESTORE_MS } from '../rooms.ts';
 import { api, MAPS, Player, register, sleep, starter, startServer, type TestServer } from './helpers.ts';
 
 let s: TestServer;
@@ -22,7 +22,7 @@ async function hero(name: string): Promise<{ id: string; token: string; p: Playe
 async function party(n: number): Promise<{ code: string; heroes: Awaited<ReturnType<typeof hero>>[] }> {
   const heroes = [];
   for (let i = 0; i < n; i++) heroes.push(await hero(`Hero${i}${Math.random().toString(36).slice(2, 6)}`));
-  heroes[0].p.send({ t: 'room.create', map: 'td', max: 4, private: false });
+  heroes[0].p.send({ t: 'room.create', map: 'td', max: 4, password: '' });
   const code = (await heroes[0].p.state()).room.code;
   for (const h of heroes.slice(1)) {
     h.p.send({ t: 'room.join', code });
@@ -49,7 +49,7 @@ test('wrong token and a foreign protocol version close the connection', async ()
 test('room: create, join by code, list, seats, full room', async () => {
   s = await startServer();
   const a = await hero('Anya'), b = await hero('Borya'), c = await hero('Vika');
-  a.p.send({ t: 'room.create', map: 'td2', max: 2, private: false });
+  a.p.send({ t: 'room.create', map: 'td2', max: 2, password: '' });
   const st = await a.p.state();
   assert.match(st.room.code, /^[1-9]\d{4}$/);
   assert.equal(st.room.map, 'td2');
@@ -59,16 +59,19 @@ test('room: create, join by code, list, seats, full room', async () => {
   const sb = await b.p.state();
   assert.equal(sb.you, 1);
   assert.deepEqual(sb.seats.map((x) => [x.name, x.host]), [['Anya', true], ['Borya', false]]);
-  // a full room disappears from the list and lets nobody in
-  assert.equal((await api(s, 'GET', '/api/rooms')).body.length, 0);
+  // a full room stays in the list (like a server browser) but lets nobody in
+  const full = (await api(s, 'GET', '/api/rooms')).body;
+  assert.deepEqual(full.map((r: { players: number; max: number; creator: string; locked: boolean; wave: number; waves: number }) => [r.players, r.max, r.creator, r.locked, r.wave, r.waves > 0]), [[2, 2, 'Anya', false, 0, true]]);
   c.p.send({ t: 'room.join', code: st.room.code });
   assert.equal((await c.p.next('error')).code, 'room-full');
   c.p.send({ t: 'room.join', code: 'NOCODE' });
   assert.equal((await c.p.next('error')).code, 'no-room');
-  // a private room is not visible in the list
-  c.p.send({ t: 'room.create', map: 'td', max: 4, private: true });
+  // a locked room is listed too — with the lock, and first: it has free seats
+  c.p.send({ t: 'room.create', map: 'td', max: 4, password: 'sekret' });
   await c.p.state();
-  assert.equal((await api(s, 'GET', '/api/rooms')).body.length, 0);
+  const list = (await api(s, 'GET', '/api/rooms')).body;
+  assert.deepEqual(list.map((r: { creator: string; locked: boolean }) => [r.creator, r.locked]), [['Vika', true], ['Anya', false]]);
+  assert.ok(!JSON.stringify(list).includes('sekret'));
   // unknown map
   c.p.send({ t: 'room.map', map: 'none' });
   assert.equal((await c.p.next('error')).code, 'bad-map');
@@ -103,6 +106,71 @@ test('start: only the host and only when everyone is ready; changing the map res
   assert.equal((await h.p.state((m) => m.seats.length === 3)).seats[2].name, 'Latecomer');
   // and in the server match they have their own seat and hero
   assert.equal(s.app.games.get(bs.matchId)?.seats.size, 3);
+});
+
+test('password: a locked room asks for it, a wrong one is refused with a pause, the right one lets in', async () => {
+  s = await startServer();
+  const a = await hero('Anya'), b = await hero('Borya');
+  a.p.send({ t: 'room.create', map: 'td', max: 4, password: 'malina' });
+  const code = (await a.p.state()).room.code;
+  b.p.send({ t: 'room.join', code });
+  assert.equal((await b.p.next('error')).code, 'need-password');
+  b.p.send({ t: 'room.join', code, password: 'wrong' });
+  assert.equal((await b.p.next('error')).code, 'bad-password');
+  // right away again — still refused: wait PASS_RETRY_MS
+  b.p.send({ t: 'room.join', code, password: 'malina' });
+  assert.equal((await b.p.next('error')).code, 'bad-password');
+  s.clock.t += PASS_RETRY_MS + 1;
+  b.p.send({ t: 'room.join', code, password: 'malina' });
+  assert.equal((await b.p.state()).you, 1);
+  // junk password — bad-message
+  b.p.send({ t: 'room.join', code, password: 'x'.repeat(NET_LIMITS.passMax + 1) });
+  assert.equal((await b.p.next('error')).code, 'bad-message');
+});
+
+test('reconnect: back in the camp the seat gets battle.start resume; after battleGraceMs — back without the password, to the old seat', async () => {
+  s = await startServer();
+  const a = await hero('Anya'), b = await hero('Borya'), c = await hero('Vika');
+  a.p.send({ t: 'room.create', map: 'td', max: 3, password: 'malina' });
+  const code = (await a.p.state()).room.code;
+  for (const h of [b, c]) { h.p.send({ t: 'room.join', code, password: 'malina' }); await h.p.state(); h.p.send({ t: 'room.ready', ready: true }); }
+  await a.p.state((m) => m.seats.length === 3 && m.seats.every((x) => x.host || x.ready));
+  a.p.send({ t: 'room.start' });
+  const first = await b.p.next('battle.start');
+  const matchId = first.matchId;
+  assert.equal(first.resume, undefined, 'a normal start has no resume');
+  frames(3);
+  // the list shows the battle and its wave
+  const row = (await api(s, 'GET', '/api/rooms')).body[0];
+  assert.equal(row.state, 'battle');
+  assert.equal(row.wave, s.app.games.get(matchId)?.td.wave);
+  // Borya (seat 1) closes the tab and opens the camp again within battleGraceMs — the camp is told about the running match
+  b.p.close();
+  await a.p.state((m) => !m.seats[1].online);
+  const b2 = await Player.connect(s, b.token);
+  open.push(b2);
+  const rs = await b2.next('battle.start');
+  assert.equal(rs.matchId, matchId);
+  assert.equal(rs.resume, true);
+  // closes again and is late: the seat is freed, the hero leaves the match
+  b2.close();
+  await a.p.state((m) => !m.seats[1].online);
+  s.clock.t += NET_LIMITS.battleGraceMs + 1;
+  s.app.rooms.sweep();
+  assert.equal(s.app.rooms.roomOfPlayer(b.id), null);
+  assert.equal(s.app.games.get(matchId)?.seats.has(1), false);
+  // a stranger needs the password even for a free seat
+  const d = await hero('Dima');
+  d.p.send({ t: 'room.join', code });
+  assert.equal((await d.p.next('error')).code, 'need-password');
+  // Borya comes back from the list without the password — to seat 1, into the same match
+  const b3 = await Player.connect(s, b.token);
+  open.push(b3);
+  b3.send({ t: 'room.join', code });
+  const back = await b3.next('battle.start');
+  assert.equal(back.matchId, matchId);
+  assert.equal((await b3.state((m) => m.seats.length === 3)).you, 1);
+  assert.equal(s.app.games.get(matchId)?.seats.has(1), true);
 });
 
 test('limits: a message flood closes the connection', async () => {
@@ -193,10 +261,13 @@ test('host left the battle — it goes on for the rest; everyone left — abando
   assert.equal(match.seats.size, 2);
   frames(5);
   assert.ok(!match.ended);
-  // guest drop: the seat is held for graceMs, then the hero leaves the match
+  // guest drop in battle: the seat is held for battleGraceMs (not just graceMs), then the hero leaves the match
   g1.p.close();
   await g2.p.state((m) => !m.seats.find((x) => x.seat === 1)?.online);
   s.clock.t += NET_LIMITS.graceMs + 1;
+  s.app.rooms.sweep();
+  assert.equal(match.seats.size, 2);
+  s.clock.t += NET_LIMITS.battleGraceMs;
   s.app.rooms.sweep();
   await g2.p.state((m) => m.seats.length === 1);
   assert.equal(match.seats.size, 1);
@@ -250,7 +321,7 @@ test('friends: add by name, online and room, remove', async () => {
   assert.equal((await api(s, 'POST', '/api/friends', { name: 'borya' }, a.token)).status, 201);
   let list = (await api(s, 'GET', '/api/friends', undefined, a.token)).body;
   assert.deepEqual(list.map((f: { name: string; online: boolean; room: unknown }) => [f.name, f.online, f.room]), [['Borya', true, null]]);
-  b.p.send({ t: 'room.create', map: 'td', max: 4, private: true });
+  b.p.send({ t: 'room.create', map: 'td', max: 4, password: 'sekret' });
   const code = (await b.p.state()).room.code;
   list = (await api(s, 'GET', '/api/friends', undefined, a.token)).body;
   assert.equal(list[0].room.code, code);
@@ -306,7 +377,7 @@ test('voice: rtc signals go only to a seat of one\'s own room, the mic flag is i
   s = await startServer();
   const { heroes: [h, g] } = await party(2);
   const other = await hero('Stranger');
-  other.p.send({ t: 'room.create', map: 'td', max: 4, private: false });
+  other.p.send({ t: 'room.create', map: 'td', max: 4, password: '' });
   await other.p.state();
   const offer = { k: 'offer', sdp: 'v=0 fake' } as const;
   h.p.send({ t: 'rtc', to: 1, data: offer });

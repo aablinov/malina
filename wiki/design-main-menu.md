@@ -1,6 +1,6 @@
 # Main menu
 
-Version 1.4 of 2026-11-07: shop and blacksmith in the camp, the battle on a copy of the profile instead of the stash (section 3). Version 1.3 of 2026-11-05: language picker on the first visit and a Language row in Settings (section 6). Version 1.2 of 2026-11-03: friends and room chat in the camp, joining a running battle (section 4). Version 1.1 of 2026-11-02: multiplayer — the camp panel works with the server (section 4, [design-multiplayer.md](design-multiplayer.md)). Version 1.0 of 2026-10-31: start screen, camp (gear and Bush Defence map selection), settings, pause and battle result, multiplayer stubs. The model is the Minecraft Dungeons menu (hero screen with gear slots, tabs on top, online lobby by the campfire). Inventory — [design-inventory.md](design-inventory.md), maps — [design-tower-defence.md](design-tower-defence.md).
+Version 1.5 of 2026-11-08: the "Rooms" tab in the online camp — a room list like a server browser, a password instead of "Private game", "Return to battle" (section 4). Version 1.4 of 2026-11-07: shop and blacksmith in the camp, the battle on a copy of the profile instead of the stash (section 3). Version 1.3 of 2026-11-05: language picker on the first visit and a Language row in Settings (section 6). Version 1.2 of 2026-11-03: friends and room chat in the camp, joining a running battle (section 4). Version 1.1 of 2026-11-02: multiplayer — the camp panel works with the server (section 4, [design-multiplayer.md](design-multiplayer.md)). Version 1.0 of 2026-10-31: start screen, camp (gear and Bush Defence map selection), settings, pause and battle result, multiplayer stubs. The model is the Minecraft Dungeons menu (hero screen with gear slots, tabs on top, online lobby by the campfire). Inventory — [design-inventory.md](design-inventory.md), maps — [design-tower-defence.md](design-tower-defence.md).
 
 ## 1. Routing
 
@@ -32,11 +32,13 @@ Version 1.4 of 2026-11-07: shop and blacksmith in the camp, the battle on a copy
 
 ~~Stub: a panel without a server, "Start game" disabled~~ — replaced by the server ([design-multiplayer.md](design-multiplayer.md)).
 
-The same camp, opened straight on the "Map" tab, with a panel on the right modelled on MCD (`Lobby.onlineHtml`):
+The same camp with a third tab **"Rooms"** (only online; Q / E go round the three tabs) — it opens on it (in a room — on "Map"). `Lobby.roomsHtml`: a table like the CS server browser across the hero column — 🔒, creator, map, wave ("lobby", "preparing" or "3 / 10"), players x / max and a button: "Join", "no seats" (the row is greyed), "you are here", "Return" (one's own running battle after closing the tab). Click — select, double click / Enter — join; a locked room opens the password field under its row. The list refreshes every 3 s while the tab is on screen, "Refresh" — at once.
+
+The panel on the right modelled on MCD (`Lobby.onlineHtml`):
 - **server unavailable** — the address and "Check again";
 - **not signed in** — a name field and "Sign in";
-- **signed in** — "Create online session", "Private game", join by code, "Sessions" with "Refresh" (rooms in battle are marked "in battle", joining is allowed), "Friends": add by name, whether online, where they are playing, "Join" them, ✕ — remove;
-- **in a room** — code, seats (host ♛, ready / not ready, no connection; the host has ✕ to remove), room chat, "Leave room", friends.
+- **signed in** — "Create online session" with a "Password (optional)" field (~~"Private game"~~ — replaced: rooms are always listed, a password closes them), join by code (a locked one asks for the password), "Friends": add by name, whether online, where they are playing (🔒 — locked), "Join" them, ✕ — remove;
+- **in a room** — code (🔒 if locked), seats (host ♛, ready / not ready, no connection; the host has ✕ to remove), room chat, "Leave room", friends; the room's battle runs (came back after closing the tab) — "The battle is on · wave n of N" and "Return to battle", the bottom button says the same.
 
 "Start game" for the host takes the whole room into battle; for a guest the button becomes "Ready" / "Not ready". The host picks the map; for guests it follows the room.
 

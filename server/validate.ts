@@ -60,8 +60,8 @@ export function checkClientMsg(v: unknown): ClientMsg | null {
     case 'hello': return isStr(v.token, 100) && Number.isInteger(v.protocol) ? (v as ClientMsg) : null;
     case 'ping': case 'room.leave': case 'room.start': case 'room.again': return v as ClientMsg;
     case 'chat': return isStr(v.text, 1000) ? (v as ClientMsg) : null;
-    case 'room.create': return isStr(v.map, 32) && isInt(v.max, 1, MAX_PLAYERS) && typeof v.private === 'boolean' ? (v as ClientMsg) : null;
-    case 'room.join': return isStr(v.code, 12) ? (v as ClientMsg) : null;
+    case 'room.create': return isStr(v.map, 32) && isInt(v.max, 1, MAX_PLAYERS) && isStr(v.password, NET_LIMITS.passMax) ? { t: 'room.create', map: v.map, max: v.max, password: v.password } : null;
+    case 'room.join': return isStr(v.code, 12) && (v.password === undefined || isStr(v.password, NET_LIMITS.passMax)) ? { t: 'room.join', code: v.code, password: v.password } : null;
     case 'room.ready': return typeof v.ready === 'boolean' ? (v as ClientMsg) : null;
     case 'room.map': return isStr(v.map, 32) ? (v as ClientMsg) : null;
     case 'room.kick': return isStr(v.playerId, 64) ? (v as ClientMsg) : null;

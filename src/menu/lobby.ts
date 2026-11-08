@@ -16,11 +16,15 @@ import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
  * the hero in 3D on the left (menu background, src/menu/scene.ts), the "Gear" and "Map" tabs in the centre, the card of the selection on the right.
  * Gear: slots by group — weapons, armour, artifacts, aura; "Change" opens the inventory on the right tab.
  * Map: three Bush Defence maps by difficulty. "Start game" — a battle on the chosen map.
+ * Rooms (online only): every live room of the server, like a server browser — lock, creator, map, wave, players; a locked one asks for the password,
+ * one's own running battle — "Return" (closed the tab: back without the password).
  * Online game — the same camp with a sessions panel (src/net/client.ts, wiki/design-multiplayer.md): log in by name, create a room
  * or join by code, seats and readiness; "Start game" for the host — "To battle" for the whole room, for a guest — "Ready".
  * Keys: Q / E — tabs, arrows — select, I — inventory, Enter — start, Esc — back.
  */
-type Pane = 'gear' | 'map';
+type Pane = 'gear' | 'map' | 'rooms';
+/** Room list refresh while the "Rooms" tab is open, ms */
+const ROOMS_POLL_MS = 3000;
 type SlotId = 'melee' | 'ranged' | 'armor' | 'art0' | 'art1' | 'art2' | 'aura';
 
 const GROUPS: { title: string; icon: string; slots: SlotId[] }[] = [
@@ -44,8 +48,13 @@ export class Lobby {
   private slot: SlotId = 'melee';
   private map: string;
   private won: string[];
-  /** Online panel: create a private room (not listed, join by code) */
-  private privateGame = false;
+  /** Online panel: password of the room being created ('' — open) */
+  private passDraft = '';
+  /** Room list: the selected row, the room asking for a password and what was typed */
+  private selCode: string | null = null;
+  private passFor: string | null = null;
+  private joinPass = '';
+  private pollTimer = 0;
   /** What was typed into the panel fields — survives a re-render */
   private nameDraft = NET.auth?.name ?? '';
   private codeDraft = '';
@@ -70,7 +79,7 @@ export class Lobby {
     el.className = 'mm-lobby';
     el.innerHTML = `
       <header class="mm-top">
-        <div class="mm-tabs"><kbd>Q</kbd><button data-pane="gear">${t('Gear')}</button><button data-pane="map">${t('Map')}</button><kbd>E</kbd></div>
+        <div class="mm-tabs"><kbd>Q</kbd><button data-pane="gear">${t('Gear')}</button><button data-pane="map">${t('Map')}</button><button data-pane="rooms">${t('Rooms')}</button><kbd>E</kbd></div>
         <div class="mm-mode" data-id="mode"></div>
         <div class="mm-cur"><span title="${t('Raspberries')}">${iconImg('berry')}<b data-id="berries"></b></span><span title="${t('Enchantment points')}">${iconImg('spiral')}<b data-id="points"></b></span>
           <button class="mm-btn icon" data-act="settings" title="${t('Settings')}">⚙</button></div>
@@ -97,11 +106,14 @@ export class Lobby {
     this.shop.onSound = (ok) => { if (ok) sfx.twinkle(); };
     this.bind();
     NET.onError = (text) => this.flash(text);
+    NET.onPassword = (code, bad) => this.askPassword(code, bad);
     NET.on((m) => this.onNet(m));
   }
 
   /** Server message: the room changed — re-render the panel; the battle started — go to battle */
   private onNet(m: ServerMsg): void {
+    // reconnected while one's battle runs (closed the tab): not straight into battle — the camp offers "Return to battle"
+    if (m.t === 'battle.start' && m.resume) { if (this.open && this.mode === 'online') this.renderSel(); return; }
     if (m.t === 'battle.start') {
       sfx.twinkle();
       window.location.href = netBattleUrl(m.map, m.players, NET.room?.room.code ?? '');
@@ -109,6 +121,9 @@ export class Lobby {
     }
     if (m.t === 'chat') { this.chatLog.push({ name: m.name, text: m.text }); this.chatLog = this.chatLog.slice(-6); }
     if (m.t === 'room.left') this.chatLog = [];
+    // entered or left a room — the list shows it at once (own row: "you are here")
+    if ((m.t === 'room.state' && this.passFor !== null) || m.t === 'room.left') this.poll();
+    if (m.t === 'room.state') this.passFor = null;
     if (m.t === 'room.state' && !NET.isHost) this.map = m.room.map;
     if ((m.t === 'room.state' || m.t === 'room.left' || m.t === 'welcome' || m.t === 'chat') && this.open && this.mode === 'online') this.renderSel();
   }
@@ -119,12 +134,26 @@ export class Lobby {
     this.mode = mode;
     this.el.classList.add('open');
     this.el.classList.toggle('online', mode === 'online');
-    // online: the camp opens on the map at once — the sessions panel is there
-    if (mode === 'online') { this.pane = 'map'; void NET.probe().then(() => this.connectNet()); }
+    // online: the camp opens on the room list (in a room — on the map); the sessions panel is on the right
+    if (mode === 'online') {
+      this.pane = NET.room ? 'map' : 'rooms';
+      void NET.probe().then(() => this.connectNet());
+      window.clearInterval(this.pollTimer);
+      this.pollTimer = window.setInterval(() => this.poll(), ROOMS_POLL_MS);
+    } else if (this.pane === 'rooms') this.pane = 'gear';
     this.render();
   }
 
-  hide(): void { this.el.classList.remove('open'); }
+  hide(): void { this.el.classList.remove('open'); window.clearInterval(this.pollTimer); }
+
+  /** Tabs in order: "Rooms" only in the online game */
+  private panes(): Pane[] { return this.mode === 'online' ? ['gear', 'map', 'rooms'] : ['gear', 'map']; }
+
+  /** The room list refreshes by itself while it is on screen */
+  private poll(): void {
+    if (!this.open || this.mode !== 'online' || this.pane !== 'rooms' || !NET.available || !NET.auth) return;
+    void NET.list().then((r) => { this.rooms = r; this.renderRooms(); });
+  }
 
   setPane(p: Pane): void { this.pane = p; this.render(); }
 
@@ -150,18 +179,47 @@ export class Lobby {
     this.shop.show(kind);
   }
 
-  /** To battle: solo — at once; online — the host leads the room into battle, a guest marks itself ready */
+  /** To battle: solo — at once; online — the host leads the room into battle, a guest marks itself ready; the room's battle runs — back into it */
   startGame(): void {
     if (this.mode === 'online') {
       if (!NET.available) { this.flash(t('The online game server is unavailable — play solo for now')); return; }
       const r = NET.room;
       if (!r) { this.flash(t('Create a room or join by code')); return; }
+      if (r.room.state === 'battle') { this.rejoin(); return; }
       if (NET.isHost) NET.startBattle();
       else NET.setReady(!r.seats.find((x) => x.seat === r.you)?.ready);
       return;
     }
     sfx.twinkle();
     window.location.href = battleUrl({ mode: this.mode, map: this.map, players: 1 });
+  }
+
+  /** Back into the room's running battle (reconnected after closing the tab) */
+  private rejoin(): void {
+    const r = NET.room;
+    if (!r || r.room.state !== 'battle') return;
+    sfx.twinkle();
+    window.location.href = netBattleUrl(r.room.map, r.seats.length, r.room.code);
+  }
+
+  /** Into a room from the list, by code or from friends: a locked one — the password field under its row (one's own running battle needs none) */
+  private joinCode(code: string): void {
+    const r = this.rooms?.find((x) => x.code === code);
+    if (r?.locked && !this.isReturn(r)) { this.askPassword(code, false); return; }
+    NET.joinRoom(code);
+  }
+
+  /** The room is one's own running battle: closed the tab — "Return" without the password */
+  private isReturn(r: RoomInfo): boolean { return r.state === 'battle' && NET.lastRoom?.code === r.code; }
+
+  /** The room wants a password: the "Rooms" tab, the field under its row */
+  private askPassword(code: string, bad: boolean): void {
+    this.passFor = code;
+    this.selCode = code;
+    this.joinPass = '';
+    if (bad) this.flash(t('Wrong password'));
+    if (this.pane !== 'rooms') this.setPane('rooms'); else this.renderRooms();
+    this.el.querySelector<HTMLInputElement>('[data-field="joinpass"]')?.focus();
   }
 
   key(e: KeyboardEvent): void {
@@ -172,12 +230,12 @@ export class Lobby {
     if (field) { if (e.code === 'Enter') { e.preventDefault(); this.netAct(field.dataset.enter); } return; }
     switch (e.code) {
       case 'Escape': this.onBack?.(); break;
-      case 'KeyQ': case 'KeyE': this.setPane(this.pane === 'gear' ? 'map' : 'gear'); break;
+      case 'KeyQ': case 'KeyE': { const ps = this.panes(); this.setPane(ps[(ps.indexOf(this.pane) + (e.code === 'KeyE' ? 1 : -1) + ps.length) % ps.length]); break; }
       case 'KeyI': this.openInventory(this.pane === 'gear' ? this.slot : undefined); break;
       case 'KeyB': this.openShop('merchant'); break;
       // voice chat in the room: one's microphone on / off
       case 'KeyT': if (NET.room) void VOICE.toggle().then((err) => { this.flash(err ?? (VOICE.on ? t('Microphone on') : t('Microphone off'))); this.render(); }); break;
-      case 'Enter': e.preventDefault(); this.startGame(); break;
+      case 'Enter': e.preventDefault(); if (this.pane === 'rooms' && this.selCode && !NET.room) this.joinCode(this.selCode); else this.startGame(); break;
       case 'ArrowRight': case 'ArrowDown': this.step(1); break;
       case 'ArrowLeft': case 'ArrowUp': this.step(-1); break;
       default: break;
@@ -186,7 +244,13 @@ export class Lobby {
 
   private step(d: number): void {
     if (this.pane === 'gear') { this.slot = SLOT_ORDER[(SLOT_ORDER.indexOf(this.slot) + d + SLOT_ORDER.length) % SLOT_ORDER.length]; this.renderSel(); }
-    else { const i = CAMPAIGN.findIndex((m) => m.id === this.map); this.selectMap(CAMPAIGN[(i + d + CAMPAIGN.length) % CAMPAIGN.length].id); }
+    else if (this.pane === 'rooms') {
+      const list = this.rooms ?? [];
+      if (!list.length) return;
+      const i = list.findIndex((r) => r.code === this.selCode);
+      this.selCode = list[i < 0 ? 0 : (i + d + list.length) % list.length].code;
+      this.renderRooms();
+    } else { const i = CAMPAIGN.findIndex((m) => m.id === this.map); this.selectMap(CAMPAIGN[(i + d + CAMPAIGN.length) % CAMPAIGN.length].id); }
   }
 
   private bind(): void {
@@ -198,6 +262,9 @@ export class Lobby {
       if (slot) { this.slot = slot; this.renderSel(); return; }
       const map = t.closest<HTMLElement>('[data-map]')?.dataset.map;
       if (map) { this.selectMap(map); return; }
+      const row = t.closest<HTMLElement>('[data-room]')?.dataset.room;
+      // only the highlight, not a re-render: otherwise the second click of a double click lands on a new element
+      if (row && !t.closest('[data-act]') && !t.closest('input')) { this.selCode = row; for (const e of this.el.querySelectorAll<HTMLElement>('[data-room]')) e.classList.toggle('sel', e.dataset.room === row); return; }
       switch (t.closest<HTMLElement>('[data-act]')?.dataset.act) {
         case 'back': this.onBack?.(); break;
         case 'settings': this.onSettings?.(); break;
@@ -207,8 +274,8 @@ export class Lobby {
         case 'shop': this.openShop('merchant'); break;
         case 'smith': this.openShop('smith'); break;
         case 'friend-del': { const id = t.closest<HTMLElement>('[data-player]')?.dataset.player; if (id) void NET.removeFriend(id).then(() => this.loadFriends()); break; }
-        case 'private': this.privateGame = !this.privateGame; this.renderSel(); break;
-        case 'join-room': { const code = t.closest<HTMLElement>('[data-code]')?.dataset.code; if (code) NET.joinRoom(code); break; }
+        case 'join-room': { const code = t.closest<HTMLElement>('[data-code]')?.dataset.code; if (code) this.joinCode(code); break; }
+        case 'rejoin': this.rejoin(); break;
         case 'kick': { const id = t.closest<HTMLElement>('[data-player]')?.dataset.player; if (id) NET.kick(id); break; }
         default: this.netAct(t.closest<HTMLElement>('[data-act]')?.dataset.act); break;
       }
@@ -219,12 +286,16 @@ export class Lobby {
       if (f.dataset.field === 'code') { f.value = f.value.replace(/\D/g, ''); this.codeDraft = f.value; }
       if (f.dataset.field === 'friend') this.friendDraft = f.value;
       if (f.dataset.field === 'chat') this.chatDraft = f.value;
+      if (f.dataset.field === 'pass') this.passDraft = f.value;
+      if (f.dataset.field === 'joinpass') this.joinPass = f.value;
     });
     this.el.addEventListener('dblclick', (e) => {
       const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as SlotId | undefined;
       if (slot) this.openInventory(slot);
       const map = (e.target as HTMLElement).closest<HTMLElement>('[data-map]')?.dataset.map;
       if (map) this.startGame();
+      const row = (e.target as HTMLElement).closest<HTMLElement>('[data-room]');
+      if (row?.dataset.room && !row.classList.contains('full') && !(e.target as HTMLElement).closest('[data-act], input')) this.joinCode(row.dataset.room);
     });
   }
 
@@ -252,8 +323,21 @@ export class Lobby {
     this.q('xp').style.width = `${Math.min(100, (D.xp / xpToNext(D.level)) * 100).toFixed(1)}%`;
     this.q('mode').innerHTML = this.mode === 'online' ? t('Online game') : t('Solo game');
     for (const b of this.el.querySelectorAll<HTMLElement>('[data-pane]')) b.classList.toggle('on', b.dataset.pane === this.pane);
-    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() : this.mapsHtml();
+    this.el.classList.toggle('rooms', this.pane === 'rooms');
+    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() : this.pane === 'map' ? this.mapsHtml() : this.roomsHtml();
     this.renderSel();
+  }
+
+  /** Re-render without losing typing: the focused field gets its focus and caret back */
+  private keepFocus(f: () => void): void {
+    const focus = (document.activeElement as HTMLInputElement | null)?.dataset?.field;
+    f();
+    if (focus) { const el = this.el.querySelector<HTMLInputElement>(`[data-field="${focus}"]`); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+  }
+
+  /** Only the room table (the list came, a row was selected) */
+  private renderRooms(): void {
+    if (this.open && this.pane === 'rooms') this.keepFocus(() => { this.q('pane').innerHTML = this.roomsHtml(); });
   }
 
   /**
@@ -264,20 +348,23 @@ export class Lobby {
     for (const e of this.el.querySelectorAll<HTMLElement>('[data-slot]')) e.classList.toggle('sel', e.dataset.slot === this.slot);
     for (const e of this.el.querySelectorAll<HTMLElement>('[data-map]')) e.classList.toggle('sel', e.dataset.map === this.map);
     // re-rendering the online panel (a message arrived, the roster changed) does not disturb typing in a field
-    const focus = (document.activeElement as HTMLInputElement | null)?.dataset?.field;
-    this.q('side').innerHTML = this.pane === 'gear' ? this.itemCard() : this.mapCard() + (this.mode === 'online' ? this.onlineHtml() : '');
-    if (focus) { const f = this.el.querySelector<HTMLInputElement>(`[data-field="${focus}"]`); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }
+    this.keepFocus(() => {
+      this.q('side').innerHTML = this.pane === 'gear' ? this.itemCard() : this.mapCard() + (this.mode === 'online' ? this.onlineHtml() : '');
+      if (this.pane === 'rooms') this.q('pane').innerHTML = this.roomsHtml();
+    });
     const lock = this.mode === 'online' && !NET.room;
     const startBtn = this.el.querySelector('[data-act="start"]') as HTMLButtonElement;
     startBtn.classList.toggle('locked', lock);
     startBtn.title = lock ? t('A room first: create one or join by code') : t('Start: {map}', { map: campaignMap(this.map).title });
+    const inBattle = this.mode === 'online' && NET.room?.room.state === 'battle';
     const guest = this.mode === 'online' && NET.room && !NET.isHost;
     const ready = guest && NET.room?.seats.find((x) => x.seat === NET.room?.you)?.ready;
-    startBtn.firstChild!.textContent = guest ? (ready ? `${t('Not ready')} ` : `${t('Ready')} `) : `${t('Start game')} `;
+    startBtn.firstChild!.textContent = inBattle ? `${t('Return to battle')} ` : guest ? (ready ? `${t('Not ready')} ` : `${t('Ready')} `) : `${t('Start game')} `;
     this.q('hint').classList.remove('warn');
     this.q('hint').textContent = this.pane === 'gear'
       ? t('Click — slot · double click or I — change · B — shop · Q / E — tabs')
-      : t('Map: {map} · double click — straight to battle', { map: campaignMap(this.map).title });
+      : this.pane === 'rooms' ? t('Click — select · double click — join · Q / E — tabs')
+        : t('Map: {map} · double click — straight to battle', { map: campaignMap(this.map).title });
   }
 
   private gearHtml(): string {
@@ -337,6 +424,33 @@ export class Lobby {
       ${this.won.includes(m.id) ? `<p class="mm-won-line">${t('Map won — the bush held!')}</p>` : ''}</div>`;
   }
 
+  /**
+   * Room list like a server browser (the screenshot of CS 1.6 in the brief): lock, creator, map, wave, players.
+   * Full — greyed out; locked — the password field under the row; one's own running battle — "Return"
+   */
+  private roomsHtml(): string {
+    const esc = (v: string): string => v.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const head = `<h4 class="mm-pane-title">${t('Rooms')}${this.rooms?.length ? ` · ${this.rooms.length}` : ''}<button class="mm-btn small" data-act="refresh">${t('Refresh')}</button></h4>`;
+    if (!NET.available) return `${head}<div class="mm-online-empty">${t('Server unavailable')}</div>`;
+    if (!NET.auth) return `${head}<div class="mm-online-empty">${t('Log in on the right — and the rooms of the server will be here')}</div>`;
+    if (this.rooms === null) return `${head}<div class="mm-online-empty">…</div>`;
+    if (!this.rooms.length) return `${head}<div class="mm-online-empty">${t('No rooms yet — create your own')}</div>`;
+    const here = NET.room?.room.code;
+    const rows = this.rooms.map((r) => {
+      const full = r.players >= r.max, back = this.isReturn(r), mine = r.code === here;
+      const wave = r.state === 'battle' ? (r.wave ? `${r.wave} / ${r.waves}` : t('preparing')) : t('lobby');
+      const act = mine ? `<i>${t('you are here')}</i>`
+        : back ? `<button class="mm-btn small primary" data-act="join-room" data-code="${r.code}">${t('Return')}</button>`
+          : full ? `<i>${t('no seats')}</i>`
+            : `<button class="mm-btn small" data-act="join-room" data-code="${r.code}">${t('Join')}</button>`;
+      const cls = [r.code === this.selCode ? 'sel' : '', full && !mine ? 'full' : '', back || mine ? 'mine' : ''].filter(Boolean).join(' ');
+      const pass = this.passFor === r.code && !mine
+        ? `<tr class="mm-pass-row"><td colspan="6"><div class="mm-join"><input class="mm-field pass" data-field="joinpass" data-enter="join-pass" type="password" maxlength="32" placeholder="${t('Room password')}" value="${esc(this.joinPass)}"><button class="mm-btn small primary" data-act="join-pass">${t('Join')}</button></div></td></tr>` : '';
+      return `<tr data-room="${r.code}" class="${cls}"><td class="lk">${r.locked ? '🔒' : ''}</td><td><b>${esc(r.creator)}</b></td><td>${campaignMap(r.map).title}</td><td>${wave}</td><td>${r.players} / ${r.max}</td><td class="act">${act}</td></tr>${pass}`;
+    }).join('');
+    return `${head}<table class="mm-browser"><thead><tr><th class="lk">🔒</th><th>${t('Creator')}</th><th>${t('Map')}</th><th>${t('Wave')}</th><th>${t('Players')}</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
   /** Online panel actions: buttons and Enter in fields */
   private netAct(a: string | undefined): void {
     switch (a) {
@@ -347,10 +461,11 @@ export class Lobby {
         break;
       }
       case 'logout': NET.logout(); this.rooms = null; this.renderSel(); break;
-      case 'host': NET.createRoom(this.map, this.privateGame); break;
-      case 'join': if (this.codeDraft.trim()) NET.joinRoom(this.codeDraft.trim()); break;
+      case 'host': NET.createRoom(this.map, this.passDraft.trim()); break;
+      case 'join-pass': if (this.passFor && this.joinPass) NET.joinRoom(this.passFor, this.joinPass); break;
+      case 'join': if (this.codeDraft.trim()) this.joinCode(this.codeDraft.trim()); break;
       case 'leave': NET.leaveRoom(); this.renderSel(); break;
-      case 'refresh': void NET.list().then((r) => { this.rooms = r; this.renderSel(); if (!r.length) this.flash(t('No open rooms — create your own')); }); this.loadFriends(); break;
+      case 'refresh': void NET.list().then((r) => { this.rooms = r; this.renderSel(); if (!r.length) this.flash(t('No rooms yet — create your own')); }); this.loadFriends(); break;
       case 'friend-add': {
         const name = this.friendDraft.trim();
         if (name) void NET.addFriend(name).then((ok) => { if (ok) { this.friendDraft = ''; this.loadFriends(); } });
@@ -381,7 +496,7 @@ export class Lobby {
   private friendsHtml(esc: (v: string) => string): string {
     const rows = this.friends.map((f) => {
       const r = f.room, can = r && r.players < r.max && r.code !== NET.room?.room.code;
-      const where = r ? `${campaignMap(r.map).title}${r.state === 'battle' ? ` · ${t('in battle')}` : ''} · ${r.players}/${r.max}` : f.online ? t('online') : t('not in game');
+      const where = r ? `${r.locked ? '🔒 ' : ''}${campaignMap(r.map).title}${r.state === 'battle' ? ` · ${t('in battle')}` : ''} · ${r.players}/${r.max}` : f.online ? t('online') : t('not in game');
       return `<li class="mm-friend${f.online ? ' on' : ''}" data-player="${f.playerId}"><b>${esc(f.name)}</b><i>${where}</i>
         ${can ? `<button class="mm-btn small" data-act="join-room" data-code="${r.code}">${t('Join')}</button>` : ''}<button class="mm-btn small" data-act="friend-del" title="${t('Remove from friends')}">✕</button></li>`;
     }).join('');
@@ -422,25 +537,23 @@ export class Lobby {
         <b>${x.host ? '♛ ' : ''}${esc(x.name)}${(x.seat === r.you ? VOICE.on : x.voice) ? ` <span class="mm-mic" title="${t('Microphone on')}">🎤</span>` : ''}</b><i>${x.host ? t('host') : x.ready ? t('ready') : t('not ready')}${x.online ? '' : ` · ${t('no connection')}`}</i>
         ${NET.isHost && !x.host ? `<button class="mm-btn small" data-act="kick" title="${t('Remove from the room')}">✕</button>` : ''}</li>`).join('');
       return `<div class="mm-online">${who}
-      <div class="mm-online-h"><b>${t('Room')}</b><span class="mm-code" title="${t('Code for friends')}">${r.room.code}</span></div>
+      <div class="mm-online-h"><b>${t('Room')}</b><span>${r.room.locked ? `<span title="${t('Locked with a password')}">🔒</span> ` : ''}<span class="mm-code" title="${t('Code for friends')}">${r.room.code}</span></span></div>
+      ${r.room.state === 'battle' ? `<div class="mm-battle-on"><b>${t('The battle is on')}${r.room.wave ? ` · ${t('wave {n} of {total}', { n: r.room.wave, total: r.room.waves })}` : ''}</b><button class="mm-btn small primary" data-act="rejoin">${t('Return to battle')}</button></div>` : ''}
       <ul class="mm-seats">${seats}${`<li class="mm-seat empty">${t('free')}</li>`.repeat(Math.max(0, r.room.max - r.seats.length))}</ul>
-      <p class="mm-note">${campaignMap(r.room.map).title}${r.room.private ? ` · ${t('private')}` : ''} · ${NET.isHost ? t('everyone ready — "Start game"') : t('"Ready" — then wait for the host')}</p>
+      <p class="mm-note">${campaignMap(r.room.map).title} · ${NET.isHost ? t('everyone ready — "Start game"') : t('"Ready" — then wait for the host')}</p>
       <p class="mm-note">${VOICE.on ? t('🎤 Microphone on — T to turn off') : t('T — turn on the microphone (voice chat)')}</p>
       ${this.chatHtml(esc)}
       <button class="mm-btn small" data-act="leave">${t('Leave the room')}</button>
       ${this.friendsHtml(esc)}
     </div>`;
     }
-    const list = this.rooms === null ? '<div class="mm-online-empty">…</div>'
-      : this.rooms.length ? `<ul class="mm-rooms">${this.rooms.map((x) => `<li><b>${esc(x.host)}</b><i>${campaignMap(x.map).title}${x.state === 'battle' ? ` · ${t('in battle')}` : ''} · ${x.players}/${x.max}</i><button class="mm-btn small" data-act="join-room" data-code="${x.code}">${t('Join')}</button></li>`).join('')}</ul>`
-        : `<div class="mm-online-empty">${t('No sessions found')}</div>`;
     return `<div class="mm-online">${who}
       <button class="mm-btn host" data-act="host">${t('Create an online session')}</button>
-      <label class="mm-toggle" data-act="private">${t('Private game')}<i class="${this.privateGame ? 'on' : ''}"></i></label>
+      <input class="mm-field pass" data-field="pass" data-enter="host" maxlength="32" placeholder="${t('Password (optional)')}" value="${esc(this.passDraft)}">
+      <p class="mm-note">${t('The room is visible to everyone in the list; with a password only those who know it get in.')}</p>
       <div class="mm-online-h"><b>${t('Room code')}</b></div>
       <div class="mm-join"><input class="mm-field" data-field="code" data-enter="join" inputmode="numeric" maxlength="5" placeholder="12345" value="${esc(this.codeDraft)}"><button class="mm-btn small" data-act="join">${t('Join')}</button></div>
-      <div class="mm-online-h"><b>${t('Sessions')}</b><button class="mm-btn small" data-act="refresh">${t('Refresh')}</button></div>
-      ${list}
+      ${this.pane === 'rooms' ? '' : `<button class="mm-btn small" data-pane="rooms">${t('Room list')} →</button>`}
       ${this.friendsHtml(esc)}
     </div>`;
   }
