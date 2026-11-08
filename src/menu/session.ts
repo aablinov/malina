@@ -53,7 +53,7 @@ export function menuUrl(lobby = true): string {
 
 // ---------- What the menu remembers ----------
 const MENU_KEY = 'malina.menu';
-export interface MenuState { map: string; mode: GameMode; /** Maps won */ won: string[] }
+export interface MenuState { map: string; mode: GameMode; /** Maps won */ won: string[]; /** Endless maps: the most waves held */ best?: Record<string, number> }
 
 export function loadMenuState(): MenuState {
   const d: MenuState = { map: 'td', mode: 'solo', won: [] };
@@ -66,6 +66,15 @@ export function loadMenuState(): MenuState {
 
 export function saveMenuState(s: MenuState): void {
   try { localStorage.setItem(MENU_KEY, JSON.stringify(s)); } catch { /* closed storage */ }
+}
+
+/** Endless map (Misty Clearing): the most waves held — on its card in the camp */
+export function record(map: string): number { return loadMenuState().best?.[map] ?? 0; }
+export function saveRecord(map: string, waves: number): void {
+  const s = loadMenuState();
+  if (waves <= (s.best?.[map] ?? 0)) return;
+  s.best = { ...s.best, [map]: waves };
+  saveMenuState(s);
 }
 
 /** Map won — a mark on its card in the camp */

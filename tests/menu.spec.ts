@@ -87,7 +87,7 @@ test('menu: solo game — equip an axe in the camp, pick the glade, battle, paus
 
   // map — the crystal glade, to battle
   await page.locator('.mm-tabs [data-pane="map"]').click();
-  await expect(page.locator('.mm-map')).toHaveCount(4);
+  await expect(page.locator('.mm-map')).toHaveCount(5);
   await page.locator('.mm-map[data-map="td2"]').click();
   await expect(page.locator('.mm-card.map h3')).toHaveText('Crystal Glade');
   await page.getByRole('button', { name: /Start game/ }).click();

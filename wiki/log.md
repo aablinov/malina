@@ -524,3 +524,8 @@ Pages: [design-tower-defence.md](design-tower-defence.md).
 ## [2026-11-08] code | Raspberry Spiral: dense waves, two final bosses
 The spiral's waves are ≈ 1.6× denser (≈ 650 enemies solo), a mini-boss in every wave from the third, two or three from the sixth; the last wave — the Golden Warden from the north and the Frost Queen from the west. Tests check the chief schedule and the queen.
 Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Bush Defence 5: Misty Clearing — endless waves in the mist
+The fifth map `td5`: a night clearing with no roads, a mist ring, eight invisible directions with every enemy wandering its own way, four pads, eight lanterns lit with F (enemies put them out), the beacon's beam, wisps with raspberries, chiefs in their own cloud. Endless waves by number (`src/td/waves-fog.ts`) with modifiers; the loot is kept when the bush falls, the record shows in the camp. New: `src/level/td-fog-map.ts`, `src/sim/fog.ts`, `src/td/fog-fx.ts`, `tests/td5.spec.ts`.
+Pages: [design-tower-defence.md](design-tower-defence.md) (section 18).
+

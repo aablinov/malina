@@ -17,6 +17,7 @@
     "map:td2": "node scripts/export-map.ts td2",
     "map:td3": "node scripts/export-map.ts td3",
     "map:td4": "node scripts/export-map.ts td4",
+    "map:td5": "node scripts/export-map.ts td5",
     "prefabs": "node scripts/gen-prefabs.ts",
     "server": "node server/main.ts",
     "server:test": "node --test 'server/test/*.test.ts'",

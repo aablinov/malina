@@ -8,6 +8,7 @@ import type { SimTower } from '../sim/tower.ts';
 import type { SimWall } from '../sim/wall.ts';
 import { voice } from '../spell-audio.ts';
 import { menuKey, SELL_BACK, TOWERS, type TowerKind } from '../td/towers.ts';
+import { FOG_MOD_TITLE, type FogMod } from '../td/waves-fog.ts';
 import '../td/td.css';
 
 /** Wall bar colour in the HUD */
@@ -173,7 +174,10 @@ export class TdUi {
     const sim = this.sim, rest = sim.spec.rest ?? 20;
     for (const e of evs) {
       switch (e.t) {
-        case 'wave.start': this.h.banner(`${t('Wave {n} of {total}', { n: e.wave as number, total: e.of as number })}<small>${t((e.title as string) || 'The Order marches on the bush')}</small>`, 2.5); break;
+        case 'wave.start': this.h.banner(`${e.of ? t('Wave {n} of {total}', { n: e.wave as number, total: e.of as number }) : t('Wave {n}', { n: e.wave as number })}<small>${t((e.title as string) || 'The Order marches on the bush')}</small>`, 2.5); break;
+        case 'lantern.out': this.h.toast(t('A lantern went out — the mist creeps closer')); break;
+        case 'wisp.catch': if (e.seat === this.seat) this.h.toast(t('Wisp caught: +{n} raspberries', { n: e.n as number })); break;
+        case 'wisp.show': this.h.toast(t('A wisp flickers in the mist — catch it!')); break;
         case 'wave.won': this.h.banner(`${t('Wave {n} beaten', { n: e.wave as number })}<small>${t('+{n} raspberries · next in {s} s · G — now', { n: e.n as number, s: rest })}</small>`, 3); break;
         case 'wave.early': if (e.seat === this.seat) this.h.toast(t('Wave ahead of time: +{n} raspberries', { n: e.n as number })); break;
         case 'td.won': this.closeMenu(); this.h.banner(`${t('The bush is saved!')}<small>${t('All waves of the Order are broken · N — play again')}</small>`, 6); break;
@@ -212,18 +216,20 @@ export class TdUi {
       const mark = isChief(k) ? '♛ ' : k === 'frostling' ? '❄ ' : k === 'gnawer' ? '⚠ ' : '';
       return `<span class="${cls}">${mark}${MOBS[k]?.title ?? k}${isChief(k) ? '' : ` ×${n}`}</span>`;
     };
-    return `<div class="td-preview"><b>${w.title ? t(w.title) : t('Wave {n}', { n: sim.wave + 1 })}:</b> ${sim.preview().map(({ kind, n }) => chip(kind, n)).join('')}</div>`;
+    const mod = w.mod ? `<em class="td-mod">${t(FOG_MOD_TITLE[w.mod as FogMod] ?? w.mod)}</em> ` : '';
+    return `<div class="td-preview"><b>${w.title ? t(w.title) : t('Wave {n}', { n: sim.wave + 1 })}:</b> ${mod}${sim.preview().map(({ kind, n }) => chip(kind, n)).join('')}</div>`;
   }
 
   renderHud(): void {
     const sim = this.sim, b = sim.bush, k = Math.max(0, b.hp / b.maxHp), n = sim.waves.length;
-    const head = sim.state === 'lost' ? t('The bush withered') : sim.state === 'won' ? t('The bush is saved!') : n ? `${t('Wave {n} of {total}', { n: `<span>${sim.wave}</span>`, total: n })}${sim.players > 1 ? ` · ${t('players {n}', { n: sim.players })}` : ''}` : t('Bush Defence · towers {n} of {total}', { n: `<span>${sim.towers.length}</span>`, total: sim.pads.length });
+    const mod = sim.endless && sim.waveRunning ? sim.current?.mod : undefined;
+    const head = sim.state === 'lost' ? t('The bush withered') : sim.state === 'won' ? t('The bush is saved!') : sim.endless ? `${t('Wave {n}', { n: `<span>${sim.wave}</span>` })}${mod ? ` · <em class="td-mod">${t(FOG_MOD_TITLE[mod as FogMod] ?? mod)}</em>` : ''}${sim.players > 1 ? ` · ${t('players {n}', { n: sim.players })}` : ''}` : n ? `${t('Wave {n} of {total}', { n: `<span>${sim.wave}</span>`, total: n })}${sim.players > 1 ? ` · ${t('players {n}', { n: sim.players })}` : ''}` : t('Bush Defence · towers {n} of {total}', { n: `<span>${sim.towers.length}</span>`, total: sim.pads.length });
     const from = sim.nextLanes?.map((l) => t(l.title).toLowerCase()).join(', ') ?? '';
     const running = sim.waveRunning;
     const sub = sim.state !== 'play' || !n ? '' : running ? t('enemies on the map {n}', { n: this.alive() }) : sim.wave >= n ? '' : t('next in {s} s — {from} · <kbd>G</kbd> now (+{bonus})', { s: Math.ceil(sim.next), from, bonus: sim.earlyBonus });
     const walls = sim.walls.length ? `<div class="td-walls">${sim.walls.map((w) => `<span class="${w.dead ? 'dead' : ''}" title="${t(w.title)}"><b>${w.kind === 'gate' ? '⌂' : t(w.title).slice(0, 1)}</b><i style="width:${(w.k * 100).toFixed(0)}%;background:${wallBarColor(w.k)}"></i></span>`).join('')}</div>` : '';
     const preview = sim.state === 'play' && !running ? this.wavePreview() : '';
-    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}${preview}${this.alarmLine()}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">${t('raspberry bush {hp} / {max}', { hp: Math.ceil(b.hp), max: b.maxHp })}</div>${walls}<div class="td-loot" title="${t('Raspberries for the camp — only if the bush is saved')}">${t('Loot: {n} raspberries', { n: `<span>${sim.lootOf(this.seat)}</span>` })}</div>`;
+    const html = `<div class="td-wave">${head}</div>${sub ? `<div class="td-next">${sub}</div>` : ''}${preview}${this.alarmLine()}<div class="td-bush"><i style="width:${(k * 100).toFixed(1)}%"></i></div><div class="td-bush-t">${t('raspberry bush {hp} / {max}', { hp: Math.ceil(b.hp), max: b.maxHp })}</div>${walls}<div class="td-loot" title="${sim.endless ? t('Raspberries for the camp — kept when the run ends') : t('Raspberries for the camp — only if the bush is saved')}">${t('Loot: {n} raspberries', { n: `<span>${sim.lootOf(this.seat)}</span>` })}</div>`;
     if (html !== this.hudHtml) { this.hudHtml = html; this.hudEl.innerHTML = html; }
     this.hudEl.classList.toggle('lost', sim.state === 'lost');
     this.hudEl.classList.toggle('won', sim.state === 'won');

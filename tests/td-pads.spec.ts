@@ -67,7 +67,7 @@ async function boxedIn(page: Page): Promise<string[]> {
   });
 }
 
-for (const map of ['td', 'td2', 'td3', 'td4']) {
+for (const map of ['td', 'td2', 'td3', 'td4', 'td5']) {
   test(`defence ${map}: every pad can be reached and its menu opened`, async ({ page }) => {
     test.setTimeout(180_000);
     await open(page, map);
