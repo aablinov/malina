@@ -468,3 +468,7 @@ Pages: [design-multiplayer.md](design-multiplayer.md).
 ## [2026-11-08] code | Rooms like a server browser: everyone sees them, password, return to battle
 `GET /api/rooms` lists every live room (locked and full too) with creator, map, wave and players; the camp got the "Rooms" tab with a CS-style table. "Private game" is replaced by a room password (migration 004, scrypt, a pause after a wrong one). Closed the tab during a battle — the camp offers "Return to battle" (`battle.start {resume}`), in a battle the seat is held 2 min (`battleGraceMs`) instead of 30 s, after that — "Return" in the list, into a locked room without the password to the old seat. `PROTOCOL = 4`.
 Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md).
+
+## [2026-11-08] code | Server profile, phase 1: the hero is born with a profile
+`POST /api/auth` creates the profile row right away — the brought one (`profile` in the body, an old browser save) or the starter one. `GET /api/profile` answers 404 only for accounts from before this change.
+Pages: [design-multiplayer.md](design-multiplayer.md).

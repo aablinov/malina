@@ -64,7 +64,7 @@ Time is Unix milliseconds everywhere. A new schema — only via a new migration 
 
 ## 5. Sign-in and profile
 
-- `POST /api/auth {name}` → `{playerId, name, token}`.
+- `POST /api/auth {name, profile?}` → `{playerId, name, token}`. The hero is born with a profile row: the brought `profile` (an old browser save, checked by `checkProfile`) or `Profile.starter()` — so every hero has a stored profile and the match reward always has somewhere to go.
   - Name — 2–16 letters, digits, spaces, `_` and `-`; case-insensitive.
   - Name taken → 409. Own name with own token — the same hero.
 - `POST /api/auth/rename`, `GET /api/me`. The token is stored in `localStorage['malina.net']`; lose the token — the hero cannot be recovered, same as a save in localStorage.
