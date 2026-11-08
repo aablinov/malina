@@ -30,12 +30,14 @@ async function lobby(page: Page, errors: string[], name: string): Promise<void> 
   // the language is chosen up front, otherwise the start screen shows the language picker
   await page.addInitScript(() => { try { localStorage.setItem('malina.lang', 'en'); } catch { /* storage unavailable */ } });
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 60_000 });
+  // first entry: the hero name card (src/menu/boot.ts); under parallel runs the cold start is long
+  const field = page.locator('.mm-boot [data-field="name"]');
+  await expect(field).toBeVisible({ timeout: 60_000 });
+  await field.fill(name);
+  await field.press('Enter');
+  // timer polling: rAF polling stalls while the earlier battle pages load the software WebGL
+  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 60_000, polling: 500 });
   await page.getByRole('button', { name: /Online game/ }).click();
-  // the login panel waits for the server's reply; under parallel runs the cold start is long
-  await expect(page.locator('.mm-online [data-field="name"]')).toBeVisible({ timeout: 60_000 });
-  await page.locator('.mm-online [data-field="name"]').fill(name);
-  await page.locator('.mm-online [data-act="login"]').click();
   await expect(page.locator('.mm-online')).toContainText(name);
 }
 
@@ -114,6 +116,9 @@ test('net: login by name, locked room from the list, readiness, server battle fo
   for (const p of [host, guest]) await p.waitForFunction(() => (window as any).__malina.td.pack.mobs.some((m: any) => m.puppet && !m.dead), null, { timeout: 60_000 });
   await host.waitForFunction(() => (window as any).__malina.td.wave === 1, null, { timeout: 30_000 });
   expect(errors).toEqual([]);
+  // the battle pages are closed: two software-WebGL battles left running starve the next test's page start
+  await host.context().close();
+  await guest.context().close();
 });
 
 test('net: closed the battle tab — the camp offers "Return to battle", the page is back in the same match', async ({ browser }) => {

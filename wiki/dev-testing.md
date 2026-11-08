@@ -1,8 +1,11 @@
 # Tests: how to run Playwright
 
-> Version 2 · 2026-11-04
+> Version 3 · 2026-11-08: the camp and battles from it need a server — `tests/game-server.ts`
 
-Tests — `tests/playground.spec.ts`, config — `playwright.config.ts`. They open the built `dist/index.html` without a server, WebGL is software (SwiftShader), the simulation is driven through `window.__malina`.
+Tests — `tests/playground.spec.ts`, config — `playwright.config.ts`. They open the built `dist/index.html`, WebGL is software (SwiftShader), the simulation is driven through `window.__malina`.
+
+- Dev pages (`?dev=playground`, `?map=…` without `from=menu`) need no server: a starter hero in memory, nothing is saved.
+- The camp and battles "from the menu" need one: the hero lives only on the server ([design-multiplayer.md](design-multiplayer.md), section 5). Such specs start their own (`startGameServer(port)` in `tests/game-server.ts`: `server/main.ts`, `DB_PATH=:memory:`, `STATIC=dist`) on their own port — 8791 net, 8792 menu, 8793 voice, 8794 td-shop; never 8787, where `make dev` may run. `signIn(page, server)` registers a hero and puts its token and the language into the page before the scripts; `storedProfile(server, token)` reads what the server keeps.
 
 ## Fast network and simulation tests — `npm run test:net`
 

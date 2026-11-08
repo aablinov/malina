@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-// Tests open the built dist/index.html (npm run build) without a server.
+// Tests open the built dist/index.html (npm run build): dev pages without a server, the camp and battles from it — through their own
+// server (tests/game-server.ts, the hero lives only there).
 // WebGL is software (SwiftShader), so rendering is slow; the simulation is driven through __malina.step().
 export default defineConfig({
   testDir: 'tests',

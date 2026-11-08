@@ -1095,11 +1095,10 @@ test('inventory: I opens, equip the claymore and armour, enchant for points, sal
   expect(after.gone).toBe(true);
   expect(after.berries).toBeGreaterThan(b0);
 
-  // Esc closes, the profile is saved
+  // Esc closes, the equipped sword stays (a dev page: the hero lives in memory, the camp's is on the server)
   await page.keyboard.press('Escape');
   await expect(page.locator('.inv.open')).toHaveCount(0);
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('malina.profile') || '{}').equip?.melee);
-  expect(saved).toBe(clay);
+  expect(await page.evaluate(() => (window as any).__malina.profile.data.equip.melee)).toBe(clay);
 });
 
 test('armour and the bow are visible on the hero: armour on — parts on the body, a shot — the bow in the left hand', async ({ page }) => {

@@ -31,11 +31,14 @@ async function lobby(page: Page, errors: string[], name: string): Promise<void> 
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => { try { localStorage.setItem('malina.lang', 'en'); } catch { /* storage unavailable */ } });
   await page.goto(`${SERVER}/`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 60_000 });
+  // first entry: the hero name card (src/menu/boot.ts); under parallel runs the cold start is long
+  const field = page.locator('.mm-boot [data-field="name"]');
+  await expect(field).toBeVisible({ timeout: 60_000 });
+  await field.fill(name);
+  await field.press('Enter');
+  // timer polling: rAF polling stalls while the earlier battle pages load the software WebGL
+  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 60_000, polling: 500 });
   await page.getByRole('button', { name: /Online game/ }).click();
-  await expect(page.locator('.mm-online [data-field="name"]')).toBeVisible({ timeout: 60_000 });
-  await page.locator('.mm-online [data-field="name"]').fill(name);
-  await page.locator('.mm-online [data-act="login"]').click();
   await expect(page.locator('.mm-online')).toContainText(name);
 }
 

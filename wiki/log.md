@@ -480,3 +480,7 @@ Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](des
 ## [2026-11-08] code | Server profile, phase 3: gear commands instead of the kit
 The battle client sends `gear` commands (equip, unequip, salvage, enchant, sutler buy and arrows) instead of the whole kit; the server checks and repeats them and charges the sutler; others get only the equipped items; the kit is taken from the database on joining, `mine` on a reconnect after changes. `PROTOCOL = 5`.
 Pages: [design-multiplayer.md](design-multiplayer.md).
+
+## [2026-11-08] code | Server profile, phase 4: tests on a server
+Specs that open the camp or a battle from it start their own server (`tests/game-server.ts`, a port per file) and sign in a hero; the first-entry test checks the name card, the move of the old browser save and the "Server unavailable" card. README: the game always runs through the server.
+Pages: [dev-testing.md](dev-testing.md).

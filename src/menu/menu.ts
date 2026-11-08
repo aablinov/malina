@@ -7,7 +7,7 @@ import { campProfile } from './boot.ts';
 import { Lobby } from './lobby.ts';
 import { MenuScene } from './scene.ts';
 import { applyAudio, SettingsPanel } from './settings-panel.ts';
-import { loadMenuState, saveMenuState, VOICE, type GameMode } from './session.ts';
+import { loadMenuState, NET, saveMenuState, VOICE, type GameMode } from './session.ts';
 import '../style.css';
 import '../hud/hud.css';
 import './menu.css';
@@ -129,6 +129,8 @@ export async function runMenu(): Promise<void> {
     settings: settingsPanel,
     /** Room voice chat (src/net/voice.ts) */
     voice: VOICE,
+    /** Send the pending profile change to the server now */
+    flush: () => NET.profiles.flush(),
   };
 }
 
