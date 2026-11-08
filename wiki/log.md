@@ -512,3 +512,7 @@ Pages: [design-tower-defence.md](design-tower-defence.md).
 ## [2026-11-08] code | Raspberry Spiral in the camp
 The camp map list offers four maps by difficulty: Lava Basin, Crystal Glade, Raspberry Spiral ("Medium", a spiral icon, a violet card), Castle on the Meadow. Russian strings for the map, its roads, waves and blocks.
 Pages: [design-main-menu.md](design-main-menu.md), [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Raspberry Spiral: tests and the wiki
+`tests/td4.spec.ts`: the map, the climb along both roads, the moth over the slope, splash and piles on the plateau, the Golden Warden's shield, sweep, swords and climb. The design page gets section 17; the menu page and the index list the fourth map.
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-main-menu.md](design-main-menu.md), [index.md](index.md).
