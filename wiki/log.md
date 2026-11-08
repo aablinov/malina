@@ -508,3 +508,7 @@ Pages: [design-tower-defence.md](design-tower-defence.md), [design-bosses.md](de
 ## [2026-11-08] code | Map 4 "Raspberry Spiral"
 A floating island in a violet dusk (`src/level/td-spiral-map.ts`, `npm run map:td4`): one road from a rune portal on the north edge winds 1¾ turns up to a mound with the bush (+2 m); the second turn climbs half a block at a time, the ridge between the turns stands at the inner turn's height. From the fifth wave a west portal opens a shortcut. 24 pads — on the ridge, on the meadow, on the mound; three radial stairways for the hero; mauve cliff blocks (`cliff_violet`, `cliff_violet_grass`), giant roots over the edge. Twelve waves for "Medium" (`src/td/waves-spiral.ts`, pack from level 4), the last — the Golden Warden. The sutler stands on a raised floor (`sutlerSpot(…, top)`, `meta.merchants[].y`).
 Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Raspberry Spiral in the camp
+The camp map list offers four maps by difficulty: Lava Basin, Crystal Glade, Raspberry Spiral ("Medium", a spiral icon, a violet card), Castle on the Meadow. Russian strings for the map, its roads, waves and blocks.
+Pages: [design-main-menu.md](design-main-menu.md), [design-tower-defence.md](design-tower-defence.md).
