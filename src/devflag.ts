@@ -4,6 +4,13 @@
  */
 export const DEV_TOOLS: boolean = import.meta.env.VITE_DEV_TOOLS !== 'off';
 
+/**
+ * An automated run (Playwright: `navigator.webdriver`): the frame loop simulates, updates the view and the HUD, but does not draw —
+ * in software WebGL a frame takes hundreds of ms and starves parallel tests; a test draws with `__malina.render()` when it needs pixels.
+ * No battle shader warm-up either (`?warm` brings it back — the perf tests count programs)
+ */
+export const AUTOMATED: boolean = typeof navigator !== 'undefined' && navigator.webdriver === true;
+
 export function wantsEditor(): boolean {
   return DEV_TOOLS && new URLSearchParams(window.location.search).get('dev') === 'editor';
 }

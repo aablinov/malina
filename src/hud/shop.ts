@@ -3,7 +3,7 @@ import { t } from '../i18n/i18n.ts';
 import { iconImg, iconURL } from '../icons.ts';
 import { armorHealth, ITEMS, itemDef, PERK_TEXT, powerMult, PRICE, RARITY, SLOT_TITLE, type Item, type ItemDef, type ItemSlot, type Profile } from '../items.ts';
 import { MERCHANT_TITLE, type MerchantKind } from '../merchants.ts';
-import { priceOf } from '../prices.ts';
+import { ARROW_BUNDLE, priceOf, SUTLER_ARROWS, SUTLER_PRICE } from '../prices.ts';
 import { WEAPON_SPECIAL } from '../temper.ts';
 import { getWeapon, weaponMetrics } from '../weapons.ts';
 import './shop.css';
@@ -38,10 +38,6 @@ const DESC: Record<MerchantKind, string> = {
 };
 const SLOT_ICON: Record<ItemSlot, string> = { melee: 'sword', ranged: 'bow', armor: 'helmet', artifact: 'flask', aura: 'a-bastion' };
 const COLS = 4;
-/** Defence sutler prices (wiki/design-tower-defence.md, section 12): by rarity, expensive — invest in the hero or in two or three towers */
-export const SUTLER_PRICE: Record<ItemDef['rarity'], number> = { common: 240, rare: 480, unique: 780 };
-export const SUTLER_ARROWS = 45;
-const ARROWS = 24;
 
 export class Shop {
   readonly el: HTMLDivElement;
@@ -154,7 +150,7 @@ export class Shop {
       default: w = of((d) => d.slot === this.tab && !d.spell);
     }
     w.sort((a, b) => a.price - b.price);
-    if (this.tab === 'ranged') w.unshift({ key: 'arrows', arrows: ARROWS, price: sutler ? SUTLER_ARROWS : PRICE.arrows });
+    if (this.tab === 'ranged') w.unshift({ key: 'arrows', arrows: ARROW_BUNDLE, price: sutler ? SUTLER_ARROWS : PRICE.arrows });
     return w;
   }
 
@@ -163,9 +159,14 @@ export class Shop {
     if (key !== this.sel) { this.sel = key; this.render(); }
     const w = this.wares.find((x) => x.key === key);
     if (!w) return false;
-    if (!this.profile.pay(w.price)) { this.onSound?.(false); this.flash(); return false; }
-    if (w.arrows) { this.profile.addArrows(w.arrows); this.bought = null; }
-    else if (w.def) { this.bought = this.profile.add(w.def.id, this.profile.power); this.profile.save(); }
+    if (w.arrows) {
+      if (!this.profile.buyArrows(w.arrows, w.price)) { this.onSound?.(false); this.flash(); return false; }
+      this.bought = null;
+    } else if (w.def) {
+      const it = this.profile.buy(w.def.id, w.price);
+      if (!it) { this.onSound?.(false); this.flash(); return false; }
+      this.bought = it;
+    }
     this.onSound?.(true);
     this.onChange?.();
     this.render();

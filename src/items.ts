@@ -410,7 +410,21 @@ export function armorHealth(it: Item): number { return Math.round((itemDef(it.de
 
 // ---------- hero profile ----------
 
-const KEY = 'malina.profile';
+/**
+ * Where the stored hero lives (wiki/design-multiplayer.md, section 5): the camp profile on the server (src/net/profile-store.ts),
+ * dev pages — in memory. `Profile` itself does not save anywhere: `save()` only notifies, the storage listens
+ */
+export interface ProfileStorage {
+  /** The stored profile (the camp copy), null — none */
+  stored(): ProfileData | null;
+  /** Change the stored profile (battle growth, victory loot) and save it */
+  update(f: (d: ProfileData) => void): void;
+}
+
+let storage: ProfileStorage | null = null;
+/** The page's profile storage: the game — the server one, dev pages — memory */
+export function setProfileStorage(s: ProfileStorage | null): void { storage = s; }
+
 /** Arrows into a defence battle — at least this many */
 export const BATTLE_ARROWS = 40;
 
@@ -441,44 +455,69 @@ export interface GearStats {
   arrowBundle: number;
 }
 
+/**
+ * A change of the gear in an online battle (wiki/design-multiplayer.md, section 7): the client does it on its own copy and sends
+ * only this — the server repeats it on the hero's copy from the database (src/game/match.ts) and charges the sutler itself
+ */
+export type KitOp =
+  | { op: 'equip'; uid: string; at?: number }
+  /** Artifact slot 0–2; -1 — the aura */
+  | { op: 'unequip'; slot: number }
+  | { op: 'salvage'; uid: string }
+  | { op: 'enchant'; uid: string; slot: number; option: number }
+  /** A sutler item at the hero's power */
+  | { op: 'buy'; def: string }
+  /** A sutler arrow bundle */
+  | { op: 'arrows' };
+
 export class Profile {
   data: ProfileData;
+  /** Gear changes for the battle server (src/cgame/net-battle.ts); unset — nobody listens */
+  onOp?: (op: KitOp) => void;
   private readonly listeners = new Set<() => void>();
   private rand: Rand;
 
-  private readonly persist: boolean;
   /** A battle copy (`enterBattle`): saving keeps only the growth */
   private battleMode = false;
 
-  constructor(data?: ProfileData, persist = true) {
-    this.persist = persist;
-    const loaded = data ? null : Profile.load();
-    this.data = data ?? loaded ?? Profile.starter();
+  /** The profile never writes by itself: the storage (setProfileStorage) listens to `save()` */
+  constructor(data?: ProfileData) {
+    this.data = data ?? Profile.starter();
     this.rand = rng(hash(String(this.data.seq)) || 1);
     this.data.equip.aura ??= null;
-    if (loaded) this.addStarterSpells();
+  }
+
+  /**
+   * A stored save brought up to date: unknown items dropped, the starter spells, auras, boss spells and new weapons added.
+   * true — the save changed (write it back)
+   */
+  static upgrade(d: ProfileData): boolean {
+    const n = d.items.length;
+    d.items = d.items.filter((i) => ITEMS.some((x) => x.id === i.def));
+    d.equip.aura ??= null;
+    return new Profile(d).addStarterSpells() || d.items.length !== n;
   }
 
   /** Saves from before spells: the four starters go to the inventory, free slots are filled with them */
-  private addStarterSpells(): void {
+  private addStarterSpells(): boolean {
     const have = new Set(this.data.items.map((i) => i.def));
     const add = STARTER_SPELLS.filter((d) => !have.has(d));
     // while there are no bosses — auras and boss spells go to the inventory so they can be tried on
     // playground: all melee weapons are in the inventory, new weapons reach old saves too
     const extra = [...AURAS, ...BOSS_SPELL_IDS(), ...BASE_SPELLS, ...ITEMS.filter((d) => d.slot === 'melee').map((d) => d.id)].filter((d) => !have.has(d));
-    if (!add.length && !extra.length) return;
+    if (!add.length && !extra.length) return false;
     for (const d of add) {
       const it = this.add(d, 1);
       const free = this.data.equip.artifacts.indexOf(null);
       if (free >= 0) this.data.equip.artifacts[free] = it.uid;
     }
     for (const d of extra) this.add(d, itemDef(d).rarity === 'unique' ? 3 : itemDef(d).rarity === 'rare' ? 2 : 1);
-    if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* closed storage */ }
+    return true;
   }
 
   /** Starter kit: a beginner's equipment and a chest of loot, so there is something to try on and enchant */
   static starter(): ProfileData {
-    const p = new Profile({ version: 1, level: 1, xp: 0, points: 3, berries: 250, souls: 0, arrows: 40, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null], aura: null } }, false);
+    const p = new Profile({ version: 1, level: 1, xp: 0, points: 3, berries: 250, souls: 0, arrows: 40, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null], aura: null } });
     const eq = (def: string, power: number): string => p.add(def, power, false).uid;
     p.data.equip = { melee: eq('sword', 1), armor: eq('tunic', 1), ranged: eq('bow', 1), artifacts: [eq('fireball', 1), eq('spark', 1), eq('heal', 1)], aura: null };
     for (const [def, power] of [
@@ -501,8 +540,6 @@ export class Profile {
    * A closed tab mid-battle loses nothing of the camp
    */
   enterBattle(): void {
-    // a hero never saved yet (a fresh starter) — stored first, otherwise the growth and the loot would have nowhere to go
-    if (this.persist && !Profile.load()) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* closed storage */ }
     this.battleMode = true;
     this.data = structuredClone(this.data);
     this.data.arrows = Math.max(this.data.arrows, BATTLE_ARROWS);
@@ -512,8 +549,9 @@ export class Profile {
   /** "Once more" / restart: the battle copy is taken anew from the stored profile — sutler purchases are gone */
   restartBattle(): void {
     if (!this.battleMode) return;
-    const stored = Profile.load();
-    if (!stored) return;
+    const s = storage?.stored();
+    if (!s) return;
+    const stored = structuredClone(s);
     const keep = this.data.berries;
     this.data = stored;
     this.data.equip.aura ??= null;
@@ -524,37 +562,23 @@ export class Profile {
 
   /** Battle growth into the stored profile: experience and level, +1 enchant point per new level */
   static keepGrowth(d: ProfileData): void {
-    const s = Profile.load();
+    const s = storage?.stored();
     if (!s || (d.level < s.level || (d.level === s.level && d.xp <= s.xp))) return;
-    s.points += Math.max(0, d.level - s.level);
-    s.level = d.level;
-    s.xp = d.xp;
-    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* closed storage */ }
+    storage?.update((x) => {
+      x.points += Math.max(0, d.level - x.level);
+      x.level = d.level;
+      x.xp = d.xp;
+    });
   }
 
   /** Victory loot into the stored profile's raspberries (solo battle; online the server pays it) */
   static creditStored(n: number): void {
-    const s = Profile.load();
-    if (!s || n <= 0) return;
-    s.berries += Math.round(n);
-    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* closed storage */ }
-  }
-
-  static load(): ProfileData | null {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw) return null;
-      const d = JSON.parse(raw) as ProfileData;
-      if (d.version !== 1 || !Array.isArray(d.items)) return null;
-      // items no longer in the catalog are dropped
-      d.items = d.items.filter((i) => ITEMS.some((x) => x.id === i.def));
-      return d;
-    } catch { return null; }
+    if (n <= 0) return;
+    storage?.update((x) => { x.berries += Math.round(n); });
   }
 
   save(): void {
     if (this.battleMode) Profile.keepGrowth(this.data);
-    else if (this.persist) try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* closed storage */ }
     for (const f of this.listeners) f();
   }
 
@@ -592,6 +616,23 @@ export class Profile {
     return true;
   }
 
+  /** Buy an item: paid, into the inventory at the hero's power; null — not enough raspberries */
+  buy(def: string, price: number): Item | null {
+    if (!this.pay(price)) return null;
+    const it = this.add(def, this.power);
+    this.save();
+    this.onOp?.({ op: 'buy', def });
+    return it;
+  }
+
+  /** Buy an arrow bundle; false — not enough raspberries */
+  buyArrows(n: number, price: number): boolean {
+    if (!this.pay(price)) return false;
+    this.addArrows(n);
+    this.onOp?.({ op: 'arrows' });
+    return true;
+  }
+
   /** Reforging at the blacksmith: +1 item power */
   reforge(uid: string, price: number): boolean {
     const it = this.get(uid);
@@ -624,15 +665,21 @@ export class Profile {
     else e[slot] = uid;
     it.isNew = false;
     this.save();
+    this.onOp?.(at === undefined ? { op: 'equip', uid } : { op: 'equip', uid, at });
     return true;
   }
 
   /** Unequip an artifact from its slot (weapons and armour cannot be unequipped — only replaced) */
-  unequipArtifact(i: number): void { this.data.equip.artifacts[i] = null; this.save(); }
+  unequipArtifact(i: number): void {
+    if (!Number.isInteger(i) || i < 0 || i >= this.data.equip.artifacts.length) return;
+    this.data.equip.artifacts[i] = null;
+    this.save();
+    this.onOp?.({ op: 'unequip', slot: i });
+  }
 
   /** Equipped aura */
   aura(): Item | null { return this.get(this.data.equip.aura); }
-  unequipAura(): void { this.data.equip.aura = null; this.save(); }
+  unequipAura(): void { this.data.equip.aura = null; this.save(); this.onOp?.({ op: 'unequip', slot: -1 }); }
 
   /** Salvage: raspberries and the spent points back. Equipped items cannot be salvaged */
   salvage(uid: string): { berries: number; points: number } | null {
@@ -643,6 +690,7 @@ export class Profile {
     this.data.berries += res.berries;
     this.data.points += res.points;
     this.save();
+    this.onOp?.({ op: 'salvage', uid });
     return res;
   }
 
@@ -666,6 +714,7 @@ export class Profile {
     s.tier++;
     this.data.points -= cost;
     this.save();
+    this.onOp?.({ op: 'enchant', uid, slot, option });
     return true;
   }
 

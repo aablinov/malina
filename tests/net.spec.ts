@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { startGameServer, type GameServer } from './game-server.ts';
 
 /**
  * Online game (wiki/design-multiplayer.md): a real server (server/main.ts, in-memory database) and two browsers.
@@ -10,32 +10,26 @@ import { spawn, type ChildProcess } from 'node:child_process';
  * and is seen by the host, the guest builds a tower from its own raspberries — the tower is at both, a wave — enemy puppets at both, names above the heroes.
  * Then the guest closes the tab, opens the camp anew — "Return to battle" — and is in the same server battle again
  */
-const PORT = 8791;
-const SERVER = `http://127.0.0.1:${PORT}`;
-const URL = `${SERVER}/`;
-let server: ChildProcess;
-
-test.beforeAll(async () => {
-  server = spawn(process.execPath, ['server/main.ts'], { env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DB_PATH: ':memory:', STATIC: 'dist' }, stdio: 'pipe' });
-  await new Promise<void>((ok, fail) => {
-    const timer = setTimeout(() => fail(new Error('the server did not start')), 10_000);
-    server.stdout?.on('data', (b: Buffer) => { if (String(b).includes('server at')) { clearTimeout(timer); ok(); } });
-    server.stderr?.on('data', (b: Buffer) => process.stderr.write(b));
-  });
-});
-test.afterAll(() => { server?.kill(); });
+let S: GameServer;
+let SERVER = '';
+let URL = '';
+// own server on a free port per worker (tests/game-server.ts)
+test.beforeAll(async () => { S = await startGameServer(); SERVER = S.base; URL = S.url; });
+test.afterAll(() => { S?.stop(); });
 
 async function lobby(page: Page, errors: string[], name: string): Promise<void> {
   page.on('pageerror', (e) => errors.push(e.message));
   // the language is chosen up front, otherwise the start screen shows the language picker
   await page.addInitScript(() => { try { localStorage.setItem('malina.lang', 'en'); } catch { /* storage unavailable */ } });
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 60_000 });
+  // first entry: the hero name card (src/menu/boot.ts); under parallel runs the cold start is long
+  const field = page.locator('.mm-boot [data-field="name"]');
+  await expect(field).toBeVisible({ timeout: 60_000 });
+  await field.fill(name);
+  await field.press('Enter');
+  // the camp builds its scene only after the sign-in: under parallel software-WebGL runs that takes long
+  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 120_000, polling: 500 });
   await page.getByRole('button', { name: /Online game/ }).click();
-  // the login panel waits for the server's reply; under parallel runs the cold start is long
-  await expect(page.locator('.mm-online [data-field="name"]')).toBeVisible({ timeout: 60_000 });
-  await page.locator('.mm-online [data-field="name"]').fill(name);
-  await page.locator('.mm-online [data-act="login"]').click();
   await expect(page.locator('.mm-online')).toContainText(name);
 }
 
@@ -114,6 +108,9 @@ test('net: login by name, locked room from the list, readiness, server battle fo
   for (const p of [host, guest]) await p.waitForFunction(() => (window as any).__malina.td.pack.mobs.some((m: any) => m.puppet && !m.dead), null, { timeout: 60_000 });
   await host.waitForFunction(() => (window as any).__malina.td.wave === 1, null, { timeout: 30_000 });
   expect(errors).toEqual([]);
+  // the battle pages are closed: two software-WebGL battles left running starve the next test's page start
+  await host.context().close();
+  await guest.context().close();
 });
 
 test('net: closed the battle tab — the camp offers "Return to battle", the page is back in the same match', async ({ browser }) => {

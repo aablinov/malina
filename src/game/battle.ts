@@ -116,7 +116,7 @@ export class HeadlessBattle {
     const sp = this.level.spawn ?? [this.world.td!.bush.pos.x, 0, this.world.td!.bush.pos.z + 4];
     const a = (seat / 4) * Math.PI * 2;
     knight.place(sp[0] + Math.cos(a) * 1.2, sp[2] + Math.sin(a) * 1.2, Math.PI, sp[1]);
-    const profile = new Profile(structuredClone(data), false);
+    const profile = new Profile(structuredClone(data));
     profile.data.arrows = Math.max(profile.data.arrows, BATTLE_ARROWS);
     const gear = new Gear({
       scene: this.scene, fx: this.fx, hero: knight, terrain: this.terrain, targets: () => this.targets(), blast: () => {},

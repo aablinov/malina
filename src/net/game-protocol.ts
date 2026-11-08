@@ -1,10 +1,11 @@
+import type { KitOp } from '../items.ts';
 import type { EntityState } from './snapshot.ts';
 import type { GearAction, TdCommand } from './protocol.ts';
 
 /**
  * Battle protocol (wiki/design-multiplayer.md, section 7) — a separate WebSocket `/game` over `Channel` (src/net/channel.ts):
  * the unreliable lane carries input commands (`Cmd`) from the client and snapshot deltas (`Delta`) from the server; the reliable one — joining the match,
- * builds, gear actions, kits, the result. The server runs the battle (src/game/match.ts), the client predicts its own hero
+ * builds, gear actions, gear changes (`gear`), the result. The server runs the battle (src/game/match.ts), the client predicts its own hero
  */
 
 /** Input command — usercmd: number, acknowledged snapshot, movement, aim, attack, roll (once), bow, ping */
@@ -25,12 +26,18 @@ export type GameClientMsg =
   | ({ t: 'td' } & Omit<TdCommand, 't'>)
   /** seq — the client's last command before the action: the server executes it in the same order with movement */
   | ({ t: 'act'; seq?: number } & GearAction)
-  /** Own gear kit (items and equipped) — bought from the sutler for cost battle raspberries */
-  | { t: 'kit'; items: unknown[]; equip: unknown; cost?: number };
+  /**
+   * A gear change (equip, sutler purchase, enchant…) — tens of bytes instead of the whole ~8 KB kit: the hero's kit comes from the
+   * database at the battle start (server/rooms.ts `profileOf`), the server repeats each change on its copy and charges the sutler
+   */
+  | ({ t: 'gear' } & KitOp);
 
 export type GameServerMsg =
   | { t: 'welcome'; seat: number; tick: number }
+  /** Another hero's look: only the equipped items (at most 7), not the whole inventory */
   | { t: 'kit'; seat: number; items: unknown[]; equip: unknown }
+  /** Own whole kit — once, when the battle page reconnects after gear changes in this battle: the client takes the server's copy */
+  | { t: 'mine'; items: unknown[]; equip: unknown; seq: number; points: number; arrows: number }
   | ({ t: 'act'; seat: number } & GearAction)
   | { t: 'toast'; text: string }
   | { t: 'over'; result: 'won' | 'lost' | 'abandoned'; wave: number }

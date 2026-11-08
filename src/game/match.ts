@@ -3,7 +3,8 @@ import { t } from '../i18n/i18n.ts';
 import type { Channel } from '../net/channel.ts';
 import { CMD_BACKLOG, LOOT_DELAY, MOB_FLAG, SNAP_RING, TICK, type Cmd, type CmdBatch, type GameClientMsg, type GameServerMsg } from '../net/game-protocol.ts';
 import { CLOSE } from '../net/protocol.ts';
-import type { Equipment, Item, ProfileData } from '../items.ts';
+import { BATTLE_ARROWS, ITEMS, itemDef, type KitOp, type ProfileData } from '../items.ts';
+import { ARROW_BUNDLE, SUTLER_ARROWS, SUTLER_PRICE } from '../prices.ts';
 import type { GearAction } from '../net/protocol.ts';
 import { SnapshotRing, type Delta, type EntityState } from '../net/snapshot.ts';
 import type { Level } from '../level/level.ts';
@@ -35,6 +36,8 @@ interface Seat {
   rolled: boolean;
   /** Actions waiting for their command: executed when lastSeq reaches their seq (the same order as on the client) */
   acts: { seq: number; a: GearAction }[];
+  /** The gear was changed in this battle (`gear`) — the kit is no longer the stored one */
+  geared: boolean;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -50,9 +53,12 @@ export class Match {
   ended: MatchEnd | null = null;
   /** The battle is over (result, rewards) — the room closes the match */
   onEnd: ((e: MatchEnd) => void) | null = null;
+  /** The stored profile of a player (the database): the battle page connects after the camp saved its last change */
+  private readonly stored: ((playerId: string) => ProfileData | null) | null;
 
-  constructor(o: { id: string; map: { level: Level; td: TdSpec }; seed: number; players: MatchPlayer[] }) {
+  constructor(o: { id: string; map: { level: Level; td: TdSpec }; seed: number; players: MatchPlayer[]; stored?: (playerId: string) => ProfileData | null }) {
     this.id = o.id;
+    this.stored = o.stored ?? null;
     this.battle = new HeadlessBattle(o.map, o.seed, Math.max(1, o.players.length), true);
     for (const p of o.players) this.join(p);
   }
@@ -65,7 +71,7 @@ export class Match {
     const was = this.seats.get(p.seat);
     if (was) return was;
     const hero = this.battle.addHero(p.seat, p.profile);
-    const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false, acts: [] };
+    const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false, acts: [], geared: false };
     this.seats.set(p.seat, s);
     this.td.setPlayers(this.seats.size);
     // strength — from the gear the hero came with (the sutler's goods do not raise it)
@@ -97,6 +103,7 @@ export class Match {
     if (!s) return false;
     if (s.chan && s.chan !== chan) s.chan.close(CLOSE.replaced);
     s.chan = chan;
+    this.restock(s);
     // a new connection — new client command numbering (the page reloaded) and a full snapshot
     s.snapAck = 0;
     s.queue.length = 0;
@@ -149,7 +156,67 @@ export class Match {
 
   get connected(): number { return [...this.seats.values()].filter((s) => s.chan).length; }
 
-  private kitOf(s: Seat): GameServerMsg { return { t: 'kit', seat: s.player.seat, items: s.hero.profile.data.items, equip: s.hero.profile.data.equip }; }
+  /** Another hero's look: the equipped items only — the inventory is nobody else's business and is ~8 KB */
+  private kitOf(s: Seat): GameServerMsg {
+    const p = s.hero.profile, d = p.data;
+    return { t: 'kit', seat: s.player.seat, items: d.items.filter((i) => p.isEquipped(i.uid)), equip: d.equip };
+  }
+
+  /**
+   * The battle page joined: the hero took the stored gear when the match started, but the camp may have saved its last change
+   * a moment later (the host pressed "Start") — until the first `gear` change the kit is taken from the database again,
+   * so the client's copy (loaded from the server too) and the server's are the same and later changes repeat identically
+   */
+  private restock(s: Seat): void {
+    if (s.geared) {
+      const d = s.hero.profile.data;
+      this.send(s, { t: 'mine', items: d.items, equip: d.equip, seq: d.seq, points: d.points, arrows: d.arrows });
+      return;
+    }
+    const fresh = this.stored?.(s.player.playerId);
+    if (!fresh) return;
+    const d = s.hero.profile.data, f = structuredClone(fresh);
+    d.items = f.items;
+    d.equip = f.equip;
+    d.equip.aura ??= null;
+    d.seq = f.seq;
+    d.points = f.points;
+    d.arrows = Math.max(f.arrows, BATTLE_ARROWS);
+    s.hero.profile.save();
+    this.broadcast(this.kitOf(s), s.player.seat);
+  }
+
+  /** A gear change from the client: repeated on the hero's copy; the sutler is paid from the seat's treasury */
+  private gear(s: Seat, m: KitOp): void {
+    const p = s.hero.profile, seat = s.player.seat, str = (v: unknown): v is string => typeof v === 'string' && v.length <= 40;
+    const poor = (): void => this.send(s, { t: 'toast', text: t('Not enough raspberries') });
+    let ok = false;
+    switch (m.op) {
+      case 'equip': ok = str(m.uid) && (m.at === undefined || (Number.isInteger(m.at) && m.at >= 0 && m.at < 3)) && p.equip(m.uid, m.at); break;
+      case 'unequip':
+        if (m.slot === -1) { p.unequipAura(); ok = true; } else if (Number.isInteger(m.slot) && m.slot >= 0 && m.slot < 3) { p.unequipArtifact(m.slot); ok = true; }
+        break;
+      case 'salvage': ok = str(m.uid) && p.salvage(m.uid) !== null; break;
+      case 'enchant': ok = str(m.uid) && isNum(m.slot) && isNum(m.option) && p.enchant(m.uid, m.slot, m.option); break;
+      case 'buy': {
+        if (!str(m.def) || !ITEMS.some((d) => d.id === m.def)) break;
+        if (!this.td.spend(seat, SUTLER_PRICE[itemDef(m.def).rarity])) { poor(); break; }
+        p.add(m.def, p.power);
+        p.save();
+        ok = true;
+        break;
+      }
+      case 'arrows':
+        if (!this.td.spend(seat, SUTLER_ARROWS)) { poor(); break; }
+        p.addArrows(ARROW_BUNDLE);
+        ok = true;
+        break;
+      default: break;
+    }
+    if (!ok) return;
+    s.geared = true;
+    if (m.op !== 'arrows') this.broadcast(this.kitOf(s), seat);
+  }
 
   private broadcast(m: GameServerMsg, except = -1): void { for (const s of this.seats.values()) if (s.player.seat !== except) this.send(s, m); }
 
@@ -181,16 +248,10 @@ export class Match {
         else this.doAct(s, a);
         break;
       }
-      case 'kit': {
-        if (!Array.isArray(m.items) || typeof m.equip !== 'object' || !m.equip) return;
-        // the sutler's fee comes from the seat's treasury; not enough — the kit does not change, a hint to the client (its mirror is fixed by the snapshot)
-        if (isNum(m.cost) && m.cost > 0 && !this.td.spend(seat, Math.round(m.cost))) { this.send(s, { t: 'toast', text: t('Not enough raspberries') }); break; }
-        const d = s.hero.profile.data;
-        d.items = JSON.parse(JSON.stringify(m.items)) as Item[];
-        d.equip = JSON.parse(JSON.stringify(m.equip)) as Equipment;
-        d.equip.aura ??= null;
-        s.hero.profile.save();
-        this.broadcast(this.kitOf(s), seat);
+      case 'gear': {
+        const { t: _t, ...op } = m;
+        void _t;
+        this.gear(s, op as KitOp);
         break;
       }
       default: break;

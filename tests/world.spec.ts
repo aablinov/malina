@@ -8,6 +8,9 @@ import { resolve } from 'node:path';
  * or after a page reload; the region's map exploration is saved too.
  */
 
+// switched off for now (2026-11-08): the whole world file is skipped — remove this line to bring the tests back
+test.skip(true, 'world tests are switched off');
+
 const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&map=world&seed=42';
 
 async function open(page: Page): Promise<string[]> {

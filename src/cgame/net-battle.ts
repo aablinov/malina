@@ -82,8 +82,6 @@ const TIME_NUDGE_DOWN = 0.002;
 const SNAP_DIST = 2.5;
 const CORRECT_K = 0.2;
 const REVIVE_S = 2;
-/** Gear kit — once per this many seconds (and right away when it changed) */
-const KIT_S = 3;
 
 const r2 = (v: number): number => Math.round(v * 100) / 100;
 const now = (): number => performance.now() / 1000;
@@ -135,11 +133,6 @@ export class NetBattleClient {
   private readonly names = document.createElement('div');
   private readonly labels = new Map<number, HTMLDivElement>();
   private rosterT = 0;
-  private kitT = 0;
-  private kitDirty = true;
-  /** Last kit sent (items + equip): profile.save() fires on arrows and berries too — an unchanged kit is not resent */
-  private kitSent = '';
-  private purseMirror = 0;
   private readonly off: (() => void)[] = [];
   /** Snapshots applied (for tests) */
   snaps = 0;
@@ -158,7 +151,8 @@ export class NetBattleClient {
     h.sim.remote = (c) => this.sendTd(c);
     h.gear.onAction = (a) => this.sendAct(a);
     h.net.battlePing();
-    this.off.push(h.profile.onChange(() => { this.kitDirty = true; }));
+    // gear changes go as tens-of-bytes `gear` messages; the kit itself the server took from the database
+    h.profile.onOp = (op) => { this.chan?.sendReliable({ t: 'gear', ...op }); };
     this.off.push(h.net.on((m) => this.onLobby(m)));
     this.connect();
   }
@@ -167,6 +161,7 @@ export class NetBattleClient {
     this.stopped = true;
     for (const f of this.off) f();
     this.h.gear.onAction = undefined;
+    this.h.profile.onOp = undefined;
     this.h.sim.remote = null;
     this.h.pack.mirror = false;
     this.ws?.close();
@@ -194,8 +189,6 @@ export class NetBattleClient {
         window.setTimeout(() => this.connect(), 500 * 2 ** this.retry);
       };
       chan.sendReliable({ t: 'hello', token: this.h.token, matchId: this.h.battle.matchId, protocol: PROTOCOL });
-      this.kitDirty = true;
-      this.kitSent = '';
     };
     ws.onerror = () => { /* onclose reconnects */ };
   }
@@ -204,6 +197,7 @@ export class NetBattleClient {
     switch (m.t) {
       case 'welcome': this.joined = true; this.retry = 0; this.sent.length = 0; this.recent.length = 0; this.seq = 0; break;
       case 'kit': if (m.seat !== this.h.battle.seat) this.applyKit(m.seat, m.items, m.equip); break;
+      case 'mine': this.takeMine(m); break;
       case 'act': { const { t: _t, seat, ...a } = m; void _t; if (seat !== this.h.battle.seat) this.remote(seat).gear.perform(a as GearAction); break; }
       case 'toast': this.h.toast(t(m.text)); break;
       case 'over': if (!this.over) { this.over = m.result; this.h.onOver(m.result, m.wave); } break;
@@ -234,19 +228,6 @@ export class NetBattleClient {
   private sendTd(c: TdCommand): void { this.chan?.sendReliable({ t: 'td', a: c.a, pad: c.pad, wall: c.wall }); }
   /** Action with the number of the last command: the server executes it after that one, before the next, as on the client */
   private sendAct(a: GearAction): void { this.chan?.sendReliable({ t: 'act', seq: this.seq, ...a }); }
-
-  private sendKit(): void {
-    if (!this.chan || !this.joined) return;
-    const d = this.h.profile.data;
-    // the sutler took raspberries from the profile — the payment goes to the server with the kit
-    const cost = Math.max(0, this.purseMirror - d.berries);
-    this.kitDirty = false;
-    this.kitT = KIT_S;
-    // every frame carries all reliables in flight: an ~8 KB kit on every save piled frames past maxPayload (1009)
-    const key = JSON.stringify([d.items, d.equip]);
-    if (key === this.kitSent && cost <= 0) return;
-    if (this.chan.sendReliable({ t: 'kit', items: d.items, equip: d.equip, cost: cost > 0 ? cost : undefined })) this.kitSent = key;
-  }
 
   // ---------- snapshots ----------
 
@@ -309,7 +290,7 @@ export class NetBattleClient {
     if (sword) { applyWeapon(sword, k.tune); k.setWeapon(sword); }
     k.place(h.hero.pos.x + 1.6, h.hero.pos.z, h.hero.yaw, h.hero.pos.y);
     const data: ProfileData = { version: 1, level: 1, xp: 0, points: 0, berries: 0, souls: MAX_SOULS, arrows: MAX_ARROWS, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null], aura: null } };
-    const profile = new Profile(data, false);
+    const profile = new Profile(data);
     const gear = h.makeGear(k, profile);
     k.onSwing = (step) => h.swing(k, gear, step);
     r = { seat, knight: k, gear, profile, input: emptyInput(), bow: false, track: new Track(), to: k.pos.clone(), yawTo: k.yaw, hp: k.hp, maxHp: k.maxHp, ping: 0, down: false };
@@ -330,6 +311,17 @@ export class NetBattleClient {
     if (he.down && !o.knight.down) { o.knight.hp = 0; o.knight.down = true; }
     else if (!he.down && o.knight.down) o.knight.revive();
     if (!he.down) o.knight.hp = he.hp;
+  }
+
+  /** The server's copy of own gear (reconnected after changes in this battle) replaces the local one */
+  private takeMine(m: Extract<GameServerMsg, { t: 'mine' }>): void {
+    if (!Array.isArray(m.items) || typeof m.equip !== 'object' || !m.equip) return;
+    const d = this.h.profile.data;
+    d.items = m.items as Item[];
+    d.equip = m.equip as Equipment;
+    d.equip.aura ??= null;
+    d.seq = m.seq; d.points = m.points; d.arrows = m.arrows;
+    this.h.profile.save();
   }
 
   private applyKit(seat: number, items: unknown, equip: unknown): void {
@@ -405,9 +397,8 @@ export class NetBattleClient {
     if (purse) {
       const n = purse.n as number;
       sim.setBerries(me, n);
-      // profile raspberries mirror the treasury: the sutler takes from it, the difference goes to the server with the kit
-      if (this.h.profile.data.berries === this.purseMirror) this.h.profile.data.berries = n;
-      this.purseMirror = n;
+      // profile raspberries mirror the treasury: the sutler's `gear` purchase is charged by the server, the snapshot brings the result
+      this.h.profile.data.berries = n;
     }
     const loot = v.ents.get(`loot${me}`);
     if (loot) sim.setLoot(me, loot.n as number);
@@ -443,8 +434,6 @@ export class NetBattleClient {
     h.pack.puppets(dt);
     // exhausted — gets up by the server snapshot; while down, own input is not sent
     void REVIVE_S;
-    this.kitT -= dt;
-    if (this.kitDirty || this.kitT <= 0) this.sendKit();
     this.rosterT -= dt;
     if (this.rosterT <= 0) { this.rosterT = 0.25; this.ui.setRoster(this.rows()); }
     this.cmdT -= dt;

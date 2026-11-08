@@ -50,9 +50,9 @@ npm install
 make play        # builds the game and starts one server that also serves it
 ```
 
-Open http://localhost:8787 — the main menu lets you play solo or create a network room. On the first visit the game asks for the interface language (English or Russian); change it later in Settings — the choice is kept in the browser. For development, `make dev` runs the game server (port 8787) and the Vite dev client (port 5173) together.
+Open http://localhost:8787 — the main menu lets you play solo or create a network room. The game always runs through the server: on the first visit it asks for the interface language (English or Russian; change it later in Settings) and then for your hero name. The hero — level, raspberries, gear — is kept on the server, the browser only remembers the sign-in token. For development, `make dev` runs the game server (port 8787) and the Vite dev client (port 5173) together.
 
-Playing over the network: run the server somewhere reachable (`PORT`, `HOST`, `DB_PATH`, `STATIC=dist` to serve the game too), open the game with `?server=http://your-host:8787`, create a room and share the code. The server keeps profiles, rooms and battle history in SQLite.
+Playing over the network: run the server somewhere reachable (`PORT`, `HOST`, `DB_PATH`, `STATIC=dist` to serve the game too), open the game with `?server=http://your-host:8787`, create a room and share the code. The server keeps hero profiles, rooms and battle history in SQLite.
 
 More scripts (`npm run …`): `typecheck`, `build`, `test:net` (server, network and simulation tests without a browser), `map:td` / `map:td2` / `map:td3` / `map:island` / `map:playground` / `map:rooms` (regenerate maps from their generators), `prefabs`, `blocks`, `decor`. `make check` runs types and the fast tests.
 

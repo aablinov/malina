@@ -4,7 +4,7 @@ import { afterEach, test } from 'node:test';
 import { CLOSE, NET_LIMITS, PROTOCOL } from '../../src/net/protocol.ts';
 import { MapCatalog } from '../maps.ts';
 import { PASS_RETRY_MS, RESTORE_MS } from '../rooms.ts';
-import { api, MAPS, Player, register, sleep, starter, startServer, type TestServer } from './helpers.ts';
+import { api, MAPS, Player, register, sleep, startServer, type TestServer } from './helpers.ts';
 
 let s: TestServer;
 const open: Player[] = [];
@@ -12,7 +12,6 @@ afterEach(async () => { for (const p of open.splice(0)) p.close(); await s.stop(
 
 async function hero(name: string): Promise<{ id: string; token: string; p: Player }> {
   const a = await register(s, name);
-  await api(s, 'PUT', '/api/profile', { version: 0, data: starter() }, a.token);
   const p = await Player.connect(s, a.token);
   open.push(p);
   return { id: a.playerId, token: a.token, p };

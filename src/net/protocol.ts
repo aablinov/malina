@@ -9,7 +9,7 @@ import { MAX_PLAYERS } from '../bosses/scaling.ts';
  */
 
 /** Protocol version: on mismatch the server closes the connection with code CLOSE.protocol */
-export const PROTOCOL = 4;
+export const PROTOCOL = 5;
 
 /** Up to four heroes in a party, as with the wardens */
 export { MAX_PLAYERS };

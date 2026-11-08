@@ -3,10 +3,11 @@ import { DEV_TOOLS, openEditor } from '../devflag.ts';
 import { LANG, setLang, storedLang, t } from '../i18n/i18n.ts';
 import { Profile } from '../items.ts';
 import { makeTextures } from '../textures.ts';
+import { campProfile } from './boot.ts';
 import { Lobby } from './lobby.ts';
 import { MenuScene } from './scene.ts';
 import { applyAudio, SettingsPanel } from './settings-panel.ts';
-import { loadMenuState, saveMenuState, VOICE, type GameMode } from './session.ts';
+import { loadMenuState, NET, saveMenuState, VOICE, type GameMode } from './session.ts';
 import '../style.css';
 import '../hud/hud.css';
 import './menu.css';
@@ -18,10 +19,11 @@ import './menu.css';
  * "Start game" reloads the page to `?map=td…&from=menu`. "To camp" from a battle returns to `?menu=lobby`.
  * First launch (no stored language, src/i18n/i18n.ts): a language picker over the start screen; the choice reloads the page.
  */
-export function runMenu(): void {
+export async function runMenu(): Promise<void> {
   document.title = t('Malina');
   document.body.classList.add('menu');
-  const profile = new Profile();
+  // first launch: the language first (the choice reloads the page), the hero name and the server profile after it
+  const profile = storedLang() === null ? new Profile() : await campProfile();
 
   const app = document.getElementById('app') as HTMLElement;
   const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -127,6 +129,8 @@ export function runMenu(): void {
     settings: settingsPanel,
     /** Room voice chat (src/net/voice.ts) */
     voice: VOICE,
+    /** Send the pending profile change to the server now */
+    flush: () => NET.profiles.flush(),
   };
 }
 

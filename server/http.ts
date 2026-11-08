@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { DEFAULT_ICE, PROTOCOL, validName, type AuthReply, type FriendInfo, type IceServer } from '../src/net/protocol.ts';
+import { Profile } from '../src/items.ts';
 import type { Auth } from './auth.ts';
 import type { Friends } from './repo/friends.ts';
 import { nameKey, type PlayerRow, type Players } from './repo/players.ts';
@@ -49,14 +50,19 @@ export function httpHandler(d: HttpDeps): (req: IncomingMessage, res: ServerResp
     'GET /api/health': () => [200, { ok: true, protocol: PROTOCOL, maps: d.maps.ids(), ice: d.ice ?? DEFAULT_ICE }],
 
     'POST /api/auth': async (req) => {
-      const body = (await readJson(req)) as { name?: unknown };
+      const body = (await readJson(req)) as { name?: unknown; profile?: unknown };
       if (!validName(body.name)) return [400, { error: 'Name: 2 to 16 letters and digits' }];
       // own name with a valid token — just confirm the sign-in
       const h = req.headers.authorization ?? '';
       const p = h.startsWith('Bearer ') ? d.auth.check(h.slice(7)) : null;
       if (p && nameKey(p.name) === nameKey(body.name)) return [200, { playerId: p.id, name: p.name, token: h.slice(7) } satisfies AuthReply];
+      // the hero is born with a profile: the one brought along (an old browser save), else the starter one
+      const chk = body.profile === undefined ? null : checkProfile(body.profile);
+      if (chk && !chk.ok) return [400, { error: chk.error }];
       const r = d.auth.register(body.name, now());
-      return r ? [201, r] : [409, { error: 'Name is taken' }];
+      if (!r) return [409, { error: 'Name is taken' }];
+      d.profiles.put(r.playerId, 0, chk?.ok ? chk.data : Profile.starter(), now());
+      return [201, r];
     },
 
     'POST /api/auth/rename': async (req) => {

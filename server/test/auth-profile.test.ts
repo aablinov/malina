@@ -26,13 +26,13 @@ test('rename', async () => {
   assert.equal((await api(s, 'GET', '/api/me', undefined, a.token)).body.name, 'NewName');
 });
 
-test('profile: first write, read, version conflict', async () => {
+test('profile: born with the hero, read, write, version conflict', async () => {
   const a = await register(s, 'Profiler');
-  assert.equal((await api(s, 'GET', '/api/profile', undefined, a.token)).status, 404);
+  const r0 = await api(s, 'GET', '/api/profile', undefined, a.token);
+  assert.equal(r0.status, 200);
+  assert.equal(r0.body.version, 1);
+  assert.equal(r0.body.data.level, 1);
   const data = starter() as { berries: number };
-  const w1 = await api(s, 'PUT', '/api/profile', { version: 0, data }, a.token);
-  assert.equal(w1.status, 200);
-  assert.equal(w1.body.version, 1);
   data.berries = 999;
   assert.equal((await api(s, 'PUT', '/api/profile', { version: 1, data }, a.token)).body.version, 2);
   // write against an old version — conflict and the fresh profile
@@ -44,8 +44,21 @@ test('profile: first write, read, version conflict', async () => {
   assert.equal(r.body.data.berries, 999);
 });
 
+test('registration with a brought profile (old browser save)', async () => {
+  const data = starter() as { berries: number };
+  data.berries = 4242;
+  const r = await api(s, 'POST', '/api/auth', { name: 'Bringer', profile: data });
+  assert.equal(r.status, 201);
+  assert.equal((await api(s, 'GET', '/api/profile', undefined, r.body.token)).body.data.berries, 4242);
+  assert.equal((await api(s, 'POST', '/api/auth', { name: 'Junker', profile: { version: 2 } })).status, 400);
+  assert.equal((await api(s, 'POST', '/api/auth', { name: 'Junker' })).status, 201, 'a rejected profile does not take the name');
+});
+
 test('profile: junk rejected, unknown items dropped', async () => {
   const a = await register(s, 'Garbage');
+  // an account from before profiles were born with the hero — writes from version 0
+  s.app.db.prepare('DELETE FROM profiles WHERE player_id = ?').run(a.playerId);
+  assert.equal((await api(s, 'GET', '/api/profile', undefined, a.token)).status, 404);
   for (const bad of [null, 5, { version: 2 }, { ...(starter() as object), berries: -1 }, { ...(starter() as object), level: 0.5 }]) {
     assert.equal((await api(s, 'PUT', '/api/profile', { version: 0, data: bad }, a.token)).status, 400, JSON.stringify(bad)?.slice(0, 40));
   }

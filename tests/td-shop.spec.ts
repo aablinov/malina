@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { signIn, startGameServer, storedProfile, type GameServer } from './game-server.ts';
 
 /**
  * The Bush Defence sutler (wiki/design-tower-defence.md, section 12): on every map at the hero's spawn point; sells
@@ -8,13 +7,16 @@ import { resolve } from 'node:path';
  * the hero's gear is as before the battle, and the raspberries are their own.
  */
 
-const URL = pathToFileURL(resolve('dist/index.html')).href;
+let S: GameServer;
+let URL = '';
+test.beforeAll(async () => { S = await startGameServer(); URL = S.url; });
+test.afterAll(() => { S?.stop(); });
 
 test('defence: the sutler on every map, prices by rarity, buying with the battle\'s raspberries, in the camp the gear is as before the battle', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  // the language is chosen up front, otherwise "To camp" lands on the language picker instead of the lobby
-  await page.addInitScript(() => { try { localStorage.setItem('malina.lang', 'en'); } catch { /* storage unavailable */ } });
+  // a hero on the server (and the language — otherwise "To camp" lands on the language picker instead of the lobby)
+  const { token } = await signIn(page, S);
   // on every map the sutler exists and can be reached
   for (const map of ['td2', 'td3']) {
     await page.goto(`${URL}?dev=playground&map=${map}`, { waitUntil: 'domcontentloaded' });
@@ -31,11 +33,12 @@ test('defence: the sutler on every map, prices by rarity, buying with the battle
     expect(ok, map).toBe(true);
   }
   // the hero's gear in the camp — the stored profile is not touched by battles (Profile.enterBattle)
-  const camp0 = await page.evaluate(() => { const g = JSON.parse(localStorage.getItem('malina.profile') ?? '{}'); return { items: g.items?.length, melee: g.equip?.melee, arrows: g.arrows }; });
+  const kitOf = (g: any): { items: number; melee: string; arrows: number } => ({ items: g.items?.length, melee: g.equip?.melee, arrows: g.arrows });
+  const camp0 = kitOf(await storedProfile(S, token));
   expect(camp0.items).toBeGreaterThan(6);
   // battle from the menu: buy an axe, equip it, return to the camp
   await page.goto(`${URL}?map=td&from=menu`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
+  await page.waitForFunction(() => (window as any).__malina?.mode === 'playground', null, { timeout: 60_000 });
   const r = await page.evaluate(async () => {
     const m = (window as any).__malina, D = m.profile.data;
     await m.ready;
@@ -90,8 +93,8 @@ test('defence: the sutler on every map, prices by rarity, buying with the battle
   expect(r.auraBought).toBe(true);
   await expect(page.locator('.pz.open.won')).toBeVisible();
   await page.getByRole('button', { name: 'To camp' }).click();
-  await page.waitForFunction(() => (window as any).__menu?.screen === 'lobby');
-  const camp = await page.evaluate((key) => { const d = JSON.parse(localStorage.getItem(key) ?? '{}'); return { items: d.items?.length, melee: d.equip?.melee, arrows: d.arrows }; }, 'malina.profile');
-  expect(camp).toEqual(camp0);
+  await page.waitForFunction(() => (window as any).__menu?.screen === 'lobby', null, { timeout: 60_000 });
+  expect(kitOf(await page.evaluate(() => (window as any).__menu.profile.data))).toEqual(camp0);
+  expect(kitOf(await storedProfile(S, token))).toEqual(camp0);
   expect(errors).toEqual([]);
 });

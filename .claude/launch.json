@@ -4,14 +4,28 @@
     {
       "name": "server",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "STATIC=dist DB_PATH=:memory: PORT=8787 HOST=127.0.0.1 mise exec -- node server/main.ts"],
+      "runtimeArgs": [
+        "-c",
+        "STATIC=dist DB_PATH=:memory: PORT=8787 HOST=127.0.0.1 mise exec -- node server/main.ts"
+      ],
       "port": 8787
     },
     {
       "name": "dev",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": [
+        "dev"
+      ],
       "port": 5173
+    },
+    {
+      "name": "server-8790",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "STATIC=dist DB_PATH=:memory: PORT=8790 HOST=127.0.0.1 mise exec -- node server/main.ts"
+      ],
+      "port": 8790
     }
   ]
 }

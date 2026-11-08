@@ -70,7 +70,7 @@ As in MCD: an item (except artifacts) has 1, 2 or 3 slots — by rarity. A slot 
 
 ## 6. Storage
 
-The profile (`ProfileData`) — `localStorage['malina.profile']`: level, experience, points, raspberries, souls, arrows, items, equipped. First launch — the starter set: equipped are the Warden's Sword, the Wanderer's Jacket, the bow, the fire arrow and the totem; in the chest 19 more items of all kinds and rarities and 3 enchantment points, to try on and level right away. Reset — `__malina.profile.reset()`.
+The profile (`ProfileData`) — on the server (`GET`/`PUT /api/profile`, [design-multiplayer.md](design-multiplayer.md), section 5; ~~`localStorage['malina.profile']`~~ until 2026-11-08): level, experience, points, raspberries, souls, arrows, items, equipped. First launch — the starter set: equipped are the Warden's Sword, the Wanderer's Jacket, the bow, the fire arrow and the totem; in the chest 19 more items of all kinds and rarities and 3 enchantment points, to try on and level right away. Reset — `__malina.profile.reset()`.
 
 ## 7. Diablo-style map
 

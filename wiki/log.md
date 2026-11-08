@@ -468,3 +468,27 @@ Pages: [design-multiplayer.md](design-multiplayer.md).
 ## [2026-11-08] code | Rooms like a server browser: everyone sees them, password, return to battle
 `GET /api/rooms` lists every live room (locked and full too) with creator, map, wave and players; the camp got the "Rooms" tab with a CS-style table. "Private game" is replaced by a room password (migration 004, scrypt, a pause after a wrong one). Closed the tab during a battle — the camp offers "Return to battle" (`battle.start {resume}`), in a battle the seat is held 2 min (`battleGraceMs`) instead of 30 s, after that — "Return" in the list, into a locked room without the password to the old seat. `PROTOCOL = 4`.
 Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md).
+
+## [2026-11-08] code | Server profile, phase 1: the hero is born with a profile
+`POST /api/auth` creates the profile row right away — the brought one (`profile` in the body, an old browser save) or the starter one. `GET /api/profile` answers 404 only for accounts from before this change.
+Pages: [design-multiplayer.md](design-multiplayer.md).
+
+## [2026-11-08] code | Server profile, phase 2: the client keeps the hero only on the server
+`Profile` no longer touches localStorage: the storage is pluggable (`setProfileStorage`) — `ServerProfileStore` in the game, memory on dev pages. Page start (`src/menu/boot.ts`): server check, the "Hero name" card on first entry, the profile from the server; the old browser save is moved to the server once. The Online panel lost its login form.
+Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md), [design-inventory.md](design-inventory.md).
+
+## [2026-11-08] code | Server profile, phase 3: gear commands instead of the kit
+The battle client sends `gear` commands (equip, unequip, salvage, enchant, sutler buy and arrows) instead of the whole kit; the server checks and repeats them and charges the sutler; others get only the equipped items; the kit is taken from the database on joining, `mine` on a reconnect after changes. `PROTOCOL = 5`.
+Pages: [design-multiplayer.md](design-multiplayer.md).
+
+## [2026-11-08] code | Server profile, phase 4: tests on a server
+Specs that open the camp or a battle from it start their own server (`tests/game-server.ts`, a port per file) and sign in a hero; the first-entry test checks the name card, the move of the old browser save and the "Server unavailable" card. README: the game always runs through the server.
+Pages: [dev-testing.md](dev-testing.md).
+
+## [2026-11-08] code | Faster Playwright run
+An automated run does not draw frames by itself and holds game time while the test is in control; Metal GPU on macOS, 640 × 400, fully parallel, test servers on free ports, Google Fonts blocked. The island roads test is split into parallel tests, posts and loot load only the level data. The Soller test is removed. Tests finish in ~1.5 min instead of ~18; the run still lingers after the last test.
+Pages: [dev-testing.md](dev-testing.md).
+
+## [2026-11-08] decision | No tests for the playground, the editor, the world and Soller
+The playground and editor tests, the world and island tests are switched off with `test.skip`, the Soller test is removed; new tests are written only for the game itself — the camp, the server, Bush Defence, the network.
+Pages: [dev-testing.md](dev-testing.md).

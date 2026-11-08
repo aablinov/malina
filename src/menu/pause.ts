@@ -1,4 +1,5 @@
 import { t } from '../i18n/i18n.ts';
+import { go } from './boot.ts';
 import { menuUrl } from './session.ts';
 import type { SettingsPanel } from './settings-panel.ts';
 
@@ -50,7 +51,7 @@ export class BattleMenu {
 
   leave(): void {
     this.onLeave?.();
-    window.location.href = menuUrl(true);
+    void go(menuUrl(true));
   }
 
   /** Keys while the menu is open; true — consumed */

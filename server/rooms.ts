@@ -258,7 +258,10 @@ export class RoomManager {
     // server-side battle: a world with the party's heroes built from their profiles
     const map = this.d.maps.load(room.row.map);
     if (!map) throw new RoomError('bad-map', 'No such map');
-    const match = new Match({ id: matchId, map, seed: room.row.seed, players: room.members.map((m) => ({ seat: m.seat, playerId: m.playerId, name: m.name, profile: this.profileOf(m.playerId) })) });
+    const match = new Match({
+      id: matchId, map, seed: room.row.seed, players: room.members.map((m) => ({ seat: m.seat, playerId: m.playerId, name: m.name, profile: this.profileOf(m.playerId) })),
+      stored: (id) => (this.d.profiles.get(id)?.data as ProfileData | undefined) ?? null,
+    });
     match.onEnd = (e) => this.finishMatch(room, matchId, e);
     this.d.games.add(match);
     const msg = this.startMsg(room, matchId);
@@ -305,7 +308,7 @@ export class RoomManager {
         this.d.matches.reward(matchId, m.playerId, berries, xp);
         const prof = this.d.profiles.get(m.playerId);
         if (!prof) continue;
-        const p = new Profile(prof.data as ProfileData, false);
+        const p = new Profile(prof.data as ProfileData);
         p.addBerries(berries);
         p.addXp(xp);
         const version = this.d.profiles.put(m.playerId, prof.version, p.data, now);
