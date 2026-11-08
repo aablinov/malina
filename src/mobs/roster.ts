@@ -8,7 +8,7 @@ import { Boarlet, BurrowBeetle, VineSpider, Bee, Hive } from './beasts.ts';
 import { BasketMimic, DruseGolemling, HopPot, JamKeg, WardObelisk } from './constructs.ts';
 import { SunKnight } from './soller.ts';
 import { BeaverGnawer, BerryRunner, CrystalShellback, FrostImp, PollenMoth, RainbowHopper, Sporeling, VineRam, StumpSapper, VineBallista } from './td-foes.ts';
-import { GoldenWardenChief, RaspberryBrute, SlimeQueen, SnowShaman } from './td-chiefs.ts';
+import { FrostQueenChief, GoldenWardenChief, RaspberryBrute, SlimeQueen, SnowShaman } from './td-chiefs.ts';
 import { BerrySlime, BerrySlimeMid, BerrySlimeSmall, BudSpitter, ThornBall, ThornHorror, VineWhip } from './bush.ts';
 import { t } from '../i18n/i18n.ts';
 
@@ -70,10 +70,11 @@ export const MOBS: Record<string, { title: string; make: MobCtor }> = {
   chief_slime: { title: t('Slime Queen'), make: SlimeQueen },
   chief_frost: { title: t('Snow Shaman'), make: SnowShaman },
   chief_warden: { title: t('Golden Warden'), make: GoldenWardenChief },
+  chief_frostqueen: { title: t('Frost Queen'), make: FrostQueenChief },
 };
 
 /** Bush Defence foes — not needed in the playground showcase buttons, they come in waves */
-export const TD_FOES = new Set(['runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper', 'sapper', 'ballista', 'gnawer', 'frostling', 'chief_brute', 'chief_slime', 'chief_frost', 'chief_warden']);
+export const TD_FOES = new Set(['runner', 'ram', 'moth', 'shellback', 'sporeling', 'hopper', 'sapper', 'ballista', 'gnawer', 'frostling', 'chief_brute', 'chief_slime', 'chief_frost', 'chief_warden', 'chief_frostqueen']);
 
 /** Slime fragments, scarecrow crows, hive bumblebees — present in the pack, not needed in the showcase buttons */
 export const MOB_PARTS = new Set(['slime_mid', 'slime_small', 'crow', 'bee']);

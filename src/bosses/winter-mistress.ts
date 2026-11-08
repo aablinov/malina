@@ -3,7 +3,7 @@ import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, hiss, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
-import { C, glowMat, rand, RASP, UNIT, type BossHooks } from './kit.ts';
+import { C, glowMat, rand, RASP, UNIT, type Boss, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
 import { t } from '../i18n/i18n.ts';
 
@@ -51,6 +51,77 @@ const sfx = {
   },
 };
 
+/** Parts of the Mistress that move: the head with the crown, the staff, the ring of shards, the heart (sleeves and shards — into the given arrays) */
+export interface WinterParts { head: THREE.Group; staff: THREE.Group; ring: THREE.Group; heart: THREE.Group }
+
+/**
+ * Model of the Mistress of Eternal Winter on `body`: a stepped frost dress, the crown of ice spikes and frozen berries, bell sleeves,
+ * an ice staff and a ring of six shards. Shared by the arena guardian and the defence Frost Queen (src/mobs/td-chiefs.ts)
+ */
+export function winterModel(b: Pick<Boss, 'lam' | 'shimmer' | 'box'>, body: THREE.Object3D, arms: THREE.Group[], shards: THREE.Mesh[]): WinterParts {
+  const head = new THREE.Group(), staff = new THREE.Group(), ring = new THREE.Group(), heart = new THREE.Group();
+  const gown = b.lam('#cfe6f4', pixelTex('#cfe6f4', 8, 913));
+  const deep = b.lam('#7fa8c8', pixelTex('#7fa8c8', 10, 914));
+  const silver = b.lam('#dfe6ee');
+  const skin = b.lam('#e4eef6');
+  const frost = b.shimmer(ICE, RASP, 0, 1.4);
+  const spike = b.shimmer(FROST, ICE, 1, 2);
+  const heartM = b.shimmer(RASP, C(4, 1.7, 2.4), 0, 3);
+  const clear = glowMat(PALE.clone().multiplyScalar(0.5), 0.35, true);
+  const B = b.box.bind(b);
+  // dress: five steps, narrower towards the top; dark frost at the bottom, silver along the edge of each
+  const tiers = [[2.0, 0.5, 0.25], [1.7, 0.5, 0.75], [1.4, 0.55, 1.27], [1.12, 0.55, 1.8], [0.9, 0.55, 2.32]] as const;
+  tiers.forEach(([w, hh, y], i) => {
+    B(body, i < 2 ? deep : gown, w, hh, w * 0.85, 0, y, 0);
+    B(body, silver, w + 0.04, 0.07, w * 0.85 + 0.04, 0, y - hh / 2 + 0.04, 0);
+  });
+  // glowing frost patterns along the hem
+  for (const s of [-1, 1]) B(body, frost, 0.08, 1.4, 0.06, s * 0.45, 0.9, 0.82);
+  B(body, silver, 1.0, 0.12, 0.85, 0, 2.62, 0);
+  // heart: the frozen berry in a clear ice cube
+  heart.position.set(0, 2.2, 0.45);
+  body.add(heart);
+  for (const [x, y, z, k] of [[0, 0, 0, 0.22], [0.12, 0.06, 0, 0.14], [-0.12, 0.06, 0, 0.14], [0, 0.06, 0.11, 0.14], [0, -0.09, 0.04, 0.14]] as const) B(heart, heartM, k, k, k, x, y, z);
+  B(heart, clear, 0.46, 0.46, 0.4, 0, 0.02, 0);
+  // head, tall collar and crown: ice spikes alternating with frozen berries
+  head.position.set(0, 2.7, 0);
+  body.add(head);
+  B(head, deep, 0.85, 0.5, 0.25, 0, 0.35, -0.3);
+  B(head, skin, 0.5, 0.52, 0.48, 0, 0.32, 0);
+  B(head, glowMat(ICE), 0.32, 0.06, 0.04, 0, 0.36, 0.25);
+  B(head, silver, 0.56, 0.08, 0.54, 0, 0.62, 0);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2, big = i % 2 === 0, tall = i === 0 || i === 4 || i === 6;
+    if (big) B(head, spike, 0.1, tall ? 0.75 : 0.45, 0.1, Math.sin(a) * 0.28, tall ? 1.02 : 0.86, Math.cos(a) * 0.28);
+    else B(head, heartM, 0.12, 0.12, 0.12, Math.sin(a) * 0.3, 0.72, Math.cos(a) * 0.3);
+  }
+  // bell sleeves; the cuffs are silver with frost
+  for (const s of [-1, 1]) {
+    const g = new THREE.Group();
+    g.position.set(s * 0.62, 2.5, 0);
+    body.add(g);
+    B(g, gown, 0.32, 0.9, 0.34, 0, -0.42, 0);
+    B(g, deep, 0.46, 0.32, 0.48, 0, -0.86, 0);
+    B(g, frost, 0.48, 0.06, 0.5, 0, -1.02, 0);
+    arms.push(g);
+  }
+  // ice staff: an icicle shaft, a crystal on top
+  staff.position.set(-0.78, 1.5, 0.3);
+  body.add(staff);
+  B(staff, silver, 0.1, 2.8, 0.1, 0, 0.3, 0);
+  B(staff, spike, 0.3, 0.55, 0.3, 0, 1.95, 0, 0, Math.PI / 4, 0);
+  B(staff, frost, 0.16, 0.16, 0.16, 0, 2.35, 0);
+  // a ring of six shards: one group, circles around
+  ring.position.y = 1.8;
+  body.add(ring);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const m = B(ring, i % 2 ? spike : frost, 0.22, 0.6, 0.22, Math.sin(a) * 1.7, 0, Math.cos(a) * 1.7, 0, 0, 0.3);
+    shards.push(m);
+  }
+  return { head, staff, ring, heart };
+}
+
 export class WinterMistress extends MiniBoss {
   readonly radius = 1.2;
   readonly title = t('Mistress of Eternal Winter');
@@ -58,14 +129,14 @@ export class WinterMistress extends MiniBoss {
   override readonly topY = 5;
   readonly drop = 'absolutezero';
   override readonly tier = 'final' as const;
-  private readonly head = new THREE.Group();
+  private head!: THREE.Group;
   private readonly arms: THREE.Group[] = [];
-  private readonly staff = new THREE.Group();
-  private readonly ring = new THREE.Group();
+  private staff!: THREE.Group;
+  private ring!: THREE.Group;
   private readonly shards: THREE.Mesh[] = [];
   /** Shard growth 0..1: broke loose — 0, then grows back */
   private readonly shardK = [1, 1, 1, 1, 1, 1];
-  private readonly heart = new THREE.Group();
+  private heart!: THREE.Group;
   private readonly iceBlock: THREE.Mesh;
   /** Deferred actions (the icicle falls a little after the mark) */
   private readonly later: { t: number; fn: () => void }[] = [];
@@ -93,65 +164,7 @@ export class WinterMistress extends MiniBoss {
   }
 
   protected build(): void {
-    const gown = this.lam('#cfe6f4', pixelTex('#cfe6f4', 8, 913));
-    const deep = this.lam('#7fa8c8', pixelTex('#7fa8c8', 10, 914));
-    const silver = this.lam('#dfe6ee');
-    const skin = this.lam('#e4eef6');
-    const frost = this.shimmer(ICE, RASP, 0, 1.4);
-    const spike = this.shimmer(FROST, ICE, 1, 2);
-    const heartM = this.shimmer(RASP, C(4, 1.7, 2.4), 0, 3);
-    const clear = glowMat(PALE.clone().multiplyScalar(0.5), 0.35, true);
-    const B = this.box.bind(this);
-    // dress: five steps, narrower towards the top; dark frost at the bottom, silver along the edge of each
-    const tiers = [[2.0, 0.5, 0.25], [1.7, 0.5, 0.75], [1.4, 0.55, 1.27], [1.12, 0.55, 1.8], [0.9, 0.55, 2.32]] as const;
-    tiers.forEach(([w, hh, y], i) => {
-      B(this.body, i < 2 ? deep : gown, w, hh, w * 0.85, 0, y, 0);
-      B(this.body, silver, w + 0.04, 0.07, w * 0.85 + 0.04, 0, y - hh / 2 + 0.04, 0);
-    });
-    // glowing frost patterns along the hem
-    for (const s of [-1, 1]) B(this.body, frost, 0.08, 1.4, 0.06, s * 0.45, 0.9, 0.82);
-    B(this.body, silver, 1.0, 0.12, 0.85, 0, 2.62, 0);
-    // heart: the frozen berry in a clear ice cube
-    this.heart.position.set(0, 2.2, 0.45);
-    this.body.add(this.heart);
-    for (const [x, y, z, k] of [[0, 0, 0, 0.22], [0.12, 0.06, 0, 0.14], [-0.12, 0.06, 0, 0.14], [0, 0.06, 0.11, 0.14], [0, -0.09, 0.04, 0.14]] as const) B(this.heart, heartM, k, k, k, x, y, z);
-    B(this.heart, clear, 0.46, 0.46, 0.4, 0, 0.02, 0);
-    // head, tall collar and crown: ice spikes alternating with frozen berries
-    this.head.position.set(0, 2.7, 0);
-    this.body.add(this.head);
-    B(this.head, deep, 0.85, 0.5, 0.25, 0, 0.35, -0.3);
-    B(this.head, skin, 0.5, 0.52, 0.48, 0, 0.32, 0);
-    B(this.head, glowMat(ICE), 0.32, 0.06, 0.04, 0, 0.36, 0.25);
-    B(this.head, silver, 0.56, 0.08, 0.54, 0, 0.62, 0);
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2, big = i % 2 === 0, tall = i === 0 || i === 4 || i === 6;
-      if (big) B(this.head, spike, 0.1, tall ? 0.75 : 0.45, 0.1, Math.sin(a) * 0.28, tall ? 1.02 : 0.86, Math.cos(a) * 0.28);
-      else B(this.head, heartM, 0.12, 0.12, 0.12, Math.sin(a) * 0.3, 0.72, Math.cos(a) * 0.3);
-    }
-    // bell sleeves; the cuffs are silver with frost
-    for (const s of [-1, 1]) {
-      const g = new THREE.Group();
-      g.position.set(s * 0.62, 2.5, 0);
-      this.body.add(g);
-      B(g, gown, 0.32, 0.9, 0.34, 0, -0.42, 0);
-      B(g, deep, 0.46, 0.32, 0.48, 0, -0.86, 0);
-      B(g, frost, 0.48, 0.06, 0.5, 0, -1.02, 0);
-      this.arms.push(g);
-    }
-    // ice staff: an icicle shaft, a crystal on top
-    this.staff.position.set(-0.78, 1.5, 0.3);
-    this.body.add(this.staff);
-    B(this.staff, silver, 0.1, 2.8, 0.1, 0, 0.3, 0);
-    B(this.staff, spike, 0.3, 0.55, 0.3, 0, 1.95, 0, 0, Math.PI / 4, 0);
-    B(this.staff, frost, 0.16, 0.16, 0.16, 0, 2.35, 0);
-    // a ring of six shards: one group, circles around
-    this.ring.position.y = 1.8;
-    this.body.add(this.ring);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const m = B(this.ring, i % 2 ? spike : frost, 0.22, 0.6, 0.22, Math.sin(a) * 1.7, 0, Math.cos(a) * 1.7, 0, 0, 0.3);
-      this.shards.push(m);
-    }
+    ({ head: this.head, staff: this.staff, ring: this.ring, heart: this.heart } = winterModel(this, this.body, this.arms, this.shards));
   }
 
   override reset(): void {

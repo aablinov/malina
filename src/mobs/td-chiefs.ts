@@ -3,6 +3,7 @@ import { pixelTex } from '../textures.ts';
 import { bell, boom, deg, hiss, voice } from '../spell-audio.ts';
 import { C, rand, RASP, wrap } from '../bosses/kit.ts';
 import { riderModel, type RiderParts } from '../bosses/golden-rider.ts';
+import { winterModel, type WinterParts } from '../bosses/winter-mistress.ts';
 import { decoyList, type Decoy } from '../decoys.ts';
 import { HpBar } from '../td/hpbar.ts';
 import { Mob, type MobHooks } from './mob.ts';
@@ -418,5 +419,101 @@ export class GoldenWardenChief extends TdChief {
     rider.rotation.x = -horse.rotation.x * 0.5;
     rider.position.y = 2.3 + Math.sin(this.time * 2) * 0.03;
     emblem.scale.setScalar(1 + Math.max(0, Math.sin(this.time * 5)) * 0.08);
+  }
+}
+
+/**
+ * Frost Queen on the march — the second final boss of the Raspberry Spiral, from the west portal (wiki/design-tower-defence.md,
+ * section 17): the Mistress of Eternal Winter's model (src/bosses/winter-mistress.ts) hovering along the road. 1400 health, 1.4 m/s;
+ * frost does not slow her. Every 6 s on the march: towers within 12 m — icicles on up to five of them one by one (25 each and
+ * a 2.5 s freeze); no towers around — two ice warlocks join her road (six at most). At the bush — a frost nova
+ */
+export class FrostQueenChief extends TdChief {
+  readonly kind = 'chief_frostqueen';
+  readonly title = t('Frost Queen');
+  readonly radius = 1.0;
+  override readonly topY = 4.6;
+  protected readonly every = 6;
+  /** Icicles fallen and warlocks called (for tests) */
+  icicles = 0;
+  called = 0;
+  private readonly arms: THREE.Group[] = [];
+  private readonly shards: THREE.Mesh[] = [];
+  private readonly p: WinterParts;
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 1400, at, 5.2);
+    this.speed = 1.4;
+    this.turn = 2.4;
+    this.keep = 2.2;
+    this.mass = 10;
+    this.aggro = 3;
+    this.loot = 60;
+    this.p = winterModel(this, this.body, this.arms, this.shards);
+    this.place();
+  }
+
+  /** Ice does not slow the queen of ice */
+  override chill(): void { /* immune */ }
+
+  protected ability(): boolean {
+    const towers = this.towersNear(12);
+    if (towers.length) { this.iciclesOn(towers); return true; }
+    if (this.called >= 6 || this.puppet) return false;
+    const side = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    for (const s of [-1, 1]) {
+      const m = this.mh.spawn('frostling', this.pos.clone().addScaledVector(side, s * 1.6));
+      if (m) { m.joinMarch(this); this.called++; }
+    }
+    this.h.fx.shock(this.pos.clone().setY(this.ground + 0.1), 3, ICE, 0.5, 0.2);
+    if (!this.quiet) bell(98, 1.5, 0.06, 0, 0.8);
+    return true;
+  }
+
+  /** Icicles: up to five towers, the nearest first; a mark, then the icicle — damage and a freeze */
+  private iciclesOn(towers: Decoy[]): void {
+    towers.sort((a, b) => Math.hypot(a.pos.x - this.pos.x, a.pos.z - this.pos.z) - Math.hypot(b.pos.x - this.pos.x, b.pos.z - this.pos.z));
+    towers.slice(0, 5).forEach((tw, i) => {
+      const to = tw.pos.clone();
+      this.field.markCircle(to, 1.2, 0.7 + i * 0.15, () => {
+        if (this.dead) return;
+        const sky = to.clone().add(new THREE.Vector3(0, 6, 0));
+        this.h.fx.streak({ path: (k, out) => out.lerpVectors(sky, to, k), dur: 0.15, color: ICE, color2: C(3, 3.6, 4), width: 0.18, tail: 0.6, halo: 1.4, core: 0.9 });
+        this.h.fx.burst(to.clone().setY(to.y + 0.4), [ICE, '#ffffff'], 14, { speed: 3, up: 3, size: 0.1, life: 0.5, glow: true, gravity: 6 });
+        if (!this.quiet) { bell(1760 + (i % 3) * 440, 0.4, 0.025, 0, 0.6); hiss({ dur: 0.18, vol: 0.12, f: 5000, f1: 1500, q: 0.9, type: 'bandpass' }); }
+        this.icicles++;
+        if (!this.puppet && tw.alive) { tw.hurt(25 * this.dmgMult, to); tw.freeze?.(2.5); }
+        if (this.inCircle(to, 1.2)) this.hurt(10, to, 2);
+      });
+    });
+  }
+
+  protected choose(dist: number): string | null { return dist < 3.5 ? 'nova' : null; }
+  protected override rest(): number { return rand(1.6, 2.2); }
+
+  protected act(_name: string, t: number, dt: number): boolean {
+    if (t - dt <= 0) {
+      const at = this.pos.clone();
+      this.field.markCircle(at, 3.5, 0.7, () => {
+        if (this.dead) return;
+        this.h.fx.shock(at.clone().setY(this.ground + 0.2), 3.5, ICE, 0.45, 0.18);
+        this.h.fx.burst(at.clone().setY(this.ground + 1.5), [ICE, '#ffffff', RASP], 30, { speed: 5, up: 2, size: 0.1, life: 0.7, glow: true, gravity: 3 });
+        if (!this.quiet) hiss({ dur: 0.6, vol: 0.14, f: 5000, f1: 1500, q: 1 });
+        if (this.inCircle(at, 3.5)) this.hurt(18, at, 3);
+      });
+    }
+    return t > 1.05;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const { head, staff, ring, heart } = this.p, S = this.st, t = this.time, cast = this.state === 'attack';
+    this.body.position.y = 0.6 + Math.sin(t * 1.2) * 0.15;
+    this.body.rotation.x = THREE.MathUtils.lerp(this.body.rotation.x, walk ? 0.08 : 0, 0.1);
+    head.rotation.x = cast ? -0.4 : Math.sin(t * 0.8) * 0.05;
+    this.arms.forEach((g, i) => g.rotation.set(cast ? -2.4 + Math.sin(S * 6 + i) * 0.15 : -0.2, 0, (i ? 1 : -1) * 0.12));
+    staff.rotation.x = THREE.MathUtils.lerp(staff.rotation.x, cast ? -0.2 : 0.08, 0.2);
+    ring.rotation.y += dt * (cast ? 4 : 1.1);
+    for (const [i, m] of this.shards.entries()) m.position.y = Math.sin(t * 2 + i) * 0.15;
+    heart.scale.setScalar(1 + Math.max(0, Math.sin(t * 4)) * 0.1);
   }
 }

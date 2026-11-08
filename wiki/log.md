@@ -516,3 +516,7 @@ Pages: [design-main-menu.md](design-main-menu.md), [design-tower-defence.md](des
 ## [2026-11-08] code | Raspberry Spiral: tests and the wiki
 `tests/td4.spec.ts`: the map, the climb along both roads, the moth over the slope, splash and piles on the plateau, the Golden Warden's shield, sweep, swords and climb. The design page gets section 17; the menu page and the index list the fourth map.
 Pages: [design-tower-defence.md](design-tower-defence.md), [design-main-menu.md](design-main-menu.md), [index.md](index.md).
+
+## [2026-11-08] code | Frost Queen on the march
+`chief_frostqueen` (`FrostQueenChief`, `src/mobs/td-chiefs.ts`) — the Mistress of Eternal Winter's model as a defence chief: hovers along the road, 1400 health, frost does not slow her, every 6 s icicles freeze and wound up to five towers within 12 m, with no towers around two ice warlocks join her road. The model is shared through `winterModel` (`src/bosses/winter-mistress.ts`).
+Pages: [design-tower-defence.md](design-tower-defence.md).
