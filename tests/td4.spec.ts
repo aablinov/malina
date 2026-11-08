@@ -19,7 +19,7 @@ async function open(page: Page): Promise<void> {
   expect(errors).toEqual([]);
 }
 
-test('spiral: map td4 — one road and a shortcut, 24 pads on three heights, twelve waves from level 4, the Golden Warden last', async ({ page }) => {
+test('spiral: map td4 — one road and a shortcut, 24 pads on three heights, twelve dense waves from level 4, chiefs from the third, the Golden Warden and the Frost Queen last', async ({ page }) => {
   await open(page);
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, td = m.td, L = m.level, T = m.terrain;
@@ -33,7 +33,8 @@ test('spiral: map td4 — one road and a shortcut, 24 pads on three heights, twe
     return {
       name: L.name, pads: td.pads.length, lanes: spec.lanes.map((l: any) => l.id), waves: td.waves.length, level: spec.level, bush: spec.bush,
       bushFloor: T.floorAt(0, 0, 10), roadStart: T.floorAt(sx, sz, 1), roadEnd: T.floorAt(ex, ez, 3), heights,
-      lastHasWarden: last.groups.some((g: any) => g.kind === 'chief_warden'), westFrom: td.waves.findIndex((w: any) => w.groups.some((g: any) => g.lane === 'west')),
+      lastHasWarden: last.groups.some((g: any) => g.kind === 'chief_warden' && g.lane === 'north'), lastHasQueen: last.groups.some((g: any) => g.kind === 'chief_frostqueen' && g.lane === 'west'),
+      chiefWaves: td.waves.map((w: any) => w.groups.filter((g: any) => g.kind.startsWith('chief_')).length), westFrom: td.waves.findIndex((w: any) => w.groups.some((g: any) => g.lane === 'west')),
       blocks: ['portal_blue', 'cliff_violet', 'cliff_violet_grass', 'grass_slab', 'path_slab', 'berry_bush'].map((n) => names.has(n)),
       sutler: L.meta.merchants?.[0], weather: L.meta.world.weather.kind,
     };
@@ -51,6 +52,10 @@ test('spiral: map td4 — one road and a shortcut, 24 pads on three heights, twe
   expect(r.heights).toContain(2);
   expect(r.heights.some((h: number) => h % 1 === 0.5)).toBe(true);
   expect(r.lastHasWarden).toBe(true);
+  expect(r.lastHasQueen).toBe(true);
+  // from the third wave every wave brings a mini-boss, from the sixth — two or more
+  expect(r.chiefWaves.slice(2).every((n: number) => n >= 1)).toBe(true);
+  expect(r.chiefWaves.slice(5).every((n: number) => n >= 2)).toBe(true);
   expect(r.westFrom).toBe(4);
   expect(r.blocks).toEqual([true, true, true, true, true, true]);
   expect(r.sutler).toMatchObject({ kind: 'sutler', y: 2 });
@@ -151,3 +156,42 @@ test('spiral: the Golden Warden marches up to the plateau, takes front hits on t
   expect(r.ground).toBe(2);
   expect(r.bush).toBeGreaterThan(0);
 });
+
+test('spiral: the Frost Queen hovers up the west road, frost does not slow her, icicles freeze towers, with no towers she calls warlocks', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page);
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, td = m.td;
+    m.hero.place(0, 40, 0, 0); m.hero.god = true;
+    td.waves.length = 0;
+    m.profile.data.berries = 99999;
+    const q = td.spawnOn('chief_frostqueen', 'west');
+    m.step(0.6);
+    q.chill(0.9, 10);
+    const slow = q.slowMul;
+    // no towers yet: she calls ice warlocks onto her road
+    for (let i = 0; i < 80 && q.called === 0; i++) { m.step(0.1); q.hp = q.maxHp; }
+    const called = q.called, warlocks = td.pack.mobs.filter((x: any) => x.kind === 'frostling' && x.alive).length;
+    for (const x of td.pack.mobs) if (x.kind === 'frostling') x.vanish();
+    // towers on every pad: icicles fall on the nearest ones and freeze them
+    for (const p of td.pads) td.build(p, 'arrow');
+    let frozen = 0, maxY = 0;
+    for (let i = 0; i < 2400 && td.bush.taken === 0; i++) {
+      m.step(0.1); q.hp = q.maxHp; maxY = Math.max(maxY, q.ground);
+      for (const x of td.pack.mobs) if (x.kind === 'frostling' && x.alive) x.vanish();
+      frozen = Math.max(frozen, td.towers.filter((t: any) => t.frozen > 0).length);
+    }
+    const out = { title: q.title, slow, called, warlocks, icicles: q.icicles, frozen, maxY, bush: td.bush.taken, top: q.pos.y - q.ground };
+    m.resetTargets();
+    return out;
+  });
+  expect(r.title).toBe('Frost Queen');
+  expect(r.slow).toBe(1);
+  expect(r.called).toBe(2);
+  expect(r.warlocks).toBe(2);
+  expect(r.icicles).toBeGreaterThan(0);
+  expect(r.frozen).toBeGreaterThan(0);
+  expect(r.maxY).toBe(2);
+  expect(r.bush).toBeGreaterThan(0);
+});
+

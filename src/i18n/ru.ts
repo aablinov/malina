@@ -2124,7 +2124,7 @@ const ru: Record<string, string> = {
   "No rooms yet — create your own": "Комнат пока нет — создай свою",
   "Click — select · double click — join · Q / E — tabs": "Клик — выбрать · двойной клик — войти · Q / E — вкладки",
   "Raspberry Spiral": "Малиновая спираль",
-  "A floating island at dusk. One road winds up to the raspberry plateau — towers on the ridge reach two turns at once. The Golden Warden leads the last wave.": "Парящий остров в сумерках. Одна дорога вьётся вверх к малиновому плато — башни на гребне достают сразу два витка. Последнюю волну ведёт Золотой страж.",
+  "A floating island at dusk. One road winds up to the raspberry plateau — towers on the ridge reach two turns at once. The Golden Warden and the Frost Queen lead the last wave.": "Парящий остров в сумерках. Одна дорога вьётся вверх к малиновому плато — башни на гребне достают сразу два витка. Последнюю волну ведут Золотой страж и Морозная королева.",
   "Spiral road": "Спиральная дорога",
   "West shortcut": "Западная тропа",
   "Up the spiral": "Вверх по спирали",
@@ -2136,7 +2136,8 @@ const ru: Record<string, string> = {
   "Two roads": "Две дороги",
   "Frost on the plateau": "Мороз на плато",
   "The Order gathers": "Орден собирается",
-  "The Golden Warden": "Золотой страж",
+  "Gold and frost": "Золото и лёд",
+  "Frost Queen": "Морозная королева",
   "Mauve cliff": "Сиреневая скала",
   "Mauve cliff with grass": "Сиреневая скала с травой",
 };

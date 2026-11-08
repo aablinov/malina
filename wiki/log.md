@@ -520,3 +520,7 @@ Pages: [design-tower-defence.md](design-tower-defence.md), [design-main-menu.md]
 ## [2026-11-08] code | Frost Queen on the march
 `chief_frostqueen` (`FrostQueenChief`, `src/mobs/td-chiefs.ts`) — the Mistress of Eternal Winter's model as a defence chief: hovers along the road, 1400 health, frost does not slow her, every 6 s icicles freeze and wound up to five towers within 12 m, with no towers around two ice warlocks join her road. The model is shared through `winterModel` (`src/bosses/winter-mistress.ts`).
 Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Raspberry Spiral: dense waves, two final bosses
+The spiral's waves are ≈ 1.6× denser (≈ 650 enemies solo), a mini-boss in every wave from the third, two or three from the sixth; the last wave — the Golden Warden from the north and the Frost Queen from the west. Tests check the chief schedule and the queen.
+Pages: [design-tower-defence.md](design-tower-defence.md).
