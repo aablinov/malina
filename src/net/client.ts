@@ -20,12 +20,15 @@ const SERVER_KEY = 'malina.server';
 const VERSION_KEY = 'malina.net.version';
 /** The battle the room went into: seat, seed, host — read by the battle page */
 const BATTLE_KEY = 'malina.net.battle';
+/** The last room the player went into battle with — survives closing the tab: the room list offers "Return" */
+const LAST_KEY = 'malina.net.last';
 export const DEFAULT_SERVER = 'http://localhost:8787';
 /** Ping in battle — once per this many ms */
 const PING_BATTLE_MS = 2000;
 
 export interface NetAuth { playerId: string; name: string; token: string }
 export interface RoomView { room: RoomInfo; seats: SeatInfo[]; you: number }
+export interface LastRoom { code: string; matchId: string }
 export interface NetBattle { matchId: string; code: string; map: string; players: number; seed: number; hostSeat: number; seat: number; seats: SeatInfo[] }
 
 const read = <T>(store: Storage, key: string): T | null => {
@@ -58,6 +61,10 @@ export class NetClient {
   online = false;
   /** Error from the server or the network — show in the camp */
   onError?: (text: string) => void;
+  /** The room asks for a password (need-password) or it was wrong (bad) — the camp opens the field for that code */
+  onPassword?: (code: string, bad: boolean) => void;
+  /** Code of the last room.join — for the password answer */
+  private joining = '';
   private ws: WebSocket | null = null;
   private readonly listeners = new Set<(m: ServerMsg) => void>();
   private ping = 0;
@@ -237,8 +244,11 @@ export class NetClient {
 
   send(m: ClientMsg): void { if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(m)); }
 
-  createRoom(map: string, priv: boolean, max = 4): void { this.send({ t: 'room.create', map, max, private: priv }); }
-  joinRoom(code: string): void { this.send({ t: 'room.join', code }); }
+  /** password '' — an open room */
+  createRoom(map: string, password: string, max = 4): void { this.send({ t: 'room.create', map, max, password }); }
+  joinRoom(code: string, password?: string): void { this.joining = code; this.send(password ? { t: 'room.join', code, password } : { t: 'room.join', code }); }
+  /** The last room the player was in battle with (the room list offers "Return") */
+  get lastRoom(): LastRoom | null { return read<LastRoom>(localStorage, LAST_KEY); }
   leaveRoom(): void { this.send({ t: 'room.leave' }); this.room = null; }
   setReady(ready: boolean): void { this.send({ t: 'room.ready', ready }); }
   setMap(map: string): void { this.send({ t: 'room.map', map }); }
@@ -257,13 +267,20 @@ export class NetClient {
         this.startPing();
         break;
       case 'room.state': this.room = { room: m.room, seats: m.seats, you: m.you }; break;
-      case 'room.left': this.room = null; break;
-      case 'error': this.onError?.(t(m.text)); break;
+      case 'room.left': this.room = null; if (m.reason !== 'closed') write(localStorage, LAST_KEY, null); break;
+      case 'error':
+        if ((m.code === 'need-password' || m.code === 'bad-password') && this.onPassword) {
+          this.onPassword(this.joining, m.code === 'bad-password');
+          if (m.code === 'need-password') break;
+        }
+        this.onError?.(t(m.text));
+        break;
       case 'profile.updated': this.takeProfile({ version: m.version, data: m.data }); break;
       case 'battle.start':
         write(sessionStorage, BATTLE_KEY, { matchId: m.matchId, code: this.room?.room.code ?? '', map: m.map, players: m.players, seed: m.seed, hostSeat: m.hostSeat, seat: this.room?.you ?? 0, seats: m.seats } satisfies NetBattle);
+        write(localStorage, LAST_KEY, { code: this.room?.room.code ?? '', matchId: m.matchId } satisfies LastRoom);
         break;
-      case 'battle.over': write(sessionStorage, BATTLE_KEY, null); break;
+      case 'battle.over': write(sessionStorage, BATTLE_KEY, null); write(localStorage, LAST_KEY, null); break;
       case 'pong': this.rtt = Math.round(performance.now() - this.pingAt); break;
       default: break;
     }

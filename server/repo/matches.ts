@@ -17,6 +17,12 @@ export class Matches {
     this.db.prepare('INSERT INTO match_players (match_id, player_id, seat) VALUES (?, ?, ?) ON CONFLICT DO NOTHING').run(id, playerId, seat);
   }
 
+  /** Player's seat in the match; null — they were not in it */
+  seatOf(id: string, playerId: string): number | null {
+    const r = this.db.prepare('SELECT seat FROM match_players WHERE match_id = ? AND player_id = ?').get(id, playerId) as { seat: number } | undefined;
+    return r ? r.seat : null;
+  }
+
   /** Close the match; false — already closed (a repeated result is not counted) */
   finish(id: string, result: MatchResult, wave: number, now: number): boolean {
     return !!this.db.prepare('UPDATE matches SET result = ?, wave = ?, ended_at = ? WHERE id = ? AND ended_at IS NULL').run(result, wave, now, id).changes;

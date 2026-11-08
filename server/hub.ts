@@ -110,8 +110,8 @@ export class Hub {
     switch (m.t) {
       case 'hello': break;
       case 'ping': c.send({ t: 'pong' }); break;
-      case 'room.create': R.create(c, m.map, m.max, m.private); break;
-      case 'room.join': R.join(c, m.code); break;
+      case 'room.create': R.create(c, m.map, m.max, m.password); break;
+      case 'room.join': R.join(c, m.code, m.password); break;
       case 'room.leave': R.leave(c, 'leave'); break;
       case 'room.ready': R.ready(c, m.ready); break;
       case 'room.map': R.setMap(c, m.map); break;

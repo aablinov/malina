@@ -155,6 +155,28 @@ body.menu #c.mm-canvas { cursor: default; }
 .mm-chat b { color: var(--mcd-gold); }
 .mm-chat i { color: #9fb4bc; }
 .mm-seat.empty { color: #7d8a90; font-style: italic; }
+.mm-field.pass { text-transform: none; letter-spacing: normal; }
+.mm-lobby:not(.online) [data-pane='rooms'] { display: none; }
+.mm-battle-on { display: flex; align-items: center; gap: 0.6em; padding: 0.6em 0.8em; background: rgba(255, 154, 60, 0.22); border: 0.12em solid #ff9a3c; }
+.mm-battle-on b { flex: 1; font-weight: 600; }
+
+/* room list like a server browser: the "Rooms" tab takes the hero column too */
+.mm-lobby.rooms .mm-hero { display: none; }
+.mm-lobby.rooms .mm-pane { grid-column: 1 / 3; padding-left: 2.4em; }
+.mm-pane-title .mm-btn { margin-left: auto; font-family: inherit; }
+.mm-browser { width: 100%; border-collapse: collapse; background: var(--mm-panel); border: 0.15em solid var(--mm-line); font-weight: 500; }
+.mm-browser th { position: sticky; top: 0; padding: 0.6em 0.8em; text-align: left; background: #0d1f28; color: #9fb4bc; font: 400 0.6em/1 var(--mcd-px); text-transform: uppercase; }
+.mm-browser td { padding: 0.5em 0.8em; border-top: 0.08em solid rgba(255, 255, 255, 0.08); white-space: nowrap; }
+.mm-browser td b { font-weight: 600; }
+.mm-browser .lk { width: 1.6em; text-align: center; padding-right: 0; }
+.mm-browser .act { width: 1%; text-align: right; }
+.mm-browser .act i { font-style: normal; color: #9fb4bc; font-size: 0.85em; }
+.mm-browser tbody tr[data-room] { cursor: pointer; }
+.mm-browser tbody tr[data-room]:hover { background: rgba(255, 255, 255, 0.08); }
+.mm-browser tr.sel { background: rgba(255, 210, 90, 0.18) !important; outline: 0.12em solid var(--mcd-gold); }
+.mm-browser tr.full { color: #7d8a90; }
+.mm-browser tr.mine td:first-child { box-shadow: inset 0.25em 0 0 #ff9a3c; }
+.mm-browser .mm-pass-row td { border-top: 0; padding-top: 0; }
 
 .mm-bottom { grid-column: 1 / -1; display: flex; align-items: center; gap: 2em; padding: 0 2.4em; background: var(--mm-bar); border-top: 0.15em solid #000; pointer-events: auto; }
 .mm-hint { flex: 1; text-align: center; font: 400 0.6em/1.4 var(--mcd-px); color: #b9c4cc; }

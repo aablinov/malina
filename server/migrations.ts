@@ -78,4 +78,9 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (player_id, friend_id)
   );
   `,
+  // 004_room_password: rooms are listed for everyone, closed with a password (salt:scrypt); the creator's name for the list
+  `
+  ALTER TABLE rooms ADD COLUMN pass_hash TEXT;
+  ALTER TABLE rooms ADD COLUMN creator TEXT NOT NULL DEFAULT '';
+  `,
 ];

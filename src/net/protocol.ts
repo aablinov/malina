@@ -9,7 +9,7 @@ import { MAX_PLAYERS } from '../bosses/scaling.ts';
  */
 
 /** Protocol version: on mismatch the server closes the connection with code CLOSE.protocol */
-export const PROTOCOL = 3;
+export const PROTOCOL = 4;
 
 /** Up to four heroes in a party, as with the wardens */
 export { MAX_PLAYERS };
@@ -26,6 +26,8 @@ export const NET_LIMITS = {
   perSecond: 100,
   /** How long to hold a disconnected player's seat, ms */
   graceMs: 30_000,
+  /** The same during a battle: closed the tab — the hero waits this long for "Return to battle" */
+  battleGraceMs: 120_000,
   /** Chat message: characters, and no more than once per this many ms */
   chatMax: 200,
   chatMs: 400,
@@ -36,6 +38,8 @@ export const NET_LIMITS = {
   /** Voice signalling (src/net/voice.ts): SDP and ICE candidate length, characters */
   sdpMax: 16 * 1024,
   iceMax: 1024,
+  /** Room password, characters */
+  passMax: 32,
 } as const;
 
 /** STUN by default; the server may replace it with its own list (env RTC_ICE_SERVERS, given in /api/health) */
@@ -61,16 +65,23 @@ export type MatchResult = 'won' | 'lost' | 'abandoned';
 /** Room in the lobby list and in `room.state` (continues `OnlineLobby` from src/menu/session.ts) */
 export interface RoomInfo {
   id: string;
-  /** Join code: six letters */
+  /** Join code: five digits */
   code: string;
-  /** Host name */
+  /** Host name (the crown; changes if the host leaves) */
   host: string;
   hostId: string;
+  /** Who created the room */
+  creator: string;
   map: string;
   players: number;
   max: number;
-  private: boolean;
+  /** Closed with a password */
+  locked: boolean;
   state: RoomState;
+  /** Current wave of the running battle; 0 — lobby */
+  wave: number;
+  /** Waves on the map */
+  waves: number;
 }
 
 export interface SeatInfo {
@@ -107,8 +118,10 @@ export interface MapRecord { map: string; bestWave: number; wins: number; fastes
 export type ClientMsg =
   | { t: 'hello'; token: string; protocol: number }
   | { t: 'ping' }
-  | { t: 'room.create'; map: string; max: number; private: boolean }
-  | { t: 'room.join'; code: string }
+  /** password '' — an open room */
+  | { t: 'room.create'; map: string; max: number; password: string }
+  /** password — for a locked room; not needed for a player of its running match (reconnect) */
+  | { t: 'room.join'; code: string; password?: string }
   | { t: 'room.leave' }
   | { t: 'room.ready'; ready: boolean }
   | { t: 'room.map'; map: string }
@@ -135,15 +148,19 @@ export type ServerMsg =
   /** The room changed; you — your seat */
   | { t: 'room.state'; room: RoomInfo; seats: SeatInfo[]; you: number }
   | { t: 'room.left'; reason: 'leave' | 'kick' | 'closed' }
-  /** The battle started: the battle page joins the match over `/game` (src/net/game-protocol.ts); hostSeat — the crown in the list */
-  | { t: 'battle.start'; matchId: string; map: string; players: number; seed: number; hostSeat: number; seats: SeatInfo[] }
+  /**
+   * The battle started: the battle page joins the match over `/game` (src/net/game-protocol.ts); hostSeat — the crown in the list.
+   * resume — you are already in this running match (reconnected after closing the tab): the camp offers "Return to battle"
+   */
+  | { t: 'battle.start'; matchId: string; map: string; players: number; seed: number; hostSeat: number; seats: SeatInfo[]; resume?: boolean }
   | { t: 'battle.over'; matchId: string; result: MatchResult; wave: number }
   | { t: 'chat'; seat: number; name: string; text: string }
   | { t: 'rtc'; from: number; data: RtcSignal }
   | { t: 'profile.updated'; version: number; data: unknown };
 
 export type ErrorCode =
-  | 'bad-message' | 'no-room' | 'room-full' | 'not-host' | 'not-ready' | 'bad-map' | 'in-room' | 'not-in-battle';
+  | 'bad-message' | 'no-room' | 'room-full' | 'not-host' | 'not-ready' | 'bad-map' | 'in-room' | 'not-in-battle'
+  | 'need-password' | 'bad-password';
 
 // ---------- REST ----------
 

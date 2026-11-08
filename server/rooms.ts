@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { Profile, type ProfileData } from '../src/items.ts';
 import { MAX_PLAYERS, NET_LIMITS, type ErrorCode, type RoomInfo, type RtcSignal, type SeatInfo, type ServerMsg } from '../src/net/protocol.ts';
 import { Match, type MatchEnd } from '../src/game/match.ts';
-import { newId } from './auth.ts';
+import { checkPass, hashPass, newId } from './auth.ts';
 import { tx, type Db } from './db.ts';
 import { MAX_XP_PER_MATCH, type MapCatalog } from './maps.ts';
 import type { Matches } from './repo/matches.ts';
@@ -65,6 +65,8 @@ export const RESTORE_MS = 10 * 60_000;
 export const PURGE_MS = 24 * 3600_000;
 /** Room code — 5 digits without a leading zero: easy to dictate and type on any keyboard */
 const CODE_LEN = 5;
+/** After a wrong room password the next try is accepted no sooner than this, ms */
+export const PASS_RETRY_MS = 1000;
 
 export class RoomError extends Error {
   readonly code: ErrorCode;
@@ -76,6 +78,8 @@ export class RoomManager {
   private readonly now: () => number;
   private readonly byId = new Map<string, Room>();
   private readonly byPlayer = new Map<string, Room>();
+  /** Wrong password: player → when the next try is accepted */
+  private readonly passWait = new Map<string, number>();
 
   constructor(deps: RoomDeps) {
     this.d = deps;
@@ -94,6 +98,9 @@ export class RoomManager {
     m.deadline = null;
     this.saveMember(room, m);
     this.broadcast(room);
+    // reconnected while the battle runs (closed the tab, came back to the camp): the camp offers "Return to battle";
+    // the battle page ignores it — the same matchId
+    if (room.row.state === 'battle' && room.matchId) c.send(this.startMsg(room, room.matchId, true));
   }
 
   /** Connection closed: the seat is held until the deadline */
@@ -104,18 +111,21 @@ export class RoomManager {
     if (m.conn !== c) return; // already signed in from another tab
     m.conn = null;
     m.voice = false;
-    m.deadline = this.now() + NET_LIMITS.graceMs;
+    // in battle longer: reopening a closed tab (page load, the camp, "Return to battle") easily takes more than half a minute
+    m.deadline = this.now() + (room.row.state === 'battle' ? NET_LIMITS.battleGraceMs : NET_LIMITS.graceMs);
     this.saveMember(room, m);
     this.broadcast(room);
   }
 
-  create(c: Conn, map: string, max: number, priv: boolean): void {
+  /** password '' — an open room */
+  create(c: Conn, map: string, max: number, password: string): void {
     if (!this.d.maps.has(map)) throw new RoomError('bad-map', 'No such map');
     this.leave(c, 'leave');
     const now = this.now();
     const row: RoomRow = {
       id: newId(), code: this.freeCode(), host_id: c.playerId, map, max: Math.max(1, Math.min(MAX_PLAYERS, max)),
-      private: priv ? 1 : 0, state: 'lobby', seed: 0, created_at: now, updated_at: now,
+      private: password ? 1 : 0, state: 'lobby', seed: 0, created_at: now, updated_at: now,
+      pass_hash: password ? hashPass(password) : null, creator: c.name,
     };
     const room: Room = { row, members: [], matchId: null };
     tx(this.d.db, () => {
@@ -126,16 +136,22 @@ export class RoomManager {
     this.broadcast(room);
   }
 
-  join(c: Conn, code: string): void {
+  /**
+   * Into a room by code (from the list, by code, from friends). A locked room asks for the password — except a player of its running match:
+   * closed the tab and the seat was freed — they come back without the password, to their old seat if it is free
+   */
+  join(c: Conn, code: string, password = ''): void {
     const room = [...this.byId.values()].find((r) => r.row.code === code.replace(/\s+/g, '').toUpperCase());
     if (!room || room.row.state === 'closed') throw new RoomError('no-room', 'No room with that code');
     if (this.byPlayer.get(c.playerId) === room) { this.attach(c); return; }
     if (room.members.length >= room.row.max) throw new RoomError('room-full', 'Room is full');
-    this.leave(c, 'leave');
     const matchId = room.matchId;
+    const oldSeat = matchId ? this.d.matches.seatOf(matchId, c.playerId) : null;
+    if (room.row.pass_hash && oldSeat === null) this.checkPassword(c, room.row.pass_hash, password);
+    this.leave(c, 'leave');
     let seat = 0;
     tx(this.d.db, () => {
-      const m = this.addMember(room, c);
+      const m = this.addMember(room, c, oldSeat);
       seat = m.seat;
       // into a running battle: a row in the match (for the reward) — and straight to the battle page
       if (matchId) this.d.matches.addPlayer(matchId, m.playerId, m.seat);
@@ -143,6 +159,17 @@ export class RoomManager {
     if (matchId) this.d.games.get(matchId)?.join({ seat, playerId: c.playerId, name: c.name, profile: this.profileOf(c.playerId) });
     this.broadcast(room);
     if (room.row.state === 'battle' && matchId) c.send(this.startMsg(room, matchId));
+  }
+
+  /** Locked room: no password — need-password, wrong — bad-password and a pause before the next try */
+  private checkPassword(c: Conn, hash: string, password: string): void {
+    if (!password) throw new RoomError('need-password', 'The room is locked — enter the password');
+    const now = this.now();
+    if ((this.passWait.get(c.playerId) ?? 0) > now || !checkPass(password, hash)) {
+      this.passWait.set(c.playerId, now + PASS_RETRY_MS);
+      throw new RoomError('bad-password', 'Wrong password');
+    }
+    this.passWait.delete(c.playerId);
   }
 
   /** Room chat: to everyone in it, with name and seat */
@@ -239,9 +266,9 @@ export class RoomManager {
     this.broadcast(room);
   }
 
-  private startMsg(room: Room, matchId: string): ServerMsg {
+  private startMsg(room: Room, matchId: string, resume = false): ServerMsg {
     const host = this.member(room, room.row.host_id);
-    return { t: 'battle.start', matchId, map: room.row.map, players: room.members.length, seed: room.row.seed, hostSeat: host.seat, seats: this.seats(room) };
+    return { t: 'battle.start', matchId, map: room.row.map, players: room.members.length, seed: room.row.seed, hostSeat: host.seat, seats: this.seats(room), ...(resume ? { resume } : {}) };
   }
 
   // ---------- Battle ----------
@@ -300,11 +327,17 @@ export class RoomManager {
       for (const m of [...room.members]) if (m.deadline !== null && m.deadline <= now) this.removeMember(room, m);
     }
     this.d.rooms.purge(now - PURGE_MS);
+    for (const [id, t] of this.passWait) if (t <= now) this.passWait.delete(id);
   }
 
-  /** Public rooms with free seats — for the list in the camp (a running battle can be joined too) */
+  /**
+   * All live rooms — the list in the camp, like a server browser: locked and full ones too (a running battle can be joined while there is a seat).
+   * Order: with free seats first, then more players, then newer
+   */
   list(): RoomInfo[] {
-    return [...this.byId.values()].filter((r) => r.row.state !== 'closed' && !r.row.private && r.members.length < r.row.max).map((r) => this.info(r));
+    return [...this.byId.values()].filter((r) => r.row.state !== 'closed')
+      .sort((a, b) => Number(a.members.length >= a.row.max) - Number(b.members.length >= b.row.max) || b.members.length - a.members.length || b.row.created_at - a.row.created_at)
+      .map((r) => this.info(r));
   }
 
   /** Player's room — for tests and debugging */
@@ -335,10 +368,12 @@ export class RoomManager {
     });
   }
 
-  private addMember(room: Room, c: Conn): Member {
+  /** want — the desired seat (the old one on a reconnect), if free */
+  private addMember(room: Room, c: Conn, want: number | null = null): Member {
     const taken = new Set(room.members.map((m) => m.seat));
     let seat = 0;
-    while (taken.has(seat)) seat++;
+    if (want !== null && want < room.row.max && !taken.has(want)) seat = want;
+    else while (taken.has(seat)) seat++;
     const m: Member = { playerId: c.playerId, name: c.name, seat, ready: false, joinedAt: this.now(), conn: c, deadline: null, voice: false };
     room.members.push(m);
     this.byPlayer.set(c.playerId, room);
@@ -424,7 +459,11 @@ export class RoomManager {
 
   private info(r: Room): RoomInfo {
     const host = r.members.find((m) => m.playerId === r.row.host_id);
-    return { id: r.row.id, code: r.row.code, host: host?.name ?? '', hostId: r.row.host_id, map: r.row.map, players: r.members.length, max: r.row.max, private: !!r.row.private, state: r.row.state };
+    const wave = r.row.state === 'battle' && r.matchId ? (this.d.games.get(r.matchId)?.td.wave ?? 0) : 0;
+    return {
+      id: r.row.id, code: r.row.code, host: host?.name ?? '', hostId: r.row.host_id, creator: r.row.creator || (host?.name ?? ''), map: r.row.map,
+      players: r.members.length, max: r.row.max, locked: !!r.row.pass_hash, state: r.row.state, wave, waves: this.d.maps.waves(r.row.map),
+    };
   }
 
   private seats(r: Room): SeatInfo[] {

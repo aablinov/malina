@@ -4,6 +4,9 @@ import type { Db } from '../db.ts';
 export interface RoomRow {
   id: string; code: string; host_id: string; map: string; max: number; private: number;
   state: RoomState; seed: number; created_at: number; updated_at: number;
+  /** Password `salt:hash` (server/auth.ts); null — open room */
+  pass_hash: string | null;
+  creator: string;
 }
 export interface MemberRow { room_id: string; player_id: string; seat: number; ready: number; joined_at: number; gone_at: number | null }
 
@@ -13,8 +16,8 @@ export class Rooms {
   constructor(db: Db) { this.db = db; }
 
   insert(r: RoomRow): void {
-    this.db.prepare('INSERT INTO rooms (id, code, host_id, map, max, private, state, seed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(r.id, r.code, r.host_id, r.map, r.max, r.private, r.state, r.seed, r.created_at, r.updated_at);
+    this.db.prepare('INSERT INTO rooms (id, code, host_id, map, max, private, state, seed, created_at, updated_at, pass_hash, creator) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(r.id, r.code, r.host_id, r.map, r.max, r.private, r.state, r.seed, r.created_at, r.updated_at, r.pass_hash, r.creator);
   }
 
   update(r: RoomRow): void {
