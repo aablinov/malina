@@ -12,8 +12,8 @@ const segDist = (px: number, pz: number, a: [number, number], b: [number, number
   return Math.hypot(px - (a[0] + dx * t), pz - (a[1] + dz * t));
 };
 
-/** A free cell for the sutler near (x, z); facing the bush at (bx, bz). null — none found */
-export function sutlerSpot(L: Level, lanes: TdLane[], pads: TdPad[], x: number, z: number, bx = 0, bz = 0): { kind: 'sutler'; x: number; z: number; yaw: number } | null {
+/** A free cell for the sutler near (x, z); facing the bush at (bx, bz); top — the ground block's y (−1 — a floor at 0, the plateau of map 4 is higher). null — none found */
+export function sutlerSpot(L: Level, lanes: TdLane[], pads: TdPad[], x: number, z: number, bx = 0, bz = 0, top = -1): { kind: 'sutler'; x: number; y: number; z: number; yaw: number } | null {
   const ok = (cx: number, cz: number): boolean => {
     for (const l of lanes) {
       const pts = [...l.points, ...(l.inner ?? [])];
@@ -22,15 +22,15 @@ export function sutlerSpot(L: Level, lanes: TdLane[], pads: TdPad[], x: number, 
     if (pads.some((p) => Math.hypot(p.x - cx, p.z - cz) < 4)) return false;
     if (Math.hypot(cx - bx, cz - bz) < 4.5) return false;
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
-      if (L.topAt(cx + dx, cz + dz) !== -1) return false;
-      for (let y = 0; y < 3; y++) if (!L.isAir(cx + dx, y, cz + dz)) return false;
+      if (L.topAt(cx + dx, cz + dz) !== top) return false;
+      for (let y = top + 1; y < top + 4; y++) if (!L.isAir(cx + dx, y, cz + dz)) return false;
     }
     return !L.decor.some((d) => Math.hypot(d.pos[0] - cx, d.pos[2] - cz) < 2);
   };
   for (let r = 0; r <= 8; r++) for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
     if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
     const cx = x + dx, cz = z + dz;
-    if (ok(cx, cz)) return { kind: 'sutler', x: cx, z: cz, yaw: Math.atan2(bx - cx, bz - cz) };
+    if (ok(cx, cz)) return { kind: 'sutler', x: cx, y: top + 1, z: cz, yaw: Math.atan2(bx - cx, bz - cz) };
   }
   return null;
 }

@@ -258,6 +258,9 @@ export const BLOCKS: BlockDef[] = [
   B('basalt_stairs', 'Basalt: stairs', 'lava', [cube(same('basalt'), 'stairs')], { rotatable: true, collide: 0.5, stairs: true, connects: true, jitter: 0.03 }),
   solid('cliff_lava', 'Scorched cliff', 'lava', 'cliffLava', { jitter: 0.03 }),
   solid('cliff_lava_top', 'Scorched cliff with ash', 'lava', { top: 'ashTop', side: 'cliffLava', bottom: 'cliffLava' }, { jitter: 0.02, natural: true }),
+  // --- Raspberry Spiral (wiki/design-tower-defence.md, section 17): mauve rock of the floating island and its grassy top ---
+  solid('cliff_violet', 'Mauve cliff', 'ground', 'cliffViolet', { jitter: 0.03 }),
+  solid('cliff_violet_grass', 'Mauve cliff with grass', 'ground', { top: 'grassTop', side: 'cliffVioletGrass', bottom: 'cliffViolet' }, { jitter: 0.02, natural: true, fringe: 'grassFringe' }),
   // lava: knee-deep liquid with warm baked light on the blocks around; the hero burns in it (src/dev/playground.ts)
   B('lava', 'Lava', 'lava', [{ obj: 'water', layer: 'lava', tex: same('lava') }], { collide: 0.5, cullSame: true, jitter: 0, bakedLight: { color: '#ff7a2a', intensity: 0.9, dist: 4 } }),
 
