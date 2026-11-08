@@ -108,8 +108,8 @@ export class RaspberryBrute extends TdChief {
     const at = this.pos.clone();
     this.field.markCircle(at, r, delay, () => {
       if (this.dead) return;
-      this.h.fx.shock(at.clone().setY(0.1), r, C(3.2, 0.8, 1.4), 0.5, 0.2);
-      this.h.fx.burst(at.clone().setY(0.3), ['#c8245a', '#8a5a34', RASP], 24, { speed: 5, up: 3, size: 0.12, life: 0.6, gravity: 8 });
+      this.h.fx.shock(at.clone().setY(this.ground + 0.1), r, C(3.2, 0.8, 1.4), 0.5, 0.2);
+      this.h.fx.burst(at.clone().setY(this.ground + 0.3), ['#c8245a', '#8a5a34', RASP], 24, { speed: 5, up: 3, size: 0.12, life: 0.6, gravity: 8 });
       this.h.fx.shake = Math.max(this.h.fx.shake, 0.5);
       if (!this.quiet) boom(60, 30, 0.6, 0.5);
       // the client puppet (src/cgame/net-battle.ts) hits for show: the server breaks towers
@@ -175,7 +175,7 @@ export class SlimeQueen extends TdChief {
     if (!m) return false;
     m.summoned = true;
     m.joinMarch(this);
-    this.h.fx.burst(this.pos.clone().setY(0.6), ['#e0306a', '#9a1240'], 12, { speed: 2.5, up: 2, size: 0.1, life: 0.5, gravity: 8 });
+    this.h.fx.burst(this.pos.clone().setY(this.ground + 0.6), ['#e0306a', '#9a1240'], 12, { speed: 2.5, up: 2, size: 0.1, life: 0.5, gravity: 8 });
     if (!this.quiet) voice({ type: 'sine', f: 140, f1: 70, dur: 0.25, vol: 0.06 });
     return true;
   }
@@ -199,7 +199,7 @@ export class SlimeQueen extends TdChief {
       const at = this.pos.clone().addScaledVector(this.fwd(), 1.2);
       this.field.markCircle(at, 2, 0.6, () => {
         if (this.dead) return;
-        this.h.fx.burst(at.clone().setY(0.1), ['#e0306a', '#9a1240'], 14, { speed: 3, up: 2, size: 0.1, life: 0.5, gravity: 8 });
+        this.h.fx.burst(at.clone().setY(this.ground + 0.1), ['#e0306a', '#9a1240'], 14, { speed: 3, up: 2, size: 0.1, life: 0.5, gravity: 8 });
         if (!this.quiet) voice({ type: 'sine', f: 120, f1: 60, dur: 0.2, vol: 0.07 });
         if (this.inCircle(at, 2)) this.hurt(14, at, 4);
       });
@@ -261,8 +261,8 @@ export class SnowShaman extends TdChief {
   protected ability(): boolean {
     const towers = this.towersNear(9);
     if (!towers.length) return false;
-    this.h.fx.shock(this.pos.clone().setY(0.2), 9, ICE, 0.7, 0.25);
-    this.h.fx.burst(this.pos.clone().setY(2.5), [ICE, '#ffffff'], 40, { speed: 6, up: 2, size: 0.12, life: 0.9, glow: true, gravity: 2 });
+    this.h.fx.shock(this.pos.clone().setY(this.ground + 0.2), 9, ICE, 0.7, 0.25);
+    this.h.fx.burst(this.pos.clone().setY(this.ground + 2.5), [ICE, '#ffffff'], 40, { speed: 6, up: 2, size: 0.12, life: 0.9, glow: true, gravity: 2 });
     if (!this.quiet) hiss({ dur: 0.8, vol: 0.14, f: 5000, f1: 1500, q: 1 });
     for (const t of towers) t.freeze?.(4);
     return true;
@@ -276,7 +276,7 @@ export class SnowShaman extends TdChief {
       const at = this.pos.clone();
       this.field.markCircle(at, 3, 0.7, () => {
         if (this.dead) return;
-        this.h.fx.shock(at.clone().setY(0.2), 3, ICE, 0.4, 0.15);
+        this.h.fx.shock(at.clone().setY(this.ground + 0.2), 3, ICE, 0.4, 0.15);
         if (this.inCircle(at, 3)) this.hurt(12, at, 3);
       }, ICE);
     }
@@ -290,3 +290,4 @@ export class SnowShaman extends TdChief {
     lerpTo(this.staff, this.state === 'attack' ? (this.st < 0.6 ? -0.8 : 0.3) : walk ? s * 0.15 : 0, k);
   }
 }
+

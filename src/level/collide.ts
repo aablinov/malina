@@ -165,7 +165,7 @@ export function obstaclesOf(L: Level, y0: number, x0: number, z0: number, x1: nu
     let run: number | null = null, runH = 0;
     const flush = (x: number) => {
       if (run === null) return;
-      out.push(obstacle((run + x) / 2 - 0.5, z, x - run, 1, runH - y0));
+      out.push({ ...obstacle((run + x) / 2 - 0.5, z, x - run, 1, runH - y0), grid: true });
       run = null;
     };
     for (let x = x0; x <= x1 + 1; x++) {

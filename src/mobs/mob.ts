@@ -149,7 +149,13 @@ export abstract class Mob extends Boss {
   private seenSeq = 0;
   /** Attack number: grows with each one — the guest's puppet restarts the same attack by it */
   attackSeq = 0;
+  /** Height above the floor (a hop, a moth's flight); the body stands at `ground + flyY` */
   protected flyY = 0;
+  /**
+   * Floor under the feet (`Terrain.floorAt`): mobs walk on the terrain like the hero — up stairs, half-blocks and ramps
+   * a step of 0.5 m at most, down any height. Over a chasm the last floor is kept
+   */
+  ground = 0;
   private dazeFor = 0;
   private deathT = 0;
   /** Healing accumulates and is shown as a number once per 0.5 s */
@@ -186,6 +192,9 @@ export abstract class Mob extends Boss {
     this.field = new Field(this.h);
     this.awake = true;
     this.pos.copy(this.home);
+    const f = h.terrain.floorAt(at.x, at.z, at.y);
+    this.ground = f > -Infinity ? f : 0;
+    this.pos.y = this.ground;
     this.yaw = yaw;
     this.setPlayers(1);
     this.group.add(this.body);
@@ -365,7 +374,7 @@ export abstract class Mob extends Boss {
     this.field.update(dt);
     if (this.state !== 'dead') this.collide(hero);
     this.healT -= dt;
-    if (this.healed >= 1 && this.healT <= 0) { this.h.fx.text(this.pos.clone().setY(this.topY + 0.3), `+${Math.round(this.healed)}`, 'heal'); this.healed = 0; this.healT = 0.5; }
+    if (this.healed >= 1 && this.healT <= 0) { this.h.fx.text(this.pos.clone().setY(this.ground + this.topY + 0.3), `+${Math.round(this.healed)}`, 'heal'); this.healed = 0; this.healT = 0.5; }
     this.tickLook(dt, this.state === 'dead' ? Math.max(0.1, 1 - this.st * 2) : 1);
     this.animate(dt, walk);
     this.place();
@@ -444,10 +453,10 @@ export abstract class Mob extends Boss {
     return true;
   }
 
-  /** Not through walls (except ghosts); does not climb onto the hero — yields to him */
+  /** Not through walls (except ghosts): blocks — by the terrain with a step, towers and decor — by obstacles; does not climb onto the hero — yields to him */
   private collide(hero: THREE.Vector3): void {
-    const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
-    if (!this.ghost) resolveCircle(p, this.radius, this.h.obstacles());
+    const p = new THREE.Vector3(this.pos.x, this.ground, this.pos.z);
+    if (!this.ghost) this.solid(p);
     const d = Math.hypot(hero.x - p.x, hero.z - p.z), R = this.radius + HERO.radius;
     if (d < R && d > 1e-3) { const k = (R - d) / d; p.x -= (hero.x - p.x) * k; p.z -= (hero.z - p.z) * k; }
     this.pos.x = p.x; this.pos.z = p.z;
@@ -495,7 +504,8 @@ export abstract class Mob extends Boss {
       if (this.state !== 'attack') { this.pos.x += mv.x * sp; this.pos.z += mv.y * sp; }
       const dx = this.pupTo.x - this.pos.x, dz = this.pupTo.z - this.pos.z, d = Math.hypot(dx, dz), k = d > 4 ? 1 : Math.min(1, dt * 12);
       this.pos.x += dx * k; this.pos.z += dz * k;
-      this.flyY += (this.pupTo.y - this.flyY) * Math.min(1, dt * 10);
+      this.ground = this.floorUnder();
+      this.flyY += (this.pupTo.y - this.ground - this.flyY) * Math.min(1, dt * 10);
       this.yaw += wrap(this.pupYaw - this.yaw) * Math.min(1, dt * 10);
       if (this.state === 'attack') {
         const dist = Math.hypot(this.pupAim.x - this.pos.x, this.pupAim.z - this.pos.z);
@@ -551,14 +561,27 @@ export abstract class Mob extends Boss {
   protected dash(dir: THREE.Vector3, speed: number, dt: number): boolean {
     const step = speed * this.slowMul * dt;
     this.move(dir, step);
-    const p = new THREE.Vector3(this.pos.x, 0, this.pos.z);
-    resolveCircle(p, this.radius, this.h.obstacles());
+    const p = new THREE.Vector3(this.pos.x, this.ground, this.pos.z);
+    this.solid(p);
     return Math.hypot(p.x - this.pos.x, p.z - this.pos.z) > step * 0.5;
   }
 
+  /** Push the body (feet at p.y) out of level blocks by the terrain and out of towers, gates and decor */
+  private solid(p: THREE.Vector3): void {
+    resolveCircle(p, this.radius, this.h.obstacles(), true);
+    this.h.terrain.resolve(p, this.radius);
+  }
+
+  /** Floor under the current point: climbs a step, drops any height; over a chasm — the last floor */
+  private floorUnder(): number {
+    const f = this.h.terrain.floorAt(this.pos.x, this.pos.z, this.ground);
+    return f > -Infinity ? f : this.ground;
+  }
+
   protected place(): void {
-    this.pos.y = this.flyY;
-    this.group.position.set(this.pos.x, this.flyY, this.pos.z);
+    if (!this.puppet) this.ground = this.floorUnder();
+    this.pos.y = this.ground + this.flyY;
+    this.group.position.set(this.pos.x, this.pos.y, this.pos.z);
     this.group.rotation.y = this.yaw;
   }
 
@@ -576,9 +599,9 @@ export abstract class Mob extends Boss {
     this.body.rotation.z = Math.min(1, this.st / 0.35) * 1.2;
     if (this.st > 0.35 && this.deathT === 0) {
       this.deathT = 1;
-      const c = this.pos.clone().setY(this.topY * 0.5);
+      const c = this.pos.clone().setY(this.ground + this.topY * 0.5);
       this.h.fx.burst(c, [RASP, '#ffffff', ...this.flashMats.slice(0, 2).map((m) => m.color.clone())], 18, { speed: 3.5, up: 3.5, size: 0.11, life: 0.7, gravity: 8 });
-      this.onDeath?.(new THREE.Vector3(this.pos.x, 0, this.pos.z));
+      this.onDeath?.(new THREE.Vector3(this.pos.x, this.ground, this.pos.z));
     }
     if (this.deathT > 0) {
       this.deathT += dt;

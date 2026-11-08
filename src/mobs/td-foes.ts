@@ -143,7 +143,7 @@ export class VineRam extends Mob {
         this.move(dir, 0.5);
         if (!this.quiet) boom(90, 40, 0.35, 0.4);
         this.h.fx.shake = Math.max(this.h.fx.shake, 0.2);
-        this.h.fx.burst(from.clone().addScaledVector(dir, 1.6).setY(0.2), ['#8a6a40', '#4a8a2a'], 10, { speed: 2.5, up: 2.5, size: 0.12, life: 0.5, gravity: 8 });
+        this.h.fx.burst(from.clone().addScaledVector(dir, 1.6).setY(this.ground + 0.2), ['#8a6a40', '#4a8a2a'], 10, { speed: 2.5, up: 2.5, size: 0.12, life: 0.5, gravity: 8 });
         if (this.inLine(from, dir, 2.2, 1.4)) this.hurt(14, from, 6);
       });
     }
@@ -206,11 +206,11 @@ export class PollenMoth extends Mob {
 
   protected act(_name: string, t: number, dt: number): boolean {
     if (t - dt <= 0) {
-      const at = this.pos.clone().setY(0);
+      const at = this.pos.clone().setY(this.ground + 0);
       this.field.markCircle(at, 1.1, 0.45, () => {
         if (this.dead) return;
         if (!this.quiet) hiss({ dur: 0.25, vol: 0.08, f: 2000, f1: 800, q: 1 });
-        this.h.fx.burst(this.pos.clone().setY(this.flyY), ['#f0e070', '#ffd040', RASP], 14, { speed: 2, up: 0.5, size: 0.08, life: 0.7, gravity: 2 });
+        this.h.fx.burst(this.pos.clone().setY(this.pos.y), ['#f0e070', '#ffd040', RASP], 14, { speed: 2, up: 0.5, size: 0.08, life: 0.7, gravity: 2 });
         if (this.inCircle(at, 1.1)) this.hurt(5, this.pos, 1);
       });
     }
@@ -288,7 +288,7 @@ export class CrystalShellback extends Mob {
       this.h.fx.text(point.clone().setY(point.y + 0.5), this.shell ? t('shell') : t('cracked'), '');
       this.h.fx.burst(point, [CRYSTAL, '#ffffff'], this.shell ? 5 : 20, { speed: 3, up: 3, size: 0.08, life: 0.4, glow: true, gravity: 8 });
       if (!this.quiet) boom(this.shell ? 1200 : 700, 400, 0.1, 0.14);
-      if (!this.shell) { this.shellMesh.visible = false; this.h.fx.flash(this.pos.clone().setY(1), CRYSTAL, 2, 0.2); }
+      if (!this.shell) { this.shellMesh.visible = false; this.h.fx.flash(this.pos.clone().setY(this.ground + 1), CRYSTAL, 2, 0.2); }
       this.notice(true);
       return;
     }
@@ -304,7 +304,7 @@ export class CrystalShellback extends Mob {
       this.field.markCircle(at, 0.9, 0.5, () => {
         if (this.dead) return;
         if (!this.quiet) boom(120, 50, 0.3, 0.3);
-        this.h.fx.burst(at.clone().setY(0.2), ['#8aa0b0', CRYSTAL], 10, { speed: 2.5, up: 2.5, size: 0.1, life: 0.5, gravity: 8 });
+        this.h.fx.burst(at.clone().setY(this.ground + 0.2), ['#8aa0b0', CRYSTAL], 10, { speed: 2.5, up: 2.5, size: 0.1, life: 0.5, gravity: 8 });
         if (this.inCircle(at, 0.9)) this.hurt(12, this.pos, 4);
       });
     }
@@ -375,9 +375,9 @@ export class Sporeling extends Mob {
   /** Burst: spore cloud — all neighbours within 3.5 m heal by 30 % */
   protected override die(): void {
     super.die();
-    this.h.fx.flash(this.pos.clone().setY(1), SPORE, 2.5, 0.3);
-    this.h.fx.shock(this.pos.clone().setY(0.1), 3.5, SPORE, 0.5, 0.2);
-    this.h.fx.burst(this.pos.clone().setY(1), [SPORE, '#f4e8ff', C(1.6, 3.2, 2.0)], 30, { speed: 2.5, up: 2, size: 0.1, life: 1.2, glow: true, gravity: 0.5 });
+    this.h.fx.flash(this.pos.clone().setY(this.ground + 1), SPORE, 2.5, 0.3);
+    this.h.fx.shock(this.pos.clone().setY(this.ground + 0.1), 3.5, SPORE, 0.5, 0.2);
+    this.h.fx.burst(this.pos.clone().setY(this.ground + 1), [SPORE, '#f4e8ff', C(1.6, 3.2, 2.0)], 30, { speed: 2.5, up: 2, size: 0.1, life: 1.2, glow: true, gravity: 0.5 });
     if (!this.quiet) hiss({ dur: 0.5, vol: 0.1, f: 1200, f1: 300, q: 1 });
     for (const m of this.mh.allies()) {
       if (m === this || m.dead) continue;
@@ -390,11 +390,11 @@ export class Sporeling extends Mob {
 
   protected act(_name: string, t: number, dt: number): boolean {
     if (t - dt <= 0) {
-      const at = this.pos.clone().setY(0);
+      const at = this.pos.clone().setY(this.ground + 0);
       this.field.markCircle(at, 1.0, 0.4, () => {
         if (this.dead) return;
         if (!this.quiet) hiss({ dur: 0.2, vol: 0.07, f: 1600, f1: 600, q: 1 });
-        this.h.fx.burst(this.pos.clone().setY(1.2), [SPORE, '#f4e8ff'], 12, { speed: 2, up: 0.5, size: 0.08, life: 0.7, gravity: 1 });
+        this.h.fx.burst(this.pos.clone().setY(this.ground + 1.2), [SPORE, '#f4e8ff'], 12, { speed: 2, up: 0.5, size: 0.08, life: 0.7, gravity: 1 });
         if (this.inCircle(at, 1.0)) this.hurt(5, this.pos, 1);
       });
     }
@@ -467,9 +467,9 @@ export class RainbowHopper extends Mob {
     this.yaw = Math.atan2(this.pos.x - from.x, this.pos.z - from.z) || this.yaw;
     this.hops++;
     this.hopT = 0.35;
-    const a = from.clone().setY(0.6), b = this.pos.clone().setY(0.6), c1 = RAINBOW[this.hops % 5], c2 = RAINBOW[(this.hops + 2) % 5];
+    const a = from.clone().setY(this.ground + 0.6), b = this.pos.clone().setY(this.ground + 0.6), c1 = RAINBOW[this.hops % 5], c2 = RAINBOW[(this.hops + 2) % 5];
     this.h.fx.streak({ path: (k, out) => { out.lerpVectors(a, b, k); out.y += Math.sin(k * Math.PI) * 1.2; return out; }, dur: 0.3, color: c1, color2: c2, width: 0.12, tail: 0.5, halo: 1.6, core: 0.5 });
-    for (let i = 0; i < 5; i++) this.h.fx.particle({ pos: from.clone().lerp(this.pos, i / 5).setY(0.6), vel: new THREE.Vector3(0, 1, 0), life: 0.6, size: 0.08, color: RAINBOW[i], gravity: 0 });
+    for (let i = 0; i < 5; i++) this.h.fx.particle({ pos: from.clone().lerp(this.pos, i / 5).setY(this.ground + 0.6), vel: new THREE.Vector3(0, 1, 0), life: 0.6, size: 0.08, color: RAINBOW[i], gravity: 0 });
     if (!this.quiet) voice({ type: 'triangle', f: 700, f1: 1400, dur: 0.12, vol: 0.03, lp: 4000 });
   }
 
@@ -492,7 +492,7 @@ export class RainbowHopper extends Mob {
       this.field.markCircle(at, 0.6, 0.3, () => {
         if (this.dead) return;
         if (!this.quiet) voice({ type: 'square', f: 500, f1: 900, dur: 0.08, vol: 0.03, lp: 3000 });
-        this.h.fx.burst(at.clone().setY(0.5), RAINBOW, 8, { speed: 2, up: 2, size: 0.07, life: 0.4, glow: true, gravity: 6 });
+        this.h.fx.burst(at.clone().setY(this.ground + 0.5), RAINBOW, 8, { speed: 2, up: 2, size: 0.07, life: 0.4, glow: true, gravity: 6 });
         if (this.inCircle(at, 0.7)) this.hurt(6, this.pos, 2);
       });
     }
@@ -582,7 +582,7 @@ export class StumpSapper extends Mob {
   blast(): void {
     if (this.blasted) return;
     this.blasted = true;
-    const at = this.pos.clone().setY(0.9);
+    const at = this.pos.clone().setY(this.ground + 0.9);
     this.h.fx.explosion(at, 3, POWDER);
     this.h.fx.burst(at, [POWDER, RASP, '#4a3018', '#ffffff'], 30, { speed: 5, up: 4, size: 0.12, life: 0.8, gravity: 8 });
     this.h.fx.shake = Math.max(this.h.fx.shake, 0.6);
@@ -594,7 +594,7 @@ export class StumpSapper extends Mob {
     for (const m of this.mh.allies()) {
       if (m === this || m.dead) continue;
       const d = Math.hypot(m.pos.x - this.pos.x, m.pos.z - this.pos.z);
-      if (d < 2.5) m.hit(40, new THREE.Vector3(m.pos.x - this.pos.x, 0, m.pos.z - this.pos.z).normalize(), m.pos.clone().setY(1), 2);
+      if (d < 2.5) m.hit(40, new THREE.Vector3(m.pos.x - this.pos.x, 0, m.pos.z - this.pos.z).normalize(), m.pos.clone().setY(m.ground + 1), 2);
     }
     if (!this.dead) this.vanish();
   }

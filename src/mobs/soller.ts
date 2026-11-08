@@ -279,7 +279,7 @@ export class SunKnight extends Mob {
     super.die();
     this.rig.spear.visible = false;
     this.flash = 1;
-    this.h.fx.text(this.pos.clone().setY(this.topY + 0.5), t('Praise the sun!'), 'heal');
+    this.h.fx.text(this.pos.clone().setY(this.ground + this.topY + 0.5), t('Praise the sun!'), 'heal');
   }
 
   protected choose(dist: number, rel: number): string | null {
@@ -362,7 +362,7 @@ export class SunKnight extends Mob {
             if (this.dead) return;
             if (!this.quiet) sfx.throw();
             this.field.shot(from, this.dir, 14, SPEAR, 45, 1.9);
-            this.h.fx.burst(from.clone().addScaledVector(this.dir, 1).setY(1.9), [SPEAR, '#ffffff'], 10, { speed: 3, up: 1, size: 0.08, life: 0.4, glow: true, gravity: 2 });
+            this.h.fx.burst(from.clone().addScaledVector(this.dir, 1).setY(this.ground + 1.9), [SPEAR, '#ffffff'], 10, { speed: 3, up: 1, size: 0.08, life: 0.4, glow: true, gravity: 2 });
             if (this.inLine(from, this.dir, 14, 1.1)) this.hurt(18, from, 6);
           }, SPEAR.clone().multiplyScalar(0.25));
           this.spearCd = 5;
@@ -371,7 +371,7 @@ export class SunKnight extends Mob {
       default: {
         // prayer: arms up, the beam is back, heals a quarter of health over 2 s; a hit interrupts it
         if (tm - dt <= 0) { this.prayed = true; this.castHp = this.hp; if (!this.quiet) sfx.praise(); }
-        if (this.hp < this.castHp - 0.01) { this.h.fx.text(this.pos.clone().setY(this.topY + 0.4), t('interrupted!'), 'crit'); this.daze(1.5); return false; }
+        if (this.hp < this.castHp - 0.01) { this.h.fx.text(this.pos.clone().setY(this.ground + this.topY + 0.4), t('interrupted!'), 'crit'); this.daze(1.5); return false; }
         if (tm > 0.3) this.heal(this.maxHp * 0.125 * dt);
         this.castHp = this.hp;
         return tm > 2.3;

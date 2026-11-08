@@ -17,6 +17,8 @@ export interface Obstacle {
   h: number;
   /** Obstacle bottom, m (decor on the second tier); absent — stands on the arena floor, blocks at any height */
   y0?: number;
+  /** A strip of level blocks (`obstaclesOf`, a flat slice at floor 0): those who walk on the terrain (mobs) skip it and use `Terrain.resolve` */
+  grid?: boolean;
 }
 
 /** A 1.6 m tall body with feet at height y overlaps the obstacle vertically */
@@ -28,13 +30,16 @@ export function obstacle(x: number, z: number, w: number, d: number, h: number, 
   return { x, z, hx: w / 2, hz: d / 2, rot: THREE.MathUtils.degToRad(rotDeg), h };
 }
 
-/** Push a circle out of obstacles. Returns true if there was contact. Sliding along walls comes for free. */
-export function resolveCircle(pos: THREE.Vector3, r: number, obs: readonly Obstacle[]): boolean {
+/**
+ * Push a circle out of obstacles. Returns true if there was contact. Sliding along walls comes for free.
+ * skipGrid — skip level-block strips (a walker on the terrain resolves blocks height-aware itself)
+ */
+export function resolveCircle(pos: THREE.Vector3, r: number, obs: readonly Obstacle[], skipGrid = false): boolean {
   let touched = false;
   for (let iter = 0; iter < 3; iter++) {
     let any = false;
     for (const o of obs) {
-      if (!overlapsY(o, pos.y)) continue;
+      if ((skipGrid && o.grid) || !overlapsY(o, pos.y)) continue;
       const c = Math.cos(o.rot), s = Math.sin(o.rot);
       const dx = pos.x - o.x, dz = pos.z - o.z;
       // into the obstacle's local axes (rotate by −rot)

@@ -138,7 +138,7 @@ export class BerryHealer extends Mob {
           if (!this.quiet) voice({ type: 'sine', f: 520, f1: 780, dur: 1, vol: 0.05, verb: 0.6 });
           this.field.markCircle(this.pos.clone(), 5, 1, () => {
             if (this.dead) return;
-            this.h.fx.shock(this.pos.clone().setY(0.1), 5, HEAL.clone().multiplyScalar(0.5), 0.5, 0.15);
+            this.h.fx.shock(this.pos.clone().setY(this.ground + 0.1), 5, HEAL.clone().multiplyScalar(0.5), 0.5, 0.15);
             for (const m of this.mh.allies()) if (Math.hypot(m.pos.x - this.pos.x, m.pos.z - this.pos.z) < 5) m.heal(m.maxHp * 0.3);
           }, HEAL);
           this.ringCd = 8;
@@ -149,7 +149,7 @@ export class BerryHealer extends Mob {
         if (tm - dt <= 0) { this.castHp = this.hp; if (!this.quiet) hiss({ dur: 0.5, vol: 0.08, f: 2600, f1: 3400, q: 2, type: 'bandpass', verb: 0.5 }); }
         this.face(dt, 0.5);
         const p = this.patient;
-        if (this.hp < this.castHp) { this.patient = null; this.h.fx.text(this.pos.clone().setY(this.topY + 0.4), t('interrupted!'), 'crit'); this.daze(1.2); return false; }
+        if (this.hp < this.castHp) { this.patient = null; this.h.fx.text(this.pos.clone().setY(this.ground + this.topY + 0.4), t('interrupted!'), 'crit'); this.daze(1.2); return false; }
         if (!p || p.dead || p.hp >= p.maxHp || Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) > 13) { this.patient = null; return tm > 0.3; }
         if (tm > 0.3) p.heal(9 * dt);
         if (tm > 2.4) { this.patient = null; return true; }
@@ -207,10 +207,10 @@ export class EmberMage extends Mob {
       if (t >= 0.3 && t - dt < 0.3) {
         const hero = this.h.hero.pos;
         const a = Math.atan2(this.pos.x - hero.x, this.pos.z - hero.z) + rand(-0.8, 0.8);
-        this.h.fx.burst(this.pos.clone().setY(1), [FIRE, RASP], 14, { speed: 3, up: 2, size: 0.1, life: 0.4, glow: true, gravity: 0 });
+        this.h.fx.burst(this.pos.clone().setY(this.ground + 1), [FIRE, RASP], 14, { speed: 3, up: 2, size: 0.1, life: 0.4, glow: true, gravity: 0 });
         if (!this.quiet) hiss({ dur: 0.25, vol: 0.15, f: 600, f1: 3000, q: 0.8, type: 'bandpass' });
         this.pos.set(hero.x + Math.sin(a) * 6, 0, hero.z + Math.cos(a) * 6);
-        this.h.fx.burst(this.pos.clone().setY(1), [FIRE, RASP], 14, { speed: 3, up: 2, size: 0.1, life: 0.4, glow: true, gravity: 0 });
+        this.h.fx.burst(this.pos.clone().setY(this.ground + 1), [FIRE, RASP], 14, { speed: 3, up: 2, size: 0.1, life: 0.4, glow: true, gravity: 0 });
         this.blinkCd = 6;
       }
       this.body.scale.setScalar(t < 0.3 ? 1 - t * 2.5 : Math.min(1, 0.25 + (t - 0.3) * 4));
@@ -229,7 +229,7 @@ export class EmberMage extends Mob {
         this.field.markCircle(to, 1.3, 0.9, () => undefined);
         this.field.lob(mesh, from, to, 0.9, 2.2, FIRE, (p) => {
           if (!this.quiet) hiss({ dur: 0.35, vol: 0.12, f: 1400, f1: 200, q: 0.5, type: 'lowpass' });
-          this.h.fx.burst(p.clone().setY(0.3), [FIRE, RASP], 10, { speed: 3, up: 3, size: 0.1, life: 0.5, glow: true, gravity: 6 });
+          this.h.fx.burst(p.clone().setY(this.ground + 0.3), [FIRE, RASP], 10, { speed: 3, up: 3, size: 0.1, life: 0.5, glow: true, gravity: 6 });
           if (this.inCircle(p, 1.3)) this.hurt(9, p, 3);
           this.field.hazard(p, 1.1, 2, 4, FIRE);
         });
@@ -290,7 +290,7 @@ export class VineSummoner extends Mob {
     if (name === 'shove') {
       if (t - dt <= 0) this.field.markCircle(this.pos.clone(), 2.2, 0.55, () => {
         if (this.dead) return;
-        this.h.fx.shock(this.pos.clone().setY(0.1), 2.2, VIOLET.clone().multiplyScalar(0.5), 0.35, 0.12);
+        this.h.fx.shock(this.pos.clone().setY(this.ground + 0.1), 2.2, VIOLET.clone().multiplyScalar(0.5), 0.35, 0.12);
         if (this.inCircle(this.pos, 2.2)) this.hurt(5, this.pos, 8);
       });
       return t > 0.8;
@@ -309,7 +309,7 @@ export class VineSummoner extends Mob {
           m.summoned = true;
           m.notice();
           this.called.push(m);
-          this.h.fx.burst(at.clone().setY(0.2), [VIOLET, RASP, '#5aa03a'], 10, { speed: 2.5, up: 3, size: 0.1, life: 0.5, glow: true, gravity: 6 });
+          this.h.fx.burst(at.clone().setY(this.ground + 0.2), [VIOLET, RASP, '#5aa03a'], 10, { speed: 2.5, up: 3, size: 0.1, life: 0.5, glow: true, gravity: 6 });
         }, VIOLET);
       }
       this.summonCd = 7;

@@ -492,3 +492,7 @@ Pages: [dev-testing.md](dev-testing.md).
 ## [2026-11-08] decision | No tests for the playground, the editor, the world and Soller
 The playground and editor tests, the world and island tests are switched off with `test.skip`, the Soller test is removed; new tests are written only for the game itself — the camp, the server, Bush Defence, the network.
 Pages: [dev-testing.md](dev-testing.md).
+
+## [2026-11-08] code | Mobs walk on the terrain
+A mob stands on `ground` — the floor under its feet by `Terrain.floorAt`, like the hero: up a step of 0.5 m, down any height; `flyY` is now a height above that floor. Level blocks push mobs out height-aware (`Terrain.resolve`), the flat block slice at y = 0 (`Obstacle.grid`) stays for wardens and bullets only. Marks, landings, zones and shots of the `Field` lie on the floor under them, mob effects rise with it. Groundwork for the raised Raspberry Spiral map.
+Pages: [design-tower-defence.md](design-tower-defence.md).

@@ -69,7 +69,7 @@ export class Boarlet extends Mob {
       this.field.markLine(this.pos.clone(), this.dir, 10, 1.3, 0.8, () => undefined);
     }
     // paws the ground for 0.8 s — and charges 10 m
-    if (t < 0.8) { if (rnd() < 0.3) this.h.fx.particle({ pos: this.pos.clone().setY(0.1), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#8a6a40', gravity: 6 }); return false; }
+    if (t < 0.8) { if (rnd() < 0.3) this.h.fx.particle({ pos: this.pos.clone().setY(this.ground + 0.1), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#8a6a40', gravity: 6 }); return false; }
     const blocked = this.dash(this.dir, 10, dt);
     this.ran += 10 * dt;
     if (!this.hitDone && this.inCircle(this.pos, this.radius + 0.2)) { this.hitDone = true; this.hurt(10, this.pos.clone().addScaledVector(this.dir, -1), 8); if (!this.quiet) boom(160, 60, 0.3, 0.35); }
@@ -145,12 +145,12 @@ export class BurrowBeetle extends Mob {
   protected act(_name: string, t: number, dt: number): boolean {
     // 0–0.4: burrows; until 2.4 s the mound crawls toward the hero; a 0.5 s mark — surfaces; miss or not — stunned 1.2 s
     if (t < 0.4) return false;
-    if (t - dt < 0.4) { this.burrowed = true; if (!this.quiet) hiss({ dur: 0.4, vol: 0.12, f: 600, f1: 200, q: 0.5, type: 'lowpass' }); this.h.fx.burst(this.pos.clone().setY(0.2), ['#7a5a3a', '#5a4428'], 10, { speed: 2, up: 2.5, size: 0.1, life: 0.5, gravity: 8 }); }
+    if (t - dt < 0.4) { this.burrowed = true; if (!this.quiet) hiss({ dur: 0.4, vol: 0.12, f: 600, f1: 200, q: 0.5, type: 'lowpass' }); this.h.fx.burst(this.pos.clone().setY(this.ground + 0.2), ['#7a5a3a', '#5a4428'], 10, { speed: 2, up: 2.5, size: 0.1, life: 0.5, gravity: 8 }); }
     const hero = this.h.hero.pos, dx = hero.x - this.pos.x, dz = hero.z - this.pos.z, d = Math.hypot(dx, dz);
     if (t < 2.4 && d > 0.3 && !this.hitDone) {
       const sp = 4.5 * dt;
       this.pos.x += (dx / d) * Math.min(sp, d); this.pos.z += (dz / d) * Math.min(sp, d);
-      if (rnd() < 0.4) this.h.fx.particle({ pos: this.pos.clone().setY(0.15), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#7a5a3a', gravity: 6 });
+      if (rnd() < 0.4) this.h.fx.particle({ pos: this.pos.clone().setY(this.ground + 0.15), vel: new THREE.Vector3(rand(-1, 1), 1.5, rand(-1, 1)), life: 0.4, size: 0.08, color: '#7a5a3a', gravity: 6 });
       return false;
     }
     if (!this.hitDone) {
@@ -160,7 +160,7 @@ export class BurrowBeetle extends Mob {
         if (this.dead) return;
         this.burrowed = false;
         if (!this.quiet) boom(140, 50, 0.4, 0.45);
-        this.h.fx.burst(c.clone().setY(0.3), ['#7a5a3a', '#b8204a'], 16, { speed: 4, up: 5, size: 0.12, life: 0.6, gravity: 10 });
+        this.h.fx.burst(c.clone().setY(this.ground + 0.3), ['#7a5a3a', '#b8204a'], 16, { speed: 4, up: 5, size: 0.12, life: 0.6, gravity: 10 });
         if (this.inCircle(c, 1.4)) this.hurt(9, c, 5);
         this.daze(1.2);
       });
@@ -234,8 +234,8 @@ export class VineSpider extends Mob {
       ball.scale.setScalar(0.35);
       if (!this.quiet) hiss({ dur: 0.3, vol: 0.08, f: 1400, f1: 600, q: 0.8, type: 'bandpass' });
       this.field.markCircle(to, 2.4, 0.8, () => undefined, WEB);
-      this.field.lob(ball, this.pos.clone().setY(0.9), to, 0.8, 2, WEB, (p) => {
-        this.h.fx.burst(p.clone().setY(0.2), ['#5aa03a', '#3f6a2a'], 12, { speed: 3, up: 1.5, size: 0.08, life: 0.5, gravity: 6 });
+      this.field.lob(ball, this.pos.clone().setY(this.ground + 0.9), to, 0.8, 2, WEB, (p) => {
+        this.h.fx.burst(p.clone().setY(this.ground + 0.2), ['#5aa03a', '#3f6a2a'], 12, { speed: 3, up: 1.5, size: 0.08, life: 0.5, gravity: 6 });
         if (this.inCircle(p, 2.4)) this.hurt(3, p, 0);
         this.field.hazard(p, 2.4, 5, 0, WEB, 0.45);
       });
