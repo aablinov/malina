@@ -3,7 +3,7 @@ import { rnd } from '../rng.ts';
 import { pixelTex } from '../textures.ts';
 import { bell, boom, deg, hiss, pluck, voice } from '../spell-audio.ts';
 import type { Rect } from './arena.ts';
-import { C, glowMat, rand, RASP, wrap, type BossHooks } from './kit.ts';
+import { C, glowMat, rand, RASP, wrap, type Boss, type BossHooks } from './kit.ts';
 import { MiniBoss } from './mini.ts';
 import { t } from '../i18n/i18n.ts';
 
@@ -47,18 +47,97 @@ const sfx = {
 /** Ghostly sword of the phalanx: hangs in the fan → flies straight into the mark */
 interface Blade { g: THREE.Group; phase: 'off' | 'hover' | 'fly'; t: number; from: THREE.Vector3; to: THREE.Vector3 }
 
+/** Parts of the Golden Warden that move: the horse, its head, pairs of legs, the rider, the halberd, the emblem (the heart) */
+export interface RiderParts { horse: THREE.Group; head: THREE.Group; legsF: THREE.Group; legsB: THREE.Group; rider: THREE.Group; halberd: THREE.Group; emblem: THREE.Group; glow: THREE.MeshBasicMaterial }
+
+/**
+ * Model of the Golden Warden on `body`: a white-and-gold horse under a raspberry caparison, a rider with a halberd and a shield in vine.
+ * Shared by the arena mini-boss and the defence warden (src/mobs/td-chiefs.ts)
+ */
+export function riderModel(b: Pick<Boss, 'lam' | 'shimmer' | 'box'>, body: THREE.Object3D): RiderParts {
+  const horse = new THREE.Group(), head = new THREE.Group(), legsF = new THREE.Group(), legsB = new THREE.Group();
+  const rider = new THREE.Group(), halberd = new THREE.Group(), emblem = new THREE.Group();
+  const coat = b.lam('#d9d2c0', pixelTex('#d9d2c0', 6, 431));
+  const gold = b.lam('#e8b84a', pixelTex('#e8b84a', 8, 432));
+  const cloth = b.lam('#a8143e', pixelTex('#a8143e', 8, 433));
+  const dark = b.lam('#4a3a2e');
+  const wood = b.lam('#7a5232');
+  const steel = b.lam('#c9c6cf');
+  const vine = b.lam('#3f7a34');
+  const berry = b.shimmer(RASP, C(4, 1.7, 2.4), 1, 3);
+  const heart = b.shimmer(GOLD, RASP, 0, 3);
+  const glow = b.shimmer(GOLD, RASP, 2, 2);
+  const B = b.box.bind(b);
+  body.add(horse);
+  // horse: body, armour on the croup and chest, raspberry caparison at the sides, tail
+  B(horse, coat, 1.3, 1.1, 2.6, 0, 1.75, 0);
+  B(horse, gold, 1.36, 0.5, 0.7, 0, 1.95, 1.0);
+  B(horse, gold, 1.36, 0.45, 0.8, 0, 2.05, -0.95);
+  for (const s of [-1, 1]) {
+    B(horse, cloth, 0.08, 0.9, 2.2, s * 0.7, 1.55, 0);
+    B(horse, gold, 0.1, 0.12, 2.2, s * 0.71, 1.12, 0);
+  }
+  B(horse, dark, 0.25, 0.9, 0.25, 0, 1.5, -1.4, -0.4);
+  // emblem of the Order on the horse's chest — a berry of cubes: the heart, ×2 on it when the horse has stumbled
+  emblem.position.set(0, 1.6, 1.34);
+  horse.add(emblem);
+  for (const [x, y, k] of [[0, 0, 0.32], [0.21, 0.18, 0.22], [-0.21, 0.18, 0.22], [0.21, -0.18, 0.22], [-0.21, -0.18, 0.22], [0, 0.34, 0.18], [0, -0.34, 0.18]] as const) B(emblem, heart, k, k, 0.12, x, y, 0);
+  B(emblem, gold, 0.14, 0.2, 0.1, 0, 0.54, 0);
+  // head: neck, muzzle in a golden chanfron, mane, eyes
+  head.position.set(0, 2.1, 1.2);
+  horse.add(head);
+  B(head, coat, 0.6, 1.0, 0.6, 0, 0.45, 0.15, 0.45);
+  B(head, coat, 0.55, 0.5, 1.0, 0, 0.95, 0.6);
+  B(head, gold, 0.6, 0.2, 0.7, 0, 1.22, 0.55);
+  B(head, gold, 0.12, 0.35, 0.12, 0, 1.45, 0.4);
+  B(head, cloth, 0.16, 0.9, 0.3, 0, 0.75, -0.1, 0.45);
+  for (const s of [-1, 1]) B(head, glowMat(GOLD), 0.06, 0.08, 0.12, s * 0.28, 1.02, 0.75);
+  // legs in pairs: each pair is one part, swings in the gallop
+  for (const [g, z] of [[legsF, 0.95], [legsB, -0.95]] as const) {
+    g.position.set(0, 1.3, z);
+    horse.add(g);
+    for (const s of [-1, 1]) { B(g, coat, 0.32, 1.15, 0.32, s * 0.38, -0.6, 0); B(g, gold, 0.36, 0.2, 0.36, s * 0.38, -1.15, 0); }
+  }
+  // rider: armour, helmet with a plume, on the left arm (+x) — a shield with vine and berries
+  rider.position.set(0, 2.3, -0.15);
+  body.add(rider);
+  B(rider, gold, 0.8, 0.9, 0.55, 0, 0.55, 0);
+  B(rider, cloth, 0.84, 0.2, 0.58, 0, 0.15, 0);
+  B(rider, gold, 0.56, 0.55, 0.55, 0, 1.3, 0);
+  B(rider, dark, 0.42, 0.08, 0.05, 0, 1.3, 0.28);
+  B(rider, glowMat(GOLD), 0.3, 0.04, 0.03, 0, 1.3, 0.31);
+  B(rider, cloth, 0.14, 0.45, 0.7, 0, 1.72, -0.1);
+  for (const s of [-1, 1]) B(rider, gold, 0.3, 0.3, 0.4, s * 0.52, 0.95, 0);
+  const shield = new THREE.Group();
+  shield.position.set(0.62, 0.6, 0.15);
+  rider.add(shield);
+  B(shield, gold, 0.12, 0.95, 0.95, 0, 0, 0, Math.PI / 4);
+  B(shield, gold, 0.14, 1.0, 0.7, 0);
+  B(shield, glow, 0.16, 0.24, 0.24, 0.02, 0, 0);
+  for (const [y, z] of [[0.35, -0.3], [0.1, 0.38], [-0.3, -0.15], [-0.4, 0.3]] as const) { B(shield, vine, 0.18, 0.12, 0.42, 0.04, y, z, 0.6); B(shield, berry, 0.14, 0.14, 0.14, 0.1, y + 0.08, z); }
+  // halberd: pivot at the rider's centre, the shaft to the right (−x); order YXZ — tilt, then rotation
+  halberd.position.set(0, 0.7, 0);
+  halberd.rotation.order = 'YXZ';
+  rider.add(halberd);
+  B(halberd, wood, 0.12, 3.0, 0.12, -0.7, 0.6, 0);
+  B(halberd, steel, 0.08, 0.55, 0.7, -0.7, 1.75, 0.3);
+  B(halberd, steel, 0.08, 0.5, 0.08, -0.7, 2.3, 0);
+  B(halberd, glow, 0.1, 0.1, 0.5, -0.7, 1.75, 0.3);
+  return { horse, head, legsF, legsB, rider, halberd, emblem, glow };
+}
+
 export class GoldenRider extends MiniBoss {
   readonly radius = 1.6;
   readonly title = t('Golden Warden');
   override readonly topY = 3.9;
   readonly drop = 'bladephalanx';
-  private readonly horse = new THREE.Group();
-  private readonly head = new THREE.Group();
-  private readonly legsF = new THREE.Group();
-  private readonly legsB = new THREE.Group();
-  private readonly rider = new THREE.Group();
-  private readonly halberd = new THREE.Group();
-  private readonly emblem = new THREE.Group();
+  private horse!: THREE.Group;
+  private head!: THREE.Group;
+  private legsF!: THREE.Group;
+  private legsB!: THREE.Group;
+  private rider!: THREE.Group;
+  private halberd!: THREE.Group;
+  private emblem!: THREE.Group;
   private readonly blades: Blade[] = [];
   private gait = 0;
   private readonly lanceDir = new THREE.Vector3();
@@ -75,72 +154,8 @@ export class GoldenRider extends MiniBoss {
   }
 
   protected build(): void {
-    const coat = this.lam('#d9d2c0', pixelTex('#d9d2c0', 6, 431));
-    const gold = this.lam('#e8b84a', pixelTex('#e8b84a', 8, 432));
-    const cloth = this.lam('#a8143e', pixelTex('#a8143e', 8, 433));
-    const dark = this.lam('#4a3a2e');
-    const wood = this.lam('#7a5232');
-    const steel = this.lam('#c9c6cf');
-    const vine = this.lam('#3f7a34');
-    const berry = this.shimmer(RASP, C(4, 1.7, 2.4), 1, 3);
-    const heart = this.shimmer(GOLD, RASP, 0, 3);
-    const glow = this.shimmer(GOLD, RASP, 2, 2);
+    ({ horse: this.horse, head: this.head, legsF: this.legsF, legsB: this.legsB, rider: this.rider, halberd: this.halberd, emblem: this.emblem } = riderModel(this, this.body));
     const B = this.box.bind(this);
-    this.body.add(this.horse);
-    // horse: body, armour on the croup and chest, raspberry caparison at the sides, tail
-    B(this.horse, coat, 1.3, 1.1, 2.6, 0, 1.75, 0);
-    B(this.horse, gold, 1.36, 0.5, 0.7, 0, 1.95, 1.0);
-    B(this.horse, gold, 1.36, 0.45, 0.8, 0, 2.05, -0.95);
-    for (const s of [-1, 1]) {
-      B(this.horse, cloth, 0.08, 0.9, 2.2, s * 0.7, 1.55, 0);
-      B(this.horse, gold, 0.1, 0.12, 2.2, s * 0.71, 1.12, 0);
-    }
-    B(this.horse, dark, 0.25, 0.9, 0.25, 0, 1.5, -1.4, -0.4);
-    // emblem of the Order on the horse's chest — a berry of cubes: the heart, ×2 on it when the horse has stumbled
-    this.emblem.position.set(0, 1.6, 1.34);
-    this.horse.add(this.emblem);
-    for (const [x, y, k] of [[0, 0, 0.32], [0.21, 0.18, 0.22], [-0.21, 0.18, 0.22], [0.21, -0.18, 0.22], [-0.21, -0.18, 0.22], [0, 0.34, 0.18], [0, -0.34, 0.18]] as const) B(this.emblem, heart, k, k, 0.12, x, y, 0);
-    B(this.emblem, gold, 0.14, 0.2, 0.1, 0, 0.54, 0);
-    // head: neck, muzzle in a golden chanfron, mane, eyes
-    this.head.position.set(0, 2.1, 1.2);
-    this.horse.add(this.head);
-    B(this.head, coat, 0.6, 1.0, 0.6, 0, 0.45, 0.15, 0.45);
-    B(this.head, coat, 0.55, 0.5, 1.0, 0, 0.95, 0.6);
-    B(this.head, gold, 0.6, 0.2, 0.7, 0, 1.22, 0.55);
-    B(this.head, gold, 0.12, 0.35, 0.12, 0, 1.45, 0.4);
-    B(this.head, cloth, 0.16, 0.9, 0.3, 0, 0.75, -0.1, 0.45);
-    for (const s of [-1, 1]) B(this.head, glowMat(GOLD), 0.06, 0.08, 0.12, s * 0.28, 1.02, 0.75);
-    // legs in pairs: each pair is one part, swings in the gallop
-    for (const [g, z] of [[this.legsF, 0.95], [this.legsB, -0.95]] as const) {
-      g.position.set(0, 1.3, z);
-      this.horse.add(g);
-      for (const s of [-1, 1]) { B(g, coat, 0.32, 1.15, 0.32, s * 0.38, -0.6, 0); B(g, gold, 0.36, 0.2, 0.36, s * 0.38, -1.15, 0); }
-    }
-    // rider: armour, helmet with a plume, on the left arm (+x) — a shield with vine and berries
-    this.rider.position.set(0, 2.3, -0.15);
-    this.body.add(this.rider);
-    B(this.rider, gold, 0.8, 0.9, 0.55, 0, 0.55, 0);
-    B(this.rider, cloth, 0.84, 0.2, 0.58, 0, 0.15, 0);
-    B(this.rider, gold, 0.56, 0.55, 0.55, 0, 1.3, 0);
-    B(this.rider, dark, 0.42, 0.08, 0.05, 0, 1.3, 0.28);
-    B(this.rider, glowMat(GOLD), 0.3, 0.04, 0.03, 0, 1.3, 0.31);
-    B(this.rider, cloth, 0.14, 0.45, 0.7, 0, 1.72, -0.1);
-    for (const s of [-1, 1]) B(this.rider, gold, 0.3, 0.3, 0.4, s * 0.52, 0.95, 0);
-    const shield = new THREE.Group();
-    shield.position.set(0.62, 0.6, 0.15);
-    this.rider.add(shield);
-    B(shield, gold, 0.12, 0.95, 0.95, 0, 0, 0, Math.PI / 4);
-    B(shield, gold, 0.14, 1.0, 0.7, 0);
-    B(shield, glow, 0.16, 0.24, 0.24, 0.02, 0, 0);
-    for (const [y, z] of [[0.35, -0.3], [0.1, 0.38], [-0.3, -0.15], [-0.4, 0.3]] as const) { B(shield, vine, 0.18, 0.12, 0.42, 0.04, y, z, 0.6); B(shield, berry, 0.14, 0.14, 0.14, 0.1, y + 0.08, z); }
-    // halberd: pivot at the rider's centre, the shaft to the right (−x); order YXZ — tilt, then rotation
-    this.halberd.position.set(0, 0.7, 0);
-    this.halberd.rotation.order = 'YXZ';
-    this.rider.add(this.halberd);
-    B(this.halberd, wood, 0.12, 3.0, 0.12, -0.7, 0.6, 0);
-    B(this.halberd, steel, 0.08, 0.55, 0.7, -0.7, 1.75, 0.3);
-    B(this.halberd, steel, 0.08, 0.5, 0.08, -0.7, 2.3, 0);
-    B(this.halberd, glow, 0.1, 0.1, 0.5, -0.7, 1.75, 0.3);
     // seven ghostly swords — in the scene, hidden until the "phalanx"
     for (let i = 0; i < BLADES; i++) {
       const g = new THREE.Group();

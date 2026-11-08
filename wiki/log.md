@@ -500,3 +500,7 @@ Pages: [design-tower-defence.md](design-tower-defence.md).
 ## [2026-11-08] code | Towers, piles and the bush at floor height
 The simulation knows the level terrain (`SimWorld.floor`): splash, tar, meteor and frost hits land on the floor under the target, raspberry piles land on the floor, lairs and spawned enemies stand on it, the bush takes its height from `meta.td.bush.y`. Tar pools carry `y` in the snapshot; hit effects and the bush view are drawn relative to the event height.
 Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-08] code | Golden Warden on the march
+`chief_warden` (`GoldenWardenChief`, `src/mobs/td-chiefs.ts`) — the arena mini-boss's horse and rider as a defence chief: 1600 health, a shield ×0.3 from the front, every 6 s a halberd sweep at towers nearby, a phalanx of seven swords at towers farther away or a gallop. The model is shared with the arena warden (`riderModel`, `src/bosses/golden-rider.ts`).
+Pages: [design-tower-defence.md](design-tower-defence.md), [design-bosses.md](design-bosses.md).

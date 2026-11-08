@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { pixelTex } from '../textures.ts';
-import { boom, hiss, voice } from '../spell-audio.ts';
-import { C, rand, RASP } from '../bosses/kit.ts';
+import { bell, boom, deg, hiss, voice } from '../spell-audio.ts';
+import { C, rand, RASP, wrap } from '../bosses/kit.ts';
+import { riderModel, type RiderParts } from '../bosses/golden-rider.ts';
 import { decoyList, type Decoy } from '../decoys.ts';
 import { HpBar } from '../td/hpbar.ts';
 import { Mob, type MobHooks } from './mob.ts';
@@ -291,3 +292,131 @@ export class SnowShaman extends TdChief {
   }
 }
 
+const GOLD = C(4, 3, 1), SPECTRAL = C(2.6, 3, 4), DUST = ['#c8b890', '#9a8f70'];
+
+/**
+ * Golden Warden on the march — the final boss of the Raspberry Spiral (map 4, wiki/design-tower-defence.md, section 17): the arena
+ * mini-boss's horse and rider (src/bosses/golden-rider.ts) on the road. 1600 health, 1.5 m/s; the shield takes a hit from the front
+ * (±60°) at ×0.3 — towers that hit him in the back and the flank are worth more; a piercing bolt goes through. Every 6 s on the march:
+ * towers within 5 m — a halberd sweep (45 to towers, 16 to the hero); farther, within 13 m — a phalanx: up to seven ghostly swords fall
+ * on towers one by one (22 each); no towers around — a gallop: 2.5 s at 2.4× speed. At the bush — the sweep
+ */
+export class GoldenWardenChief extends TdChief {
+  readonly kind = 'chief_warden';
+  readonly title = t('Golden Warden');
+  readonly radius = 1.3;
+  override readonly topY = 3.9;
+  protected readonly every = 6;
+  /** How many swords have fallen (for tests) */
+  blades = 0;
+  private readonly p: RiderParts;
+  private gait = 0;
+  private gallopT = 0;
+
+  constructor(h: MobHooks, at: THREE.Vector3) {
+    super(h, 1600, at, 4.6);
+    this.speed = 1.5;
+    this.turn = 2.2;
+    this.keep = 2.4;
+    this.mass = 12;
+    this.aggro = 3;
+    this.loot = 60;
+    this.p = riderModel(this, this.body);
+    this.place();
+  }
+
+  /** Shield on the left arm: a blow from the front (±60°) — ×0.3; dazed never, stunned never */
+  protected override guard(dir: THREE.Vector3): number {
+    const from = Math.atan2(-dir.x, -dir.z);
+    return Math.abs(wrap(from - this.yaw)) < Math.PI / 3 ? 0.3 : 1;
+  }
+
+  /** Gallop: the march speed ×2.4 */
+  protected override get marchPace(): number { return this.pace * (this.gallopT > 0 ? 2.4 : 1); }
+
+  override update(dt: number): void {
+    this.gallopT -= dt;
+    super.update(dt);
+  }
+
+  protected ability(): boolean {
+    if (this.towersNear(5).length) { this.sweep(4, 0.8, 45); return true; }
+    const far = this.towersNear(13);
+    if (far.length) { this.phalanx(far); return true; }
+    this.gallopT = 2.5;
+    if (!this.quiet) { voice({ type: 'sawtooth', f: 196, f1: 262, dur: 0.6, vol: 0.05, lp: 1400, verb: 0.5 }); boom(70, 35, 0.5, 0.5); }
+    return true;
+  }
+
+  /** Halberd sweep: a circle of radius r, after `delay` — damage to towers and 16 to the hero (and the bush) */
+  private sweep(r: number, delay: number, toTowers: number): void {
+    const at = this.pos.clone();
+    this.field.markCircle(at, r, delay, () => {
+      if (this.dead) return;
+      if (!this.quiet) hiss({ dur: 0.45, vol: 0.25, f: 600, f1: 2600, q: 1.4 });
+      for (let i = 0; i < 4; i++) this.h.fx.arc(at.clone().setY(this.ground), this.yaw + i * Math.PI / 2, GOLD, r - 0.1, 1.6, 2.2);
+      this.h.fx.shock(at.clone().setY(this.ground + 0.1), r, GOLD, 0.35, 0.18);
+      if (!this.puppet) for (const d of decoyList()) if (d.siege && d.alive && Math.hypot(d.pos.x - at.x, d.pos.z - at.z) < r + 0.75) d.hurt(toTowers * this.dmgMult, at);
+      if (this.inCircle(at, r)) this.hurt(16, at, 7);
+    });
+  }
+
+  /** Phalanx: up to seven swords one by one onto the towers around (the nearest first), each with its own note of the chord */
+  private phalanx(towers: Decoy[]): void {
+    towers.sort((a, b) => Math.hypot(a.pos.x - this.pos.x, a.pos.z - this.pos.z) - Math.hypot(b.pos.x - this.pos.x, b.pos.z - this.pos.z));
+    for (let i = 0; i < 7; i++) {
+      const tw = towers[i % towers.length], to = tw.pos.clone();
+      this.field.markCircle(to, 1.1, 0.5 + i * 0.18, () => {
+        if (this.dead) return;
+        const sky = to.clone().add(new THREE.Vector3(0, 7, 0));
+        this.h.fx.streak({ path: (k, out) => out.lerpVectors(sky, to, k), dur: 0.15, color: SPECTRAL, color2: i % 2 ? GOLD : RASP, width: 0.12, tail: 0.6, halo: 1.2, core: 0.9 });
+        this.h.fx.burst(to.clone().setY(to.y + 0.4), [SPECTRAL, GOLD, RASP], 10, { speed: 3, up: 3, size: 0.08, life: 0.5, glow: true, gravity: 6 });
+        if (!this.quiet) { bell(deg(392, i), 1.6, 0.05, 0, 0.6); boom(160, 70, 0.18, 0.2); }
+        this.blades++;
+        if (!this.puppet && tw.alive) tw.hurt(22 * this.dmgMult, to);
+        if (this.inCircle(to, 1.1)) this.hurt(10, to, 3);
+      });
+    }
+  }
+
+  protected choose(dist: number): string | null { return dist < 3.5 ? 'sweep' : null; }
+  protected override rest(): number { return rand(1.8, 2.4); }
+
+  protected act(_name: string, t: number, dt: number): boolean {
+    if (t - dt <= 0) this.sweep(3.5, 0.6, 30);
+    return t > 1.05;
+  }
+
+  protected animate(dt: number, walk: boolean): void {
+    const { horse, head, legsF, legsB, rider, halberd, emblem } = this.p, S = this.st;
+    if (walk) {
+      const was = this.gait % 1;
+      this.gait += dt * (this.gallopT > 0 ? 3.2 : 1.6);
+      const k = this.gait % 1, ph = k * Math.PI * 2;
+      legsF.rotation.x = Math.sin(ph) * 0.7;
+      legsB.rotation.x = -Math.sin(ph + 0.6) * 0.7;
+      this.body.position.y = Math.abs(Math.sin(ph)) * 0.18;
+      horse.rotation.x = Math.sin(ph) * 0.06;
+      head.rotation.x = Math.sin(ph + 1) * 0.18;
+      if (k < was) {
+        if (!this.quiet) { boom(95, 45, 0.16, 0.22); boom(80, 40, 0.14, 0.18, 0.07); }
+        this.h.fx.burst(this.pos.clone().setY(this.ground + 0.1), DUST, this.gallopT > 0 ? 8 : 4, { speed: 1.2, up: 0.8, size: 0.1, life: 0.45, gravity: 6 });
+      }
+    } else if (this.state !== 'dead') {
+      legsF.rotation.x *= 0.85; legsB.rotation.x *= 0.85;
+      this.body.position.y *= 0.85;
+      horse.rotation.x *= 0.85;
+      head.rotation.x = Math.sin(this.time * 1.5) * 0.06;
+    }
+    // halberd: up at rest, levelled in the gallop, sideways and a full turn in the sweep
+    const hb = halberd.rotation;
+    if (this.state === 'attack') {
+      const wind = Math.min(1, S / 0.5), spin = S < 0.6 ? -0.5 * wind : -0.5 + Math.min(1, (S - 0.6) / 0.3) * Math.PI * 2;
+      hb.set(0, spin, 1.35 * wind);
+    } else if (this.gallopT > 0) hb.set(Math.min(1.35, hb.x + dt * 3), 0, 0);
+    else { hb.x *= 0.85; hb.y = wrap(hb.y) * 0.85; hb.z *= 0.85; }
+    rider.rotation.x = -horse.rotation.x * 0.5;
+    rider.position.y = 2.3 + Math.sin(this.time * 2) * 0.03;
+    emblem.scale.setScalar(1 + Math.max(0, Math.sin(this.time * 5)) * 0.08);
+  }
+}
