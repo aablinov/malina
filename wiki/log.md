@@ -472,3 +472,7 @@ Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](des
 ## [2026-11-08] code | Server profile, phase 1: the hero is born with a profile
 `POST /api/auth` creates the profile row right away — the brought one (`profile` in the body, an old browser save) or the starter one. `GET /api/profile` answers 404 only for accounts from before this change.
 Pages: [design-multiplayer.md](design-multiplayer.md).
+
+## [2026-11-08] code | Server profile, phase 2: the client keeps the hero only on the server
+`Profile` no longer touches localStorage: the storage is pluggable (`setProfileStorage`) — `ServerProfileStore` in the game, memory on dev pages. Page start (`src/menu/boot.ts`): server check, the "Hero name" card on first entry, the profile from the server; the old browser save is moved to the server once. The Online panel lost its login form.
+Pages: [design-multiplayer.md](design-multiplayer.md), [design-main-menu.md](design-main-menu.md), [design-inventory.md](design-inventory.md).

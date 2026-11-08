@@ -13,7 +13,7 @@ const KNOWN = new Set(ITEMS.map((d) => d.id));
 
 /**
  * Hero profile (`ProfileData`, src/items.ts) or an error text. Items missing from the catalog are dropped —
- * as in `Profile.load`; equipped slots reference only the profile's own items
+ * as in `Profile.upgrade`; equipped slots reference only the profile's own items
  */
 export function checkProfile(v: unknown): { ok: true; data: ProfileData } | { ok: false; error: string } {
   if (!isObj(v)) return { ok: false, error: 'profile is not an object' };

@@ -8,6 +8,7 @@ import type { MerchantKind } from '../merchants.ts';
 import type { Textures } from '../textures.ts';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
 import type { MenuScene } from './scene.ts';
+import { go } from './boot.ts';
 import { battleUrl, loadMenuState, NET, netBattleUrl, saveMenuState, VOICE, type GameMode } from './session.ts';
 import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
 
@@ -56,7 +57,6 @@ export class Lobby {
   private joinPass = '';
   private pollTimer = 0;
   /** What was typed into the panel fields — survives a re-render */
-  private nameDraft = NET.auth?.name ?? '';
   private codeDraft = '';
   /** Public rooms of the server: null — not asked yet */
   private rooms: RoomInfo[] | null = null;
@@ -116,7 +116,7 @@ export class Lobby {
     if (m.t === 'battle.start' && m.resume) { if (this.open && this.mode === 'online') this.renderSel(); return; }
     if (m.t === 'battle.start') {
       sfx.twinkle();
-      window.location.href = netBattleUrl(m.map, m.players, NET.room?.room.code ?? '');
+      void go(netBattleUrl(m.map, m.players, NET.room?.room.code ?? ''));
       return;
     }
     if (m.t === 'chat') { this.chatLog.push({ name: m.name, text: m.text }); this.chatLog = this.chatLog.slice(-6); }
@@ -191,7 +191,7 @@ export class Lobby {
       return;
     }
     sfx.twinkle();
-    window.location.href = battleUrl({ mode: this.mode, map: this.map, players: 1 });
+    void go(battleUrl({ mode: this.mode, map: this.map, players: 1 }));
   }
 
   /** Back into the room's running battle (reconnected after closing the tab) */
@@ -199,7 +199,7 @@ export class Lobby {
     const r = NET.room;
     if (!r || r.room.state !== 'battle') return;
     sfx.twinkle();
-    window.location.href = netBattleUrl(r.room.map, r.seats.length, r.room.code);
+    void go(netBattleUrl(r.room.map, r.seats.length, r.room.code));
   }
 
   /** Into a room from the list, by code or from friends: a locked one — the password field under its row (one's own running battle needs none) */
@@ -282,7 +282,6 @@ export class Lobby {
     });
     this.el.addEventListener('input', (e) => {
       const f = e.target as HTMLInputElement;
-      if (f.dataset.field === 'name') this.nameDraft = f.value;
       if (f.dataset.field === 'code') { f.value = f.value.replace(/\D/g, ''); this.codeDraft = f.value; }
       if (f.dataset.field === 'friend') this.friendDraft = f.value;
       if (f.dataset.field === 'chat') this.chatDraft = f.value;
@@ -432,7 +431,6 @@ export class Lobby {
     const esc = (v: string): string => v.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
     const head = `<h4 class="mm-pane-title">${t('Rooms')}${this.rooms?.length ? ` · ${this.rooms.length}` : ''}<button class="mm-btn small" data-act="refresh">${t('Refresh')}</button></h4>`;
     if (!NET.available) return `${head}<div class="mm-online-empty">${t('Server unavailable')}</div>`;
-    if (!NET.auth) return `${head}<div class="mm-online-empty">${t('Log in on the right — and the rooms of the server will be here')}</div>`;
     if (this.rooms === null) return `${head}<div class="mm-online-empty">…</div>`;
     if (!this.rooms.length) return `${head}<div class="mm-online-empty">${t('No rooms yet — create your own')}</div>`;
     const here = NET.room?.room.code;
@@ -455,12 +453,8 @@ export class Lobby {
   private netAct(a: string | undefined): void {
     switch (a) {
       case 'probe': void NET.probe().then(() => this.connectNet()); break;
-      case 'login': {
-        const name = this.nameDraft.trim();
-        void NET.login(name).then((ok) => { if (ok) this.connectNet(); });
-        break;
-      }
-      case 'logout': NET.logout(); this.rooms = null; this.renderSel(); break;
+      // the hero is forgotten in this browser — the page asks for a name again (src/menu/boot.ts)
+      case 'logout': void NET.profiles.flush().then(() => { NET.logout(); window.location.reload(); }); break;
       case 'host': NET.createRoom(this.map, this.passDraft.trim()); break;
       case 'join-pass': if (this.passFor && this.joinPass) NET.joinRoom(this.passFor, this.joinPass); break;
       case 'join': if (this.codeDraft.trim()) this.joinCode(this.codeDraft.trim()); break;
@@ -476,10 +470,9 @@ export class Lobby {
     }
   }
 
-  /** The server is there and the login is done: sync the profile, open the connection, ask for the room list */
+  /** The server is there and the login is done: open the connection, ask for the room list */
   connectNet(): void {
     if (NET.available && NET.auth) {
-      void NET.syncProfile(this.profile).then(() => { if (this.open) this.render(); });
       NET.connect();
       void NET.list().then((r) => { this.rooms = r; if (this.open && this.mode === 'online') this.renderSel(); });
       this.loadFriends();
@@ -522,15 +515,7 @@ export class Lobby {
       <button class="mm-btn small" data-act="probe">${t('Check again')}</button>
     </div>`;
     }
-    if (!NET.auth) {
-      return `<div class="mm-online">
-      <div class="mm-online-h"><b>${t('Hero name')}</b></div>
-      <input class="mm-field" data-field="name" data-enter="login" maxlength="16" placeholder="${t('2–16 letters')}" value="${esc(this.nameDraft)}">
-      <button class="mm-btn host" data-act="login">${t('Log in')}</button>
-      <p class="mm-note">${t('No password: the server remembers the hero in this browser.')}</p>
-    </div>`;
-    }
-    const who = `<div class="mm-online-h"><b>${esc(NET.auth.name)}</b><button class="mm-btn small" data-act="logout" title="${t('Forget the login in this browser')}">${t('Log out')}</button></div>`;
+    const who = `<div class="mm-online-h"><b>${esc(NET.auth?.name ?? '')}</b><button class="mm-btn small" data-act="logout" title="${t('Forget the login in this browser')}">${t('Log out')}</button></div>`;
     const r = NET.room;
     if (r) {
       const seats = r.seats.map((x) => `<li class="mm-seat${x.online ? '' : ' off'}${x.seat === r.you ? ' me' : ''}" data-player="${x.playerId}">

@@ -1,6 +1,6 @@
 # Multiplayer — server
 
-Version 2.5 of 2026-11-08: rooms like a server browser — every live room is listed (locked and full ones too) with creator, map, wave and players; closed with a password instead of hiding; reconnect after closing the tab — `battle.start {resume}` in the camp and back into a locked room without the password, `PROTOCOL = 4` (sections 4, 6). Version 2.4 of 2026-11-07: room voice chat on T — WebRTC peer to peer, signalling over `/ws`, `PROTOCOL = 3` (section 7a). Version 2.3 of 2026-11-07: the reward is the match loot and only for victory; heroes go in with their own gear; the party's strength scales the waves (sections 6, 7). Version 2.2 of 2026-11-04: deltas are applied from the event queue before ticks, `act` actions carrying a command number are executed by the server in order with movement (section 7, [arch-layers.md](arch-layers.md)). Version 2.1 of 2026-11-04: a ring of received snapshots on the client (deltas from an older base are not lost under latency), command batches, interpolation by server time, the hero stands still after a disconnect (section 7); layers and the Quake 3 correspondence — [arch-layers.md](arch-layers.md). Version 2.0 of 2026-11-04: the battle is computed by the server ([adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md)) — simulation without rendering, a channel with seq/ack, snapshot deltas over `/game`, prediction of own hero on the client, rewards from the server; the host model, host migration, `relay`, `battle.end`/`battle.loot` and `CoopHost`/`CoopGuest` are removed, `PROTOCOL = 2` (sections 1, 3, 6–8). ~~Versions 1.0–1.4 (2026-11-02 – 2026-11-03): host-authoritative model — the host's browser computes the battle, the server relays and trusts the outcome~~ — replaced. Camp — [design-main-menu.md](design-main-menu.md), wave scaling — [design-tower-defence.md](design-tower-defence.md), section 5, the split of simulation and view — same page, section 15.
+Version 2.6 of 2026-11-08: the hero profile lives only on the server, born with the hero at registration; the game always signs in at page start (section 5). Version 2.5 of 2026-11-08: rooms like a server browser — every live room is listed (locked and full ones too) with creator, map, wave and players; closed with a password instead of hiding; reconnect after closing the tab — `battle.start {resume}` in the camp and back into a locked room without the password, `PROTOCOL = 4` (sections 4, 6). Version 2.4 of 2026-11-07: room voice chat on T — WebRTC peer to peer, signalling over `/ws`, `PROTOCOL = 3` (section 7a). Version 2.3 of 2026-11-07: the reward is the match loot and only for victory; heroes go in with their own gear; the party's strength scales the waves (sections 6, 7). Version 2.2 of 2026-11-04: deltas are applied from the event queue before ticks, `act` actions carrying a command number are executed by the server in order with movement (section 7, [arch-layers.md](arch-layers.md)). Version 2.1 of 2026-11-04: a ring of received snapshots on the client (deltas from an older base are not lost under latency), command batches, interpolation by server time, the hero stands still after a disconnect (section 7); layers and the Quake 3 correspondence — [arch-layers.md](arch-layers.md). Version 2.0 of 2026-11-04: the battle is computed by the server ([adr-005-server-authoritative-battle.md](adr-005-server-authoritative-battle.md)) — simulation without rendering, a channel with seq/ack, snapshot deltas over `/game`, prediction of own hero on the client, rewards from the server; the host model, host migration, `relay`, `battle.end`/`battle.loot` and `CoopHost`/`CoopGuest` are removed, `PROTOCOL = 2` (sections 1, 3, 6–8). ~~Versions 1.0–1.4 (2026-11-02 – 2026-11-03): host-authoritative model — the host's browser computes the battle, the server relays and trusts the outcome~~ — replaced. Camp — [design-main-menu.md](design-main-menu.md), wave scaling — [design-tower-defence.md](design-tower-defence.md), section 5, the split of simulation and view — same page, section 15.
 
 ## 1. Model
 
@@ -67,7 +67,7 @@ Time is Unix milliseconds everywhere. A new schema — only via a new migration 
 - `POST /api/auth {name, profile?}` → `{playerId, name, token}`. The hero is born with a profile row: the brought `profile` (an old browser save, checked by `checkProfile`) or `Profile.starter()` — so every hero has a stored profile and the match reward always has somewhere to go.
   - Name — 2–16 letters, digits, spaces, `_` and `-`; case-insensitive.
   - Name taken → 409. Own name with own token — the same hero.
-- `POST /api/auth/rename`, `GET /api/me`. The token is stored in `localStorage['malina.net']`; lose the token — the hero cannot be recovered, same as a save in localStorage.
+- `POST /api/auth/rename`, `GET /api/me`. The token is stored in `localStorage['malina.net']`; lose the token — the hero cannot be recovered.
 - `GET /api/profile`, `PUT /api/profile {version, data}` — optimistic locking: with a stale version → 409 and the fresh profile.
 - Validation (`checkProfile`):
   - the shape of `ProfileData`, finite non-negative numbers, size ≤ 256 KB;
@@ -75,13 +75,12 @@ Time is Unix milliseconds everywhere. A new schema — only via a new migration 
   - unknown items are thrown away, as in `Profile.load`.
 
   This does not protect against cheats in the host model — it filters out garbage.
-- **Sync** (`NetClient.syncProfile`, in the camp):
-  - the client remembers the version of the last sync (`malina.net.version`);
-  - the server's version is newer → the server profile is taken;
-  - otherwise the local one is sent to the server;
-  - further changes in the camp are sent with a 0.8 s delay.
-
-  The battle page does not touch the stored profile: it works on a battle copy (`Profile.enterBattle`, [design-tower-defence.md](design-tower-defence.md), section 12).
+- ~~**Sync** (`NetClient.syncProfile`): the local copy in localStorage against the server version~~ — replaced 2026-11-08: **the profile lives only on the server** (`ServerProfileStore`, `src/net/profile-store.ts`):
+  - the page loads it at start (`load`, [design-main-menu.md](design-main-menu.md), section 1) and keeps the version in memory;
+  - the camp profile is linked (`attach`): its changes go out as `PUT` 0.8 s after the last one, `flush()` before going to another page, a keepalive `PUT` on `pagehide`;
+  - a 409 (another tab, match rewards) — the server copy replaces the stored one; `profile.updated` after a match does the same;
+  - the solo battle page writes only growth and victory loot into the stored copy (`Profile.keepGrowth`, `creditStored` through `setProfileStorage`); the online battle page writes nothing (`frozen`) — the server pays itself;
+  - an old browser save `localStorage['malina.profile']` goes to the server once — in the registration (`profile`) or as the first write of an account without a profile — and is removed.
 
 ## 6. Rooms
 

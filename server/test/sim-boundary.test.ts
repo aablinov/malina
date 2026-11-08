@@ -13,8 +13,8 @@ const PURE = ['src/sim', 'src/net'];
 const DIRS = [...PURE, 'src/game'];
 /** Gameplay the server runs (hero, gear, magic, mobs, wardens): scene and sound allowed, randomness and clocks not */
 const GAMEPLAY = ['src/mobs', 'src/bosses', 'src/magic', 'src/knight.ts', 'src/gear.ts', 'src/spells.ts', 'src/weapon-arts.ts', 'src/aura-offense.ts', 'src/auras.ts', 'src/weapon-synergies.ts', 'src/decoys.ts', 'src/collision.ts', 'src/level/pathfind.ts'];
-/** Client modules that belong in src/net for the shared protocol but do not load in Node (browser WebSocket, DOM, WebRTC) */
-const CLIENT_ONLY = new Set(['src/net/client.ts', 'src/net/battle-ui.ts', 'src/net/voice.ts']);
+/** Client modules that belong in src/net for the shared protocol but do not load in Node (browser WebSocket, DOM, WebRTC, the server profile store) */
+const CLIENT_ONLY = new Set(['src/net/client.ts', 'src/net/battle-ui.ts', 'src/net/voice.ts', 'src/net/profile-store.ts']);
 const BANNED: [RegExp, string][] = [
   [/from '[^']*\/(fx|textures|audio|spell-audio|weapon-audio|loot-look)(\.ts)?'/, 'view and sound'],
   [/\.css'/, 'styles'],

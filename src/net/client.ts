@@ -1,8 +1,8 @@
 import { t } from '../i18n/i18n.ts';
-import type { Profile, ProfileData } from '../items.ts';
+import { ServerProfileStore, legacyProfile } from './profile-store.ts';
 import {
   CLOSE, NET_LIMITS, PROTOCOL,
-  type AuthReply, type ClientMsg, type FriendInfo, type MatchSummary, type ProfileReply, type RoomInfo, type SeatInfo, type ServerMsg,
+  type AuthReply, type ClientMsg, type FriendInfo, type MatchSummary, type RoomInfo, type SeatInfo, type ServerMsg,
 } from './protocol.ts';
 
 /**
@@ -12,12 +12,10 @@ import {
  * Server address: `?server=http://…` (remembered), else the stored one, else the same origin if the server itself served the game
  * (`STATIC=dist npm run server`), else http://localhost:8787.
  *
- * Profile: the server is the master. The client remembers the version of the last sync; if the server's version is newer
- * (battle rewards, another browser) the server profile is taken, otherwise the local one goes to the server
+ * Profile: only on the server (`profiles`, src/net/profile-store.ts) — the page loads it at start and writes changes back
  */
 const AUTH_KEY = 'malina.net';
 const SERVER_KEY = 'malina.server';
-const VERSION_KEY = 'malina.net.version';
 /** The battle the room went into: seat, seed, host — read by the battle page */
 const BATTLE_KEY = 'malina.net.battle';
 /** The last room the player went into battle with — survives closing the tab: the room list offers "Return" */
@@ -75,10 +73,8 @@ export class NetClient {
   private fastPing = false;
   private retry = 0;
   private stopped = false;
-  private profile: Profile | null = null;
-  private pushTimer = 0;
-  /** The client itself is changing the profile (it came from the server) — do not send it back */
-  private taking = false;
+  /** The hero profile on the server */
+  readonly profiles = new ServerProfileStore(this);
 
   constructor(base = serverUrl()) { this.base = base; }
 
@@ -99,12 +95,12 @@ export class NetClient {
     return r.ok ? ((await r.json()) as RoomInfo[]) : [];
   }
 
-  /** Log in by name; null — the name is taken or bad (the error text goes to onError) */
+  /** Log in by name (a new hero brings the old browser save along); null — the name is taken or bad (the error text goes to onError) */
   async login(name: string): Promise<NetAuth | null> {
-    const r = await this.api('POST', '/api/auth', { name });
+    const profile = legacyProfile() ?? undefined;
+    const r = await this.api('POST', '/api/auth', { name, profile });
     const body = (await r.json()) as AuthReply & { error?: string };
     if (!r.ok) { this.onError?.(body.error ? t(body.error) : t('Could not log in')); return null; }
-    if (this.auth?.playerId !== body.playerId) write(localStorage, VERSION_KEY, null);
     this.auth = { playerId: body.playerId, name: body.name, token: body.token };
     write(localStorage, AUTH_KEY, this.auth);
     return this.auth;
@@ -115,7 +111,6 @@ export class NetClient {
     this.stop();
     this.auth = null;
     write(localStorage, AUTH_KEY, null);
-    write(localStorage, VERSION_KEY, null);
   }
 
   /** Friends: whether online and in which room */
@@ -139,58 +134,11 @@ export class NetClient {
     return r.ok ? ((await r.json()) as MatchSummary[]) : [];
   }
 
-  /**
-   * Link the hero profile with the server: newer on the server — take it, otherwise send ours.
-   * From then on profile changes (in the camp) go to the server with a delay
-   */
-  async syncProfile(profile: Profile): Promise<void> {
-    if (!this.auth) return;
-    this.profile = profile;
-    const r = await this.api('GET', '/api/profile');
-    const known = read<number>(localStorage, VERSION_KEY) ?? 0;
-    if (r.ok) {
-      const srv = (await r.json()) as ProfileReply;
-      if (srv.version > known) this.takeProfile(srv);
-      else await this.pushProfile();
-    } else if (r.status === 404) {
-      write(localStorage, VERSION_KEY, 0);
-      await this.pushProfile();
-    }
-    profile.onChange(() => {
-      if (this.taking) return;
-      window.clearTimeout(this.pushTimer);
-      this.pushTimer = window.setTimeout(() => void this.pushProfile(), 800);
-    });
-  }
-
-  private async pushProfile(): Promise<void> {
-    const p = this.profile;
-    if (!p || !this.auth) return;
-    const version = read<number>(localStorage, VERSION_KEY) ?? 0;
-    const r = await this.api('PUT', '/api/profile', { version, data: p.data });
-    if (r.ok || r.status === 409) this.takeProfile((await r.json()) as ProfileReply, r.ok);
-    else { const e = ((await r.json().catch(() => ({}))) as { error?: string }).error; this.onError?.(e ? t(e) : t('The profile was not saved on the server')); }
-  }
-
-  /** Server profile into the hero; mine — it is ours anyway, only remember the version */
-  private takeProfile(srv: ProfileReply, mine = false): void {
-    // the battle page does not link the profile: the camp takes the server one by version
-    const p = this.profile;
-    if (!p) return;
-    write(localStorage, VERSION_KEY, srv.version);
-    if (mine) return;
-    p.data = srv.data as ProfileData;
-    p.data.equip.aura ??= null;
-    this.taking = true;
-    p.save();
-    this.taking = false;
-  }
-
-  private api(method: string, path: string, body?: unknown): Promise<Response> {
+  api(method: string, path: string, body?: unknown, keepalive = false): Promise<Response> {
     const headers: Record<string, string> = {};
     if (this.auth) headers.Authorization = `Bearer ${this.auth.token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    return fetch(this.base + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    return fetch(this.base + path, { method, headers, keepalive, body: body === undefined ? undefined : JSON.stringify(body) });
   }
 
   // ---------- WebSocket ----------
@@ -225,7 +173,8 @@ export class NetClient {
       this.online = false;
       window.clearInterval(this.ping);
       this.emit({ t: 'room.left', reason: 'closed' });
-      if (e.code === CLOSE.auth) { this.onError?.(t('The server did not recognise the hero — log in again')); this.logout(); return; }
+      // the server does not know the token — the page asks for the hero name again (src/menu/boot.ts)
+      if (e.code === CLOSE.auth) { this.logout(); window.location.reload(); return; }
       if (e.code === CLOSE.protocol) { this.onError?.(t('The game version does not match the server — reload the page')); return; }
       if (e.code === CLOSE.replaced || this.stopped) return;
       // dropped — reconnect: the seat in the room is held for NET_LIMITS.graceMs
@@ -275,7 +224,7 @@ export class NetClient {
         }
         this.onError?.(t(m.text));
         break;
-      case 'profile.updated': this.takeProfile({ version: m.version, data: m.data }); break;
+      case 'profile.updated': this.profiles.take({ version: m.version, data: m.data }); break;
       case 'battle.start':
         write(sessionStorage, BATTLE_KEY, { matchId: m.matchId, code: this.room?.room.code ?? '', map: m.map, players: m.players, seed: m.seed, hostSeat: m.hostSeat, seat: this.room?.you ?? 0, seats: m.seats } satisfies NetBattle);
         write(localStorage, LAST_KEY, { code: this.room?.room.code ?? '', matchId: m.matchId } satisfies LastRoom);

@@ -305,7 +305,7 @@ export class RoomManager {
         this.d.matches.reward(matchId, m.playerId, berries, xp);
         const prof = this.d.profiles.get(m.playerId);
         if (!prof) continue;
-        const p = new Profile(prof.data as ProfileData, false);
+        const p = new Profile(prof.data as ProfileData);
         p.addBerries(berries);
         p.addXp(xp);
         const version = this.d.profiles.put(m.playerId, prof.version, p.data, now);

@@ -309,7 +309,7 @@ export class NetBattleClient {
     if (sword) { applyWeapon(sword, k.tune); k.setWeapon(sword); }
     k.place(h.hero.pos.x + 1.6, h.hero.pos.z, h.hero.yaw, h.hero.pos.y);
     const data: ProfileData = { version: 1, level: 1, xp: 0, points: 0, berries: 0, souls: MAX_SOULS, arrows: MAX_ARROWS, seq: 0, items: [], equip: { melee: null, ranged: null, armor: null, artifacts: [null, null, null], aura: null } };
-    const profile = new Profile(data, false);
+    const profile = new Profile(data);
     const gear = h.makeGear(k, profile);
     k.onSwing = (step) => h.swing(k, gear, step);
     r = { seat, knight: k, gear, profile, input: emptyInput(), bow: false, track: new Track(), to: k.pos.clone(), yawTo: k.yaw, hp: k.hp, maxHp: k.maxHp, ping: 0, down: false };

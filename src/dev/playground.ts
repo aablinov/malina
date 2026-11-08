@@ -101,7 +101,7 @@ function pickMap(): LevelJSON {
   return j;
 }
 
-export function runPlayground(): void {
+export function runPlayground(profile: Profile): void {
   /**
    * Playground: the main development scene (ADR-004). A block arena, straw dummies for the sword, a storage yard, a pond,
    * stairs onto a platform, a block showcase. Mechanics live in shared modules (knight.ts, trail.ts); here — the scene and debugging.
@@ -110,7 +110,6 @@ export function runPlayground(): void {
   // weapon — the one equipped in the inventory (src/items.ts); ?weapon=<id> — on top of it, for debugging (src/weapons.ts).
   // The equipped one's numbers are the starting point for "Reset" in F1
   const urlWeapon = new URLSearchParams(window.location.search).has('weapon') ? pickWeapon() : null;
-  const profile = new Profile();
   // settings from the main menu (src/menu/settings.ts): volume, quality, post-processing, shadows, help
   const settings = loadSettings();
   applyAudio(settings);
