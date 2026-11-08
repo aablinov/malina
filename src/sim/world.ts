@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { Obstacle } from '../collision.ts';
 import type { Level } from '../level/level.ts';
+import { terrainOf, type Terrain } from '../level/collide.ts';
 import type { EntityState } from '../net/snapshot.ts';
 import { useDecoys, type Decoy } from '../decoys.ts';
 import { rng, useRng, type Rand } from '../rng.ts';
@@ -67,6 +68,8 @@ export class SimWorld {
   readonly rng: Rand;
   readonly seed: number;
   readonly level: Level | null;
+  /** Level terrain (floors of the plateau, terraces, ramps); null — an empty test world on the y = 0 plane */
+  readonly terrain: Terrain | null;
   readonly h: SimHooks;
   readonly td: SimTd | null;
   readonly piles: Piles;
@@ -80,8 +83,15 @@ export class SimWorld {
     this.seed = o.seed;
     this.rng = rng(o.seed);
     this.level = o.level;
+    this.terrain = o.level ? terrainOf(o.level) : null;
     this.piles = new Piles(this);
     this.td = o.td ? new SimTd(this, o.td, o.players ?? 1, o.personal ?? false) : null;
+  }
+
+  /** Floor under a point no higher than y + step (the bush on the plateau, a splash on a terrace, a landed pile); a chasm or no level — 0 */
+  floor(x: number, z: number, y = 0): number {
+    const f = this.terrain?.floorAt(x, z, y) ?? 0;
+    return f > -Infinity ? f : 0;
   }
 
   emit(e: SimEvent): void { this.events.push(e); }

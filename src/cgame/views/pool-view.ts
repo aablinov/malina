@@ -26,8 +26,8 @@ export class PoolView {
 
   set(ent: EntityState): void {
     const e = ent as PoolEnt;
-    this.at.set(e.x, 0, e.z);
-    this.mesh.position.set(e.x, 0.03, e.z);
+    this.at.set(e.x, e.y ?? 0, e.z);
+    this.mesh.position.set(e.x, this.at.y + 0.03, e.z);
     if (e.r !== this.r) { this.r = e.r; this.mesh.geometry.dispose(); this.mesh.geometry = new THREE.CircleGeometry(e.r, 20); }
     this.mat.opacity = Math.min(0.85, e.t * 0.6);
   }

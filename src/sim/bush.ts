@@ -19,11 +19,11 @@ export class SimBush implements Decoy {
   onDeath?: () => void;
   private readonly w: SimWorld;
 
-  constructor(w: SimWorld, x: number, z: number, hp: number) {
+  constructor(w: SimWorld, x: number, z: number, hp: number, y = 0) {
     this.w = w;
-    this.pos = new THREE.Vector3(x, 0, z);
+    this.pos = new THREE.Vector3(x, y, z);
     this.hp = this.maxHp = hp;
-    this.solid = { x, z, hx: 0.45, hz: 0.45, rot: 0, h: 1.2 };
+    this.solid = { x, z, hx: 0.45, hz: 0.45, rot: 0, h: 1.2, y0: this.pos.y };
   }
 
   get alive(): boolean { return !this.dead; }

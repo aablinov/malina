@@ -28,7 +28,7 @@ export class BushView {
   private readonly scene: THREE.Scene;
   private readonly fx: FX;
   constructor(scene: THREE.Scene, fx: FX, spec: TdBush, ent: EntityState) { this.scene = scene; this.fx = fx;
-    this.pos = new THREE.Vector3(spec.x, 0, spec.z);
+    this.pos = new THREE.Vector3(spec.x, spec.y ?? 0, spec.z);
     this.hp = this.maxHp = spec.hp;
     this.group.position.copy(this.pos);
     const B = (parent: THREE.Object3D, mat: THREE.Material, w: number, h: number, d: number, px = 0, py = 0, pz = 0, rx = 0, ry = 0, rz = 0): THREE.Mesh => {

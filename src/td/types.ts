@@ -28,7 +28,8 @@ export interface TdWall {
 }
 
 /** The raspberry bush — what we defend: where it stands and how much it can take */
-export interface TdBush { x: number; z: number; hp: number }
+/** The bush: where it stands and its health; y — floor height under it (the plateau of map 4), 0 if absent */
+export interface TdBush { x: number; y?: number; z: number; hp: number }
 
 /** Wave group: kind — a mob from the roster (src/mobs/roster.ts), count of them every `every` seconds along lane `lane` (id), starting `delay` seconds after the wave begins */
 export interface TdWaveGroup { kind: string; count: number; every: number; lane: string; delay?: number }

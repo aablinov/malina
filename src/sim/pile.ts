@@ -34,7 +34,7 @@ export class Piles {
   drop(at: THREE.Vector3, n: number): Pile | null {
     if (n <= 0) return null;
     const r = this.w.rng;
-    const p: Pile = { id: this.w.id('p'), n, pos: at.clone().setY(0.8), vel: new THREE.Vector3((r() - 0.5) * 2, 4, (r() - 0.5) * 2), lock: 0.4, t: 0, landed: false };
+    const p: Pile = { id: this.w.id('p'), n, pos: at.clone().setY(at.y + 0.8), vel: new THREE.Vector3((r() - 0.5) * 2, 4, (r() - 0.5) * 2), lock: 0.4, t: 0, landed: false };
     this.list.push(p);
     this.w.emit({ t: 'pile.drop', id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, n });
     return p;
@@ -54,8 +54,9 @@ export class Piles {
       p.lock -= dt;
       p.vel.y -= 12 * dt;
       p.pos.addScaledVector(p.vel, dt);
-      if (p.pos.y < 0.14) {
-        p.pos.y = 0.14;
+      const floor = this.w.floor(p.pos.x, p.pos.z, p.pos.y) + 0.14;
+      if (p.pos.y < floor) {
+        p.pos.y = floor;
         if (!p.landed && p.vel.y < -1) { p.landed = true; this.w.emit({ t: 'pile.land', id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z }); }
         if (Math.abs(p.vel.y) > 1.5) { p.vel.y = -p.vel.y * 0.3; p.vel.x *= 0.5; p.vel.z *= 0.5; }
         else { p.vel.y = 0; const k = Math.exp(-6 * dt); p.vel.x *= k; p.vel.z *= k; }
@@ -69,7 +70,7 @@ export class Piles {
       }
       const reach = this.harvestT > 0 ? Infinity : this.reach;
       if (p.lock <= 0 && to && d < reach) {
-        const pull = to.pos.clone().setY(0.6).sub(p.pos).setLength((reach === Infinity ? 14 + d : Math.min(10, 3 + (reach - d) * 6)) * dt);
+        const pull = to.pos.clone().setY(to.pos.y + 0.6).sub(p.pos).setLength((reach === Infinity ? 14 + d : Math.min(10, 3 + (reach - d) * 6)) * dt);
         p.pos.add(pull);
         if (d < 0.6) {
           this.list.splice(i, 1);
