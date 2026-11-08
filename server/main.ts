@@ -22,7 +22,8 @@ const app = createApp({
   staticDir: env.STATIC ? join(process.cwd(), env.STATIC) : undefined,
   ice: env.RTC_ICE_SERVERS ? (JSON.parse(env.RTC_ICE_SERVERS) as IceServer[]) : undefined,
 });
-const port = await app.listen(Number(env.PORT) || 8787, env.HOST);
+// PORT=0 — any free port (the tests start a server per worker); the real one is in the log line
+const port = await app.listen(env.PORT ? Number(env.PORT) : 8787, env.HOST);
 console.log(`Malina: server at http://localhost:${port} (ws — /ws)`);
 
 const stop = (): void => {

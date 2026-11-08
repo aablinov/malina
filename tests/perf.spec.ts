@@ -8,7 +8,8 @@ import { resolve } from 'node:path';
  * the median frame, geometry leaks and growth of the shader program count after warm-up. The threshold is PERF_MAX_MS (40 ms by default).
  */
 
-const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground';
+// warm=1: an automated run skips the shader warm-up (src/devflag.ts AUTOMATED), here it is measured
+const URL = pathToFileURL(resolve('dist/index.html')).href + '?dev=playground&warm=1';
 const MAX_MS = Number(process.env.PERF_MAX_MS || 40);
 /** Frame time is meaningful only on a real GPU (PERF_GPU=1, see playwright.config.ts); in SwiftShader we check leaks and programs */
 const GPU = !!process.env.PERF_GPU;
@@ -16,6 +17,8 @@ const GPU = !!process.env.PERF_GPU;
 const RENDER_EVERY = GPU ? 1 : 4;
 
 test.setTimeout(600_000);
+// programs, geometries and textures do not depend on the frame size; in SwiftShader every pixel costs — a small frame (a real GPU keeps the full one)
+if (!GPU) test.use({ viewport: { width: 320, height: 200 } });
 
 interface Frame { ms: number; tick: number; render: number; marks: string[] }
 interface Report { frames: Frame[]; programs0: number; programs1: number; geo0: number; geo1: number; tex0: number; tex1: number }

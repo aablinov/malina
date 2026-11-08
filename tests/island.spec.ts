@@ -62,41 +62,70 @@ test('island: map from the plan — regions, start, mobs, warden, merchants and 
   expect(MAP.entities.filter((e) => e.kind === 'terminal').length).toBe(1);
 });
 
-test('island: the plan\'s roads are walkable, mob posts and loot stand on free ground, a patrol walks, an ambush sleeps until 3 m', async ({ page }) => {
+/**
+ * The roads, posts, loot and mob checks — split into parallel tests (each loads its own part of the island by regions).
+ * `prep` runs in the page: the hero in god mode, `load(x, z)` places him and streams the regions around (no drawing).
+ */
+const PREP = `
+  const m = window.__malina; m.script(true); m.hero.god = true;
+  const L = m.level, V = m.hero.pos.constructor;
+  // all the regions around at once (streaming loads one per frame), then two steps — obstacles, props and the arenas around
+  const load = (x, z) => { m.hero.place(x, z, 0); m.regions.warm([{ x, z }]); m.step(0.2); m.render(false); m.step(0.2); m.render(false); for (const a of m.arenas) a.reset(); };
+  // only the level data around (no hero, no steps): enough for the floor and air checks
+  const data = (x, z) => m.regions.warm([{ x, z }]);
+  const floorOk = (x, z) => { const f = L.nameAt(x, -1, z); return f !== 'air' && f !== 'water' && f !== 'river' && L.isAir(x, 0, z) && L.isAir(x, 1, z); };
+`;
+
+async function island(page: import('@playwright/test').Page, body: string, arg?: unknown): Promise<any> {
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => (window as any).__malina?.mode === 'playground');
-  const r = await page.evaluate(async (ROADS) => {
-    const m = (window as any).__malina; m.script(true); await m.ready; m.hero.god = true;
-    const L = m.level, V = m.hero.pos.constructor;
-    const SX = 256 / 1932, SZ = 256 / 1916, P = (x: number, y: number) => [Math.round(x * SX - 128), Math.round(y * SZ - 128)];
-    /** Place the hero (the regions around get loaded) and lower the arena grates if he woke one by accident */
-    const load = (x: number, z: number) => { m.hero.place(x, z, 0); m.step(0.2); m.render(); m.step(0.2); m.render(); for (const a of m.arenas) a.reset(); };
-    const bad: unknown[] = [];
-    for (const line of ROADS) for (let i = 0; i + 3 < line.length; i += 2) {
-      const [ax, az] = P(line[i], line[i + 1]), [bx, bz] = P(line[i + 2], line[i + 3]);
-      load(ax, az);
-      const path = m.pathfinder.find(new V(ax, m.hero.pos.y, az), new V(bx, 0, bz), { solids: m.solids });
-      const end = path[path.length - 1], d = end ? Math.hypot(end.x - bx, end.z - bz) : 99;
-      if (d > 1.5) bad.push([line[i], line[i + 1], line[i + 2], line[i + 3], d]);
-    }
-    const floorOk = (x: number, z: number) => { const f = L.nameAt(x, -1, z); return f !== 'air' && f !== 'water' && f !== 'river' && L.isAir(x, 0, z) && L.isAir(x, 1, z); };
-    const posts: unknown[] = [];
-    for (const r of m.mobRooms) for (const p of r.spec.posts) { const x = Math.round(p.x), z = Math.round(p.z); load(x + 12, z); if (!floorOk(x, z)) posts.push([r.spec.id, p.kind, x, z]); }
-    const items: unknown[] = [];
-    for (const e of L.entities) { if (!['chest', 'crate', 'barrel', 'terminal'].includes(e.kind)) continue; load(e.x + 12, e.z); if (!floorOk(e.x, e.z)) items.push([e.kind, e.x, e.z]); }
+  return page.evaluate(`(async (ARG) => { ${PREP} await m.ready; ${body} })(${JSON.stringify(arg ?? null)})`);
+}
+
+for (const [n, line] of ROADS.entries()) {
+  test(`island: road ${n + 1} of the plan is walkable segment by segment`, async ({ page }) => {
+    const bad = await island(page, `
+      const SX = 256 / 1932, SZ = 256 / 1916, P = (x, y) => [Math.round(x * SX - 128), Math.round(y * SZ - 128)];
+      const bad = [];
+      for (let i = 0; i + 3 < ARG.length; i += 2) {
+        const [ax, az] = P(ARG[i], ARG[i + 1]), [bx, bz] = P(ARG[i + 2], ARG[i + 3]);
+        load(ax, az);
+        const path = m.pathfinder.find(new V(ax, m.hero.pos.y, az), new V(bx, 0, bz), { solids: m.solids });
+        const end = path[path.length - 1], d = end ? Math.hypot(end.x - bx, end.z - bz) : 99;
+        if (d > 1.5) bad.push([ARG[i], ARG[i + 1], ARG[i + 2], ARG[i + 3], d]);
+      }
+      return bad;`, line);
+    expect(bad).toEqual([]);
+  });
+}
+
+test('island: mob posts stand on free ground', async ({ page }) => {
+  const posts = await island(page, `
+    const posts = [];
+    for (const r of m.mobRooms) for (const p of r.spec.posts) { const x = Math.round(p.x), z = Math.round(p.z); data(x, z); if (!floorOk(x, z)) posts.push([r.spec.id, p.kind, x, z]); }
+    return posts;`);
+  expect(posts).toEqual([]);
+});
+
+test('island: chests, crates, barrels and the terminal stand on free ground', async ({ page }) => {
+  const items = await island(page, `
+    const items = [];
+    for (const e of L.entities) { if (!['chest', 'crate', 'barrel', 'terminal'].includes(e.kind)) continue; data(e.x, e.z); if (!floorOk(e.x, e.z)) items.push([e.kind, e.x, e.z]); }
+    return items;`);
+  expect(items).toEqual([]);
+});
+
+test('island: a patrol walks, an ambush sleeps until 3 m', async ({ page }) => {
+  const r = await island(page, `
     // patrol: the hero is far — the gardener walks its route; ambush: the beetle sleeps at 6 m, wakes at 2.5 m
-    const pr = m.mobRooms.find((r: any) => r.spec.id === 'patrol1');
+    const pr = m.mobRooms.find((r) => r.spec.id === 'patrol1');
     load(pr.spec.posts[0].x + 25, pr.spec.posts[0].z + 20); m.fillRoom(pr);
     const w = pr.pack.mobs[0], p0 = [w.pos.x, w.pos.z]; m.step(3);
     const patrol = { moved: Math.hypot(w.pos.x - p0[0], w.pos.z - p0[1]), alerted: w.alerted, state: w.state };
-    const am = m.mobRooms.find((r: any) => r.spec.id === 'ambush1'); const b = am.pack.mobs[0];
+    const am = m.mobRooms.find((r) => r.spec.id === 'ambush1'); const b = am.pack.mobs[0];
     load(b.pos.x + 6, b.pos.z); m.fillRoom(am); const b2 = am.pack.mobs[0]; m.step(1); const far = b2.alerted;
     m.hero.place(b2.pos.x + 2.5, b2.pos.z, 0); m.step(1); const near = b2.alerted;
-    return { bad, posts, items, patrol, far, near };
-  }, ROADS);
-  expect(r.bad).toEqual([]);
-  expect(r.posts).toEqual([]);
-  expect(r.items).toEqual([]);
+    return { patrol, far, near };`);
   expect(r.patrol.alerted).toBe(false);
   expect(r.patrol.moved).toBeGreaterThan(2);
   expect(r.far).toBe(false);

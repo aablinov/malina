@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { startGameServer, type GameServer } from './game-server.ts';
 
 /**
  * Online game (wiki/design-multiplayer.md): a real server (server/main.ts, in-memory database) and two browsers.
@@ -10,20 +10,12 @@ import { spawn, type ChildProcess } from 'node:child_process';
  * and is seen by the host, the guest builds a tower from its own raspberries — the tower is at both, a wave — enemy puppets at both, names above the heroes.
  * Then the guest closes the tab, opens the camp anew — "Return to battle" — and is in the same server battle again
  */
-const PORT = 8791;
-const SERVER = `http://127.0.0.1:${PORT}`;
-const URL = `${SERVER}/`;
-let server: ChildProcess;
-
-test.beforeAll(async () => {
-  server = spawn(process.execPath, ['server/main.ts'], { env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DB_PATH: ':memory:', STATIC: 'dist' }, stdio: 'pipe' });
-  await new Promise<void>((ok, fail) => {
-    const timer = setTimeout(() => fail(new Error('the server did not start')), 10_000);
-    server.stdout?.on('data', (b: Buffer) => { if (String(b).includes('server at')) { clearTimeout(timer); ok(); } });
-    server.stderr?.on('data', (b: Buffer) => process.stderr.write(b));
-  });
-});
-test.afterAll(() => { server?.kill(); });
+let S: GameServer;
+let SERVER = '';
+let URL = '';
+// own server on a free port per worker (tests/game-server.ts)
+test.beforeAll(async () => { S = await startGameServer(); SERVER = S.base; URL = S.url; });
+test.afterAll(() => { S?.stop(); });
 
 async function lobby(page: Page, errors: string[], name: string): Promise<void> {
   page.on('pageerror', (e) => errors.push(e.message));
@@ -35,8 +27,8 @@ async function lobby(page: Page, errors: string[], name: string): Promise<void> 
   await expect(field).toBeVisible({ timeout: 60_000 });
   await field.fill(name);
   await field.press('Enter');
-  // timer polling: rAF polling stalls while the earlier battle pages load the software WebGL
-  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 60_000, polling: 500 });
+  // the camp builds its scene only after the sign-in: under parallel software-WebGL runs that takes long
+  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 120_000, polling: 500 });
   await page.getByRole('button', { name: /Online game/ }).click();
   await expect(page.locator('.mm-online')).toContainText(name);
 }

@@ -47,7 +47,7 @@ import { Weather } from '../weather.ts';
 import { aimLight, lightData, makeLight, worldOf } from '../world.ts';
 import { Dummy } from './dummies.ts';
 import { Overlays } from './overlay.ts';
-import { DEV_TOOLS, fromMenu, openEditor } from '../devflag.ts';
+import { AUTOMATED, DEV_TOOLS, fromMenu, openEditor } from '../devflag.ts';
 import { loadSettings, pixelRatio } from '../menu/settings.ts';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel.ts';
 import { BattleMenu } from '../menu/pause.ts';
@@ -1195,7 +1195,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     fx.updateReal(real);
     // the inventory is open — the game is paused, as in single-player MCD
     // a network battle does not pause: the others play on, one's own hero stands still (empty input), commands go out every tick
-    if (!paused && (netRoom || (!inventory.open && !shop.open && !battle?.pausing))) acc += real * timeScale * stop;
+    // an automated run with the test in control (`script(true)`): game time moves only by `step()` — what the page did between two
+    // test calls no longer depends on how loaded the machine is (src/devflag.ts AUTOMATED); a network battle keeps its clock
+    const held = AUTOMATED && scripted && !netRoom;
+    if (held) acc = 0;
+    else if (!paused && (netRoom || (!inventory.open && !shop.open && !battle?.pausing))) acc += real * timeScale * stop;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     perf.begin();
     let n = 0;
@@ -1228,8 +1232,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   }
   const _xray = new THREE.Vector3();
 
-  /** Camera, overlays, HUD and the frame; real — how much real time passed */
-  function render(real: number): void {
+  /** Camera, overlays, HUD and the frame; real — how much real time passed; draw — into WebGL (an automated run draws only on request) */
+  function render(real: number, draw = !AUTOMATED): void {
     syncView(real);
     // the camera follows the hero; in height — smoothly, so a fall does not jerk the frame
     const want = hero.pos.clone();
@@ -1265,11 +1269,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     updateHUD(real, fpsVal, frameMs);
 
 
+    if (!draw) return;
     if (postFX) look.render();
     else look.renderPlain(camera);
   }
   // warming up the battle shaders and textures (src/fx-zoo.ts): compile before the first cast, not in the frame of a hit
-  const ready = warmUp(renderer, scene, camera, T, look.composer.renderTarget1).catch((e) => { console.warn('warm-up failed', e); return 0; });
+  const ready = AUTOMATED && !query.has('warm') ? Promise.resolve(0)
+    : warmUp(renderer, scene, camera, T, look.composer.renderTarget1).catch((e) => { console.warn('warm-up failed', e); return 0; });
   frame();
 
   // ---------- Debug hook ----------
@@ -1373,8 +1379,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     script(on = true) { scripted = on; if (on) { input.move.set(0, 0); input.attack = false; orders.reset(); } },
     /** Run the simulation for sec seconds without real time */
     step(sec: number) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) tick(STEP); syncView(sec); },
-    /** Draw a frame now (a background tab gets no requestAnimationFrame) */
-    render() { render(0); },
+    /** Draw a frame now (a background tab gets no requestAnimationFrame); draw=false — only the view: camera, regions, chunks, labels */
+    render(draw = true) { render(0, draw); },
     /** Space press: dodge roll */
     press(what: 'roll') { input[what] = true; },
     /** Press LMB at a ground point (shift — strike in place); a target at that point — approach and strike */

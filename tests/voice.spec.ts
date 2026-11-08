@@ -1,31 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { startGameServer, type GameServer } from './game-server.ts';
 
 /**
  * Room voice chat (src/net/voice.ts, wiki/design-multiplayer.md "Voice"): a real server and two browsers with a fake microphone.
  * In the camp: T at the host — the mic flag is in the guest's seats, the guest's WebRTC connection is up and gets a live track;
  * the room goes to battle — the mic turns on again by itself on the battle page; T in battle — off, the mic track is stopped
  */
-const PORT = 8793;
-const SERVER = `http://127.0.0.1:${PORT}`;
-let server: ChildProcess;
-
-test.use({
-  launchOptions: {
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
-    executablePath: process.env.PW_CHROMIUM || undefined,
-  },
-});
-
-test.beforeAll(async () => {
-  server = spawn(process.execPath, ['server/main.ts'], { env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DB_PATH: ':memory:', STATIC: 'dist', RTC_ICE_SERVERS: '[]' }, stdio: 'pipe' });
-  await new Promise<void>((ok, fail) => {
-    const timer = setTimeout(() => fail(new Error('the server did not start')), 10_000);
-    server.stdout?.on('data', (b: Buffer) => { if (String(b).includes('server at')) { clearTimeout(timer); ok(); } });
-    server.stderr?.on('data', (b: Buffer) => process.stderr.write(b));
-  });
-});
-test.afterAll(() => { server?.kill(); });
+let S: GameServer;
+let SERVER = '';
+// own server on a free port per worker (tests/game-server.ts)
+test.beforeAll(async () => { S = await startGameServer({ RTC_ICE_SERVERS: '[]' }); SERVER = S.base; });
+test.afterAll(() => { S?.stop(); });
 
 async function lobby(page: Page, errors: string[], name: string): Promise<void> {
   page.on('pageerror', (e) => errors.push(e.message));
@@ -36,8 +21,8 @@ async function lobby(page: Page, errors: string[], name: string): Promise<void> 
   await expect(field).toBeVisible({ timeout: 60_000 });
   await field.fill(name);
   await field.press('Enter');
-  // timer polling: rAF polling stalls while the earlier battle pages load the software WebGL
-  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 60_000, polling: 500 });
+  // the camp builds its scene only after the sign-in: under parallel software-WebGL runs that takes long
+  await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 120_000, polling: 500 });
   await page.getByRole('button', { name: /Online game/ }).click();
   await expect(page.locator('.mm-online')).toContainText(name);
 }

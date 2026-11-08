@@ -484,3 +484,7 @@ Pages: [design-multiplayer.md](design-multiplayer.md).
 ## [2026-11-08] code | Server profile, phase 4: tests on a server
 Specs that open the camp or a battle from it start their own server (`tests/game-server.ts`, a port per file) and sign in a hero; the first-entry test checks the name card, the move of the old browser save and the "Server unavailable" card. README: the game always runs through the server.
 Pages: [dev-testing.md](dev-testing.md).
+
+## [2026-11-08] code | Faster Playwright run
+An automated run does not draw frames by itself and holds game time while the test is in control; Metal GPU on macOS, 640 × 400, fully parallel, test servers on free ports, Google Fonts blocked. The island roads test is split into parallel tests, posts and loot load only the level data. The Soller test is removed. Tests finish in ~1.5 min instead of ~18; the run still lingers after the last test.
+Pages: [dev-testing.md](dev-testing.md).

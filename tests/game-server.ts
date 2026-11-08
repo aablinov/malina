@@ -3,16 +3,17 @@ import { spawn, type ChildProcess } from 'node:child_process';
 
 /**
  * The game always goes through the server (wiki/design-multiplayer.md, section 5): specs that open the camp or a battle "from the menu"
- * start their own server (server/main.ts, in-memory database, `STATIC=dist`) on their own port — not 8787, where `make dev` may live.
+ * start their own server (server/main.ts, in-memory database, `STATIC=dist`) on a free port (`PORT=0`): tests run fully in parallel,
+ * every worker has its own; never 8787, where `make dev` may live.
  * Pages opened directly (`?dev=playground`, `?map=…`) need no server: a starter hero in memory.
  */
 export interface GameServer { base: string; url: string; stop(): void }
 
-export async function startGameServer(port: number): Promise<GameServer> {
-  const server: ChildProcess = spawn(process.execPath, ['server/main.ts'], { env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DB_PATH: ':memory:', STATIC: 'dist' }, stdio: 'pipe' });
-  await new Promise<void>((ok, fail) => {
-    const timer = setTimeout(() => fail(new Error('the server did not start')), 10_000);
-    server.stdout?.on('data', (b: Buffer) => { if (String(b).includes('server at')) { clearTimeout(timer); ok(); } });
+export async function startGameServer(env: Record<string, string> = {}): Promise<GameServer> {
+  const server: ChildProcess = spawn(process.execPath, ['server/main.ts'], { env: { ...process.env, PORT: '0', HOST: '127.0.0.1', DB_PATH: ':memory:', STATIC: 'dist', ...env }, stdio: 'pipe' });
+  const port = await new Promise<number>((ok, fail) => {
+    const timer = setTimeout(() => fail(new Error('the server did not start')), 5_000);
+    server.stdout?.on('data', (b: Buffer) => { const m = /server at http:\/\/[^:]+:(\d+)/.exec(String(b)); if (m) { clearTimeout(timer); ok(Number(m[1])); } });
     server.stderr?.on('data', (b: Buffer) => process.stderr.write(b));
   });
   const base = `http://127.0.0.1:${port}`;

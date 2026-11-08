@@ -9,7 +9,7 @@ import { signIn, startGameServer, storedProfile, type GameServer } from './game-
 
 let S: GameServer;
 let URL = '';
-test.beforeAll(async () => { S = await startGameServer(8792); URL = S.url; });
+test.beforeAll(async () => { S = await startGameServer(); URL = S.url; });
 test.afterAll(() => { S?.stop(); });
 
 /** A signed-in hero on the start screen; returns its token */

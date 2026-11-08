@@ -1,11 +1,18 @@
 # Tests: how to run Playwright
 
-> Version 3 · 2026-11-08: the camp and battles from it need a server — `tests/game-server.ts`
+> Version 4 · 2026-11-08: fast run — no frames drawn by themselves, real GPU on macOS, fully parallel, font hosts blocked. Version 3 · 2026-11-08: the camp and battles from it need a server — `tests/game-server.ts`
 
-Tests — `tests/playground.spec.ts`, config — `playwright.config.ts`. They open the built `dist/index.html`, WebGL is software (SwiftShader), the simulation is driven through `window.__malina`.
+Tests — `tests/playground.spec.ts`, config — `playwright.config.ts`. They open the built `dist/index.html`, the simulation is driven through `window.__malina`.
+
+- **No frames by themselves:** an automated run (`navigator.webdriver`, `AUTOMATED` in `src/devflag.ts`) simulates and updates the view and the HUD but does not draw; `__malina.render()` draws a frame, `render(false)` only syncs the view (camera, regions, chunks). No shader warm-up either — `?warm=1` brings it back (perf tests count programs).
+- **Held time:** while the test is in control (`script(true)`) game time moves only by `step()` — what the page does between two test calls does not depend on machine load.
+- **GPU:** on macOS — Metal even headless (a page starts in ~1.6 s, frames are cheap); elsewhere or with `PW_SOFTWARE=1` — SwiftShader. Window 640 × 400.
+- **Parallel:** `fullyParallel`, a worker per core (`PW_WORKERS` overrides).
+- **No network:** the font hosts (Google Fonts) fail at once (`--host-resolver-rules`) — otherwise the request hangs and holds the `load` event for a minute.
+- Known: after the last test the run may linger for minutes with idle workers — not found yet.
 
 - Dev pages (`?dev=playground`, `?map=…` without `from=menu`) need no server: a starter hero in memory, nothing is saved.
-- The camp and battles "from the menu" need one: the hero lives only on the server ([design-multiplayer.md](design-multiplayer.md), section 5). Such specs start their own (`startGameServer(port)` in `tests/game-server.ts`: `server/main.ts`, `DB_PATH=:memory:`, `STATIC=dist`) on their own port — 8791 net, 8792 menu, 8793 voice, 8794 td-shop; never 8787, where `make dev` may run. `signIn(page, server)` registers a hero and puts its token and the language into the page before the scripts; `storedProfile(server, token)` reads what the server keeps.
+- The camp and battles "from the menu" need one: the hero lives only on the server ([design-multiplayer.md](design-multiplayer.md), section 5). Such specs start their own (`startGameServer()` in `tests/game-server.ts`: `server/main.ts`, `DB_PATH=:memory:`, `STATIC=dist`) on a free port (`PORT=0`, the port from the server's log line) — every worker its own; never 8787, where `make dev` may run. `signIn(page, server)` registers a hero and puts its token and the language into the page before the scripts; `storedProfile(server, token)` reads what the server keeps.
 
 ## Fast network and simulation tests — `npm run test:net`
 

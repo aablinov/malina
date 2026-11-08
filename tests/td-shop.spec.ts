@@ -9,7 +9,7 @@ import { signIn, startGameServer, storedProfile, type GameServer } from './game-
 
 let S: GameServer;
 let URL = '';
-test.beforeAll(async () => { S = await startGameServer(8794); URL = S.url; });
+test.beforeAll(async () => { S = await startGameServer(); URL = S.url; });
 test.afterAll(() => { S?.stop(); });
 
 test('defence: the sutler on every map, prices by rarity, buying with the battle\'s raspberries, in the camp the gear is as before the battle', async ({ page }) => {

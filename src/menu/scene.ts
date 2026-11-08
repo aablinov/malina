@@ -1,3 +1,4 @@
+import { AUTOMATED } from '../devflag.ts';
 import * as THREE from 'three';
 import { itemDef, type Profile } from '../items.ts';
 import { emptyInput, Knight } from '../knight.ts';
@@ -211,7 +212,8 @@ export class MenuScene {
       input.aim.set(HERO_X + Math.sin(this.yaw) * 5, 0, Math.cos(this.yaw) * 5);
       this.knight.yaw = this.yaw;
       this.knight.update(dt, input, []);
-      this.renderer.render(this.scene, this.camera);
+      // an automated run does not draw the camp (src/devflag.ts AUTOMATED)
+      if (!AUTOMATED) this.renderer.render(this.scene, this.camera);
     };
     loop();
   }
