@@ -9,7 +9,7 @@ import type { Textures } from '../textures.ts';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
 import type { MenuScene } from './scene.ts';
 import { go } from './boot.ts';
-import { battleUrl, loadMenuState, NET, netBattleUrl, saveMenuState, VOICE, type GameMode } from './session.ts';
+import { battleUrl, loadMenuState, NET, netBattleUrl, record, saveMenuState, VOICE, type GameMode } from './session.ts';
 import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
 
 /**
@@ -419,8 +419,8 @@ export class Lobby {
     const m = campaignMap(this.map);
     return `<div class="mm-card map" style="--bg:${m.bg}"><div class="mm-card-tag">${difficultyTitle(m.difficulty)}</div>
       <h3>${m.title}</h3><p>${m.blurb}</p>
-      <dl><dt>${t('Waves')}</dt><dd>${m.waves}</dd><dt>${t('Lanes')}</dt><dd>${m.lanes}</dd><dt>${t('Bush')}</dt><dd>${m.bush}</dd><dt>${t('Treasury')}</dt><dd>${m.berries}</dd></dl>
-      ${this.won.includes(m.id) ? `<p class="mm-won-line">${t('Map won — the bush held!')}</p>` : ''}</div>`;
+      <dl><dt>${t('Waves')}</dt><dd>${m.endless ? '∞' : m.waves}</dd><dt>${t('Lanes')}</dt><dd>${m.lanes}</dd><dt>${t('Bush')}</dt><dd>${m.bush}</dd><dt>${t('Treasury')}</dt><dd>${m.berries}</dd></dl>
+      ${m.endless ? (record(m.id) ? `<p class="mm-won-line">${t('Record: {n} waves held', { n: record(m.id) })}</p>` : '') : this.won.includes(m.id) ? `<p class="mm-won-line">${t('Map won — the bush held!')}</p>` : ''}</div>`;
   }
 
   /**

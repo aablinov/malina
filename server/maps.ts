@@ -22,10 +22,12 @@ export class MapCatalog {
     for (const f of readdirSync(dir)) {
       if (!f.endsWith('.json')) continue;
       try {
-        const td = (JSON.parse(readFileSync(join(dir, f), 'utf8')) as { meta?: { td?: { berries?: number; waves?: { bounty?: number }[] } } }).meta?.td;
+        const td = (JSON.parse(readFileSync(join(dir, f), 'utf8')) as { meta?: { td?: { berries?: number; endless?: boolean; waves?: { bounty?: number }[] } } }).meta?.td;
         if (!td?.waves) continue;
         const id = f.slice(0, -5);
-        this.maps.set(id, { id, waves: td.waves.length, bounty: td.waves.reduce((a, w) => a + (w.bounty ?? 0), 0), berries: td.berries ?? 0 });
+        // endless (Misty Clearing): the map bakes ten waves; a long run lasts several times more and the bounties grow — the cap is ×6
+        const bounty = td.waves.reduce((a, w) => a + (w.bounty ?? 0), 0) * (td.endless ? 6 : 1);
+        this.maps.set(id, { id, waves: td.waves.length, bounty, berries: td.berries ?? 0 });
       } catch { /* broken map file — not a multiplayer map */ }
     }
   }

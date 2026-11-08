@@ -51,7 +51,7 @@ import { AUTOMATED, DEV_TOOLS, fromMenu, openEditor } from '../devflag.ts';
 import { loadSettings, pixelRatio } from '../menu/settings.ts';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel.ts';
 import { BattleMenu } from '../menu/pause.ts';
-import { markWon, NET, netBattleUrl, VOICE } from '../menu/session.ts';
+import { markWon, NET, netBattleUrl, record, saveRecord, VOICE } from '../menu/session.ts';
 import { netBattle } from '../net/client.ts';
 import { SnapshotView } from '../net/snapshot.ts';
 import { campaignMap } from '../menu/campaign.ts';
@@ -66,6 +66,8 @@ import { NetBattleClient } from '../cgame/net-battle.ts';
 import '../cgame/net.css';
 import { LavaFx } from '../td/lava-fx.ts';
 import { MistFx } from '../td/mist-fx.ts';
+import { LANTERN_FLAME } from '../sim/fog.ts';
+import { FogFx } from '../td/fog-fx.ts';
 import type { TdSpec } from '../td/types.ts';
 import { button, Panel, select, toggle } from './panel.ts';
 import '../style.css';
@@ -312,6 +314,7 @@ export function runPlayground(profile: Profile): void {
   const tdSpec = level.meta.td as TdSpec | undefined;
   // mist at the enemy camps (src/td/mist-fx.ts): the exit points are hidden
   const mistFx = tdSpec?.mist ? new MistFx(scene, tdSpec.lanes, tdSpec.mist) : null;
+  let fogFx: FogFx | null = null;
   // on a map — from meta.merchants ({ kind, x, y?, z, yaw }; y — the floor of the stall, the plateau of map 4), on the playground — in the north-west corner
   const merchantSpecs: { kind: 'smith' | 'merchant'; x: number; y?: number; z: number; yaw: number }[] = hasMap ? ((level.meta.merchants as { kind: 'smith' | 'merchant'; x: number; y?: number; z: number; yaw: number }[] | undefined) ?? []) : [{ kind: 'smith' as const, x: -17, z: -13, yaw: 0 }, { kind: 'merchant' as const, x: -19, z: -6, yaw: Math.PI / 2 }];
   const merchants: Merchant[] = merchantSpecs.map((m) => new Merchant(scene, overlayEl, T, m.kind, m.x, m.z, m.yaw, m.y ?? 0));
@@ -893,6 +896,9 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     // the map's starting treasury replaces the battle copy's raspberries (the stored profile keeps its own — Profile.enterBattle)
     profile.data.berries = purseMirror = sim.berries(0);
     syncPurse();
+    // Misty Clearing (src/td/fog-fx.ts): the mist ring, lanterns, the beacon's beam, wisps and the chiefs' clouds
+    const s0 = sim;
+    if (s0.fog) fogFx = new FogFx(scene, s0.fog, tdSpec.bush, () => s0.waveRunning ? s0.current?.mod : undefined, () => pk.mobs.filter((m) => !m.dead && m.kind.startsWith('chief_')).map((m) => m.pos));
     tdView = new TdView({ scene, fx, quiet: () => scripted, spec: tdSpec, heroPos: () => hero.pos, seat: () => nb?.seat ?? 0 });
     tdUi = new TdUi(document.body, sim, 0, { toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, heroPos: () => hero.pos, sync: syncPurse, alive: () => pk.mobs.filter((m) => !m.dead).length });
   }
@@ -1033,16 +1039,18 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   function updateHUD(dt: number, _fps: number, _frameMs: number): void {
     const pad = sim && tdUi && !tdUi.menuOpen && !hero.down ? sim.nearPad(hero.pos) : null;
     const wall = sim && !pad && !hero.down ? sim.nearWall(hero.pos) : null;
-    const trader = hero.down || pad || wall ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
-    const near = hero.down || trader || pad || wall ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
+    const lamp = sim?.fog && !pad && !wall && !hero.down ? sim.fog.near(hero.pos.x, hero.pos.z) : null;
+    const trader = hero.down || pad || wall || lamp ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
+    const near = hero.down || trader || pad || wall || lamp ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
     // came up to a chest — it chimes softly
     const nearChest = near?.kind === 'supply' ? near.target : null;
     if (nearChest && nearChest !== lastNearChest && !scripted) sfx.twinkle();
     lastNearChest = nearChest;
     const promptEl = $('pgPrompt');
-    promptEl.style.display = (near || trader || pad || wall) && !inventory.open && !shop.open ? '' : 'none';
+    promptEl.style.display = (near || trader || pad || wall || lamp) && !inventory.open && !shop.open ? '' : 'none';
     if (pad && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.prompt(pad)}`);
     else if (wall && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.wallPrompt(wall)}`);
+    else if (lamp) setHTML('pgPrompt', `<kbd>F</kbd>${lamp.lit ? t('Lantern burns · {n}%', { n: Math.round((lamp.flame / LANTERN_FLAME) * 100) }) + (lamp.flame < LANTERN_FLAME ? ` · ${t('top up')}` : '') : t('Light the lantern')}`);
     else if (trader) setHTML('pgPrompt', `<kbd>F</kbd>${t('Trade: {who}', { who: MERCHANT_TITLE[trader.kind].toLowerCase() })}`);
     else if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
     hud.update(gear.hudState(), dt);
@@ -1114,9 +1122,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       interactReq = false;
       const pad = sim && !hero.down ? sim.nearPad(hero.pos) : null;
       const wall = sim && !pad && !hero.down ? sim.nearWall(hero.pos) : null;
-      const trader = pad || wall ? null : merchants.find((m) => m.near(hero.pos));
+      const lamp = sim?.fog && !pad && !wall && !hero.down ? sim.fog.near(hero.pos.x, hero.pos.z) : null;
+      const trader = pad || wall || lamp ? null : merchants.find((m) => m.near(hero.pos));
       if (pad && tdUi) { if (tdUi.menuOpen) tdUi.closeMenu(); else tdUi.openMenu(pad); }
       else if (wall && sim) { syncPurse(); sim.repairWall(0, wall); syncPurse(); }
+      else if (lamp && sim) sim.command(nb?.seat ?? 0, { t: 'td', a: 'lantern', pad: lamp.index });
       if (trader && !hero.down) { shop.show(trader.kind); }
       const it = trader || pad ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
       if (it && !hero.down) props.interact(it, hero.hp, hero.maxHp);
@@ -1145,6 +1155,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     clearEdges();
     lavaFx?.update(dt, hero.pos);
     mistFx?.update(dt);
+    fogFx?.update(dt);
     // a room thinks when the hero is near or the garrison is fighting; all fell and the hero left — the garrison is back at its posts
     for (const r of mobRooms) {
       if (inRoom(r.spec, 30) || r.pack.mobs.some((m) => m.alerted)) r.pack.update(dt);
@@ -1212,8 +1223,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       tdEndShown = sim.state;
       const me = nb?.seat ?? 0;
       // the match loot goes to the camp only for a defended bush; in a network battle the server pays it (server/rooms.ts)
-      if (sim.state === 'won') { markWon(mapName); if (!netClient) Profile.creditStored(sim.lootOf(me)); }
-      if (sim.state !== 'play') battle.end(sim.state === 'won', t('{n} of {total} waves repelled, {fallen} enemies slain', { n: sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1), total: sim.waves.length, fallen: sim.fallen }), sim.lootOf(me));
+      if (sim.state === 'won') markWon(mapName);
+      if (sim.paid && !netClient) Profile.creditStored(sim.lootOf(me));
+      // endless run (Misty Clearing): the result is how many waves held, the record goes to the camp
+      if (sim.state !== 'play' && sim.endless) { const held = Math.max(0, sim.wave - 1); saveRecord(mapName, held); battle.end(false, t('{n} waves held, {fallen} enemies slain · record {best}', { n: held, fallen: sim.fallen, best: record(mapName) }), sim.lootOf(me), true); }
+      else if (sim.state !== 'play') battle.end(sim.state === 'won', t('{n} of {total} waves repelled, {fallen} enemies slain', { n: sim.state === 'won' ? sim.waves.length : Math.max(0, sim.wave - 1), total: sim.waves.length, fallen: sim.fallen }), sim.lootOf(me));
     }
     perf.renderStart();
     render(real);
@@ -1340,7 +1354,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Rank-and-file mobs (src/mobs/): pack.mobs; summon a mob at a point */
     pack,
     /** Bush defence: the facade (pads, towers, build(pad, kind), enemy pack, walls); world and sim — the simulation world (src/sim/); lavaFx — lava haze and sparks (cells) */
-    td: tdFacade, world, sim, tdView, tdUi, lavaFx, mistFx,
+    td: tdFacade, world, sim, tdView, tdUi, lavaFx, mistFx, get fogFx() { return fogFx; },
     /** Mob rooms: spec (posts, entrance) and the garrison pack; fillRoom — back at the posts */
     mobRooms, fillRoom,
     spawnMob(kind: string, x: number, z: number) { return pack.spawn(kind, new THREE.Vector3(x, 0, z)); },

@@ -18,6 +18,7 @@ import { WebSocketTransport, type SocketLike } from '../net/ws-transport.ts';
 import type { EventQueue } from './events.ts';
 import type { SimEvent } from '../sim/events.ts';
 import type { SimTd } from '../sim/td.ts';
+import { SimWisp } from '../sim/fog.ts';
 import { SimTower } from '../sim/tower.ts';
 import type { SimWorld } from '../sim/world.ts';
 import { applyWeapon, getWeapon } from '../weapons.ts';
@@ -411,6 +412,12 @@ export class NetBattleClient {
       t.level = e.level; t.hp = e.hp; t.maxHp = e.maxHp; t.frozen = e.frozen; t.spent = e.spent;
     }
     for (const l of sim.lairs) { const e = v.ents.get(l.id); if (e) l.warn = e.warn as number; }
+    if (sim.fog) for (const l of sim.fog.lanterns) { const e = v.ents.get(l.id); if (e) { l.lit = !!e.lit; l.flame = e.flame as number; } }
+    if (sim.fog) {
+      // wisps: rebuilt from the records (the server moves and catches them)
+      sim.fog.wisps.length = 0;
+      for (const [id, e] of v.ents) if (id.startsWith('wisp')) { const w = new SimWisp(Number(id.slice(4)), 0, 0, 0, e.n as number); w.x = e.x as number; w.z = e.z as number; sim.fog.wisps.push(w); }
+    }
   }
 
   // ---------- frame ----------
