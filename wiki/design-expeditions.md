@@ -1,6 +1,6 @@
 # Expeditions. Design document
 
-Version 0.3 of 2026-11-10. In the code: stages 1–3 (section 11) — a mission is playable solo at `?map=expedition&seed=N&obj=lairs|beacons|bush&d=1…8`. Not in the code yet: the mission board and the network (stage 4), alarm, revive and totems, parcels, operations and camp beds.
+Version 0.5 of 2026-11-11. In the code: stages 1–5 (section 11) — missions are played solo and in a room from the camp's "Expeditions" tab, with the alarm, horn-blowers, dusk, revive and totems. Not in the code yet: parcels (stage 6), operations, the difficulty ladder, modifiers, camp beds and the order of the day (stage 7).
 
 **Decision:** [adr-006-expeditions.md](adr-006-expeditions.md). **Source:** [sources/helldivers2.md](sources/helldivers2.md).
 
@@ -91,6 +91,8 @@ Towers are the main find: the game already has five towers with levels and abili
 - The mission has an alarm meter. It grows with time and with every horn call; each step makes the patrols stronger.
 - Instead of a hard timer — **dusk**: at minute 15 it gets dark and the alarm grows twice as fast. It nudges the squad towards extraction and does not cut the game off.
 
+**In the code** (stage 5): the alarm is a number, 100 points per level, four levels. It grows by a level every four minutes, 1.5 times faster while a horn-blowers' nest stands and twice as fast after dusk (minute 15, the scene turns to night). Every level adds one to the pack level of everyone on the map and one enemy to every raid. The first mob of each patrol carries the horn: once it notices a hero it blows for 3 s; killed in that time — nothing happens; otherwise the alarm gets +50 and a raid marches to where the squad was seen; the same patrol calls again no sooner than 30 s later. A horn-blower has no model of its own yet — a note sign and a ring mark it.
+
 ## 7. Downed heroes and reinforcements
 
 | Parameter | Value |
@@ -100,6 +102,8 @@ Towers are the main find: the game already has five towers with levels and abili
 | Totems | 4 per mission, +1 per secondary objective |
 | No totems and everyone down | the mission fails; half the raspberries and the experience are kept |
 | Friendly fire | none |
+
+**In the code** (stage 5): the mission rules own the downed state (`Rules.ownsDowned`, `SimHooks.raise`) — a hero no longer gets up by himself after 2 s. A teammate standing within 2.4 m lifts him in 3 s without pressing anything. After 20 s without help (3 s when nobody is left standing) a totem lifts him next to the nearest standing teammate. With no totems and everyone down the mission ends: failed with half the loot kept, or counted without the balloon and its seeds if the primary objective was already done. A withered bush fails the mission the same way.
 
 The downed state was first described in [design-dungeon.md](design-dungeon.md), section 10.3; it is not in the code.
 

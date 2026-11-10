@@ -35,9 +35,38 @@ const LOOT_PRIMARY = 40;
 const LOOT_PRIMARY_D = 15;
 const LOOT_BOARD = 0.25;
 
+// ---------- alarm (section 6) ----------
+/** Alarm points per level; the level tops out at ALARM_MAX */
+export const ALARM_STEP = 100;
+export const ALARM_MAX = 4;
+/** Points per second just from the squad being on the map: a level every four minutes */
+const ALARM_RATE = ALARM_STEP / 240;
+/** A horn call adds this much */
+const ALARM_HORN = 50;
+/** A horn-blower blows this long before the call goes out; killed sooner — no call */
+export const HORN_BLOW = 3;
+/** The same patrol calls again no sooner than this */
+const HORN_REST = 30;
+/** Dusk: from this second of the mission the alarm grows twice as fast */
+export const DUSK_AT = 15 * 60;
+
+// ---------- downed heroes (section 7) ----------
+export const TOTEMS = 4;
+/** A fallen hero waits this long for a teammate before a totem lifts him */
+export const DOWN_WAIT = 20;
+/** A teammate standing this close lifts him in RAISE_HOLD seconds */
+export const RAISE_R = 2.4;
+export const RAISE_HOLD = 3;
+/** Nobody is left standing: the totem works after this many seconds */
+const SOLO_RAISE = 3;
+/** A failed mission keeps this share of the loot */
+const LOOT_FAILED = 0.5;
+
 interface GroundSeed { id: string; x: number; y: number; z: number; rarity: SeedRarity; lock: number }
 interface Side { spec: ExpSecondary; done: boolean; nest: SimNest | null }
 interface Raid { mobs: PostedMob[] }
+interface Horn { mob: PostedMob; t: number; rest: number }
+interface Down { t: number; hold: number }
 
 export class SimExpedition implements Rules {
   readonly spec: ExpeditionSpec;
@@ -67,6 +96,15 @@ export class SimExpedition implements Rules {
   private readonly purses = new Map<number, number>();
   private readonly loots = new Map<number, number>();
   private raidT = 0;
+  /** Mission time, s */
+  time = 0;
+  alarm = 0;
+  dusk = false;
+  /** Shared lives of the squad */
+  totems = TOTEMS;
+  readonly ownsDowned = true;
+  private readonly horns: Horn[] = [];
+  private readonly downs = new Map<number, Down>();
   /** Hint to the player (seat, text) */
   onToast: ((seat: number, text: string) => void) | null = null;
   /** Client of a network battle: a mirror of the server's rules — commands go to the server */
@@ -102,15 +140,19 @@ export class SimExpedition implements Rules {
       return side;
     });
     w.piles.onPick = (seat, n) => this.gain(seat, n);
+    // the first of every patrol carries the horn
+    for (const g of this.garrisons.rooms) if (g.spec.id.startsWith('patrol') && g.mobs[0]) this.horns.push({ mob: g.mobs[0], t: -1, rest: 0 });
   }
 
   // ---------- rules ----------
-  /** Pack level: the mission's plus the heroes' strength */
-  get base(): number { return this.spec.level + this.rating - 1; }
+  /** Pack level: the mission's plus the heroes' strength plus the alarm */
+  get base(): number { return this.spec.level + this.rating - 1 + this.alarmLevel; }
+  get alarmLevel(): number { return Math.min(ALARM_MAX, Math.floor(this.alarm / ALARM_STEP)); }
   get stage(): number { return this.done; }
   get progress(): number { return this.done; }
   get goal(): number { return this.spec.objective.kind === 'bush' ? BUSH_WAVES : this.spec.objective.sites.length; }
-  get paid(): boolean { return this.state === 'won'; }
+  /** A won mission pays its loot; a failed one — what was left of it (half) */
+  get paid(): boolean { return this.state !== 'play'; }
   get muster(): [number, number, number] { const l = this.spec.landings[this.spec.landing] ?? this.spec.landings[0]; return [l.x, this.w.floor(l.x, l.z, 2), l.z]; }
   /** Steps of the primary objective done: lairs burnt, beacons lit, waves beaten */
   get done(): number {
@@ -231,6 +273,7 @@ export class SimExpedition implements Rules {
     if (s.done) return;
     s.done = true;
     this.addLoot(LOOT_SIDE);
+    this.totems++;
     const at = new THREE.Vector3(s.spec.x, this.w.floor(s.spec.x, s.spec.z, 2), s.spec.z);
     // an Order chest: raspberries on the ground and an item; an altar blesses the loot; a watchtower shows the map (the view)
     if (s.spec.kind === 'chest') { this.w.piles.drop(at, 20 + 5 * this.spec.difficulty); const it = rollMobLoot(this.lootRng); this.w.drops.drop(at, it.def, it.relic); }
@@ -243,7 +286,7 @@ export class SimExpedition implements Rules {
     this.bush = b;
     this.solidsCache = null;
     this.undecoy = addDecoy(b, this.w.decoys);
-    b.onDeath = () => { this.undecoy?.(); this.solidsCache = null; this.state = 'lost'; this.w.emit({ t: 'exp.lost', why: 'bush' }); };
+    b.onDeath = () => { this.undecoy?.(); this.solidsCache = null; this.fail('bush'); };
     this.w.emit({ t: 'bush.plant', x, y: b.pos.y, z, seat });
     this.bushRest = 4;
   }
@@ -284,7 +327,7 @@ export class SimExpedition implements Rules {
     }
     from ??= new THREE.Vector3(target.x, 0, target.z + 14);
     const raid: Raid = { mobs: [] };
-    for (let i = 0, count = scaledCount(n, this.players); i < count; i++) {
+    for (let i = 0, count = scaledCount(n + this.alarmLevel, this.players); i < count; i++) {
       const a = r() * Math.PI * 2, d = 2.2 + r() * 2.5, x = from.x + Math.cos(a) * d, z = from.z + Math.sin(a) * d;
       const m = this.w.h.spawnMob(this.pool[Math.floor(r() * this.pool.length)], new THREE.Vector3(x, this.w.floor(x, z, 2), z)) as PostedMob | null;
       if (!m) continue;
@@ -296,6 +339,90 @@ export class SimExpedition implements Rules {
     }
     this.w.emit({ t: 'exp.raid', x: from.x, y: this.w.floor(from.x, from.z, 2), z: from.z, n: raid.mobs.length });
     return raid;
+  }
+
+  // ---------- alarm ----------
+  private raiseAlarm(n: number): void {
+    const was = this.alarmLevel;
+    this.alarm = Math.min(ALARM_STEP * ALARM_MAX, this.alarm + n);
+    if (this.alarmLevel === was) return;
+    // the Order is roused: everyone on the map gets tougher
+    this.w.h.setScale(this.base, this.players);
+    this.w.emit({ t: 'exp.alarm', level: this.alarmLevel });
+  }
+
+  private tickAlarm(dt: number, heroes: readonly HeroLike[]): void {
+    this.time += dt;
+    if (!this.dusk && this.time >= DUSK_AT) { this.dusk = true; this.w.emit({ t: 'exp.dusk' }); }
+    // a standing horn-blowers' nest keeps the Order on its toes
+    const nest = this.sides.some((s) => s.nest && !s.nest.dead);
+    this.raiseAlarm(ALARM_RATE * dt * (this.dusk ? 2 : 1) * (nest ? 1.5 : 1));
+    for (const h of this.horns) {
+      const m = h.mob;
+      h.rest = Math.max(0, h.rest - dt);
+      if (m.dead) { if (h.t >= 0) { h.t = -1; this.w.emit({ t: 'horn.cut', x: m.pos.x, y: m.pos.y, z: m.pos.z }); } continue; }
+      if (h.t < 0) {
+        if (m.alerted && h.rest <= 0) { h.t = 0; this.w.emit({ t: 'horn.start', x: m.pos.x, y: m.pos.y, z: m.pos.z, sec: HORN_BLOW }); }
+        continue;
+      }
+      h.t += dt;
+      if (h.t < HORN_BLOW) continue;
+      h.t = -1;
+      h.rest = HORN_REST;
+      this.w.emit({ t: 'horn.call', x: m.pos.x, y: m.pos.y, z: m.pos.z });
+      this.raiseAlarm(ALARM_HORN);
+      // reinforcements march to where the squad was seen
+      const prey = heroes.filter((x) => !x.down).sort((a, b) => a.pos.distanceToSquared(m.pos) - b.pos.distanceToSquared(m.pos))[0];
+      if (prey) this.raid(prey.pos.clone(), 3);
+    }
+  }
+
+  // ---------- downed heroes ----------
+  /** The mission ends in failure: the squad keeps a share of the loot */
+  private fail(why: 'bush' | 'wipe'): void {
+    if (this.state !== 'play') return;
+    for (const seat of this.purses.keys()) this.loots.set(seat, (this.loots.get(seat) ?? 0) * LOOT_FAILED);
+    this.state = 'lost';
+    this.w.emit({ t: 'exp.lost', why });
+  }
+
+  /** Seconds a fallen hero has left to wait and how far a teammate has got with lifting him (0..1); null — he is on his feet */
+  downOf(seat: number): { left: number; k: number } | null {
+    const d = this.downs.get(seat);
+    return d ? { left: Math.max(0, DOWN_WAIT - d.t), k: Math.min(1, d.hold / RAISE_HOLD) } : null;
+  }
+
+  private tickDowned(dt: number, heroes: readonly HeroLike[]): void {
+    const up = heroes.filter((h) => !h.down);
+    for (const h of heroes) {
+      if (!h.down) { this.downs.delete(h.seat); continue; }
+      let d = this.downs.get(h.seat);
+      if (!d) { d = { t: 0, hold: 0 }; this.downs.set(h.seat, d); }
+      d.t += dt;
+      // a teammate next to him lifts him
+      const helper = up.some((o) => Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z) <= RAISE_R);
+      d.hold = helper ? d.hold + dt : Math.max(0, d.hold - dt);
+      if (d.hold >= RAISE_HOLD) { this.lift(h, null, false); continue; }
+      // nobody came in time, or nobody is left to come: a totem — next to the nearest teammate
+      if (d.t < (up.length ? DOWN_WAIT : SOLO_RAISE) || this.totems <= 0) continue;
+      const to = up.slice().sort((a, b) => a.pos.distanceToSquared(h.pos) - b.pos.distanceToSquared(h.pos))[0];
+      this.totems--;
+      this.lift(h, to ? to.pos.clone() : null, true);
+    }
+    // everyone lies and there is nothing to lift them with: the mission is over — counted if the objective was done
+    if (heroes.length && !up.length && this.totems <= 0 && heroes.every((h) => h.down)) {
+      if (!this.primary) { this.fail('wipe'); return; }
+      this.state = 'won';
+      this.extraction.state = 'gone';
+      this.w.emit({ t: 'exp.won', x: this.extraction.pos.x, y: this.extraction.pos.y, z: this.extraction.pos.z, n: 0 });
+    }
+  }
+
+  private lift(h: HeroLike, at: THREE.Vector3 | null, totem: boolean): void {
+    this.downs.delete(h.seat);
+    this.w.h.raise?.(h.seat, at ?? undefined);
+    const p = at ?? h.pos;
+    this.w.emit({ t: totem ? 'hero.totem' : 'hero.raised', x: p.x, y: p.y, z: p.z, seat: h.seat, left: this.totems });
   }
 
   // ---------- seeds ----------
@@ -372,9 +499,11 @@ export class SimExpedition implements Rules {
         this.step();
       }
     }
+    this.tickAlarm(dt, heroes);
     this.tickBush(dt);
     this.tickSeeds(dt, heroes);
     this.tickExtraction(dt, heroes);
+    if (this.state === 'play') this.tickDowned(dt, heroes);
   }
 
   /**
@@ -388,6 +517,11 @@ export class SimExpedition implements Rules {
     this.state = exp.state as RulesState;
     this.primary = !!exp.primary;
     this.fallen = n(exp.fallen);
+    this.totems = n(exp.totems);
+    this.alarm = n(exp.alarm);
+    this.dusk = !!exp.dusk;
+    this.time = n(exp.time);
+    this.downs.clear();
     this.players = n(exp.players) || 1;
     this.rating = n(exp.rating) || 1;
     if (this.spec.objective.kind === 'bush') this.bushWave = n(exp.done);
@@ -411,6 +545,7 @@ export class SimExpedition implements Rules {
     this.seeds.length = 0;
     for (const [id, e] of ents) {
       if (/^seed\d+$/.test(id)) this.seeds.push({ id, x: n(e.x), y: n(e.y), z: n(e.z), rarity: e.seed as SeedRarity, lock: 0 });
+      else if (id.startsWith('down')) this.downs.set(n(e.seat), { t: DOWN_WAIT - n(e.left), hold: n(e.k) * RAISE_HOLD });
       else if (id.startsWith('carry')) this.carried.set(n(e.seat), { common: n(e.c), rare: n(e.r), golden: n(e.g) });
       else if (id.startsWith('bank')) this.banked.set(n(e.seat), { common: n(e.c), rare: n(e.r), golden: n(e.g) });
       else if (id.startsWith('purse')) this.setBerries(n(e.seat), n(e.n));
@@ -419,7 +554,9 @@ export class SimExpedition implements Rules {
   }
 
   entities(out: EntityState[]): void {
-    out.push({ id: 'exp', state: this.state, kind: this.spec.objective.kind, done: this.done, goal: this.goal, primary: this.primary ? 1 : 0, players: this.players, rating: this.rating, fallen: this.fallen, guards: this.garrisons.alive, wave: this.bushRaid ? 1 : 0 });
+    out.push({ id: 'exp', state: this.state, kind: this.spec.objective.kind, done: this.done, goal: this.goal, primary: this.primary ? 1 : 0, players: this.players, rating: this.rating, fallen: this.fallen, guards: this.garrisons.alive, wave: this.bushRaid ? 1 : 0,
+      totems: this.totems, alarm: Math.round(this.alarm), dusk: this.dusk ? 1 : 0, time: Math.floor(this.time) });
+    for (const [seat, d] of this.downs) out.push({ id: `down${seat}`, seat, left: Math.ceil(DOWN_WAIT - d.t), k: Math.round((d.hold / RAISE_HOLD) * 10) / 10 });
     for (const n of this.nests) n.entity(out);
     for (const b of this.beacons) b.entity(out);
     this.bush?.entity(out);

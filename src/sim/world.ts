@@ -51,6 +51,8 @@ export interface SimHooks {
   setScale(level: number, players: number): void;
   /** Level blocks changed (breach, repair): recompute obstacles */
   levelChanged?(): void;
+  /** A fallen hero gets up — where he lies or at a point (rules that own the downed state: src/sim/expedition.ts) */
+  raise?(seat: number, at?: THREE.Vector3): void;
   /** Step of heroes and the pack inside the world step — under this world's game randomness and decoys */
   step?(dt: number): void;
 }

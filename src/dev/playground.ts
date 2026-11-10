@@ -936,6 +936,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       step: (dt) => pk.update(dt),
       setScale: (l, p) => pk.setScale(l, p),
       levelChanged,
+      // the mission decides when the fallen hero gets up: a teammate or a totem (src/sim/expedition.ts)
+      raise: (_seat, at) => { if (at) hero.place(at.x, at.z, hero.yaw, at.y); hero.revive(); downT = 0; },
       // a network battle: the server posts the garrisons and runs the mission, this world only mirrors it
     }, { seed: expSpec.seed, level, mode: { kind: 'expedition', spec: expSpec }, players: bossPlayers, personal: false, mirror: FROM_MENU && !!query.get('room') });
     const ex = exped = world.expedition!;
@@ -946,7 +948,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     profile.data.berries = 0;
     expView = new ExpeditionView({ scene, fx, quiet: () => scripted, spec: expSpec, heroPos: () => hero.pos, seat: () => nb?.seat ?? 0 });
     expView.floorAt = (x, z) => world!.floor(x, z, 2);
-    expUi = new ExpUi(document.body, ex, () => nb?.seat ?? 0, { banner: (h, sec) => hud.banner(h, sec), toast: (s) => toast(s), heroPos: () => hero.pos, goal: (a, b) => hud.setGoal(a, b) });
+    expUi = new ExpUi(document.body, ex, () => nb?.seat ?? 0, { banner: (h, sec) => hud.banner(h, sec), toast: (s) => toast(s), heroPos: () => hero.pos, goal: (a, b) => hud.setGoal(a, b), dusk: () => { night = true; applyNight(); } });
     // single player: the mission's things appear at once; in a network battle they come with the first server snapshot
     if (!(FROM_MENU && query.get('room'))) flushExp();
   }
@@ -1220,7 +1222,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     } else lavaT = 0;
     const healed = props.update(dt, hero);
     if (healed > 0) hero.hp = Math.min(hero.maxHp, hero.hp + healed);
-    if (hero.down) { if (downT === 0) gear.onDown(); downT += dt; if (downT > 2) { hero.revive(); downT = 0; } }
+    if (hero.down) { if (downT === 0) gear.onDown(); downT += dt; if (downT > 2 && !exped) { hero.revive(); downT = 0; } }
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
     pack.update(dt);
@@ -1299,7 +1301,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       const me = nb?.seat ?? 0;
       // in a network battle the server pays the loot and the seeds (server/rooms.ts)
       if (exped.paid && !netClient) { Profile.creditStored(exped.lootOf(me)); Profile.creditSeeds(exped.bankedOf(me)); }
-      if (battle) battle.end(exped.state === 'won', expUi.summary(), exped.paid ? exped.lootOf(me) : 0);
+      // a failed mission keeps half its loot — the result screen shows it as kept
+      if (battle) battle.end(exped.state === 'won', expUi.summary(), exped.lootOf(me), exped.state !== 'won');
       else hud.banner(`${t(exped.state === 'won' ? 'Mission complete' : 'Mission failed')}<small>${expUi.summary()}</small>`, 8);
     }
     if (battle && sim && sim.state !== tdEndShown) {

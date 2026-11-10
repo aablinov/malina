@@ -7,7 +7,7 @@ import type { Mob } from '../../src/mobs/mob.ts';
 import { Match, type MatchEnd } from '../../src/game/match.ts';
 import { Profile } from '../../src/items.ts';
 import { expeditionMap } from '../../src/level/expedition-map.ts';
-import { BUSH_WAVES } from '../../src/sim/expedition.ts';
+import { BUSH_WAVES, DOWN_WAIT, DUSK_AT, HORN_BLOW, RAISE_HOLD, TOTEMS } from '../../src/sim/expedition.ts';
 import { BEACON_HOLD, BOARD_WAIT, EXTRACT_WAIT } from '../../src/sim/objective.ts';
 import { loadPrefabs } from '../prefabs.ts';
 
@@ -187,4 +187,88 @@ test('expedition: secondary objectives — a chest and an altar are used, the ho
     return JSON.stringify(m.match.entities());
   };
   assert.ok(play() === play(), 'two runs of one seed differ');
+});
+
+function party(objective: ObjectiveKind, n: number, seed = 9) {
+  const match = new Match({ id: `p-${objective}`, map: expeditionMap({ seed, difficulty: 2, objective }, LIB), seed, players: Array.from({ length: n }, (_, i) => ({ seat: i, playerId: `p${i}`, name: `P${i}`, profile: Profile.starter() })) });
+  const b = match.battle, exp = b.world.expedition!, knights = Array.from({ length: n }, (_, i) => b.heroes.get(i)!.knight);
+  const events: string[] = [];
+  const step = (sec: number, each?: () => void): void => { for (let i = 0; i < Math.round(sec * 60); i++) { each?.(); b.step(1 / 60); for (const e of b.world.takeEvents()) events.push(e.t); } };
+  return { match, b, exp, knights, events, step };
+}
+
+test('expedition, downed: a teammate next to the fallen lifts him in three seconds; alone he waits for a totem; no totems and everyone down — the mission fails with half the loot', () => {
+  const p = party('lairs', 2), { exp, knights: [a, c] } = p;
+  const land = exp.spec.landings[0], put = (k: typeof a, dx: number): void => k.place(land.x + dx, land.z, 0, 0);
+  assert.equal(exp.totems, TOTEMS);
+  // a teammate next to the fallen
+  put(a, 0); put(c, 1.5);
+  a.hurt(99999);
+  p.step(1);
+  assert.equal(a.down, true, 'he does not get up by himself any more');
+  assert.ok(exp.downOf(0)!.k > 0.2);
+  p.step(RAISE_HOLD);
+  assert.equal(a.down, false);
+  assert.ok(p.events.includes('hero.raised'));
+  assert.equal(exp.totems, TOTEMS, 'a teammate costs no totem');
+  // the teammate is far: the fallen waits out his time, then a totem puts him next to the teammate
+  put(c, 30);
+  a.hurt(99999);
+  p.step(DOWN_WAIT - 1, () => { c.hp = c.maxHp; });
+  assert.equal(a.down, true);
+  p.step(2, () => { c.hp = c.maxHp; });
+  assert.equal(a.down, false);
+  assert.equal(exp.totems, TOTEMS - 1);
+  assert.ok(Math.hypot(a.pos.x - c.pos.x, a.pos.z - c.pos.z) < 3, 'he rises next to the teammate');
+  // both down: a totem lifts at once, one hero per totem; when they run out the mission is lost
+  exp.addLoot(100);
+  const loot = exp.lootOf(0);
+  exp.totems = 1;
+  a.hurt(99999); c.hurt(99999);
+  p.step(4);
+  assert.equal(exp.totems, 0);
+  assert.equal(exp.state, 'play');
+  a.hurt(99999); c.hurt(99999);
+  p.step(1);
+  assert.equal(exp.state, 'lost');
+  assert.ok(Math.abs(exp.lootOf(0) - loot / 2) <= 1, 'half the loot is kept');
+  assert.equal(exp.paid, true);
+});
+
+test('expedition, alarm: it grows with time and with a horn call; a horn-blower killed in time calls nobody; dusk doubles the growth', () => {
+  const p = party('lairs', 1), { exp, knights: [a] } = p;
+  const base = exp.base;
+  const keep = (): void => { a.hp = a.maxHp; };
+  // the horn: the first of a patrol blows for three seconds once it sees the hero
+  const patrol = exp.garrisons.rooms.find((r) => r.spec.id.startsWith('patrol'))!, horn = patrol.mobs[0] as unknown as Mob;
+  a.place(horn.pos.x + 3, horn.pos.z, 0, 0);
+  p.step(1, keep);
+  assert.ok(p.events.includes('horn.start'));
+  horn.hit(99999, UP, horn.pos, 0);
+  p.step(HORN_BLOW + 1, keep);
+  assert.ok(p.events.includes('horn.cut'));
+  assert.ok(!p.events.includes('horn.call'));
+  assert.ok(exp.alarm < 10, 'only time has passed');
+  // another patrol's horn-blower is left alone: the call goes out, the alarm jumps, a raid comes
+  const other = exp.garrisons.rooms.filter((r) => r.spec.id.startsWith('patrol'))[1].mobs[0] as unknown as Mob;
+  a.place(other.pos.x + 3, other.pos.z, 0, 0);
+  p.step(HORN_BLOW + 2, () => { keep(); a.place(other.pos.x + 3, other.pos.z, 0, 0); });
+  assert.ok(p.events.includes('horn.call'));
+  assert.ok(p.events.includes('exp.raid'));
+  assert.ok(exp.alarm >= 50);
+  // time: a level every four minutes, the pack gets tougher with it
+  const far = exp.spec.landings[0];
+  exp.alarm = 99.9;
+  p.step(1, () => { keep(); a.place(far.x, far.z, 0, 0); });
+  assert.equal(exp.alarmLevel, 1);
+  assert.equal(exp.base, base + 1);
+  assert.ok(p.events.includes('exp.alarm'));
+  // dusk
+  const rate = (): number => { const a0 = exp.alarm; p.step(2, () => { keep(); a.place(far.x, far.z, 0, 0); }); return exp.alarm - a0; };
+  const day = rate();
+  exp.time = DUSK_AT - 0.5;
+  p.step(1, keep);
+  assert.equal(exp.dusk, true);
+  assert.ok(p.events.includes('exp.dusk'));
+  assert.ok(rate() > day * 1.8);
 });

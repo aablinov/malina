@@ -2,7 +2,7 @@ import type * as THREE from 'three';
 import type { MapMarker } from '../hud/automap.ts';
 import { t } from '../i18n/i18n.ts';
 import type { SimEvent } from '../sim/events.ts';
-import type { SimExpedition } from '../sim/expedition.ts';
+import { ALARM_MAX, type SimExpedition } from '../sim/expedition.ts';
 import '../td/td.css';
 
 /**
@@ -10,7 +10,7 @@ import '../td/td.css';
  * the bag, the balloon's countdown; banners for the mission's events, markers for the map and the hint by the F key. Reads the
  * rules (src/sim/expedition.ts — the real ones in single player, the mirror in a network battle); changes nothing
  */
-export interface ExpUiHooks { banner(html: string, sec?: number): void; toast(s: string): void; heroPos(): THREE.Vector3; goal(title: string, sub: string): void }
+export interface ExpUiHooks { banner(html: string, sec?: number): void; toast(s: string): void; heroPos(): THREE.Vector3; goal(title: string, sub: string): void; /** Dusk has fallen: the scene turns to night */ dusk?(): void }
 
 const TITLE = { lairs: 'Burn the lairs', beacons: 'Light the beacons', bush: 'Plant the raspberry bush' } as const;
 const USE_TEXT = {
@@ -71,7 +71,14 @@ export class ExpUi {
         case 'extract.call': this.h.banner(`${t('The balloon is on its way')}<small>${t('Hold the pad for {n} s', { n: Number(e.sec) })}</small>`, 3); break;
         case 'extract.ready': this.h.banner(`${t('The balloon has landed')}<small>${t('Everyone onto the pad!')}</small>`, 3); break;
         case 'poi.take': if (e.seat === this.seat() && e.seed) this.h.toast(t('Seed found — carry it to the balloon')); break;
-        case 'exp.lost': this.h.banner(t('The bush has withered'), 3); break;
+        case 'exp.lost': this.h.banner(t(e.why === 'bush' ? 'The bush has withered' : 'The squad has fallen'), 3); break;
+        case 'horn.start': this.h.toast(t('A horn-blower! Stop him before he calls')); break;
+        case 'horn.cut': this.h.toast(t('The horn is silenced')); break;
+        case 'horn.call': this.h.banner(`${t('The horn has sounded')}<small>${t('Reinforcements are coming')}</small>`, 2.5); break;
+        case 'exp.alarm': this.h.toast(t('Alarm {n}: the Order grows stronger', { n: Number(e.level) })); break;
+        case 'exp.dusk': this.h.dusk?.(); this.h.banner(`${t('Dusk is falling')}<small>${t('The alarm grows twice as fast — time to leave')}</small>`, 4); break;
+        case 'hero.totem': this.h.toast(t('A raspberry totem lifts the fallen · {n} left', { n: Number(e.left) })); break;
+        case 'hero.raised': if (e.seat === this.seat()) this.h.toast(t('A teammate lifted you')); break;
         default: break;
       }
     }
@@ -84,6 +91,9 @@ export class ExpUi {
     const lines: string[] = [];
     if (pad.state === 'called') lines.push(`<div class="td-wave">${t('Balloon in')} <span>${Math.ceil(pad.t)}</span></div>`);
     else if (pad.state === 'ready') lines.push(`<div class="td-wave">${t('Boarding')} <span>${Math.ceil(pad.t)}</span></div>`);
+    const down = s.downOf(this.seat());
+    if (down) lines.push(`<div class="td-alarm">${down.k > 0 ? t('A teammate is lifting you') : s.totems > 0 ? t('Down · a totem in {n} s', { n: Math.ceil(down.left) }) : t('Down · no totems left')}</div>`);
+    lines.push(`<div>${t('Totems')}: <span style="color:#ff8fb0">${s.totems}</span> · ${t('Alarm')}: <span style="color:#ffd15c">${'▮'.repeat(s.alarmLevel)}${'▯'.repeat(ALARM_MAX - s.alarmLevel)}</span>${s.dusk ? ` · ${t('dusk')}` : ''}</div>`);
     const tg = this.target();
     if (tg && s.state === 'play') {
       const dx = tg.x - hp.x, dz = tg.z - hp.z, d = Math.hypot(dx, dz);

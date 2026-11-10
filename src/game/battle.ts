@@ -87,6 +87,13 @@ export class HeadlessBattle {
       setScale: (l, p) => this.pack.setScale(l, p),
       levelChanged: () => { this.levelObstacles.length = 0; this.levelObstacles.push(...obstaclesOf(map.level, 0, b.minX, b.minZ, b.maxX, b.maxZ)); this.foeCache = null; },
       step: (dt) => this.stepActors(dt),
+      raise: (seat, at) => {
+        const h = this.heroes.get(seat);
+        if (!h) return;
+        if (at) h.knight.place(at.x, at.z, h.knight.yaw, at.y);
+        h.knight.revive();
+        h.downT = 0;
+      },
     };
     this.world = new SimWorld(hooks, { seed, level: map.level, mode: map.mode, players, personal });
   }
@@ -191,7 +198,7 @@ export class HeadlessBattle {
     const solids = this.world.solids;
     for (const h of this.heroes.values()) {
       const k = h.knight;
-      if (k.down) { h.downT += dt; if (h.downT > REVIVE_S) { k.revive(); h.downT = 0; } }
+      if (k.down && !this.world.rules?.ownsDowned) { h.downT += dt; if (h.downT > REVIVE_S) { k.revive(); h.downT = 0; } }
       k.slow = Math.min(0.8, this.pack.slowFor(k));
       h.input.roll = h.rolled;
       h.rolled = false;

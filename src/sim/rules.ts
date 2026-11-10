@@ -36,6 +36,8 @@ export interface Rules {
   readonly goal: number;
   /** Whether the match loot goes to the camp */
   readonly paid: boolean;
+  /** The rules decide when a fallen hero gets up (`SimHooks.raise`); otherwise he rises by himself after a moment */
+  readonly ownsDowned?: boolean;
   /** Hero obstacles the rules own (towers, the bush trunk) */
   readonly solids: Obstacle[];
   /** Enemy obstacles: the same plus what only enemies cannot pass */

@@ -260,6 +260,10 @@ export class ExpeditionView {
         case 'poi.take': fx.burst(at(e, 0.6), ['#d8345a', '#ffcc3a'], 14, { speed: 3, up: 4, size: 0.1, life: 0.6 }); fx.text(at(e, 1.2), `+${num(e.n)}`, 'berry'); break;
         case 'seed.take': fx.burst(at(e, 0.6), [glow(SEED_COLOR[String(e.seed)] ?? '#ffffff')], 10, { speed: 2, up: 3, size: 0.09, life: 0.5, glow: true, gravity: 3 }); break;
         case 'exp.side': fx.pillar(at(e), glow('#ffe27a', 2.4), 7, 0.4); fx.ring(at(e, 0.06), 3, glow('#ffe27a'), 0.5, 0.12, 1); break;
+        case 'horn.start': fx.text(at(e, 2.2), '♪', 'bad'); fx.ring(at(e, 0.06), 3, glow('#ffd15c'), 0.6, 0.12, 1); break;
+        case 'horn.call': fx.shock(at(e, 0.06), 8, glow('#ffd15c'), 0.8, 0.2); fx.text(at(e, 2.4), '♪♪♪', 'bad'); break;
+        case 'hero.totem': fx.pillar(at(e), glow('#ff5a8a', 2.6), 10, 0.6); fx.ring(at(e, 0.06), 3, glow('#ff5a8a'), 0.6, 0.14, 1); break;
+        case 'hero.raised': fx.burst(at(e, 0.8), [glow('#8be38f'), '#ffffff'], 16, { speed: 2, up: 4, size: 0.1, life: 0.7, glow: true, gravity: 3 }); break;
         case 'extract.call': fx.ring(at(e, 0.06), PAD_R + 2, glow('#7ad0ff'), 1, 0.2, 2); break;
         case 'extract.ready': fx.pillar(at(e), glow('#7ad0ff', 2.6), 16, 0.8); break;
         default: break;
