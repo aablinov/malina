@@ -20,8 +20,11 @@ export type SimMode = { kind: 'td'; td: TdSpec } | { kind: 'expedition'; spec: E
 /** A level with its mode — what a match is started on */
 export interface MatchMap { level: Level; mode: SimMode }
 
+/** Expedition command (src/sim/expedition.ts): use what the hero stands next to — a beacon, the plot, a chest, the extraction pad */
+export interface ExpCommand { t: 'exp'; a: 'use' }
+
 /** A player's action addressed to the rules */
-export type RulesCommand = TdCommand;
+export type RulesCommand = TdCommand | ExpCommand;
 
 export interface Rules {
   readonly state: RulesState;

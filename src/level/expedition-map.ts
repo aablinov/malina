@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ExpeditionParams, ExpeditionSpec, ExpLair, ExpPoi, ExpSecondary, ExpSite, SecondaryKind, SeedRarity } from '../expedition/types.ts';
+import { guardPool, type ExpeditionParams, type ExpeditionSpec, type ExpLair, type ExpPoi, type ExpSecondary, type ExpSite, type SecondaryKind, type SeedRarity } from '../expedition/types.ts';
 import { rng, type Rand } from '../rng.ts';
 import type { MatchMap } from '../sim/rules.ts';
 import { terrainOf } from './collide.ts';
@@ -25,12 +25,6 @@ const REACH_EXPAND = 400_000;
 
 interface Spot { x: number; z: number; r: number }
 
-/** Guards by tier: a higher difficulty adds the next tier to the pool */
-const GUARDS: readonly (readonly string[])[] = [
-  ['squire', 'berryling', 'wolf', 'boarlet', 'crossbow'],
-  ['spear', 'shield', 'pyro', 'archer', 'hedgehog'],
-  ['hammer', 'banner', 'healer', 'summoner', 'reaper'],
-];
 const SECONDARY: readonly SecondaryKind[] = ['chest', 'altar', 'watchtower', 'horns'];
 const TREES = ['tree_oak', 'tree_oak_2', 'tree_oak_3', 'tree_pine_dark', 'tree_pine_dark_2'];
 const ROCKS = ['boulder_single', 'boulder_group', 'mossy_boulders', 'bush_cluster'];
@@ -90,7 +84,7 @@ function build(p: ExpeditionParams, seed: number, lib: Record<string, LibraryPre
   for (const q of pois) if (q.seed === 'common' && r() < 0.35) q.seed = null;
 
   // ---------- garrisons ----------
-  const pool = GUARDS.slice(0, 1 + (d >= 3 ? 1 : 0) + (d >= 5 ? 1 : 0)).flat();
+  const pool = guardPool(d);
   const pick = (): string => pool[int(0, pool.length - 1)];
   const ring = (c: ExpSite, n: number, rad: number, aggro?: number): MobPost[] => Array.from({ length: n }, (_, i) => {
     const a = (i / n) * Math.PI * 2 + r() * 0.6;

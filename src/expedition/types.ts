@@ -9,6 +9,17 @@ export type ObjectiveKind = 'lairs' | 'beacons' | 'bush';
 export const OBJECTIVES: readonly ObjectiveKind[] = ['lairs', 'beacons', 'bush'];
 export type SecondaryKind = 'chest' | 'altar' | 'watchtower' | 'horns';
 export type SeedRarity = 'common' | 'rare' | 'golden';
+export const SEED_RARITIES: readonly SeedRarity[] = ['common', 'rare', 'golden'];
+export type SeedBag = Record<SeedRarity, number>;
+export const emptyBag = (): SeedBag => ({ common: 0, rare: 0, golden: 0 });
+
+/** Guards by tier: difficulty 3 and 5 add the next tier to the pool */
+const GUARDS: readonly (readonly string[])[] = [
+  ['squire', 'berryling', 'wolf', 'boarlet', 'crossbow'],
+  ['spear', 'shield', 'pyro', 'archer', 'hedgehog'],
+  ['hammer', 'banner', 'healer', 'summoner', 'reaper'],
+];
+export const guardPool = (difficulty: number): string[] => GUARDS.slice(0, 1 + (difficulty >= 3 ? 1 : 0) + (difficulty >= 5 ? 1 : 0)).flat();
 
 /** What a mission is generated from: the same values give the same map everywhere */
 export interface ExpeditionParams {

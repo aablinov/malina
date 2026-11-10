@@ -15,7 +15,7 @@ import { rollMobLoot } from '../items.ts';
 import { DROP_CHANCE } from './drops.ts';
 import { r1 } from './entities.ts';
 import { SimLair } from './lair.ts';
-import type { Rules } from './rules.ts';
+import type { Rules, RulesCommand } from './rules.ts';
 import { SimTower } from './tower.ts';
 import { t } from '../i18n/i18n.ts';
 import { SimWall } from './wall.ts';
@@ -195,7 +195,8 @@ export class SimTd implements Rules {
 
   // ---------- commands ----------
   /** Action of the player in seat `seat`; false — it failed (the hint goes to onToast) */
-  command(seat: number, c: TdCommand): boolean {
+  command(seat: number, c: RulesCommand): boolean {
+    if (c.t !== 'td') return false;
     if (this.remote) { this.remote(c); return true; }
     if (this.state !== 'play') return false;
     if (c.a === 'wave') return this.callWave(seat);

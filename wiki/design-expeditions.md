@@ -1,6 +1,6 @@
 # Expeditions. Design document
 
-Version 0.2 of 2026-11-10. In the code: stages 1–2 (section 11) — the rules interface, the map generator and the garrisons; nothing is playable yet.
+Version 0.3 of 2026-11-10. In the code: stages 1–3 (section 11) — a mission is playable solo at `?map=expedition&seed=N&obj=lairs|beacons|bush&d=1…8`. Not in the code yet: the mission board and the network (stage 4), alarm, revive and totems, parcels, operations and camp beds.
 
 **Decision:** [adr-006-expeditions.md](adr-006-expeditions.md). **Source:** [sources/helldivers2.md](sources/helldivers2.md).
 
@@ -52,6 +52,16 @@ Every objective is assembled from what the simulation already has ([design-tower
 | Rescue the gardeners | free captives in garrisons and lead them to extraction | garrisons; escort is new | later |
 | Bring out the harvest | collect baskets across the map and carry them to the cart | piles and drops; carrying is new | later |
 
+**In the code** (`src/sim/expedition.ts`, `src/sim/objective.ts`): everything besides fighting is one command, `use` (F) — it acts on what the hero stands next to.
+
+| Objective | How it plays now |
+|---|---|
+| Burn the lairs | every lair is a target with health (160 / 260 / 420 by size, +50 % per extra player) for sword, arrows and spells; all burnt — done |
+| Light the beacons | F lights a beacon and a raid marches on it; the charge grows while a hero stands within 6 m and drains at half speed when nobody does; 20 s — lit |
+| Plant a bush | the plot's guards must fall first; F plants a bush with 320 health; three raids march on it, 6 s apart; all beaten — done. A withered bush loses the mission. There is no seedling to carry yet |
+
+A raid comes out of the nearest standing lair within 42 m, otherwise out of the woods 22 m away. Lairs that are not the objective can be burnt too — for loot.
+
 **Secondary objectives:** an Order chest, an altar with a blessing for the mission, a watchtower (reveals the map around it), a nest of horn-blowers (while it stands, the alarm rises faster).
 
 ## 5. Parcels from the camp
@@ -96,6 +106,8 @@ The downed state was first described in [design-dungeon.md](design-dungeon.md), 
 - Seeds reach the profile only through extraction.
 - **Extraction:** the squad calls the balloon, holds the pad for 90 s under waves, then everyone boards the basket.
 - If the primary objective is done, the mission counts even without extraction — but the seeds are lost.
+
+**In the code:** points of interest are picked up by walking over them (raspberries into the mission purse, a seed into the bag); a fallen hero spills his seeds on the ground. The balloon can be called only after the primary objective; while it flies a raid comes every 22 s; after landing it waits 20 s or leaves at once when everyone standing is on the pad (5 m). Who is on the pad banks his seeds, and the whole squad's match loot grows by a quarter. With nobody aboard the mission still counts. Seeds are counted in the match but do not reach the profile yet (stage 4).
 
 ## 9. Modifiers
 

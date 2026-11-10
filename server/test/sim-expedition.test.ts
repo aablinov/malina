@@ -1,0 +1,190 @@
+import assert from 'node:assert/strict';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import * as THREE from 'three';
+import type { ObjectiveKind } from '../../src/expedition/types.ts';
+import type { Mob } from '../../src/mobs/mob.ts';
+import { Match, type MatchEnd } from '../../src/game/match.ts';
+import { Profile } from '../../src/items.ts';
+import { expeditionMap } from '../../src/level/expedition-map.ts';
+import { BUSH_WAVES } from '../../src/sim/expedition.ts';
+import { BEACON_HOLD, BOARD_WAIT, EXTRACT_WAIT } from '../../src/sim/objective.ts';
+import { loadPrefabs } from '../prefabs.ts';
+
+const LIB = loadPrefabs(join(import.meta.dirname, '..', '..', 'assets', 'prefabs'));
+const USE = { t: 'exp', a: 'use' } as const;
+const UP = new THREE.Vector3(0, 0, 1);
+
+function start(objective: ObjectiveKind, difficulty = 5, seed = 9) {
+  const match = new Match({ id: `x-${objective}`, map: expeditionMap({ seed, difficulty, objective }, LIB), seed, players: [{ seat: 0, playerId: 'p0', name: 'A', profile: Profile.starter() }] });
+  let end: MatchEnd | null = null;
+  match.onEnd = (e) => { end = e; };
+  const b = match.battle, exp = b.world.expedition!, hero = b.heroes.get(0)!.knight;
+  const events: string[] = [];
+  const posted = exp.garrisons.alive;
+  /** n seconds of the battle; the hero does not fall unless the test wants it */
+  let held: { x: number; z: number; dx: number } | null = null;
+  const run = (sec: number, o: { mortal?: boolean; each?: () => void } = {}): void => {
+    for (let i = 0; i < Math.round(sec * 60); i++) {
+      if (!o.mortal) hero.hp = hero.maxHp;
+      // guards shove the hero around: the test keeps him where it put him
+      if (held && !hero.down) hero.place(held.x + held.dx, held.z, 0, b.world.floor(held.x + held.dx, held.z, 2));
+      o.each?.();
+      b.step(1 / 60);
+      for (const e of b.world.takeEvents()) events.push(e.t);
+    }
+  };
+  const go = (p: { x: number; z: number }, dx = 0): void => { held = { x: p.x, z: p.z, dx }; hero.place(p.x + dx, p.z, 0, b.world.floor(p.x + dx, p.z, 2)); };
+  /** Everyone marching on a raid falls */
+  const slay = (): void => { for (const m of b.pack.mobs) if (m.net > posted && !m.dead) m.hit(99999, UP, m.pos, 0); };
+  /** A garrison falls to the last guard */
+  const rout = (id: string): void => { for (let i = 0; i < 20 && !exp.garrisons.cleared(id); i++) { for (const m of exp.garrisons.room(id)!.mobs as unknown as Mob[]) if (!m.dead) m.hit(99999, UP, m.pos, 0); run(0.25); } };
+  return { match, b, exp, hero, run, go, slay, rout, events, end: () => end };
+}
+
+test('expedition, lairs: burnt lairs complete the objective; the balloon comes only after it; seeds reach the camp with those aboard', () => {
+  const s = start('lairs'), { exp } = s;
+  assert.equal(exp.goal, exp.nests.length);
+  // the pad before the objective is done: no balloon
+  s.go(exp.extraction.pos);
+  s.run(0.1);
+  assert.equal(exp.usable(0), 'wait');
+  assert.equal(exp.command(0, USE), false);
+  // a point of interest with a seed: raspberries into the purse, the seed into the bag
+  const poi = exp.spec.pois.find((q) => q.seed)!;
+  s.go(poi);
+  s.run(0.2);
+  assert.equal(exp.berries(0), poi.berries);
+  assert.equal(exp.carriedOf(0)[poi.seed!], 1);
+  assert.ok(!s.match.entities().some((e) => e.id === poi.id), 'the taken point leaves the snapshot');
+  // the hero falls: the seed lies on the ground; back on his feet he picks it up
+  s.hero.hurt(99999);
+  s.run(0.1, { mortal: true });
+  assert.equal(exp.carriedOf(0)[poi.seed!], 0);
+  assert.equal(exp.seeds.length, 1);
+  s.run(4);
+  assert.equal(s.hero.down, false);
+  s.go(exp.seeds[0] ?? poi);
+  s.run(0.5);
+  assert.equal(exp.seeds.length, 0);
+  assert.equal(exp.carriedOf(0)[poi.seed!], 1);
+  // lairs are targets of the hero's weapons and block the way
+  assert.equal(s.b.targets().filter((x) => exp.nests.includes(x as never)).length, exp.nests.length);
+  assert.ok(exp.solids.length >= exp.nests.length);
+  for (const n of exp.nests) { assert.equal(exp.primary, false); n.hit(99999); }
+  assert.equal(exp.primary, true);
+  assert.equal(exp.progress, exp.goal);
+  assert.ok(s.b.world.takeEvents().some((e) => e.t === 'exp.primary'));
+  assert.ok(exp.lootOf(0) > 0);
+  // the balloon: called, raids come while it flies, then boarding
+  s.go(exp.extraction.pos);
+  s.run(0.1);
+  assert.equal(exp.usable(0), 'extract');
+  assert.ok(exp.command(0, USE));
+  assert.equal(exp.extraction.state, 'called');
+  const loot = exp.lootOf(0);
+  s.run(EXTRACT_WAIT + 0.5, { each: s.slay });
+  assert.ok(s.events.includes('exp.raid'));
+  assert.ok(s.events.includes('extract.ready'));
+  s.run(1);
+  assert.equal(exp.state, 'won');
+  assert.equal(exp.bankedOf(0)[poi.seed!], 1);
+  assert.ok(exp.lootOf(0) > loot, 'boarding adds its share');
+  // the match ends and pays the loot
+  for (let i = 0; i < 120 && !s.end(); i++) s.match.frame(0.05);
+  assert.equal(s.end()!.result, 'won');
+  assert.equal(s.end()!.wave, exp.goal);
+  assert.equal(s.end()!.rewards.get(0)!.berries, exp.lootOf(0));
+});
+
+test('expedition, beacons: a beacon is lit with F and held; nobody near — the charge drains; all lit — the objective is done', () => {
+  const s = start('beacons'), { exp } = s;
+  const [first, ...rest] = exp.beacons;
+  s.go(first.pos, 1);
+  s.run(0.1);
+  assert.equal(exp.usable(0), 'beacon');
+  assert.ok(exp.command(0, USE));
+  assert.equal(first.state, 'lighting');
+  s.run(5, { each: s.slay });
+  const charged = first.charge;
+  assert.ok(charged > 4.5);
+  // the hero walks away: the charge drains
+  s.go(exp.spec.landings[0]);
+  s.run(4, { each: s.slay });
+  assert.ok(first.charge < charged);
+  assert.equal(first.state, 'lighting');
+  s.go(first.pos, 1);
+  s.run(BEACON_HOLD + 1, { each: s.slay });
+  assert.equal(first.state, 'lit');
+  assert.equal(exp.done, 1);
+  assert.equal(exp.primary, false);
+  for (const b of rest) { s.go(b.pos, 1); s.run(0.1); assert.ok(exp.command(0, USE)); s.run(BEACON_HOLD + 0.5, { each: s.slay }); }
+  assert.equal(exp.primary, true);
+  // nobody boards: the mission still counts, the seeds carried are lost
+  exp.carriedOf(0).common = 2;
+  s.go(exp.extraction.pos);
+  s.run(0.1);
+  assert.ok(exp.command(0, USE));
+  s.go(exp.spec.landings[0]);
+  s.run(EXTRACT_WAIT + BOARD_WAIT + 1, { each: s.slay });
+  assert.equal(exp.state, 'won');
+  assert.equal(exp.bankedOf(0).common, 0);
+});
+
+test('expedition, bush: planted on the plot, three waves march on it; beaten — the objective is done; a withered bush loses the mission', () => {
+  const s = start('bush'), { exp } = s;
+  const plot = exp.spec.objective.sites[0];
+  assert.equal(exp.goal, BUSH_WAVES);
+  s.go(plot, 2);
+  s.run(0.1);
+  // the plot's guards first: with them around nothing is planted
+  assert.equal(exp.usable(0), 'guarded');
+  assert.equal(exp.command(0, USE), false);
+  s.rout('g:plot');
+  assert.equal(exp.usable(0), 'plot');
+  assert.ok(exp.command(0, USE));
+  assert.ok(exp.bush);
+  assert.ok(s.match.entities().some((e) => e.id === 'bush'));
+  // the first wave comes out and walks to the bush
+  s.run(5);
+  const raiders = s.b.pack.mobs.filter((m) => m.march && !m.dead);
+  assert.ok(raiders.length >= 4);
+  const d0 = Math.min(...raiders.map((m) => Math.hypot(m.pos.x - plot.x, m.pos.z - plot.z)));
+  s.run(3);
+  assert.ok(Math.min(...raiders.map((m) => Math.hypot(m.pos.x - plot.x, m.pos.z - plot.z))) < d0 - 3, 'the raid marches at the bush');
+  s.run(40, { each: s.slay });
+  assert.equal(exp.bushWave, BUSH_WAVES);
+  assert.equal(exp.primary, true);
+  assert.equal(exp.state, 'play');
+
+  const l = start('bush', 2, 4);
+  l.go(l.exp.spec.objective.sites[0], 2);
+  l.run(0.1);
+  l.rout('g:plot');
+  assert.ok(l.exp.command(0, USE));
+  l.exp.bush!.hurt(99999, UP);
+  assert.equal(l.exp.state, 'lost');
+  for (let i = 0; i < 120 && !l.end(); i++) l.match.frame(0.05);
+  assert.equal(l.end()!.result, 'lost');
+  assert.equal(l.end()!.rewards.get(0)!.berries, 0);
+});
+
+test('expedition: secondary objectives — a chest and an altar are used, the horn-blowers nest is burnt; the same seed and commands give the same mission', () => {
+  const s = start('lairs', 8, 21), { exp } = s;
+  for (const side of exp.sides) {
+    const loot = exp.lootOf(0);
+    if (side.nest) side.nest.hit(99999);
+    else { s.go(side.spec, 1); s.run(0.1); assert.equal(exp.usable(0), side.spec.kind); assert.ok(exp.command(0, USE)); }
+    assert.equal(side.done, true);
+    assert.ok(exp.lootOf(0) > loot);
+  }
+  const play = (): string => {
+    const m = start('beacons', 4, 33);
+    m.go(m.exp.beacons[0].pos, 1);
+    m.run(0.1);
+    m.exp.command(0, USE);
+    m.run(12);
+    return JSON.stringify(m.match.entities());
+  };
+  assert.ok(play() === play(), 'two runs of one seed differ');
+});

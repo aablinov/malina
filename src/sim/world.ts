@@ -96,8 +96,10 @@ export class SimWorld {
     this.terrain = o.level ? terrainOf(o.level) : null;
     this.piles = new Piles(this);
     this.drops = new Drops(this);
-    this.td = o.mode?.kind === 'td' ? new SimTd(this, o.mode.td, o.players ?? 1, o.personal ?? false) : null;
-    this.expedition = o.mode?.kind === 'expedition' ? new SimExpedition(this, o.mode.spec, o.players ?? 1, o.personal ?? false) : null;
+    const mode = o.mode, players = o.players ?? 1, personal = o.personal ?? false;
+    // the rules may post enemies right away (garrisons): under this world's randomness, like everything in a step
+    this.td = mode?.kind === 'td' ? this.scoped(() => new SimTd(this, mode.td, players, personal)) : null;
+    this.expedition = mode?.kind === 'expedition' ? this.scoped(() => new SimExpedition(this, mode.spec, players, personal)) : null;
     this.rules = this.td ?? this.expedition;
   }
 
@@ -118,6 +120,12 @@ export class SimWorld {
 
   /** Events since the last pickup — the view and the snapshot take them after the step; what happened between steps (hero hits) is here too */
   takeEvents(): SimEvent[] { const e = this.events; this.events = []; return e; }
+
+  /** Run something of the game outside a step (a command that spawns enemies) under this world's randomness and decoys */
+  scoped<T>(fn: () => T): T {
+    const r1 = useRng(this.rng), r2 = useDecoys(this.decoys);
+    try { return fn(); } finally { r2(); r1(); }
+  }
 
   /** World step: game randomness and decoys are this world's, then heroes and the pack (hook), the rules, piles */
   step(dt: number): void {

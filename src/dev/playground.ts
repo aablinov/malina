@@ -20,6 +20,12 @@ import { ceilingAt, collideTop, decorSolids, obstaclesOf, raycastVoxels, terrain
 import { Pathfinder } from '../level/pathfind.ts';
 import { mapByName, ROOMS } from '../level/maps.ts';
 import { buildFloor } from '../level/dungeon.ts';
+import { buildExpedition } from '../level/expedition-map.ts';
+import { LIBRARY } from '../level/prefab-lib/index.ts';
+import { OBJECTIVES, type ExpeditionSpec, type ObjectiveKind } from '../expedition/types.ts';
+import type { SimExpedition } from '../sim/expedition.ts';
+import { ExpUi } from '../cgame/exp-ui.ts';
+import { ExpeditionView } from '../cgame/views/expedition-view.ts';
 import { surfaceAt } from '../level/kit.ts';
 import { worldSource } from '../world/gen.ts';
 import { RegionManager } from '../world/regions.ts';
@@ -89,6 +95,11 @@ function pickMap(): LevelJSON {
   const q = new URLSearchParams(window.location.search);
   const name = q.get('map');
   if (name === 'dungeon') return buildFloor({ seed: Number(q.get('seed')) || 1, floor: Number(q.get('floor')) || 1, rooms: ROOMS }).toJSON();
+  // an expedition (wiki/design-expeditions.md): the mission map is built from the seed, the difficulty (d) and the objective (obj)
+  if (name === 'expedition') {
+    const seed = Number(q.get('seed')) || 1, obj = q.get('obj') as ObjectiveKind | null;
+    return buildExpedition({ seed, difficulty: Number(q.get('d')) || 1, objective: obj && OBJECTIVES.includes(obj) ? obj : OBJECTIVES[seed % OBJECTIVES.length] }, Object.fromEntries(LIBRARY.map((p) => [p.id, p]))).toJSON();
+  }
   if (name === 'editor') {
     try {
       const raw = localStorage.getItem('malina.editor.level');
@@ -181,7 +192,8 @@ export function runPlayground(profile: Profile): void {
   const hasMap = query.has('map');
   const worldSeed = Number(query.get('seed')) || 1;
   const sourceLevel = WORLD ? null : Level.fromJSON(pickMap());
-  const STREAM = WORLD || query.has('stream') || (sourceLevel !== null && sourceLevel.chunks.size > STREAM_CHUNKS);
+  // an expedition is simulated over the whole map (garrisons far from the hero stand on its ground): it is never streamed
+  const STREAM = WORLD || query.has('stream') || (sourceLevel !== null && sourceLevel.chunks.size > STREAM_CHUNKS && query.get('map') !== 'expedition');
   const level = STREAM ? new Level(sourceLevel?.name ?? 'world') : sourceLevel!;
   if (STREAM && sourceLevel) { level.adoptPalette(sourceLevel); level.entities.push(...sourceLevel.entities); level.spawn = sourceLevel.spawn; Object.assign(level.meta, sourceLevel.meta); }
   // world settings from the editor (meta.world): sun, sky, haze, post-processing, weather; placed lights are 'light' entities
@@ -312,6 +324,12 @@ export function runPlayground(profile: Profile): void {
   /** The defence enemy pack: everyone heading for the bush */
   let tdPack: Pack | null = null;
   const tdSpec = level.meta.td as TdSpec | undefined;
+  // the "Expeditions" mode (wiki/design-expeditions.md): on a map with meta.expedition — the same world with the mission rules
+  // (src/sim/expedition.ts), its view (src/cgame/views/expedition-view.ts) and HUD (src/cgame/exp-ui.ts)
+  const expSpec = level.meta.expedition as ExpeditionSpec | undefined;
+  let exped: SimExpedition | null = null;
+  let expView: ExpeditionView | null = null;
+  let expUi: ExpUi | null = null;
   // mist at the enemy camps (src/td/mist-fx.ts): the exit points are hidden
   const mistFx = tdSpec?.mist ? new MistFx(scene, tdSpec.lanes, tdSpec.mist) : null;
   let fogFx: FogFx | null = null;
@@ -504,7 +522,7 @@ export function runPlayground(profile: Profile): void {
     for (const b of bosses) if (b.awake) list.push(...b.targets());
     list.push(...pack.targets());
     for (const r of mobRooms) list.push(...r.pack.targets());
-    if (sim && tdPack) list.push(...sim.targets(), ...tdPack.targets());
+    if (world && tdPack) list.push(...(world.rules?.targets() ?? []), ...tdPack.targets());
     return list;
   };
   let lastStrike: { s: Strike; t: number } | null = null;
@@ -861,7 +879,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const levelChanged = (): void => { if (STREAM) return; obstacles.length = 0; obstacles.push(...obstaclesOf(level, 0, bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ), ...decorSolids(level)); foeObsKey = null; };
   // defence: the hero goes in with their own gear, on a battle copy of the profile (Profile.enterBattle) — the sutler's goods, the battle treasury
   // and inventory shuffles stay in the battle, the stored profile gets the experience and the victory loot
-  if (tdSpec) profile.enterBattle();
+  if (tdSpec || expSpec) profile.enterBattle();
   // the party's player count: ?players=N
   if (FROM_MENU) bossPlayers = Math.max(1, Math.min(4, Number(query.get('players')) || 1));
   /**
@@ -904,8 +922,47 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     tdView = new TdView({ scene, fx, quiet: () => scripted, spec: tdSpec, heroPos: () => hero.pos, seat: () => nb?.seat ?? 0 });
     tdUi = new TdUi(document.body, sim, 0, { toast: (s) => toast(s), banner: (h, sec) => hud.banner(h, sec), quiet: () => scripted, heroPos: () => hero.pos, sync: syncPurse, alive: () => pk.mobs.filter((m) => !m.dead).length });
   }
+  if (expSpec && !tdSpec) {
+    const pk = new Pack(bossHooks, (at, n, base, kind) => { world?.rules?.killed(at, n, base, kind); });
+    tdPack = pk;
+    world = new SimWorld({
+      foes: () => pk.mobs.filter((m) => m.alive),
+      heroes: () => [{ pos: hero.pos, get down() { return hero.down; }, seat: 0 }],
+      spawnMob: (kind, at) => pk.spawn(kind, at),
+      step: (dt) => pk.update(dt),
+      setScale: (l, p) => pk.setScale(l, p),
+      levelChanged,
+    }, { seed: Number(query.get('seed')) || 1, level, mode: { kind: 'expedition', spec: expSpec }, players: bossPlayers, personal: false });
+    const ex = exped = world.expedition!;
+    world.drops.onPick = (_seat, def) => { const power = mobLootPower(def, profile.power); profile.add(def, power); profile.save(); Profile.keepItem(def, power); };
+    ex.setRating(profile.rating);
+    ex.fund(0);
+    ex.onToast = (_seat, text) => toast(text);
+    profile.data.berries = 0;
+    expView = new ExpeditionView({ scene, fx, quiet: () => scripted, spec: expSpec, heroPos: () => hero.pos, seat: () => 0 });
+    expView.floorAt = (x, z) => world!.floor(x, z, 2);
+    expUi = new ExpUi(document.body, ex, 0, { banner: (h, sec) => hud.banner(h, sec), toast: (s) => toast(s), heroPos: () => hero.pos, goal: (a, b) => hud.setGoal(a, b) });
+    flushExp();
+  }
+  /** World records and events of an expedition — into its view and HUD */
+  function flushExp(): void {
+    if (!world || !exped || !expView || !expUi) return;
+    const evs = world.takeEvents();
+    snapView.apply({ n: snapView.n + 1, base: 0, tick: world.tick, add: world.entities(), upd: [], del: [], ev: [evs] });
+    expView.apply(snapView);
+    expUi.events(evs);
+    // the mission's purse is the hero's raspberries for the HUD
+    profile.data.berries = exped.berries(0);
+  }
   /** A step of the defence world and the view from its snapshot and events (src/cgame/) */
   function stepTd(dt: number): void {
+    if (world && exped && expView && expUi) {
+      world.step(dt);
+      flushExp();
+      expUi.update();
+      expView.update(dt);
+      return;
+    }
     if (!world || !sim || !tdView || !tdUi || !tdPack) return;
     if (netClient) {
       // network battle: the world and the puppets follow the server snapshots (NetBattleClient.update), one's own hero is predicted above
@@ -1042,15 +1099,17 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     const pad = sim && tdUi && !tdUi.menuOpen && !hero.down ? sim.nearPad(hero.pos) : null;
     const wall = sim && !pad && !hero.down ? sim.nearWall(hero.pos) : null;
     const lamp = sim?.fog && !pad && !wall && !hero.down ? sim.fog.near(hero.pos.x, hero.pos.z) : null;
+    const expUse = expUi && !hero.down ? expUi.prompt() : null;
     const trader = hero.down || pad || wall || lamp ? null : merchants.find((m) => m.near(hero.pos)) ?? null;
-    const near = hero.down || trader || pad || wall || lamp ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
+    const near = hero.down || trader || pad || wall || lamp || expUse ? null : props.nearest(hero.pos, hero.hp, hero.maxHp);
     // came up to a chest — it chimes softly
     const nearChest = near?.kind === 'supply' ? near.target : null;
     if (nearChest && nearChest !== lastNearChest && !scripted) sfx.twinkle();
     lastNearChest = nearChest;
     const promptEl = $('pgPrompt');
-    promptEl.style.display = (near || trader || pad || wall || lamp) && !inventory.open && !shop.open ? '' : 'none';
-    if (pad && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.prompt(pad)}`);
+    promptEl.style.display = (near || trader || pad || wall || lamp || expUse) && !inventory.open && !shop.open ? '' : 'none';
+    if (expUse) setHTML('pgPrompt', `<kbd>F</kbd>${expUse}`);
+    else if (pad && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.prompt(pad)}`);
     else if (wall && tdUi) setHTML('pgPrompt', `<kbd>F</kbd>${tdUi.wallPrompt(wall)}`);
     else if (lamp) setHTML('pgPrompt', `<kbd>F</kbd>${lamp.lit ? t('Lantern burns · {n}%', { n: Math.round((lamp.flame / LANTERN_FLAME) * 100) }) + (lamp.flame < LANTERN_FLAME ? ` · ${t('top up')}` : '') : t('Light the lantern')}`);
     else if (trader) setHTML('pgPrompt', `<kbd>F</kbd>${t('Trade: {who}', { who: MERCHANT_TITLE[trader.kind].toLowerCase() })}`);
@@ -1066,6 +1125,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       ...props.terminals.map((t) => ({ x: t.pos.x, z: t.pos.z, icon: 'heart' })),
       ...merchants.map((m) => ({ x: m.pos.x, z: m.pos.z, icon: m.kind === 'smith' ? 'hammer' : 'berry', always: true })),
       ...(tdUi?.alarmMarkers ?? []),
+      ...(expUi?.markers() ?? []),
     ], [props.supplies.filter((c) => c.opened).length, props.supplies.length]); }
     helpT -= dt;
     $('pgHelp').style.opacity = helpOn && helpT > 0 ? String(Math.min(0.9, helpT)) : '0';
@@ -1122,6 +1182,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
 
     if (interactReq) {
       interactReq = false;
+      // an expedition: the beacon, the plot, a chest, the pad — whatever the hero stands next to
+      if (exped && !hero.down && exped.usable(0)) exped.command(0, { t: 'exp', a: 'use' });
       const pad = sim && !hero.down ? sim.nearPad(hero.pos) : null;
       const wall = sim && !pad && !hero.down ? sim.nearWall(hero.pos) : null;
       const lamp = sim?.fog && !pad && !wall && !hero.down ? sim.fog.near(hero.pos.x, hero.pos.z) : null;
@@ -1221,6 +1283,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     perf.tickEnd();
     if (n >= 6) acc = 0;
     music.update(real, inFight(), hero.down ? 0 : hero.hp / hero.maxHp);
+    if (exped && expUi && exped.state !== tdEndShown) {
+      tdEndShown = exped.state;
+      // the mission's loot goes to the camp when the balloon has left with the objective done
+      if (exped.paid) Profile.creditStored(exped.lootOf(0));
+      if (battle) battle.end(exped.state === 'won', expUi.summary(), exped.paid ? exped.lootOf(0) : 0);
+      else hud.banner(`${t(exped.state === 'won' ? 'Mission complete' : 'Mission failed')}<small>${expUi.summary()}</small>`, 8);
+    }
     if (battle && sim && sim.state !== tdEndShown) {
       tdEndShown = sim.state;
       const me = nb?.seat ?? 0;
@@ -1330,6 +1399,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   }))(sim, tdUi, tdPack) : null;
   window.__malina = {
     mode: 'playground',
+    /** Expedition for tests (tests/expedition.spec.ts): the rules, the view, the HUD and the pack; null — another mode */
+    get exp() { return exped && expUi && tdPack && world ? { sim: exped, ui: expUi, pack: tdPack, world, flush: flushExp, targets: () => targets(), use: () => exped!.command(0, { t: 'exp', a: 'use' }) } : null; },
     /** Network battle client (src/cgame/net-battle.ts); null — the battle is local */
     get net() { return netClient; },
     /** Room voice chat (src/net/voice.ts) */
