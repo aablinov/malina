@@ -352,7 +352,7 @@ export class Match {
         mx: r2(i.move.x), mz: r2(i.move.y), ax: r2(i.aim.x), az: r2(i.aim.z), attack: i.attack ? 1 : 0, roll: s.rolled ? 1 : 0, bow: s.hero.bow ? 1 : 0, ack: s.lastSeq, ping: s.ping });
     }
     for (const m of this.battle.pack.mobs) {
-      if (m.dead) continue;
+      if (m.dead || m.asleep) continue;
       const aim = m.aimPos;
       const flags = (m.summoned ? MOB_FLAG.summoned : 0) | (m.state === 'daze' ? MOB_FLAG.daze : 0) | (m.chillT > 0 ? MOB_FLAG.chill : 0) | (m.rally > 0 ? MOB_FLAG.rally : 0) | (m.alerted ? MOB_FLAG.alerted : 0);
       out.push({ id: `m${m.net}`, kind: m.kind, x: r2(m.pos.x), y: r2(m.pos.y), z: r2(m.pos.z), yaw: r2(m.yaw), hp: Math.round(m.hp), maxHp: m.maxHp, flags,

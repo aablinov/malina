@@ -1,6 +1,6 @@
 # Expeditions. Design document
 
-Version 0.1 of 2026-11-10. Nothing here is in the code yet.
+Version 0.2 of 2026-11-10. In the code: stages 1–2 (section 11) — the rules interface, the map generator and the garrisons; nothing is playable yet.
 
 **Decision:** [adr-006-expeditions.md](adr-006-expeditions.md). **Source:** [sources/helldivers2.md](sources/helldivers2.md).
 
@@ -34,6 +34,10 @@ One procedural map by seed, 160 × 160 m in the first version, one biome. On it:
 | Extraction point | 1 |
 
 The generator checks that every landing point has a path to all objectives and to the extraction point.
+
+**In the code** (`src/level/expedition-map.ts`, `buildExpedition({ seed, difficulty, objective }, prefabs)`): sites are placed by rejection sampling — the extraction pad and the landings on the outer ring (50–64 m from the centre, landings at least 38 m apart), lairs, objective sites, secondary objectives and points of interest inside. The ground is grass with 0.5 m terraces, flat under sites and patrol lines; a cliff rim closes the map; rock outcrops and prefab trees never stand on a site or a patrol line. If the sites do not fit or an objective is unreachable, the generator retries with a derived seed (up to 12 times). The description goes to `meta.expedition` (`src/expedition/types.ts`). A map builds in 50–160 ms.
+
+**Garrisons** (`src/sim/garrison.ts`): guards at lairs, objective sites and secondary objectives, ambushes at every other point of interest, a patrol from each lair to the next. Kinds come from three tiers opened at difficulty 1, 3 and 5. A garrison farther than 30 m from every hero sleeps: its mobs do not think and are not sent in the snapshot; it wakes when a hero comes near and stays awake while anyone in it has noticed a hero.
 
 ## 4. Objectives
 

@@ -1,5 +1,6 @@
 import type * as THREE from 'three';
 import type { Obstacle } from '../collision.ts';
+import type { ExpeditionSpec } from '../expedition/types.ts';
 import type { Level } from '../level/level.ts';
 import type { TdCommand } from '../net/protocol.ts';
 import type { EntityState } from '../net/snapshot.ts';
@@ -14,7 +15,7 @@ import type { TdSpec } from '../td/types.ts';
 export type RulesState = 'play' | 'won' | 'lost';
 
 /** What is played on a level: the mode and its description from the map */
-export type SimMode = { kind: 'td'; td: TdSpec };
+export type SimMode = { kind: 'td'; td: TdSpec } | { kind: 'expedition'; spec: ExpeditionSpec };
 
 /** A level with its mode — what a match is started on */
 export interface MatchMap { level: Level; mode: SimMode }

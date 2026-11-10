@@ -75,6 +75,8 @@ export abstract class Mob extends Boss {
   aggro = 14;
   /** Noticed the hero */
   alerted = false;
+  /** A garrison far from every hero (src/sim/garrison.ts): the pack does not step it and clients do not get it */
+  asleep = false;
   /** Patrol route: until it notices the hero, walks the points in a loop (src/level/playground-map.ts, MobPost.route) */
   route: THREE.Vector3[] | null = null;
   private routeI = 0;

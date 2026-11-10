@@ -545,3 +545,7 @@ Pages: [sources/helldivers2.md](sources/helldivers2.md), [adr-006-expeditions.md
 ## [2026-11-10] code | Match rules behind one interface (Expeditions, stage 1)
 `src/sim/rules.ts`: the `Rules` interface and the explicit mode of a match map (`MatchMap`, `SimMode`). `SimWorld`, `HeadlessBattle`, `Match` and the rooms talk to `world.rules`; `SimTd` implements it and behaves as before. The lobby protocol and the `matches.wave` column keep their names — they now carry the rules' stage and progress. The battle client still mirrors the defence only; it is generalised together with the expedition mirror (stages 3–4).
 Pages: [arch-layers.md](arch-layers.md), [design-expeditions.md](design-expeditions.md), [adr-006-expeditions.md](adr-006-expeditions.md).
+
+## [2026-11-10] code | Expedition map by seed, garrisons in the simulation (Expeditions, stage 2)
+`src/level/expedition-map.ts` builds a 160 × 160 m mission map from a seed, a difficulty and an objective: landings, extraction pad, lairs, objective sites, secondary objectives, points of interest, patrols; the same parameters give the same level hash, reachability is checked by the pathfinder. `src/sim/garrison.ts` posts the guards and puts far garrisons to sleep (`Mob.asleep`: the pack skips them, the match does not send them). A second mode `expedition` with `SimExpedition` — purses and loot so far. `server/prefabs.ts` loads the prefab library for the server.
+Pages: [design-expeditions.md](design-expeditions.md).

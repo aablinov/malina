@@ -8,6 +8,7 @@ import { rng, useRng, type Rand } from '../rng.ts';
 import type { Target } from '../target.ts';
 import type { SimEvent } from './events.ts';
 import { Drops } from './drops.ts';
+import { SimExpedition } from './expedition.ts';
 import { Piles } from './pile.ts';
 import type { Rules, SimMode } from './rules.ts';
 import { SimTd } from './td.ts';
@@ -77,6 +78,8 @@ export class SimWorld {
   readonly rules: Rules | null;
   /** The same rules when the mode is Bush Defence — for its views and menus */
   readonly td: SimTd | null;
+  /** The same rules when the mode is an expedition */
+  readonly expedition: SimExpedition | null;
   readonly piles: Piles;
   /** Items from fallen enemies (src/sim/drops.ts) */
   readonly drops: Drops;
@@ -94,7 +97,8 @@ export class SimWorld {
     this.piles = new Piles(this);
     this.drops = new Drops(this);
     this.td = o.mode?.kind === 'td' ? new SimTd(this, o.mode.td, o.players ?? 1, o.personal ?? false) : null;
-    this.rules = this.td;
+    this.expedition = o.mode?.kind === 'expedition' ? new SimExpedition(this, o.mode.spec, o.players ?? 1, o.personal ?? false) : null;
+    this.rules = this.td ?? this.expedition;
   }
 
   /** Floor under a point no higher than y + step (the bush on the plateau, a splash on a terrace, a landed pile); a chasm or no level — 0 */
