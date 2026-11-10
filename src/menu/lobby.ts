@@ -8,7 +8,8 @@ import type { MerchantKind } from '../merchants.ts';
 import type { Textures } from '../textures.ts';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
 import { boardHtml, missionCardHtml } from './expeditions.ts';
-import { MAX_DIFFICULTY, sameMission, withLanding } from '../expedition/mission.ts';
+import { isMission, MAX_DIFFICULTY, parseMission, sameMission, sameOperation, withLanding } from '../expedition/mission.ts';
+import { plantBed, unlockedDifficulty, type BedKind } from '../expedition/camp.ts';
 import { PARCEL_HINT, PARCEL_TITLE } from '../expedition/parcels.ts';
 import { PARCEL_KINDS, parcelLoadout } from '../sim/parcel.ts';
 import type { MenuScene } from './scene.ts';
@@ -27,6 +28,9 @@ import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
  * or join by code, seats and readiness; "Start game" for the host — "To battle" for the whole room, for a guest — "Ready".
  * Keys: Q / E — tabs, arrows — select, I — inventory, Enter — start, Esc — back.
  */
+/** `t` under another name: click handlers call their event target `t` */
+const tr = t;
+
 type Pane = 'gear' | 'map' | 'missions' | 'rooms';
 /** Room list refresh while the "Rooms" tab is open, ms */
 const ROOMS_POLL_MS = 3000;
@@ -131,7 +135,8 @@ export class Lobby {
     // entered or left a room — the list shows it at once (own row: "you are here")
     if ((m.t === 'room.state' && this.passFor !== null) || m.t === 'room.left') this.poll();
     if (m.t === 'room.state') this.passFor = null;
-    if (m.t === 'room.state' && !NET.isHost) this.map = m.room.map;
+    // the room's map: a guest follows the host; the host follows the server when it moves the room on to an operation's next mission
+    if (m.t === 'room.state' && (!NET.isHost || (isMission(m.room.map) && sameOperation(m.room.map, this.map)))) this.map = m.room.map;
     if ((m.t === 'room.state' || m.t === 'room.left' || m.t === 'welcome' || m.t === 'chat') && this.open && this.mode === 'online') this.renderSel();
   }
 
@@ -197,6 +202,9 @@ export class Lobby {
       else NET.setReady(!r.seats.find((x) => x.seat === r.you)?.ready);
       return;
     }
+    // a remembered mission above the hero's ladder (another hero played here before) does not start
+    const mission = parseMission(this.map);
+    if (mission && mission.difficulty > unlockedDifficulty(this.profile.data)) { this.flash(t('Win a mission of difficulty {n} first', { n: mission.difficulty - 1 })); return; }
     sfx.twinkle();
     void go(battleUrl({ mode: this.mode, map: this.map, players: 1 }));
   }
@@ -272,6 +280,9 @@ export class Lobby {
       if (map) { this.selectMap(map); return; }
       // expeditions: the board's difficulty and the landing point on the mission's sketch
       const diff = Number(t.closest<HTMLElement>('[data-diff]')?.dataset.diff);
+      if (diff && diff > unlockedDifficulty(this.profile.data)) { this.flash(tr('Win a mission of difficulty {n} first', { n: diff - 1 })); return; }
+      const bed = t.closest<HTMLElement>('[data-bed]')?.dataset.bed as BedKind | undefined;
+      if (bed) { if (plantBed(this.profile.data, bed)) { this.profile.save(); sfx.twinkle(); this.render(); } else this.flash(tr('Not enough seeds for this bed')); return; }
       if (diff) { this.expDiff = diff; const st = loadMenuState(); st.expDiff = diff; saveMenuState(st); this.render(); return; }
       const parcel = t.closest<HTMLElement>('[data-parcel]')?.dataset.parcel;
       if (parcel !== undefined) { this.cycleParcel(Number(parcel)); return; }
@@ -338,7 +349,7 @@ export class Lobby {
     this.q('mode').innerHTML = this.mode === 'online' ? t('Online game') : t('Solo game');
     for (const b of this.el.querySelectorAll<HTMLElement>('[data-pane]')) b.classList.toggle('on', b.dataset.pane === this.pane);
     this.el.classList.toggle('rooms', this.pane === 'rooms');
-    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() + this.parcelsHtml() : this.pane === 'map' ? this.mapsHtml() : this.pane === 'missions' ? boardHtml(this.map, this.expDiff) : this.roomsHtml();
+    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() + this.parcelsHtml() : this.pane === 'map' ? this.mapsHtml() : this.pane === 'missions' ? boardHtml(this.map, this.expDiff, this.profile.data, this.streak()) : this.roomsHtml();
     this.renderSel();
   }
 
@@ -418,6 +429,13 @@ export class Lobby {
       <button class="mm-btn small primary" data-act="change">${t('Change')} <kbd>I</kbd></button></div>`;
   }
 
+  /** Missions of an operation won in a row: solo — remembered by the menu; in a room the server keeps it, and the room's map is the step it is on */
+  private streak(): { seed: number; difficulty: number; next: number } | null {
+    if (this.mode === 'solo') return loadMenuState().streak ?? null;
+    const m = NET.room ? parseMission(NET.room.room.map) : null;
+    return m?.op ? { seed: m.op.seed, difficulty: m.difficulty, next: m.op.index } : null;
+  }
+
   /** Parcels for expeditions (src/sim/parcel.ts): three slots under the gear; a click puts the next kind into the slot */
   private parcelsHtml(): string {
     const kinds = parcelLoadout(this.profile.data.parcels);
@@ -451,7 +469,7 @@ export class Lobby {
 
   private mapCard(): string {
     const m = campaignMap(this.map);
-    if (m.mission) return missionCardHtml(m.id);
+    if (m.mission) return missionCardHtml(m.id, this.streak());
     return `<div class="mm-card map" style="--bg:${m.bg}"><div class="mm-card-tag">${difficultyTitle(m.difficulty)}</div>
       <h3>${m.title}</h3><p>${m.blurb}</p>
       <dl><dt>${t('Waves')}</dt><dd>${m.endless ? '∞' : m.waves}</dd><dt>${t('Lanes')}</dt><dd>${m.lanes}</dd><dt>${t('Bush')}</dt><dd>${m.bush}</dd><dt>${t('Treasury')}</dt><dd>${m.berries}</dd></dl>

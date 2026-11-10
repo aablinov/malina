@@ -5,6 +5,8 @@ import { Match, MAX_LOOT_ITEMS, type MatchEnd } from '../src/game/match.ts';
 import { checkPass, hashPass, newId } from './auth.ts';
 import { tx, type Db } from './db.ts';
 import { MAX_SEEDS_PER_MATCH, MAX_XP_PER_MATCH, type MapCatalog } from './maps.ts';
+import { missionResult, unlockedDifficulty } from '../src/expedition/camp.ts';
+import { boardDay, missionId, operation, operationMult, parseMission } from '../src/expedition/mission.ts';
 import type { Matches } from './repo/matches.ts';
 import type { Profiles } from './repo/profiles.ts';
 import type { Rooms as RoomRepo, RoomRow } from './repo/rooms.ts';
@@ -44,6 +46,8 @@ interface Room {
   members: Member[];
   /** Running battle */
   matchId: string | null;
+  /** Expeditions: missions of an operation the room has won in a row — the next one pays more (src/expedition/mission.ts) */
+  streak?: { seed: number; difficulty: number; next: number } | null;
 }
 
 export interface RoomDeps {
@@ -118,8 +122,15 @@ export class RoomManager {
   }
 
   /** password '' — an open room */
-  create(c: Conn, map: string, max: number, password: string): void {
+  /** The map exists and, if it is a mission, its difficulty is open to the host (the ladder, src/expedition/camp.ts) */
+  private checkMap(c: Conn, map: string): void {
     if (!this.d.maps.has(map)) throw new RoomError('bad-map', 'No such map');
+    const mission = parseMission(map);
+    if (mission && mission.difficulty > unlockedDifficulty(this.profileOf(c.playerId))) throw new RoomError('bad-map', 'This difficulty is not open yet');
+  }
+
+  create(c: Conn, map: string, max: number, password: string): void {
+    this.checkMap(c, map);
     this.leave(c, 'leave');
     const now = this.now();
     const row: RoomRow = {
@@ -226,7 +237,7 @@ export class RoomManager {
 
   setMap(c: Conn, map: string): void {
     const room = this.hostRoom(c);
-    if (!this.d.maps.has(map)) throw new RoomError('bad-map', 'No such map');
+    this.checkMap(c, map);
     if (room.row.state !== 'lobby') return;
     room.row.map = map;
     // map changed — readiness is reset
@@ -298,13 +309,15 @@ export class RoomManager {
     if (room.matchId !== matchId) return;
     const now = this.now();
     const maxBerries = this.d.maps.maxBerries(room.row.map, room.members.length);
+    // an expedition: the mission's place in an operation the room carries through, the day for the order of the day
+    const mission = parseMission(room.row.map), mult = mission ? operationMult(mission, room.streak ?? null) : 1, day = boardDay(now);
     const updated: { m: Member; version: number; data: ProfileData }[] = [];
     tx(this.d.db, () => {
       if (!this.d.matches.finish(matchId, e.result, Math.min(e.wave, this.d.maps.waves(room.row.map)), now)) return;
       for (const m of room.members) {
         const r = e.rewards.get(m.seat);
         if (!r) continue;
-        const berries = Math.min(r.berries, maxBerries), xp = Math.min(r.xp, MAX_XP_PER_MATCH);
+        const berries = Math.min(Math.round(r.berries * mult), maxBerries), xp = Math.min(r.xp, MAX_XP_PER_MATCH);
         this.d.matches.reward(matchId, m.playerId, berries, xp);
         const prof = this.d.profiles.get(m.playerId);
         if (!prof) continue;
@@ -315,9 +328,17 @@ export class RoomManager {
         for (const it of (r.items ?? []).slice(0, MAX_LOOT_ITEMS)) if (ITEMS.some((d) => d.id === it.def)) p.add(it.def, Math.max(1, Math.min(99, Math.round(it.power))));
         // seeds brought out of an expedition on the balloon
         if (r.seeds) { const cap = (n: number): number => Math.max(0, Math.min(MAX_SEEDS_PER_MATCH, Math.round(n))); p.addSeeds({ common: cap(r.seeds.common), rare: cap(r.seeds.rare), golden: cap(r.seeds.golden) }); }
+        // the difficulty ladder and the order of the day (src/expedition/camp.ts)
+        if (mission && r.stats) missionResult(p.data, { won: e.result === 'won', difficulty: mission.difficulty, stats: r.stats, day });
         const version = this.d.profiles.put(m.playerId, prof.version, p.data, now);
         if (version !== null) updated.push({ m, version, data: p.data });
       }
+      // a won mission of an operation: the room moves on to the next one and keeps the streak; anything else breaks it
+      if (mission?.op && e.result === 'won') {
+        const op = operation(mission.op.seed, mission.difficulty), next = mission.op.index + 1;
+        room.streak = next < op.missions.length ? { seed: op.seed, difficulty: op.difficulty, next } : null;
+        if (next < op.missions.length) room.row.map = missionId(op.missions[next]);
+      } else room.streak = null;
       this.toLobby(room);
     });
     for (const u of updated) u.m.conn?.send({ t: 'profile.updated', version: u.version, data: u.data });

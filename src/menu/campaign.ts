@@ -1,5 +1,4 @@
-import { missionId, parseMission } from '../expedition/mission.ts';
-import type { ExpeditionParams } from '../expedition/types.ts';
+import { missionId, parseMission, type Mission } from '../expedition/mission.ts';
 import { t } from '../i18n/i18n.ts';
 import { mapByName } from '../level/maps.ts';
 import type { TdSpec } from '../td/types.ts';
@@ -25,7 +24,7 @@ export interface CampaignMap {
   /** Endless waves (Misty Clearing): no victory, the record counts */
   endless: boolean;
   /** An expedition mission (src/expedition/mission.ts): the id is the mission itself */
-  mission?: Required<ExpeditionParams>;
+  mission?: Mission;
 }
 
 const DIFFICULTY = ['', t('Easy'), t('Medium'), t('Hard')];
@@ -54,7 +53,7 @@ const MISSION_ICON = { lairs: 'axe', beacons: 'spark', bush: 'berry' };
 const MISSION_BG = { lairs: 'linear-gradient(160deg, #5c2338, #20121c 70%)', beacons: 'linear-gradient(160deg, #6a4a16, #24190c 70%)', bush: 'linear-gradient(160deg, #2c5a2a, #132016 70%)' };
 
 /** A mission as a map of the camp: its title, colours and icon — for room lists, the start button, the battle menu */
-function missionMap(m: Required<ExpeditionParams>): CampaignMap {
+function missionMap(m: Mission): CampaignMap {
   return {
     id: missionId(m), title: `${t('Expedition')}: ${MISSION_TITLE[m.objective]}`, difficulty: m.difficulty <= 2 ? 1 : m.difficulty <= 5 ? 2 : 3, blurb: '',
     bg: MISSION_BG[m.objective], icon: MISSION_ICON[m.objective], waves: 0, lanes: 0, bush: 0, berries: 0, endless: false, mission: m,

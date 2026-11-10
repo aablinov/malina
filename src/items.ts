@@ -407,6 +407,10 @@ export interface ProfileData {
   seeds?: { common: number; rare: number; golden: number };
   /** Parcels taken on expeditions — three slots (src/sim/parcel.ts); absent — the default set */
   parcels?: string[];
+  /** Expeditions: the highest difficulty open to the hero (1 by default), camp beds by kind, progress on the order of the day (src/expedition/camp.ts) */
+  expLevel?: number;
+  beds?: Record<string, number>;
+  order?: { day: number; n: number; done: boolean };
 }
 
 /** Multiplier from item power: +6% per unit */
@@ -648,6 +652,9 @@ export class Profile {
     if (b.common + b.rare + b.golden <= 0) return;
     storage?.update((x) => { new Profile(x).addSeeds(b); });
   }
+
+  /** A solo mission is over: the ladder and the order of the day into the stored profile (online the server does it) */
+  static creditMission(apply: (d: ProfileData) => void): void { storage?.update((x) => { apply(x); }); }
 
   /** Victory loot into the stored profile's raspberries (solo battle; online the server pays it) */
   static creditStored(n: number): void {

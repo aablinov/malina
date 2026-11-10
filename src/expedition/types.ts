@@ -29,6 +29,8 @@ export interface ExpeditionParams {
   objective: ObjectiveKind;
   /** Which of the three landing points the squad takes (0 by default); the map itself does not depend on it */
   landing?: number;
+  /** The mission's place in an operation (src/expedition/mission.ts): the operation's seed and the mission's number in it */
+  op?: { seed: number; index: number };
 }
 
 export interface ExpSite { id: string; x: number; z: number }
@@ -55,6 +57,8 @@ export interface ExpeditionSpec {
   secondary: ExpSecondary[];
   lairs: ExpLair[];
   pois: ExpPoi[];
+  /** Modifiers of the mission's operation: mist, downpour, fullmoon, fury, quiet (section 9) */
+  mods: string[];
   /** Guards at posts and patrols between lairs (src/sim/garrison.ts) */
   garrisons: MobRoomSpec[];
 }

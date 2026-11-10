@@ -50,6 +50,10 @@ export class Parcels {
   private readonly loadouts = new Map<number, ParcelKind[]>();
   private readonly cds = new Map<number, number[]>();
   private n = 0;
+  /** Downpour: parcels fly longer; camp beds: a seat's slots rest less (1 — as is) */
+  delay = PARCEL_DELAY;
+  private readonly haste = new Map<number, number>();
+  setHaste(seat: number, k: number): void { this.haste.set(seat, Math.max(0.5, Math.min(1, k))); }
   private solidsCache: Obstacle[] | null = null;
   private readonly w: SimWorld;
 
@@ -70,10 +74,10 @@ export class Parcels {
     if (!h || h.down || !Number.isInteger(slot) || slot < 0 || slot >= PARCEL_SLOTS || cd[slot] > 0) return false;
     if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - h.pos.x, z - h.pos.z) > PARCEL_RANGE) return false;
     const kind = this.loadout(seat)[slot];
-    cd[slot] = PARCELS[kind].cd;
-    const p: Flying = { id: `parcel${++this.n}`, kind, x, z, t: PARCEL_DELAY, seat };
+    cd[slot] = PARCELS[kind].cd * (this.haste.get(seat) ?? 1);
+    const p: Flying = { id: `parcel${++this.n}`, kind, x, z, t: this.delay, seat };
     this.flying.push(p);
-    this.w.emit({ t: 'parcel.call', id: p.id, x, y: this.w.floor(x, z, h.pos.y + 2), z, kind, seat, sec: PARCEL_DELAY });
+    this.w.emit({ t: 'parcel.call', id: p.id, x, y: this.w.floor(x, z, h.pos.y + 2), z, kind, seat, sec: this.delay });
     return true;
   }
 

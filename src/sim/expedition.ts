@@ -10,7 +10,8 @@ import type { Target } from '../target.ts';
 import { clampRating, lootK, scaledCount } from '../td/scaling.ts';
 import { SimBush } from './bush.ts';
 import { Garrisons, type PostedMob } from './garrison.ts';
-import { Parcels } from './parcel.ts';
+import { Parcels, PARCEL_DELAY } from './parcel.ts';
+import { HASTE_STEP, STASH_BERRIES, type Beds, type MissionStats } from '../expedition/camp.ts';
 import { BEACON_HOLD, BOARD_WAIT, EXTRACT_WAIT, HOLD_R, PAD_R, SimBeacon, SimExtraction, SimNest, USE_R } from './objective.ts';
 import type { Rules, RulesCommand, RulesState } from './rules.ts';
 import type { HeroLike, SimWorld } from './world.ts';
@@ -106,6 +107,12 @@ export class SimExpedition implements Rules {
   /** Shared lives of the squad */
   totems = TOTEMS;
   readonly ownsDowned = true;
+  /** Modifiers of the operation (section 9) */
+  private readonly quiet: boolean;
+  private readonly fury: boolean;
+  private readonly duskAt: number;
+  /** Totems the camp beds added — the squad takes the best bed among its heroes */
+  private bedTotems = 0;
   private readonly horns: Horn[] = [];
   private readonly downs = new Map<number, Down>();
   /** Hint to the player (seat, text) */
@@ -133,8 +140,15 @@ export class SimExpedition implements Rules {
     this.pool = guardPool(spec.difficulty);
     w.h.setScale(this.base, this.players);
     this.parcels = new Parcels(w);
+    const mods = spec.mods ?? [];
+    this.quiet = mods.includes('quiet');
+    this.fury = mods.includes('fury');
+    this.duskAt = mods.includes('fullmoon') ? DUSK_AT * 0.55 : DUSK_AT;
+    if (mods.includes('downpour')) this.parcels.delay = PARCEL_DELAY * 2;
     this.garrisons = new Garrisons(w, mirrored ? [] : spec.garrisons);
     this.nests = spec.lairs.map((l) => new SimNest(w, l, this.players));
+    // quiet forest: no horns, but the lairs are tougher
+    if (this.quiet) for (const n of this.nests) n.hp = n.maxHp = Math.round(n.maxHp * 1.5);
     for (const n of this.nests) n.onDeath = () => this.nestFell(n);
     this.beacons = spec.objective.kind === 'beacons' ? spec.objective.sites.map((s) => new SimBeacon(w, s)) : [];
     this.extraction = new SimExtraction(w, spec.extraction);
@@ -147,7 +161,7 @@ export class SimExpedition implements Rules {
     });
     w.piles.onPick = (seat, n) => this.gain(seat, n);
     // the first of every patrol carries the horn
-    for (const g of this.garrisons.rooms) if (g.spec.id.startsWith('patrol') && g.mobs[0]) this.horns.push({ mob: g.mobs[0], t: -1, rest: 0 });
+    if (!this.quiet) for (const g of this.garrisons.rooms) if (g.spec.id.startsWith('patrol') && g.mobs[0]) this.horns.push({ mob: g.mobs[0], t: -1, rest: 0 });
   }
 
   // ---------- rules ----------
@@ -192,7 +206,20 @@ export class SimExpedition implements Rules {
   }
   lootOf(seat = 0): number { return Math.floor(this.loots.get(this.key(seat)) ?? 0); }
   /** Loot to every seat: the mission is a team one */
-  addLoot(n: number): void { if (n > 0) for (const seat of this.purses.keys()) this.loots.set(seat, (this.loots.get(seat) ?? 0) + n * lootK(this.rating)); }
+  addLoot(n: number): void { if (n > 0) for (const seat of this.purses.keys()) this.loots.set(seat, (this.loots.get(seat) ?? 0) + n * lootK(this.rating) * (this.fury ? 1.25 : 1)); }
+
+  /** A hero's camp beds (src/expedition/camp.ts): starting raspberries, faster parcels, extra totems for the squad */
+  applyBeds(seat: number, beds: Beds): void {
+    if (beds.stash > 0 && this.berries(seat) === 0) this.gain(seat, beds.stash * STASH_BERRIES);
+    this.parcels.setHaste(seat, 1 - beds.haste * HASTE_STEP);
+    if (beds.totem > this.bedTotems) { this.totems += beds.totem - this.bedTotems; this.bedTotems = beds.totem; }
+  }
+
+  /** What the mission adds to a hero's order of the day: the squad's lairs and beacons, his own seeds, the mission itself */
+  statsOf(seat: number): MissionStats {
+    const b = this.bankedOf(seat);
+    return { lairs: this.nests.filter((n) => n.dead).length, beacons: this.beacons.filter((x) => x.state === 'lit').length, seeds: b.common + b.rare + b.golden, missions: this.state === 'won' ? 1 : 0 };
+  }
   /** Seeds a hero carries now — lost unless he boards the balloon */
   carriedOf(seat: number): SeedBag { let b = this.carried.get(seat); if (!b) { b = emptyBag(); this.carried.set(seat, b); } return b; }
   /** Seeds a hero brought out — these reach the camp */
@@ -363,7 +390,7 @@ export class SimExpedition implements Rules {
 
   private tickAlarm(dt: number, heroes: readonly HeroLike[]): void {
     this.time += dt;
-    if (!this.dusk && this.time >= DUSK_AT) { this.dusk = true; this.w.emit({ t: 'exp.dusk' }); }
+    if (!this.dusk && this.time >= this.duskAt) { this.dusk = true; this.w.emit({ t: 'exp.dusk' }); }
     // a standing horn-blowers' nest keeps the Order on its toes
     const nest = this.sides.some((s) => s.nest && !s.nest.dead);
     this.raiseAlarm(ALARM_RATE * dt * (this.dusk ? 2 : 1) * (nest ? 1.5 : 1));

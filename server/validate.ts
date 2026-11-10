@@ -23,6 +23,9 @@ export function checkProfile(v: unknown): { ok: true; data: ProfileData } | { ok
     if (!isInt(v[k], 0, BIG)) return { ok: false, error: `field ${k}` };
   }
   if ((v.level as number) < 1) return { ok: false, error: 'field level' };
+  if (v.expLevel !== undefined && !isInt(v.expLevel, 1, 8)) return { ok: false, error: 'field expLevel' };
+  if (v.beds !== undefined && !(isObj(v.beds) && Object.keys(v.beds).length <= 8 && Object.values(v.beds).every((x) => isInt(x, 0, 3)))) return { ok: false, error: 'field beds' };
+  if (v.order !== undefined && !(isObj(v.order) && isInt(v.order.day, 0, BIG) && isInt(v.order.n, 0, 1000) && typeof v.order.done === 'boolean')) return { ok: false, error: 'field order' };
   if (v.parcels !== undefined && !(Array.isArray(v.parcels) && v.parcels.length <= 3 && v.parcels.every((x) => isStr(x, 24)))) return { ok: false, error: 'field parcels' };
   if (v.seeds !== undefined && !(isObj(v.seeds) && isInt(v.seeds.common, 0, BIG) && isInt(v.seeds.rare, 0, BIG) && isInt(v.seeds.golden, 0, BIG))) return { ok: false, error: 'field seeds' };
   if (!Array.isArray(v.items) || v.items.length > 2000) return { ok: false, error: 'field items' };
@@ -62,10 +65,10 @@ export function checkClientMsg(v: unknown): ClientMsg | null {
     case 'hello': return isStr(v.token, 100) && Number.isInteger(v.protocol) ? (v as ClientMsg) : null;
     case 'ping': case 'room.leave': case 'room.start': case 'room.again': return v as ClientMsg;
     case 'chat': return isStr(v.text, 1000) ? (v as ClientMsg) : null;
-    case 'room.create': return isStr(v.map, 32) && isInt(v.max, 1, MAX_PLAYERS) && isStr(v.password, NET_LIMITS.passMax) ? { t: 'room.create', map: v.map, max: v.max, password: v.password } : null;
+    case 'room.create': return isStr(v.map, 48) && isInt(v.max, 1, MAX_PLAYERS) && isStr(v.password, NET_LIMITS.passMax) ? { t: 'room.create', map: v.map, max: v.max, password: v.password } : null;
     case 'room.join': return isStr(v.code, 12) && (v.password === undefined || isStr(v.password, NET_LIMITS.passMax)) ? { t: 'room.join', code: v.code, password: v.password } : null;
     case 'room.ready': return typeof v.ready === 'boolean' ? (v as ClientMsg) : null;
-    case 'room.map': return isStr(v.map, 32) ? (v as ClientMsg) : null;
+    case 'room.map': return isStr(v.map, 48) ? (v as ClientMsg) : null;
     case 'room.kick': return isStr(v.playerId, 64) ? (v as ClientMsg) : null;
     case 'voice': return typeof v.on === 'boolean' ? (v as ClientMsg) : null;
     case 'rtc': return isInt(v.to, 0, MAX_PLAYERS - 1) && checkRtc(v.data) ? { t: 'rtc', to: v.to, data: v.data } : null;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { missionMods } from '../expedition/mission.ts';
 import { guardPool, type ExpeditionParams, type ExpeditionSpec, type ExpLair, type ExpPoi, type ExpSecondary, type ExpSite, type SecondaryKind, type SeedRarity } from '../expedition/types.ts';
 import { rng, type Rand } from '../rng.ts';
 import type { MatchMap } from '../sim/rules.ts';
@@ -48,6 +49,8 @@ export function buildExpedition(p: ExpeditionParams, lib: Record<string, Library
 
 function build(p: ExpeditionParams, seed: number, lib: Record<string, LibraryPrefab>): Level {
   const r: Rand = rng(seed), H = EXP_HALF, d = p.difficulty;
+  // the operation's modifiers (section 9): fury — larger patrols, full moon — a golden seed two difficulties earlier
+  const mods = missionMods(p), fury = mods.includes('fury'), moon = mods.includes('fullmoon');
   const int = (a: number, b: number): number => a + Math.floor(r() * (b - a + 1));
   const taken: Spot[] = [];
   /** A free point in the ring r0…r1 from the centre, at least `gap` from everything placed */
@@ -80,7 +83,7 @@ function build(p: ExpeditionParams, seed: number, lib: Record<string, LibraryPre
   // seeds: rare from difficulty 3 on two points, golden from 5 on the point nearest to the large lair
   const byBig = pois.slice().sort((a, b) => Math.hypot(a.x - big.x, a.z - big.z) - Math.hypot(b.x - big.x, b.z - big.z));
   if (d >= 3) for (const q of byBig.slice(1, 3)) q.seed = 'rare';
-  if (d >= 5) byBig[0].seed = 'golden';
+  if (d >= (moon ? 3 : 5)) byBig[0].seed = 'golden';
   for (const q of pois) if (q.seed === 'common' && r() < 0.35) q.seed = null;
 
   // ---------- garrisons ----------
@@ -105,7 +108,7 @@ function build(p: ExpeditionParams, seed: number, lib: Record<string, LibraryPre
     const off = (c: ExpLair, to: ExpLair): [number, number] => { const l = Math.hypot(to.x - c.x, to.z - c.z) || 1; return [Math.round(c.x + ((to.x - c.x) / l) * 10), Math.round(c.z + ((to.z - c.z) / l) * 10)]; };
     const from = off(a, b), to = off(b, a);
     patrolLines.push([from[0], from[1], to[0], to[1]]);
-    const posts: MobPost[] = Array.from({ length: 2 + (d >= 4 ? 1 : 0) }, (_, k) => ({ kind: pick(), x: from[0] + k * 1.5, z: from[1] + (k % 2), aggro: 11, route: [from, to] }));
+    const posts: MobPost[] = Array.from({ length: 2 + (d >= 4 ? 1 : 0) + (fury ? 1 : 0) }, (_, k) => ({ kind: pick(), x: from[0] + k * 1.5, z: from[1] + (k % 2), aggro: 11, route: [from, to] }));
     garrisons.push({ id: `patrol${i}`, title: 'Patrol', x0: Math.min(from[0], to[0]) - 4, x1: Math.max(from[0], to[0]) + 4, z0: Math.min(from[1], to[1]) - 4, z1: Math.max(from[1], to[1]) + 4, posts, enter: { x: from[0], z: from[1], yaw: 0 }, respawn: false });
   });
 
@@ -189,7 +192,7 @@ function build(p: ExpeditionParams, seed: number, lib: Record<string, LibraryPre
   }
 
   const land = landings[Math.max(0, Math.min(landings.length - 1, Math.round(p.landing ?? 0)))];
-  const spec: ExpeditionSpec = { seed: p.seed, difficulty: d, half: H, level: d, landings, landing: landings.indexOf(land), extraction, objective: { kind: p.objective, sites: objSites }, secondary, lairs, pois, garrisons };
+  const spec: ExpeditionSpec = { seed: p.seed, difficulty: d, half: H, level: d, landings, landing: landings.indexOf(land), mods, extraction, objective: { kind: p.objective, sites: objSites }, secondary, lairs, pois, garrisons };
   L.spawn = [land.x, 0, land.z];
   // the hero faces the middle of the map (meta.spawnYaw: 0 — towards +X, 90 — towards +Z)
   L.meta.spawnYaw = Math.round((Math.atan2(-land.z, -land.x) * 180) / Math.PI);
@@ -200,6 +203,9 @@ function build(p: ExpeditionParams, seed: number, lib: Record<string, LibraryPre
     sky: { color: '#9fd0f0', hemiSky: '#bfe2ff', hemiGround: '#6f8f5a', hemi: 0.9, ambient: 0.3 },
     fog: { enabled: true, color: '#cfe6f2', near: 60, far: 150 },
     post: { bloom: 0.35, bloomThreshold: 0.85, vignette: 0.22, saturation: 1.08 },
+    ...(mods.includes('downpour') ? { weather: { kind: 'rain', intensity: 0.7, wind: 0.4 } } : {}),
+    // mist: the haze stands close — lairs and patrols show up late
+    ...(mods.includes('mist') ? { fog: { enabled: true, color: '#dfe8ea', near: 14, far: 48 } } : {}),
   };
   L.dirty.clear();
   return L;

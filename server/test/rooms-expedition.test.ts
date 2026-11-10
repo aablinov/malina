@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { boardDay, dailyBoard, missionId, parseMission, withLanding } from '../../src/expedition/mission.ts';
-import { OBJECTIVES } from '../../src/expedition/types.ts';
+import { boardDay, dailyBoard, missionId, missionMods, MODIFIERS, OP_STEP, operationMult, parseMission, withLanding } from '../../src/expedition/mission.ts';
 import { MapCatalog } from '../maps.ts';
 import { api, MAPS, Player, register, startServer, type TestServer } from './helpers.ts';
 
@@ -26,9 +25,22 @@ test('mission id: parsed back, malformed ones rejected; the board of a day is th
   const day = boardDay(Date.UTC(2026, 10, 11, 15));
   assert.deepEqual(dailyBoard(day, 3), dailyBoard(day, 3));
   assert.notDeepEqual(dailyBoard(day, 3), dailyBoard(day + 1, 3));
-  assert.notDeepEqual(dailyBoard(day, 3).map((m) => m.seed), dailyBoard(day, 4).map((m) => m.seed));
-  assert.deepEqual(dailyBoard(day, 3).map((m) => m.objective).sort(), OBJECTIVES.slice().sort());
-  for (const m of dailyBoard(day, 8)) assert.deepEqual(parseMission(missionId(m)), m);
+  assert.notDeepEqual(dailyBoard(day, 3).map((o) => o.seed), dailyBoard(day, 4).map((o) => o.seed));
+  // an operation: two or three missions with different objectives, shared modifiers; its missions parse back with their place
+  for (const op of dailyBoard(day, 8)) {
+    assert.ok(op.missions.length >= 2 && op.missions.length <= 3);
+    assert.equal(new Set(op.missions.map((m) => m.objective)).size, op.missions.length);
+    assert.ok(op.mods.length >= 1 && op.mods.every((m) => MODIFIERS.includes(m)));
+    for (const m of op.missions) { assert.deepEqual(parseMission(missionId(m)), m); assert.deepEqual(missionMods(m), op.mods); }
+    // a place in an operation is not taken on trust
+    const m = op.missions[1];
+    assert.equal(parseMission(missionId({ ...m, op: { seed: m.op!.seed, index: 0 } })), null);
+    assert.equal(parseMission(missionId({ ...m, seed: m.seed + 1 })), null);
+    // the multiplier grows only for missions won in a row
+    assert.equal(operationMult(op.missions[0], null), 1);
+    assert.equal(operationMult(m, { seed: op.seed, difficulty: 8, next: 0 }), 1);
+    assert.ok(operationMult(m, { seed: op.seed, difficulty: 8, next: 1 }) >= 1 + OP_STEP);
+  }
   // the catalog serves missions next to the map files
   const maps = new MapCatalog(MAPS);
   assert.ok(maps.has('exp:12345:4:bush:2') && !maps.has('exp:12345:9:bush:2') && maps.has('td'));
@@ -39,11 +51,14 @@ test('mission id: parsed back, malformed ones rejected; the board of a day is th
 test('mission room: the server runs an expedition — heroes on the chosen landing, `exp` commands, seeds and loot into the profiles', async () => {
   s = await startServer();
   const h = await hero('Lena'), g = await hero('Gosha');
-  const map = 'exp:777:2:beacons:1';
+  const map = 'exp:777:1:beacons:1';
   h.p.send({ t: 'room.create', map: 'exp:777:9:beacons:1', max: 4, password: '' });
   assert.equal((await h.p.next('error')).code, 'bad-map');
   h.p.send({ t: 'room.create', map: 'td', max: 4, password: '' });
   const code = (await h.p.state()).room.code;
+  // the ladder: difficulty 2 opens only after a won mission of difficulty 1
+  h.p.send({ t: 'room.map', map: 'exp:777:2:beacons:1' });
+  assert.equal((await h.p.next('error')).code, 'bad-map');
   h.p.send({ t: 'room.map', map });
   assert.equal((await h.p.state((m) => m.room.map === map)).room.map, map);
   g.p.send({ t: 'room.join', code });
@@ -85,6 +100,7 @@ test('mission room: the server runs an expedition — heroes on the chosen landi
   assert.equal(over.result, 'won');
   const gp = (await g.p.next('profile.updated')).data as { berries: number; seeds?: { common: number; rare: number; golden: number } };
   assert.deepEqual(gp.seeds, { common: 0, rare: 2, golden: 0 });
+  assert.equal((gp as { expLevel?: number }).expLevel, 2, 'the won mission opened the next difficulty');
   assert.equal(gp.berries, 250 + loot);
   const hp = (await h.p.next('profile.updated')).data as { seeds?: unknown };
   assert.equal(hp.seeds, undefined, 'the host did not board: his seeds are lost');
@@ -92,4 +108,33 @@ test('mission room: the server runs an expedition — heroes on the chosen landi
   // the stored profile with seeds passes validation when the camp saves it again
   const prof = await api(s, 'GET', '/api/profile', undefined, g.token);
   assert.deepEqual(prof.body.data.seeds, { common: 0, rare: 2, golden: 0 });
+});
+
+test('operation in a room: a won mission moves the room on to the next one, which pays more; a lost one breaks the streak', async () => {
+  s = await startServer();
+  const h = await hero('Olya');
+  const op = dailyBoard(boardDay(), 1)[0], [first, second] = op.missions.map((m) => missionId(m));
+  h.p.send({ t: 'room.create', map: first, max: 4, password: '' });
+  await h.p.state((m) => m.room.map === first);
+  const win = async (loot: number): Promise<number> => {
+    h.p.send({ t: 'room.start' });
+    const { matchId } = await h.p.next('battle.start');
+    const exp = s.app.games.get(matchId)!.battle.world.expedition!;
+    frames(4);
+    exp.addLoot(loot);
+    const had = exp.lootOf(0);
+    exp.state = 'won';
+    frames(120);
+    await h.p.next('battle.over');
+    const paid = ((await api(s, 'GET', '/api/matches', undefined, h.token)).body as { id: string; berries: number }[]).find((x) => x.id === matchId)!.berries;
+    return paid / had;
+  };
+  assert.equal(await win(100), 1, 'the first mission pays as is');
+  assert.equal((await h.p.state((m) => m.room.state === 'lobby')).room.map, second, 'the room moved on to the next mission');
+  assert.ok(Math.abs((await win(100)) - operationMult(op.missions[1], { seed: op.seed, difficulty: 1, next: 1 })) < 0.02, 'the second one pays more');
+  await h.p.state((m) => m.room.state === 'lobby');
+  // picked out of order, a later mission pays as is
+  h.p.send({ t: 'room.map', map: second });
+  await h.p.state((m) => m.room.map === second);
+  assert.equal(await win(100), 1);
 });

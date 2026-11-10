@@ -565,3 +565,7 @@ Pages: [design-expeditions.md](design-expeditions.md).
 ## [2026-11-11] code | Parcels from the camp (Expeditions, stage 6)
 `src/sim/parcel.ts`: three slots per hero on Z / X / C — a defence tower that stands for a minute wherever it lands, a spell volley over an area, a healing totem; called to the aim point within 16 m, landing in 3 s, each slot with its own rest. The set is picked in the camp under the gear and stored in the profile. The mission view reuses the defence's tower, bolt and pool views.
 Pages: [design-expeditions.md](design-expeditions.md).
+
+## [2026-11-11] code | Operations, the difficulty ladder, modifiers, camp beds, the order of the day (Expeditions, stage 7)
+The board offers three operations a day: chains of two or three missions with shared modifiers (mist, downpour, full moon, Order's fury, quiet forest); missions won in a row pay more, the server keeps the room's streak and moves it on. A won mission of the hero's top difficulty opens the next one. Seeds are planted in three camp beds (totem, stash, courier); the order of the day counts lairs, beacons, seeds or missions and pays once. `src/expedition/camp.ts`, `src/expedition/mission.ts`, `src/menu/expeditions.ts`; tests `server/test/expedition-camp.test.ts`, `server/test/rooms-expedition.test.ts`.
+Pages: [design-expeditions.md](design-expeditions.md).

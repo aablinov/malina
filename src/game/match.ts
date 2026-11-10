@@ -9,6 +9,7 @@ import type { GearAction } from '../net/protocol.ts';
 import { SnapshotRing, type Delta, type EntityState } from '../net/snapshot.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { r2 } from '../sim/entities.ts';
+import { bedsOf, type MissionStats } from '../expedition/camp.ts';
 import type { SeedBag } from '../expedition/types.ts';
 import type { MatchMap, Rules } from '../sim/rules.ts';
 import type { SimTd } from '../sim/td.ts';
@@ -21,7 +22,7 @@ import { HeadlessBattle, type BattleHero } from './battle.ts';
  */
 export interface MatchPlayer { seat: number; playerId: string; name: string; profile: ProfileData }
 export type GameChannel = Channel<GameClientMsg | GameServerMsg, CmdBatch | Delta<SimEvent>>;
-export interface MatchEnd { result: 'won' | 'lost' | 'abandoned'; wave: number; rewards: Map<number, { berries: number; xp: number; items?: LootItem[]; seeds?: SeedBag }> }
+export interface MatchEnd { result: 'won' | 'lost' | 'abandoned'; wave: number; rewards: Map<number, { berries: number; xp: number; items?: LootItem[]; seeds?: SeedBag; stats?: MissionStats }> }
 /** An item an enemy left and a hero picked up (src/sim/drops.ts): it goes to the stored profile when the match ends, whatever the outcome */
 export interface LootItem { def: string; power: number }
 /** No more items than this per hero per match reach the stored profile */
@@ -102,6 +103,8 @@ export class Match {
     this.seats.set(p.seat, s);
     // the parcels the hero picked in the camp
     this.battle.world.expedition?.parcels.setLoadout(p.seat, hero.profile.data.parcels);
+    // and what his camp beds give: starting raspberries, faster parcels, a totem for the squad
+    this.battle.world.expedition?.applyBeds(p.seat, bedsOf(hero.profile.data));
     this.rules.setPlayers(this.seats.size);
     // strength — from the gear the hero came with (the sutler's goods do not raise it)
     this.ratings.set(p.seat, hero.profile.rating);
@@ -386,6 +389,8 @@ export class Match {
       if (s.loot.length) r.items = s.loot.slice();
       // seeds — only what the hero brought out on the balloon
       if (exp && result === 'won') { const b = exp.bankedOf(s.player.seat); if (b.common + b.rare + b.golden > 0) r.seeds = b; }
+      // what the mission adds to the order of the day (an abandoned one adds nothing)
+      if (exp && result !== 'abandoned') r.stats = exp.statsOf(s.player.seat);
     }
     this.ended = { result, wave, rewards };
     this.broadcast({ t: 'over', result, wave });

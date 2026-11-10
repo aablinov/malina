@@ -23,7 +23,8 @@ import { buildFloor } from '../level/dungeon.ts';
 import { buildExpedition } from '../level/expedition-map.ts';
 import { LIBRARY } from '../level/prefab-lib/index.ts';
 import { OBJECTIVES, type ExpeditionSpec, type ObjectiveKind } from '../expedition/types.ts';
-import { parseMission } from '../expedition/mission.ts';
+import { boardDay, missionId, operation, operationMult, parseMission } from '../expedition/mission.ts';
+import { bedsOf, missionResult } from '../expedition/camp.ts';
 import { PARCEL_RANGE } from '../sim/parcel.ts';
 import type { SimExpedition } from '../sim/expedition.ts';
 import { ExpUi } from '../cgame/exp-ui.ts';
@@ -59,7 +60,7 @@ import { AUTOMATED, DEV_TOOLS, fromMenu, openEditor } from '../devflag.ts';
 import { loadSettings, pixelRatio } from '../menu/settings.ts';
 import { applyAudio, SettingsPanel } from '../menu/settings-panel.ts';
 import { BattleMenu } from '../menu/pause.ts';
-import { markWon, NET, netBattleUrl, record, saveRecord, VOICE } from '../menu/session.ts';
+import { loadMenuState, markWon, NET, netBattleUrl, record, saveMenuState, saveRecord, VOICE } from '../menu/session.ts';
 import { netBattle } from '../net/client.ts';
 import { SnapshotView } from '../net/snapshot.ts';
 import { campaignMap } from '../menu/campaign.ts';
@@ -955,6 +956,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     world.drops.onPick = (_seat, def) => { const power = mobLootPower(def, profile.power); profile.add(def, power); profile.save(); Profile.keepItem(def, power); };
     ex.setRating(profile.rating);
     ex.parcels.setLoadout(0, profile.data.parcels);
+    ex.applyBeds(0, bedsOf(profile.data));
     ex.fund(0);
     ex.onToast = (_seat, text) => toast(text);
     profile.data.berries = 0;
@@ -1312,9 +1314,24 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       // the mission's loot goes to the camp when the balloon has left with the objective done
       const me = nb?.seat ?? 0;
       // in a network battle the server pays the loot and the seeds (server/rooms.ts)
-      if (exped.paid && !netClient) { Profile.creditStored(exped.lootOf(me)); Profile.creditSeeds(exped.bankedOf(me)); }
+      const won = exped.state === 'won', mission = parseMission(mapName);
+      // a mission of an operation won in a row pays more; in a network battle the server counts it all (server/rooms.ts)
+      const menu = loadMenuState(), mult = mission && !netClient ? operationMult(mission, menu.streak ?? null) : 1, loot = Math.round(exped.lootOf(me) * mult);
+      if (!netClient) {
+        Profile.creditStored(loot);
+        Profile.creditSeeds(exped.bankedOf(me));
+        const stats = exped.statsOf(me), difficulty = exped.spec.difficulty;
+        Profile.creditMission((d) => { missionResult(d, { won, difficulty, stats, day: boardDay() }); });
+        // the camp opens on the operation's next mission
+        if (mission?.op && won) {
+          const op = operation(mission.op.seed, mission.difficulty), next = mission.op.index + 1;
+          menu.streak = next < op.missions.length ? { seed: op.seed, difficulty: op.difficulty, next } : null;
+          if (next < op.missions.length) menu.map = missionId(op.missions[next]);
+        } else menu.streak = null;
+        saveMenuState(menu);
+      }
       // a failed mission keeps half its loot — the result screen shows it as kept
-      if (battle) battle.end(exped.state === 'won', expUi.summary(), exped.lootOf(me), exped.state !== 'won');
+      if (battle) battle.end(won, expUi.summary(), loot, !won);
       else hud.banner(`${t(exped.state === 'won' ? 'Mission complete' : 'Mission failed')}<small>${expUi.summary()}</small>`, 8);
     }
     if (battle && sim && sim.state !== tdEndShown) {

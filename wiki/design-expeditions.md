@@ -1,6 +1,6 @@
 # Expeditions. Design document
 
-Version 0.6 of 2026-11-11. In the code: stages 1–6 (section 11) — missions are played solo and in a room from the camp's "Expeditions" tab, with the alarm, horn-blowers, dusk, revive, totems and parcels. Not in the code yet: operations, the difficulty ladder, modifiers, camp beds and the order of the day (stage 7).
+Version 1.0 of 2026-11-11. In the code: all seven stages (section 11) — missions are played solo and in a room from the camp's "Expeditions" tab: operations with modifiers, the difficulty ladder, the alarm, horn-blowers, dusk, revive, totems, parcels, seeds, camp beds and the order of the day. Not made: the supply crate, carrying a seedling, the warden, escort and harvest objectives, a fourth parcel slot, collections and cosmetics (section 11, "Later").
 
 **Decision:** [adr-006-expeditions.md](adr-006-expeditions.md). **Source:** [sources/helldivers2.md](sources/helldivers2.md).
 
@@ -22,6 +22,10 @@ A co-op mode for 1–4 players. The squad picks a mission on the board in the ca
 **In the code** (stage 4): a mission is a map name — `exp:<seed>:<difficulty>:<objective>:<landing>` (`src/expedition/mission.ts`). A room, a match record and the battle page address carry it where a Bush Defence map carries its file name, so the lobby protocol and the database did not change. The camp has an "Expeditions" tab (`src/menu/expeditions.ts`): difficulty buttons 1–8, the day's three missions (one of each objective, the same for every player, changing at midnight UTC), and the card of the chosen mission with a sketch of its map — lairs, objective sites, the balloon pad and three landing points to click. Operations (chains of missions) and unlocking difficulties one at a time are stage 7; for now every difficulty is open.
 
 **Network:** the server builds the mission's level from its name (`MapCatalog.load`) and runs it (`Match`); the client sends one message, `exp` — "use"; the battle page keeps a mirror of the rules filled from snapshot records (`SimExpedition.mirror`), so the HUD, the hints and the map read the same object as in single player. When the match ends the server adds the loot and the banked seeds to the profiles (`ProfileData.seeds`); in single player the page credits them itself.
+
+**Operations in the code** (stage 7): the board's three tiles are operations — `operation(seed, difficulty)` gives two or three missions with different objectives and one modifier (two from difficulty 4 with a coin toss). A mission's name carries its place: `exp:…:<operation seed>.<index>`; the place is checked against the real operation, so it cannot be forged. Each next mission won in a row pays 25 % more loot, the last one another 50 %. In a room the server keeps the streak and moves the room on to the next mission after a win; solo the menu remembers it. A lost or abandoned mission, or one picked out of order, pays as is.
+
+**Difficulty ladder:** a hero starts with difficulty 1; a won mission of his top difficulty opens the next (`ProfileData.expLevel`). The board locks the buttons above it and the server refuses a room map above the host's.
 
 ## 3. Mission map
 
@@ -139,6 +143,8 @@ One or two per operation.
 | Order's fury | more patrols, more raspberries from enemies |
 | Quiet forest | no horn-blowers, but the lairs are tougher |
 
+**In the code** (stage 7): mist — the haze stands at 14–48 m instead of 60–150; downpour — rain, parcels fly 6 s instead of 3; full moon — dusk at minute 8, the golden seed appears from difficulty 3; Order's fury — one more mob in every patrol and a quarter more loot; quiet forest — no horn-blowers, lairs have half as much health again.
+
 ## 10. Keeping the player interested
 
 | Horizon | Hook | What it is here |
@@ -150,6 +156,13 @@ One or two per operation.
 | Weeks | the difficulty ladder, 1–8 | each step unlocks an enemy, a modifier and a seed rarity |
 | Months | camp beds | seeds are planted in beds: new parcels, a fourth slot, an extra totem, starting raspberries. Nothing expires |
 | Always | collections and cosmetics | the book of relics (twenty exist), mastery stars per objective type, cloaks and banners for achievements |
+
+**In the code** (stage 7, `src/expedition/camp.ts`):
+
+| What | How it works |
+|---|---|
+| Camp beds | three beds under the board, planted with seeds: totem (+1 totem for the squad, 2 levels), stash (+25 raspberries at the start of a mission, 3 levels), courier (parcels rest 10 % less, 3 levels). Level n costs 4n common seeds, from the second also 2(n−1) rare, the third also a golden one |
+| Order of the day | one for everyone, by the day: burn 5 lairs, light 4 beacons, bring out 6 seeds or complete 2 missions; the squad's lairs and beacons count for each hero; pays raspberries and rare seeds once |
 
 **Deliberately not done:** seasons with expiring progress, daily penalties for skipping, a war map shared by the whole server.
 
