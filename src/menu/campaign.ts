@@ -1,3 +1,5 @@
+import { missionId, parseMission } from '../expedition/mission.ts';
+import type { ExpeditionParams } from '../expedition/types.ts';
 import { t } from '../i18n/i18n.ts';
 import { mapByName } from '../level/maps.ts';
 import type { TdSpec } from '../td/types.ts';
@@ -22,6 +24,8 @@ export interface CampaignMap {
   berries: number;
   /** Endless waves (Misty Clearing): no victory, the record counts */
   endless: boolean;
+  /** An expedition mission (src/expedition/mission.ts): the id is the mission itself */
+  mission?: Required<ExpeditionParams>;
 }
 
 const DIFFICULTY = ['', t('Easy'), t('Medium'), t('Hard')];
@@ -45,4 +49,17 @@ export const CAMPAIGN: readonly CampaignMap[] = BASE.map((b) => {
   return { ...b, endless: !!td?.endless, waves: td?.waves?.length ?? 0, lanes: td?.lanes.length ?? 0, bush: td?.bush.hp ?? 0, berries: td?.berries ?? 0 };
 });
 
-export const campaignMap = (id: string): CampaignMap => CAMPAIGN.find((m) => m.id === id) ?? CAMPAIGN[0];
+const MISSION_TITLE = { lairs: t('Burn the lairs'), beacons: t('Light the beacons'), bush: t('Plant the raspberry bush') };
+const MISSION_ICON = { lairs: 'axe', beacons: 'spark', bush: 'berry' };
+const MISSION_BG = { lairs: 'linear-gradient(160deg, #5c2338, #20121c 70%)', beacons: 'linear-gradient(160deg, #6a4a16, #24190c 70%)', bush: 'linear-gradient(160deg, #2c5a2a, #132016 70%)' };
+
+/** A mission as a map of the camp: its title, colours and icon — for room lists, the start button, the battle menu */
+function missionMap(m: Required<ExpeditionParams>): CampaignMap {
+  return {
+    id: missionId(m), title: `${t('Expedition')}: ${MISSION_TITLE[m.objective]}`, difficulty: m.difficulty <= 2 ? 1 : m.difficulty <= 5 ? 2 : 3, blurb: '',
+    bg: MISSION_BG[m.objective], icon: MISSION_ICON[m.objective], waves: 0, lanes: 0, bush: 0, berries: 0, endless: false, mission: m,
+  };
+}
+
+/** A Bush Defence map of the camp or a mission by its id; unknown — the first map */
+export const campaignMap = (id: string): CampaignMap => { const m = parseMission(id); return m ? missionMap(m) : (CAMPAIGN.find((x) => x.id === id) ?? CAMPAIGN[0]); };

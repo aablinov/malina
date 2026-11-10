@@ -188,9 +188,11 @@ function build(p: ExpeditionParams, seed: number, lib: Record<string, LibraryPre
     if (Math.hypot(end.x - b.x, end.z - b.z) > 2.5) throw new Unfit(`${to.id} is unreachable from ${from.id}`);
   }
 
-  const spec: ExpeditionSpec = { seed: p.seed, difficulty: d, half: H, level: d, landings, extraction, objective: { kind: p.objective, sites: objSites }, secondary, lairs, pois, garrisons };
-  L.spawn = [landings[0].x, 0, landings[0].z];
-  L.meta.spawnYaw = Math.round((Math.atan2(-landings[0].x, -landings[0].z) * 180) / Math.PI);
+  const land = landings[Math.max(0, Math.min(landings.length - 1, Math.round(p.landing ?? 0)))];
+  const spec: ExpeditionSpec = { seed: p.seed, difficulty: d, half: H, level: d, landings, landing: landings.indexOf(land), extraction, objective: { kind: p.objective, sites: objSites }, secondary, lairs, pois, garrisons };
+  L.spawn = [land.x, 0, land.z];
+  // the hero faces the middle of the map (meta.spawnYaw: 0 — towards +X, 90 — towards +Z)
+  L.meta.spawnYaw = Math.round((Math.atan2(-land.z, -land.x) * 180) / Math.PI);
   L.meta.goal = [{ lairs: 'Burn the lairs', beacons: 'Light the beacons', bush: 'Plant the raspberry bush' }[p.objective], 'Expedition'];
   L.meta.expedition = spec;
   L.meta.world = {

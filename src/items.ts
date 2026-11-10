@@ -403,6 +403,8 @@ export interface ProfileData {
   seq: number;
   items: Item[];
   equip: Equipment;
+  /** Seeds brought out of expeditions (wiki/design-expeditions.md, section 8): common, rare, golden; absent — none yet */
+  seeds?: { common: number; rare: number; golden: number };
 }
 
 /** Multiplier from item power: +6% per unit */
@@ -630,6 +632,19 @@ export class Profile {
   /** An item an enemy left goes to the stored profile too — it stays whatever the battle's outcome (solo battle; online the server adds it) */
   static keepItem(def: string, power: number): void {
     storage?.update((x) => { new Profile(x).add(def, power); });
+  }
+
+  /** Seeds brought out of an expedition — into the profile */
+  addSeeds(b: { common: number; rare: number; golden: number }): void {
+    const s = this.data.seeds ??= { common: 0, rare: 0, golden: 0 };
+    s.common += Math.max(0, Math.round(b.common)); s.rare += Math.max(0, Math.round(b.rare)); s.golden += Math.max(0, Math.round(b.golden));
+    this.save();
+  }
+
+  /** Seeds into the stored profile (solo expedition; online the server adds them) */
+  static creditSeeds(b: { common: number; rare: number; golden: number }): void {
+    if (b.common + b.rare + b.golden <= 0) return;
+    storage?.update((x) => { new Profile(x).addSeeds(b); });
   }
 
   /** Victory loot into the stored profile's raspberries (solo battle; online the server pays it) */

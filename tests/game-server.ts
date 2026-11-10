@@ -12,7 +12,8 @@ export interface GameServer { base: string; url: string; stop(): void }
 export async function startGameServer(env: Record<string, string> = {}): Promise<GameServer> {
   const server: ChildProcess = spawn(process.execPath, ['server/main.ts'], { env: { ...process.env, PORT: '0', HOST: '127.0.0.1', DB_PATH: ':memory:', STATIC: 'dist', ...env }, stdio: 'pipe' });
   const port = await new Promise<number>((ok, fail) => {
-    const timer = setTimeout(() => fail(new Error('the server did not start')), 5_000);
+    // under a full parallel run a dozen browsers start at the same moment: the server needs longer than its idle 0.2 s
+    const timer = setTimeout(() => fail(new Error('the server did not start')), 30_000);
     server.stdout?.on('data', (b: Buffer) => { const m = /server at http:\/\/[^:]+:(\d+)/.exec(String(b)); if (m) { clearTimeout(timer); ok(Number(m[1])); } });
     server.stderr?.on('data', (b: Buffer) => process.stderr.write(b));
   });

@@ -27,6 +27,8 @@ export interface ExpeditionParams {
   /** 1–8: more lairs and guards, tougher kinds, rarer seeds */
   difficulty: number;
   objective: ObjectiveKind;
+  /** Which of the three landing points the squad takes (0 by default); the map itself does not depend on it */
+  landing?: number;
 }
 
 export interface ExpSite { id: string; x: number; z: number }
@@ -45,6 +47,8 @@ export interface ExpeditionSpec {
   level: number;
   /** Where the squad may land */
   landings: ExpSite[];
+  /** The landing the squad chose */
+  landing: number;
   extraction: ExpSite;
   /** Primary objective: burn the lairs at `sites`, light the beacons there, or plant the bush on the plot */
   objective: { kind: ObjectiveKind; sites: ExpSite[] };

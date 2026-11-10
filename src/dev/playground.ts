@@ -23,6 +23,7 @@ import { buildFloor } from '../level/dungeon.ts';
 import { buildExpedition } from '../level/expedition-map.ts';
 import { LIBRARY } from '../level/prefab-lib/index.ts';
 import { OBJECTIVES, type ExpeditionSpec, type ObjectiveKind } from '../expedition/types.ts';
+import { parseMission } from '../expedition/mission.ts';
 import type { SimExpedition } from '../sim/expedition.ts';
 import { ExpUi } from '../cgame/exp-ui.ts';
 import { ExpeditionView } from '../cgame/views/expedition-view.ts';
@@ -96,6 +97,9 @@ function pickMap(): LevelJSON {
   const name = q.get('map');
   if (name === 'dungeon') return buildFloor({ seed: Number(q.get('seed')) || 1, floor: Number(q.get('floor')) || 1, rooms: ROOMS }).toJSON();
   // an expedition (wiki/design-expeditions.md): the mission map is built from the seed, the difficulty (d) and the objective (obj)
+  // a mission from the camp's board: the map name is the mission itself (src/expedition/mission.ts)
+  const mission = name ? parseMission(name) : null;
+  if (mission) return buildExpedition(mission, Object.fromEntries(LIBRARY.map((p) => [p.id, p]))).toJSON();
   if (name === 'expedition') {
     const seed = Number(q.get('seed')) || 1, obj = q.get('obj') as ObjectiveKind | null;
     return buildExpedition({ seed, difficulty: Number(q.get('d')) || 1, objective: obj && OBJECTIVES.includes(obj) ? obj : OBJECTIVES[seed % OBJECTIVES.length] }, Object.fromEntries(LIBRARY.map((p) => [p.id, p]))).toJSON();
@@ -193,7 +197,7 @@ export function runPlayground(profile: Profile): void {
   const worldSeed = Number(query.get('seed')) || 1;
   const sourceLevel = WORLD ? null : Level.fromJSON(pickMap());
   // an expedition is simulated over the whole map (garrisons far from the hero stand on its ground): it is never streamed
-  const STREAM = WORLD || query.has('stream') || (sourceLevel !== null && sourceLevel.chunks.size > STREAM_CHUNKS && query.get('map') !== 'expedition');
+  const STREAM = WORLD || query.has('stream') || (sourceLevel !== null && sourceLevel.chunks.size > STREAM_CHUNKS && !sourceLevel.meta.expedition);
   const level = STREAM ? new Level(sourceLevel?.name ?? 'world') : sourceLevel!;
   if (STREAM && sourceLevel) { level.adoptPalette(sourceLevel); level.entities.push(...sourceLevel.entities); level.spawn = sourceLevel.spawn; Object.assign(level.meta, sourceLevel.meta); }
   // world settings from the editor (meta.world): sun, sky, haze, post-processing, weather; placed lights are 'light' entities
@@ -927,22 +931,24 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     tdPack = pk;
     world = new SimWorld({
       foes: () => pk.mobs.filter((m) => m.alive),
-      heroes: () => [{ pos: hero.pos, get down() { return hero.down; }, seat: 0 }],
+      heroes: () => [{ pos: hero.pos, get down() { return hero.down; }, get seat() { return nb?.seat ?? 0; } }],
       spawnMob: (kind, at) => pk.spawn(kind, at),
       step: (dt) => pk.update(dt),
       setScale: (l, p) => pk.setScale(l, p),
       levelChanged,
-    }, { seed: Number(query.get('seed')) || 1, level, mode: { kind: 'expedition', spec: expSpec }, players: bossPlayers, personal: false });
+      // a network battle: the server posts the garrisons and runs the mission, this world only mirrors it
+    }, { seed: expSpec.seed, level, mode: { kind: 'expedition', spec: expSpec }, players: bossPlayers, personal: false, mirror: FROM_MENU && !!query.get('room') });
     const ex = exped = world.expedition!;
     world.drops.onPick = (_seat, def) => { const power = mobLootPower(def, profile.power); profile.add(def, power); profile.save(); Profile.keepItem(def, power); };
     ex.setRating(profile.rating);
     ex.fund(0);
     ex.onToast = (_seat, text) => toast(text);
     profile.data.berries = 0;
-    expView = new ExpeditionView({ scene, fx, quiet: () => scripted, spec: expSpec, heroPos: () => hero.pos, seat: () => 0 });
+    expView = new ExpeditionView({ scene, fx, quiet: () => scripted, spec: expSpec, heroPos: () => hero.pos, seat: () => nb?.seat ?? 0 });
     expView.floorAt = (x, z) => world!.floor(x, z, 2);
-    expUi = new ExpUi(document.body, ex, 0, { banner: (h, sec) => hud.banner(h, sec), toast: (s) => toast(s), heroPos: () => hero.pos, goal: (a, b) => hud.setGoal(a, b) });
-    flushExp();
+    expUi = new ExpUi(document.body, ex, () => nb?.seat ?? 0, { banner: (h, sec) => hud.banner(h, sec), toast: (s) => toast(s), heroPos: () => hero.pos, goal: (a, b) => hud.setGoal(a, b) });
+    // single player: the mission's things appear at once; in a network battle they come with the first server snapshot
+    if (!(FROM_MENU && query.get('room'))) flushExp();
   }
   /** World records and events of an expedition — into its view and HUD */
   function flushExp(): void {
@@ -957,6 +963,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   /** A step of the defence world and the view from its snapshot and events (src/cgame/) */
   function stepTd(dt: number): void {
     if (world && exped && expView && expUi) {
+      // network battle: the mission follows the server snapshots (NetBattleClient.update)
+      if (netClient) { netClient.update(dt); expUi.update(); expView.update(dt); return; }
       world.step(dt);
       flushExp();
       expUi.update();
@@ -1000,10 +1008,11 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     scene, fx, hero: k, terrain, targets: () => targets(), blast: (at, r, dmg) => props.blast(at, r, dmg),
     sound: (kind) => { if (hears(k) && kind !== 'empty' && kind !== 'level') GEAR_SOUND[kind](); }, toast: () => {}, banner: () => {}, quiet: () => !hears(k),
   }, p);
-  if (nb && sim && world && tdView && tdUi && tdPack && NET.auth) {
+  if (nb && world && tdPack && NET.auth && ((sim && tdView && tdUi) || (exped && expView && expUi))) {
     netClient = new NetBattleClient({
       net: NET, battle: nb, token: NET.auth.token, base: NET.base, scene, T, fx, hero, gear, profile, input, bow: () => gi.mouse.rmb && !scripted, events,
-      sim, world, pack: tdPack, tdView, tdUi, terrain, solids, makeGear, toast, voice: VOICE,
+      sim: sim ?? undefined, world, pack: tdPack, tdView: tdView ?? undefined, tdUi: tdUi ?? undefined, exp: exped && expView && expUi ? { sim: exped, view: expView, ui: expUi } : undefined,
+      terrain, solids, makeGear, toast, voice: VOICE,
       swing: (k, g, step) => { if (hears(k)) weaponSwing(g.arts.category, step); },
       quiet: () => scripted,
       onOver: (result) => { if (result === 'abandoned') toast(t('Everyone left — battle abandoned')); },
@@ -1050,13 +1059,14 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   const shop = new Shop(document.body, profile);
   // a battle from the main menu (src/menu/pause.ts): Esc — pause with settings, the end of the defence — the result and "To camp"
   const mapName = query.get('map') ?? '';
-  if (FROM_MENU) document.title = t('Malina — {name}', { name: tdSpec ? campaignMap(mapName).title : t(level.name) });
-  const battle = FROM_MENU ? new BattleMenu(document.body, new SettingsPanel(document.body), tdSpec ? campaignMap(mapName).title : t(level.name)) : null;
+  const battleTitle = tdSpec || parseMission(mapName) ? campaignMap(mapName).title : t(level.name);
+  if (FROM_MENU) document.title = t('Malina — {name}', { name: battleTitle });
+  const battle = FROM_MENU ? new BattleMenu(document.body, new SettingsPanel(document.body), battleTitle) : null;
   if (battle) {
     battle.onRestart = () => {
       // network battle: "Play again" after the battle — the host starts a new one for the whole room; restarting mid-battle is not allowed
       if (netRoom) {
-        if (sim?.state === 'play') toast(t('In a network game, restart only after the battle'));
+        if ((sim ?? exped)?.state === 'play') toast(t('In a network game, restart only after the battle'));
         else if (NET.isHost) NET.again();
         else toast(t('“Play again” is started by the host'));
         return;
@@ -1183,7 +1193,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (interactReq) {
       interactReq = false;
       // an expedition: the beacon, the plot, a chest, the pad — whatever the hero stands next to
-      if (exped && !hero.down && exped.usable(0)) exped.command(0, { t: 'exp', a: 'use' });
+      if (exped && !hero.down && exped.usable(nb?.seat ?? 0)) exped.command(nb?.seat ?? 0, { t: 'exp', a: 'use' });
       const pad = sim && !hero.down ? sim.nearPad(hero.pos) : null;
       const wall = sim && !pad && !hero.down ? sim.nearWall(hero.pos) : null;
       const lamp = sim?.fog && !pad && !wall && !hero.down ? sim.fog.near(hero.pos.x, hero.pos.z) : null;
@@ -1286,8 +1296,10 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     if (exped && expUi && exped.state !== tdEndShown) {
       tdEndShown = exped.state;
       // the mission's loot goes to the camp when the balloon has left with the objective done
-      if (exped.paid) Profile.creditStored(exped.lootOf(0));
-      if (battle) battle.end(exped.state === 'won', expUi.summary(), exped.paid ? exped.lootOf(0) : 0);
+      const me = nb?.seat ?? 0;
+      // in a network battle the server pays the loot and the seeds (server/rooms.ts)
+      if (exped.paid && !netClient) { Profile.creditStored(exped.lootOf(me)); Profile.creditSeeds(exped.bankedOf(me)); }
+      if (battle) battle.end(exped.state === 'won', expUi.summary(), exped.paid ? exped.lootOf(me) : 0);
       else hud.banner(`${t(exped.state === 'won' ? 'Mission complete' : 'Mission failed')}<small>${expUi.summary()}</small>`, 8);
     }
     if (battle && sim && sim.state !== tdEndShown) {
@@ -1400,7 +1412,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   window.__malina = {
     mode: 'playground',
     /** Expedition for tests (tests/expedition.spec.ts): the rules, the view, the HUD and the pack; null — another mode */
-    get exp() { return exped && expUi && tdPack && world ? { sim: exped, ui: expUi, pack: tdPack, world, flush: flushExp, targets: () => targets(), use: () => exped!.command(0, { t: 'exp', a: 'use' }) } : null; },
+    get exp() { return exped && expUi && tdPack && world ? { sim: exped, ui: expUi, pack: tdPack, world, flush: flushExp, targets: () => targets(), seat: nb?.seat ?? 0, use: () => exped!.command(nb?.seat ?? 0, { t: 'exp', a: 'use' }) } : null; },
     /** Network battle client (src/cgame/net-battle.ts); null — the battle is local */
     get net() { return netClient; },
     /** Room voice chat (src/net/voice.ts) */

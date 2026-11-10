@@ -7,6 +7,8 @@ import { Shop } from '../hud/shop.ts';
 import type { MerchantKind } from '../merchants.ts';
 import type { Textures } from '../textures.ts';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
+import { boardHtml, missionCardHtml } from './expeditions.ts';
+import { MAX_DIFFICULTY, sameMission, withLanding } from '../expedition/mission.ts';
 import type { MenuScene } from './scene.ts';
 import { go } from './boot.ts';
 import { battleUrl, loadMenuState, NET, netBattleUrl, record, saveMenuState, VOICE, type GameMode } from './session.ts';
@@ -23,7 +25,7 @@ import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
  * or join by code, seats and readiness; "Start game" for the host — "To battle" for the whole room, for a guest — "Ready".
  * Keys: Q / E — tabs, arrows — select, I — inventory, Enter — start, Esc — back.
  */
-type Pane = 'gear' | 'map' | 'rooms';
+type Pane = 'gear' | 'map' | 'missions' | 'rooms';
 /** Room list refresh while the "Rooms" tab is open, ms */
 const ROOMS_POLL_MS = 3000;
 type SlotId = 'melee' | 'ranged' | 'armor' | 'art0' | 'art1' | 'art2' | 'aura';
@@ -48,6 +50,8 @@ export class Lobby {
   private mode: GameMode = 'solo';
   private slot: SlotId = 'melee';
   private map: string;
+  /** Expeditions: the difficulty of the board on screen */
+  private expDiff = 1;
   private won: string[];
   /** Online panel: password of the room being created ('' — open) */
   private passDraft = '';
@@ -75,11 +79,12 @@ export class Lobby {
     const st = loadMenuState();
     this.map = campaignMap(st.map).id;
     this.won = st.won;
+    this.expDiff = Math.max(1, Math.min(MAX_DIFFICULTY, Math.round(st.expDiff ?? campaignMap(st.map).mission?.difficulty ?? 1)));
     const el = document.createElement('div');
     el.className = 'mm-lobby';
     el.innerHTML = `
       <header class="mm-top">
-        <div class="mm-tabs"><kbd>Q</kbd><button data-pane="gear">${t('Gear')}</button><button data-pane="map">${t('Map')}</button><button data-pane="rooms">${t('Rooms')}</button><kbd>E</kbd></div>
+        <div class="mm-tabs"><kbd>Q</kbd><button data-pane="gear">${t('Gear')}</button><button data-pane="map">${t('Map')}</button><button data-pane="missions">${t('Expeditions')}</button><button data-pane="rooms">${t('Rooms')}</button><kbd>E</kbd></div>
         <div class="mm-mode" data-id="mode"></div>
         <div class="mm-cur"><span title="${t('Raspberries')}">${iconImg('berry')}<b data-id="berries"></b></span><span title="${t('Enchantment points')}">${iconImg('spiral')}<b data-id="points"></b></span>
           <button class="mm-btn icon" data-act="settings" title="${t('Settings')}">⚙</button></div>
@@ -147,7 +152,7 @@ export class Lobby {
   hide(): void { this.el.classList.remove('open'); window.clearInterval(this.pollTimer); }
 
   /** Tabs in order: "Rooms" only in the online game */
-  private panes(): Pane[] { return this.mode === 'online' ? ['gear', 'map', 'rooms'] : ['gear', 'map']; }
+  private panes(): Pane[] { return this.mode === 'online' ? ['gear', 'map', 'missions', 'rooms'] : ['gear', 'map', 'missions']; }
 
   /** The room list refreshes by itself while it is on screen */
   private poll(): void {
@@ -250,7 +255,8 @@ export class Lobby {
       const i = list.findIndex((r) => r.code === this.selCode);
       this.selCode = list[i < 0 ? 0 : (i + d + list.length) % list.length].code;
       this.renderRooms();
-    } else { const i = CAMPAIGN.findIndex((m) => m.id === this.map); this.selectMap(CAMPAIGN[(i + d + CAMPAIGN.length) % CAMPAIGN.length].id); }
+    } else if (this.pane === 'missions') { this.expDiff = ((this.expDiff - 1 + d + MAX_DIFFICULTY) % MAX_DIFFICULTY) + 1; this.render(); }
+    else { const i = CAMPAIGN.findIndex((m) => m.id === this.map); this.selectMap(CAMPAIGN[(i + d + CAMPAIGN.length) % CAMPAIGN.length].id); }
   }
 
   private bind(): void {
@@ -262,6 +268,11 @@ export class Lobby {
       if (slot) { this.slot = slot; this.renderSel(); return; }
       const map = t.closest<HTMLElement>('[data-map]')?.dataset.map;
       if (map) { this.selectMap(map); return; }
+      // expeditions: the board's difficulty and the landing point on the mission's sketch
+      const diff = Number(t.closest<HTMLElement>('[data-diff]')?.dataset.diff);
+      if (diff) { this.expDiff = diff; const st = loadMenuState(); st.expDiff = diff; saveMenuState(st); this.render(); return; }
+      const landing = t.closest<SVGElement>('[data-landing]')?.dataset.landing;
+      if (landing !== undefined) { this.selectMap(withLanding(this.map, Number(landing))); return; }
       const row = t.closest<HTMLElement>('[data-room]')?.dataset.room;
       // only the highlight, not a re-render: otherwise the second click of a double click lands on a new element
       if (row && !t.closest('[data-act]') && !t.closest('input')) { this.selCode = row; for (const e of this.el.querySelectorAll<HTMLElement>('[data-room]')) e.classList.toggle('sel', e.dataset.room === row); return; }
@@ -323,7 +334,7 @@ export class Lobby {
     this.q('mode').innerHTML = this.mode === 'online' ? t('Online game') : t('Solo game');
     for (const b of this.el.querySelectorAll<HTMLElement>('[data-pane]')) b.classList.toggle('on', b.dataset.pane === this.pane);
     this.el.classList.toggle('rooms', this.pane === 'rooms');
-    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() : this.pane === 'map' ? this.mapsHtml() : this.roomsHtml();
+    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() : this.pane === 'map' ? this.mapsHtml() : this.pane === 'missions' ? boardHtml(this.map, this.expDiff) : this.roomsHtml();
     this.renderSel();
   }
 
@@ -345,7 +356,8 @@ export class Lobby {
    */
   private renderSel(): void {
     for (const e of this.el.querySelectorAll<HTMLElement>('[data-slot]')) e.classList.toggle('sel', e.dataset.slot === this.slot);
-    for (const e of this.el.querySelectorAll<HTMLElement>('[data-map]')) e.classList.toggle('sel', e.dataset.map === this.map);
+    // a mission tile is the same mission whatever landing is picked: it follows the selection's id
+    for (const e of this.el.querySelectorAll<HTMLElement>('[data-map]')) { if (e.dataset.map && sameMission(e.dataset.map, this.map)) e.dataset.map = this.map; e.classList.toggle('sel', e.dataset.map === this.map); }
     // re-rendering the online panel (a message arrived, the roster changed) does not disturb typing in a field
     this.keepFocus(() => {
       this.q('side').innerHTML = this.pane === 'gear' ? this.itemCard() : this.mapCard() + (this.mode === 'online' ? this.onlineHtml() : '');
@@ -363,7 +375,8 @@ export class Lobby {
     this.q('hint').textContent = this.pane === 'gear'
       ? t('Click — slot · double click or I — change · B — shop · Q / E — tabs')
       : this.pane === 'rooms' ? t('Click — select · double click — join · Q / E — tabs')
-        : t('Map: {map} · double click — straight to battle', { map: campaignMap(this.map).title });
+        : this.pane === 'missions' ? t('Click — mission · 1–3 on the sketch — landing · Q / E — tabs')
+          : t('Map: {map} · double click — straight to battle', { map: campaignMap(this.map).title });
   }
 
   private gearHtml(): string {
@@ -417,6 +430,7 @@ export class Lobby {
 
   private mapCard(): string {
     const m = campaignMap(this.map);
+    if (m.mission) return missionCardHtml(m.id);
     return `<div class="mm-card map" style="--bg:${m.bg}"><div class="mm-card-tag">${difficultyTitle(m.difficulty)}</div>
       <h3>${m.title}</h3><p>${m.blurb}</p>
       <dl><dt>${t('Waves')}</dt><dd>${m.endless ? '∞' : m.waves}</dd><dt>${t('Lanes')}</dt><dd>${m.lanes}</dd><dt>${t('Bush')}</dt><dd>${m.bush}</dd><dt>${t('Treasury')}</dt><dd>${m.berries}</dd></dl>

@@ -53,7 +53,7 @@ export function menuUrl(lobby = true): string {
 
 // ---------- What the menu remembers ----------
 const MENU_KEY = 'malina.menu';
-export interface MenuState { map: string; mode: GameMode; /** Maps won */ won: string[]; /** Endless maps: the most waves held */ best?: Record<string, number> }
+export interface MenuState { map: string; mode: GameMode; /** Maps won */ won: string[]; /** Endless maps: the most waves held */ best?: Record<string, number>; /** Expeditions: the difficulty picked on the board */ expDiff?: number }
 
 export function loadMenuState(): MenuState {
   const d: MenuState = { map: 'td', mode: 'solo', won: [] };

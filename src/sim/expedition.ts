@@ -10,7 +10,7 @@ import type { Target } from '../target.ts';
 import { clampRating, lootK, scaledCount } from '../td/scaling.ts';
 import { SimBush } from './bush.ts';
 import { Garrisons, type PostedMob } from './garrison.ts';
-import { BOARD_WAIT, EXTRACT_WAIT, HOLD_R, PAD_R, SimBeacon, SimExtraction, SimNest, USE_R } from './objective.ts';
+import { BEACON_HOLD, BOARD_WAIT, EXTRACT_WAIT, HOLD_R, PAD_R, SimBeacon, SimExtraction, SimNest, USE_R } from './objective.ts';
 import type { Rules, RulesCommand, RulesState } from './rules.ts';
 import type { HeroLike, SimWorld } from './world.ts';
 
@@ -77,7 +77,11 @@ export class SimExpedition implements Rules {
   private solidsCache: Obstacle[] | null = null;
   private undecoy: (() => void) | null = null;
 
-  constructor(w: SimWorld, spec: ExpeditionSpec, players: number, personal: boolean) {
+  /** A network battle's client: state comes from the server's records (`mirror`), nothing is posted or ticked here */
+  private readonly mirrored: boolean;
+
+  constructor(w: SimWorld, spec: ExpeditionSpec, players: number, personal: boolean, mirrored = false) {
+    this.mirrored = mirrored;
     this.w = w;
     this.spec = spec;
     this.players = Math.max(1, Math.round(players));
@@ -85,7 +89,7 @@ export class SimExpedition implements Rules {
     this.lootRng = rng((w.seed ^ 0x3c6ef372) >>> 0 || 1);
     this.pool = guardPool(spec.difficulty);
     w.h.setScale(this.base, this.players);
-    this.garrisons = new Garrisons(w, spec.garrisons);
+    this.garrisons = new Garrisons(w, mirrored ? [] : spec.garrisons);
     this.nests = spec.lairs.map((l) => new SimNest(w, l, this.players));
     for (const n of this.nests) n.onDeath = () => this.nestFell(n);
     this.beacons = spec.objective.kind === 'beacons' ? spec.objective.sites.map((s) => new SimBeacon(w, s)) : [];
@@ -107,7 +111,7 @@ export class SimExpedition implements Rules {
   get progress(): number { return this.done; }
   get goal(): number { return this.spec.objective.kind === 'bush' ? BUSH_WAVES : this.spec.objective.sites.length; }
   get paid(): boolean { return this.state === 'won'; }
-  get muster(): [number, number, number] { const l = this.spec.landings[0]; return [l.x, this.w.floor(l.x, l.z, 2), l.z]; }
+  get muster(): [number, number, number] { const l = this.spec.landings[this.spec.landing] ?? this.spec.landings[0]; return [l.x, this.w.floor(l.x, l.z, 2), l.z]; }
   /** Steps of the primary objective done: lairs burnt, beacons lit, waves beaten */
   get done(): number {
     const k = this.spec.objective.kind;
@@ -358,6 +362,7 @@ export class SimExpedition implements Rules {
   }
 
   update(dt: number): void {
+    if (this.mirrored) return;
     this.garrisons.update();
     if (this.state !== 'play') return;
     const heroes = this.w.h.heroes();
@@ -372,6 +377,47 @@ export class SimExpedition implements Rules {
     this.tickExtraction(dt, heroes);
   }
 
+  /**
+   * Mirror of a network battle (src/cgame/net-battle.ts): the server's records into this copy — the HUD, the hints and the map
+   * read it as they read the real rules in single player
+   */
+  mirror(ents: ReadonlyMap<string, EntityState>): void {
+    const n = (v: unknown): number => (typeof v === 'number' ? v : 0);
+    const exp = ents.get('exp');
+    if (!exp) return;
+    this.state = exp.state as RulesState;
+    this.primary = !!exp.primary;
+    this.fallen = n(exp.fallen);
+    this.players = n(exp.players) || 1;
+    this.rating = n(exp.rating) || 1;
+    if (this.spec.objective.kind === 'bush') this.bushWave = n(exp.done);
+    for (const nest of [...this.nests, ...this.sides.map((s) => s.nest)]) {
+      const e = nest && ents.get(nest.id);
+      if (!nest || !e) continue;
+      if (nest.dead !== !!e.dead) this.solidsCache = null;
+      nest.hp = n(e.hp); nest.maxHp = n(e.maxHp); nest.dead = !!e.dead;
+    }
+    for (const b of this.beacons) { const e = ents.get(b.id); if (e) { b.state = e.state as SimBeacon['state']; b.charge = n(e.k) * BEACON_HOLD; } }
+    const pad = ents.get(this.extraction.id);
+    if (pad) { this.extraction.state = pad.state as SimExtraction['state']; this.extraction.t = n(pad.t); }
+    const bush = ents.get('bush');
+    if (bush) {
+      if (!this.bush) { const p = this.spec.objective.sites[0]; this.bush = new SimBush(this.w, p.x, p.z, n(bush.maxHp), this.w.floor(p.x, p.z, 2)); this.solidsCache = null; }
+      this.bush.hp = n(bush.hp); this.bush.maxHp = n(bush.maxHp); this.bush.dead = !!bush.dead;
+    }
+    for (const s of this.sides) { const e = ents.get(`s:${s.spec.id}`); if (e) s.done = !!e.done; }
+    this.taken.clear();
+    for (const q of this.spec.pois) if (!ents.has(q.id)) this.taken.add(q.id);
+    this.seeds.length = 0;
+    for (const [id, e] of ents) {
+      if (/^seed\d+$/.test(id)) this.seeds.push({ id, x: n(e.x), y: n(e.y), z: n(e.z), rarity: e.seed as SeedRarity, lock: 0 });
+      else if (id.startsWith('carry')) this.carried.set(n(e.seat), { common: n(e.c), rare: n(e.r), golden: n(e.g) });
+      else if (id.startsWith('bank')) this.banked.set(n(e.seat), { common: n(e.c), rare: n(e.r), golden: n(e.g) });
+      else if (id.startsWith('purse')) this.setBerries(n(e.seat), n(e.n));
+      else if (id.startsWith('loot')) this.setLoot(n(e.seat), n(e.n));
+    }
+  }
+
   entities(out: EntityState[]): void {
     out.push({ id: 'exp', state: this.state, kind: this.spec.objective.kind, done: this.done, goal: this.goal, primary: this.primary ? 1 : 0, players: this.players, rating: this.rating, fallen: this.fallen, guards: this.garrisons.alive, wave: this.bushRaid ? 1 : 0 });
     for (const n of this.nests) n.entity(out);
@@ -382,6 +428,7 @@ export class SimExpedition implements Rules {
     for (const q of this.spec.pois) if (!this.taken.has(q.id)) out.push({ id: q.id, x: q.x, z: q.z, seed: q.seed ?? '' });
     for (const s of this.seeds) out.push({ id: s.id, x: s.x, y: s.y, z: s.z, seed: s.rarity });
     for (const [seat, b] of this.carried) out.push({ id: `carry${seat}`, seat, c: b.common, r: b.rare, g: b.golden });
+    for (const [seat, b] of this.banked) out.push({ id: `bank${seat}`, seat, c: b.common, r: b.rare, g: b.golden });
     for (const [seat, n] of this.purses) out.push({ id: `purse${seat}`, seat, n });
     for (const seat of this.purses.keys()) out.push({ id: `loot${seat}`, seat, n: this.lootOf(seat) });
   }

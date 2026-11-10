@@ -23,6 +23,7 @@ export function checkProfile(v: unknown): { ok: true; data: ProfileData } | { ok
     if (!isInt(v[k], 0, BIG)) return { ok: false, error: `field ${k}` };
   }
   if ((v.level as number) < 1) return { ok: false, error: 'field level' };
+  if (v.seeds !== undefined && !(isObj(v.seeds) && isInt(v.seeds.common, 0, BIG) && isInt(v.seeds.rare, 0, BIG) && isInt(v.seeds.golden, 0, BIG))) return { ok: false, error: 'field seeds' };
   if (!Array.isArray(v.items) || v.items.length > 2000) return { ok: false, error: 'field items' };
   const uids = new Set<string>();
   for (const it of v.items) {

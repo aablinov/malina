@@ -18,6 +18,9 @@ import { WebSocketTransport, type SocketLike } from '../net/ws-transport.ts';
 import type { EventQueue } from './events.ts';
 import type { SimEvent } from '../sim/events.ts';
 import type { SimTd } from '../sim/td.ts';
+import type { SimExpedition } from '../sim/expedition.ts';
+import type { ExpUi } from './exp-ui.ts';
+import type { ExpeditionView } from './views/expedition-view.ts';
 import { SimWisp } from '../sim/fog.ts';
 import { SimTower } from '../sim/tower.ts';
 import type { SimWorld } from '../sim/world.ts';
@@ -48,11 +51,14 @@ export interface NetBattleHooks {
   profile: Profile;
   input: KnightInput;
   bow(): boolean;
-  sim: SimTd;
+  /** Bush Defence: the mirror of the defence, its view and menu; absent in another mode */
+  sim?: SimTd;
   world: SimWorld;
   pack: Pack;
-  tdView: TdView;
-  tdUi: TdUi;
+  tdView?: TdView;
+  tdUi?: TdUi;
+  /** Expedition: the mirror of the mission rules, its view and HUD */
+  exp?: { sim: SimExpedition; view: ExpeditionView; ui: ExpUi };
   terrain: Terrain;
   solids(): Obstacle[];
   /** Gear for another player's hero: the same targets, sound only near our own hero */
@@ -149,7 +155,8 @@ export class NetBattleClient {
     this.names.className = 'net-names';
     document.body.appendChild(this.names);
     h.pack.mirror = true;
-    h.sim.remote = (c) => this.sendTd(c);
+    if (h.sim) h.sim.remote = (c) => { if (c.t === 'td') this.sendTd(c); };
+    if (h.exp) h.exp.sim.remote = (c) => { if (c.t === 'exp') this.chan?.sendReliable({ t: 'exp', a: c.a }); };
     h.gear.onAction = (a) => this.sendAct(a);
     h.net.battlePing();
     // gear changes go as tens-of-bytes `gear` messages; the kit itself the server took from the database
@@ -163,7 +170,8 @@ export class NetBattleClient {
     for (const f of this.off) f();
     this.h.gear.onAction = undefined;
     this.h.profile.onOp = undefined;
-    this.h.sim.remote = null;
+    if (this.h.sim) this.h.sim.remote = null;
+    if (this.h.exp) this.h.exp.sim.remote = null;
     this.h.pack.mirror = false;
     this.ws?.close();
     this.names.remove();
@@ -247,9 +255,17 @@ export class NetBattleClient {
     }
     for (const r of this.heroes.values()) if (!v.ents.has(`h${r.seat}`)) { /* the room roster removes those who left */ }
     for (const m of this.h.pack.mobs) if (!seenMobs.has(m.net) && !m.dead) { m.vanish(); this.tracks.delete(`m${m.net}`); }
-    this.mirrorTd(v);
-    this.h.tdView.apply(v);
-    this.h.tdUi.events(v.events);
+    if (this.h.sim) this.mirrorTd(this.h.sim, v);
+    this.h.tdView?.apply(v);
+    this.h.tdUi?.events(v.events);
+    const exp = this.h.exp;
+    if (exp) {
+      exp.sim.mirror(v.ents);
+      // raspberries of the mission purse — the hero's for the HUD
+      this.h.profile.data.berries = exp.sim.berries(me);
+      exp.view.apply(v);
+      exp.ui.events(v.events);
+    }
   }
 
   /** Snapshot time into the server clock estimate; returns the snapshot time (the axis of the interpolation buffers) */
@@ -375,8 +391,8 @@ export class NetBattleClient {
   }
 
   /** Defence from records: state, wave, bush, walls, towers and own raspberries into the SimTd mirror (menu, HUD, hints) */
-  private mirrorTd(v: SnapshotView<SimEvent>): void {
-    const sim = this.h.sim, me = this.h.battle.seat;
+  private mirrorTd(sim: SimTd, v: SnapshotView<SimEvent>): void {
+    const me = this.h.battle.seat;
     const td = v.ents.get('td');
     if (td) {
       sim.state = td.state as SimTd['state'];

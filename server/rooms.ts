@@ -4,7 +4,7 @@ import { MAX_PLAYERS, NET_LIMITS, type ErrorCode, type RoomInfo, type RtcSignal,
 import { Match, MAX_LOOT_ITEMS, type MatchEnd } from '../src/game/match.ts';
 import { checkPass, hashPass, newId } from './auth.ts';
 import { tx, type Db } from './db.ts';
-import { MAX_XP_PER_MATCH, type MapCatalog } from './maps.ts';
+import { MAX_SEEDS_PER_MATCH, MAX_XP_PER_MATCH, type MapCatalog } from './maps.ts';
 import type { Matches } from './repo/matches.ts';
 import type { Profiles } from './repo/profiles.ts';
 import type { Rooms as RoomRepo, RoomRow } from './repo/rooms.ts';
@@ -313,6 +313,8 @@ export class RoomManager {
         p.addXp(xp);
         // items picked up from fallen enemies stay with the hero whatever the outcome
         for (const it of (r.items ?? []).slice(0, MAX_LOOT_ITEMS)) if (ITEMS.some((d) => d.id === it.def)) p.add(it.def, Math.max(1, Math.min(99, Math.round(it.power))));
+        // seeds brought out of an expedition on the balloon
+        if (r.seeds) { const cap = (n: number): number => Math.max(0, Math.min(MAX_SEEDS_PER_MATCH, Math.round(n))); p.addSeeds({ common: cap(r.seeds.common), rare: cap(r.seeds.rare), golden: cap(r.seeds.golden) }); }
         const version = this.d.profiles.put(m.playerId, prof.version, p.data, now);
         if (version !== null) updated.push({ m, version, data: p.data });
       }

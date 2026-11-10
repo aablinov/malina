@@ -1,15 +1,25 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { MAX_DIFFICULTY, parseMission } from '../src/expedition/mission.ts';
+import { expeditionMap } from '../src/level/expedition-map.ts';
 import { Level, type LevelJSON } from '../src/level/level.ts';
+import type { LibraryPrefab } from '../src/level/prefab-lib/types.ts';
+import { loadPrefabs } from './prefabs.ts';
 import { crowdMult, lootK, MAX_RATING } from '../src/td/scaling.ts';
 import type { MatchMap } from '../src/sim/rules.ts';
 import type { TdSpec } from '../src/td/types.ts';
 
 /**
- * Multiplayer maps — Bush Defence maps from assets/maps (they have `meta.td`, src/td/types.ts).
- * The server reads them once: which maps can be chosen in a room and how many raspberries per battle is plausible
+ * Multiplayer maps — Bush Defence maps from assets/maps (they have `meta.td`, src/td/types.ts) and expedition missions, whose
+ * name is the mission itself (`exp:…`, src/expedition/mission.ts) and whose level is built from it on demand.
+ * The server reads the files once: which maps can be chosen in a room and how many raspberries per battle is plausible
  */
 export interface NetMap { id: string; waves: number; bounty: number; berries: number }
+
+/** Seeds of one rarity per hero per mission — a cap against bugs: a map holds at most ten points of interest */
+export const MAX_SEEDS_PER_MATCH = 12;
+/** Steps of a mission's objective never exceed this (lairs, beacons, waves) */
+const MISSION_STEPS = 8;
 
 /** More XP per battle than this — we do not trust the host */
 export const MAX_XP_PER_MATCH = 50_000;
@@ -17,9 +27,14 @@ export const MAX_XP_PER_MATCH = 50_000;
 export class MapCatalog {
   private readonly maps = new Map<string, NetMap>();
   private readonly dir: string;
+  private readonly prefabs: Record<string, LibraryPrefab>;
 
   constructor(dir: string) {
     this.dir = dir;
+    // the prefab library lies next to the maps; without it missions are built with plain trees
+    let lib: Record<string, LibraryPrefab> = {};
+    try { lib = loadPrefabs(join(dir, '..', 'prefabs')); } catch { /* no library */ }
+    this.prefabs = lib;
     for (const f of readdirSync(dir)) {
       if (!f.endsWith('.json')) continue;
       try {
@@ -33,7 +48,7 @@ export class MapCatalog {
     }
   }
 
-  has(id: string): boolean { return this.maps.has(id); }
+  has(id: string): boolean { return this.maps.has(id) || parseMission(id) !== null; }
   ids(): string[] { return [...this.maps.keys()].sort(); }
 
   /**
@@ -41,14 +56,19 @@ export class MapCatalog {
    * enemies give about as much again (more with the party — more enemies); all wave bounties with the party multiplier times two is ample
    */
   maxBerries(id: string, players: number): number {
+    // a mission: every enemy and point of interest, the objective and the boarding share stay far below this
+    const mission = parseMission(id);
+    if (mission) return Math.ceil(1500 * (1 + mission.difficulty / MAX_DIFFICULTY) * crowdMult(players) * lootK(MAX_RATING));
     const m = this.maps.get(id);
     return m ? Math.ceil(m.bounty * crowdMult(players) * 2 * lootK(MAX_RATING)) : 0;
   }
 
-  waves(id: string): number { return this.maps.get(id)?.waves ?? 0; }
+  waves(id: string): number { return parseMission(id) ? MISSION_STEPS : (this.maps.get(id)?.waves ?? 0); }
 
   /** Map level for a server-side battle (each match gets its own, walls break blocks); null — no such map */
   load(id: string): MatchMap | null {
+    const mission = parseMission(id);
+    if (mission) return expeditionMap(mission, this.prefabs);
     if (!this.maps.has(id)) return null;
     const j = JSON.parse(readFileSync(join(this.dir, `${id}.json`), 'utf8')) as LevelJSON;
     const level = Level.fromJSON(j);

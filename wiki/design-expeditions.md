@@ -19,6 +19,10 @@ A co-op mode for 1–4 players. The squad picks a mission on the board in the ca
 - A mission card shows the primary objective type, the number of secondary objectives, the biome, the modifiers and the expected reward.
 - The host chooses, the others mark themselves ready — as with the Bush Defence map today ([design-main-menu.md](design-main-menu.md)).
 
+**In the code** (stage 4): a mission is a map name — `exp:<seed>:<difficulty>:<objective>:<landing>` (`src/expedition/mission.ts`). A room, a match record and the battle page address carry it where a Bush Defence map carries its file name, so the lobby protocol and the database did not change. The camp has an "Expeditions" tab (`src/menu/expeditions.ts`): difficulty buttons 1–8, the day's three missions (one of each objective, the same for every player, changing at midnight UTC), and the card of the chosen mission with a sketch of its map — lairs, objective sites, the balloon pad and three landing points to click. Operations (chains of missions) and unlocking difficulties one at a time are stage 7; for now every difficulty is open.
+
+**Network:** the server builds the mission's level from its name (`MapCatalog.load`) and runs it (`Match`); the client sends one message, `exp` — "use"; the battle page keeps a mirror of the rules filled from snapshot records (`SimExpedition.mirror`), so the HUD, the hints and the map read the same object as in single player. When the match ends the server adds the loot and the banked seeds to the profiles (`ProfileData.seeds`); in single player the page credits them itself.
+
 ## 3. Mission map
 
 One procedural map by seed, 160 × 160 m in the first version, one biome. On it:

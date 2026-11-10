@@ -63,6 +63,8 @@ export interface SimWorldOpts {
   players?: number;
   /** Shared battle: each seat has its own raspberries */
   personal?: boolean;
+  /** A network battle's client: the rules only mirror the server's — they post no enemies and do not tick */
+  mirror?: boolean;
 }
 
 export class SimWorld {
@@ -99,7 +101,7 @@ export class SimWorld {
     const mode = o.mode, players = o.players ?? 1, personal = o.personal ?? false;
     // the rules may post enemies right away (garrisons): under this world's randomness, like everything in a step
     this.td = mode?.kind === 'td' ? this.scoped(() => new SimTd(this, mode.td, players, personal)) : null;
-    this.expedition = mode?.kind === 'expedition' ? this.scoped(() => new SimExpedition(this, mode.spec, players, personal)) : null;
+    this.expedition = mode?.kind === 'expedition' ? this.scoped(() => new SimExpedition(this, mode.spec, players, personal, !!o.mirror)) : null;
     this.rules = this.td ?? this.expedition;
   }
 

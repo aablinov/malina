@@ -23,11 +23,11 @@ export class ExpUi {
   /** The watchtower was climbed: the whole map's sites are shown */
   revealed = false;
   private readonly sim: SimExpedition;
-  private readonly seat: number;
+  private readonly seat: () => number;
   private readonly h: ExpUiHooks;
   private last = '';
 
-  constructor(root: HTMLElement, sim: SimExpedition, seat: number, h: ExpUiHooks) {
+  constructor(root: HTMLElement, sim: SimExpedition, seat: () => number, h: ExpUiHooks) {
     this.sim = sim; this.seat = seat; this.h = h;
     this.el = document.createElement('div');
     this.el.className = 'td-hud exp-hud';
@@ -45,7 +45,7 @@ export class ExpUi {
   }
 
   /** The hint by the F key; null — nothing to use here */
-  prompt(): string | null { const u = this.sim.usable(this.seat); return u ? t(USE_TEXT[u]) : null; }
+  prompt(): string | null { const u = this.sim.usable(this.seat()); return u ? t(USE_TEXT[u]) : null; }
 
   /** Map markers: objective sites and the pad always; lairs, points of interest and the rest — once explored or from the watchtower */
   markers(): MapMarker[] {
@@ -70,7 +70,7 @@ export class ExpUi {
         case 'exp.side': if (e.kind === 'watchtower') this.revealed = true; this.h.toast(t('Secondary objective done')); break;
         case 'extract.call': this.h.banner(`${t('The balloon is on its way')}<small>${t('Hold the pad for {n} s', { n: Number(e.sec) })}</small>`, 3); break;
         case 'extract.ready': this.h.banner(`${t('The balloon has landed')}<small>${t('Everyone onto the pad!')}</small>`, 3); break;
-        case 'poi.take': if (e.seat === this.seat && e.seed) this.h.toast(t('Seed found — carry it to the balloon')); break;
+        case 'poi.take': if (e.seat === this.seat() && e.seed) this.h.toast(t('Seed found — carry it to the balloon')); break;
         case 'exp.lost': this.h.banner(t('The bush has withered'), 3); break;
         default: break;
       }
@@ -80,7 +80,7 @@ export class ExpUi {
   update(): void {
     const s = this.sim, k = s.spec.objective.kind, hp = this.h.heroPos();
     this.h.goal(t(s.primary ? 'Leave by balloon' : TITLE[k]), s.primary ? t('Expedition') : t('{n} of {total}', { n: s.done, total: s.goal }));
-    const bag = s.carriedOf(this.seat), pad = s.extraction;
+    const bag = s.carriedOf(this.seat()), pad = s.extraction;
     const lines: string[] = [];
     if (pad.state === 'called') lines.push(`<div class="td-wave">${t('Balloon in')} <span>${Math.ceil(pad.t)}</span></div>`);
     else if (pad.state === 'ready') lines.push(`<div class="td-wave">${t('Boarding')} <span>${Math.ceil(pad.t)}</span></div>`);
@@ -98,7 +98,7 @@ export class ExpUi {
 
   /** The line of the result screen */
   summary(): string {
-    const s = this.sim, b = s.bankedOf(this.seat);
+    const s = this.sim, b = s.bankedOf(this.seat());
     return t('{n} of {total} done, {fallen} enemies slain · seeds brought out: {c} / {r} / {g}', { n: s.done, total: s.goal, fallen: s.fallen, c: b.common, r: b.rare, g: b.golden });
   }
 

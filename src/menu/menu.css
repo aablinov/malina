@@ -221,3 +221,18 @@ body.menu #c.mm-canvas { cursor: default; }
 .pz .mm-btn { width: 100%; }
 .pz.end { background: rgba(4, 14, 20, 0.35); }
 .mm-pane > .mm-btn { align-self: flex-start; margin-top: 0.6em; }
+
+/* expeditions: the board's difficulty row and the mission's map sketch (src/menu/expeditions.ts) */
+.mm-exp-diff { display: flex; align-items: center; gap: 0.4em; margin-bottom: 1em; font: 400 0.7em/1 var(--mcd-px); }
+.mm-exp-diff span { margin-right: 0.6em; color: #b9c4cc; }
+.mm-exp-map { display: block; width: 100%; margin-top: 1.2em; background: rgba(0, 0, 0, 0.35); }
+.mm-exp-map rect { fill: rgba(120, 190, 110, 0.18); stroke: rgba(255, 255, 255, 0.25); stroke-width: 1; }
+.mm-exp-map .lair { fill: #d8345a; opacity: 0.75; }
+.mm-exp-map .obj { fill: #ffd15c; }
+.mm-exp-map .pad { fill: none; stroke: #7ad0ff; stroke-width: 2.5; }
+.mm-exp-map .land { cursor: pointer; }
+.mm-exp-map .land circle { fill: #2c5a2a; stroke: #fff; stroke-width: 1.5; }
+.mm-exp-map .land.on circle { fill: #8be38f; stroke-width: 3; }
+.mm-exp-map .land text { font: 700 10px Rubik, system-ui, sans-serif; fill: #fff; text-anchor: middle; pointer-events: none; }
+.mm-exp-map .land.on text { fill: #111; }
+.mm-exp-legend { margin: 0.8em 0 0 !important; font-size: 0.85em; }

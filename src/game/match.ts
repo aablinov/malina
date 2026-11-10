@@ -9,6 +9,7 @@ import type { GearAction } from '../net/protocol.ts';
 import { SnapshotRing, type Delta, type EntityState } from '../net/snapshot.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { r2 } from '../sim/entities.ts';
+import type { SeedBag } from '../expedition/types.ts';
 import type { MatchMap, Rules } from '../sim/rules.ts';
 import type { SimTd } from '../sim/td.ts';
 import { HeadlessBattle, type BattleHero } from './battle.ts';
@@ -20,7 +21,7 @@ import { HeadlessBattle, type BattleHero } from './battle.ts';
  */
 export interface MatchPlayer { seat: number; playerId: string; name: string; profile: ProfileData }
 export type GameChannel = Channel<GameClientMsg | GameServerMsg, CmdBatch | Delta<SimEvent>>;
-export interface MatchEnd { result: 'won' | 'lost' | 'abandoned'; wave: number; rewards: Map<number, { berries: number; xp: number; items?: LootItem[] }> }
+export interface MatchEnd { result: 'won' | 'lost' | 'abandoned'; wave: number; rewards: Map<number, { berries: number; xp: number; items?: LootItem[]; seeds?: SeedBag }> }
 /** An item an enemy left and a hero picked up (src/sim/drops.ts): it goes to the stored profile when the match ends, whatever the outcome */
 export interface LootItem { def: string; power: number }
 /** No more items than this per hero per match reach the stored profile */
@@ -68,6 +69,9 @@ export class Match {
     this.battle = new HeadlessBattle(o.map, o.seed, Math.max(1, o.players.length), true);
     for (const p of o.players) this.join(p);
     this.battle.world.drops.onPick = (seat, def) => this.pickUp(seat, def);
+    // an expedition's hints (the plot is guarded, the balloon will not come yet) go to the player who asked
+    const exp = this.battle.world.expedition;
+    if (exp) exp.onToast = (seat, text) => { const s = this.seats.get(seat); if (s) this.send(s, { t: 'toast', text }); };
   }
 
   /** A hero picked up an item an enemy left: into the battle copy of the gear right away (the client gets its copy anew), and on the list for the stored profile */
@@ -266,6 +270,10 @@ export class Match {
         this.rules.command(seat, { t: 'td', a: m.a, pad: isNum(m.pad) ? m.pad : undefined, wall: typeof m.wall === 'string' ? m.wall : undefined });
         break;
       }
+      case 'exp': {
+        if (m.a === 'use') this.rules.command(seat, { t: 'exp', a: 'use' });
+        break;
+      }
       case 'act': {
         const { t: _t, seq, ...a } = m;
         void _t;
@@ -368,7 +376,14 @@ export class Match {
   private finish(result: MatchEnd['result']): void {
     const wave = this.rules.progress;
     const rewards: MatchEnd['rewards'] = this.battle.rewards();
-    for (const s of this.seats.values()) { const r = rewards.get(s.player.seat); if (r && s.loot.length) r.items = s.loot.slice(); }
+    const exp = this.battle.world.expedition;
+    for (const s of this.seats.values()) {
+      const r = rewards.get(s.player.seat);
+      if (!r) continue;
+      if (s.loot.length) r.items = s.loot.slice();
+      // seeds — only what the hero brought out on the balloon
+      if (exp && result === 'won') { const b = exp.bankedOf(s.player.seat); if (b.common + b.rare + b.golden > 0) r.seeds = b; }
+    }
     this.ended = { result, wave, rewards };
     this.broadcast({ t: 'over', result, wave });
     for (const s of this.seats.values()) s.chan?.flush();

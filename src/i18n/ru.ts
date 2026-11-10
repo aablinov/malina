@@ -2293,5 +2293,17 @@ const ru: Record<string, string> = {
   "{n} of {total} done, {fallen} enemies slain · seeds brought out: {c} / {r} / {g}": "Выполнено {n} из {total}, повержено врагов: {fallen} · вынесено семян: {c} / {r} / {g}",
   "Mission complete": "Миссия выполнена",
   "Mission failed": "Миссия провалена",
+  "Expeditions": "Вылазки",
+  "Expeditions — today's board": "Вылазки — доска на сегодня",
+  "Difficulty": "Сложность",
+  "difficulty {n}": "сложность {n}",
+  "Lairs": "Логова",
+  "Secondary": "Побочные цели",
+  "Points of interest": "Точки интереса",
+  "Pick a landing: 1, 2 or 3 · yellow — objective · blue — balloon · red — lairs": "Выбери высадку: 1, 2 или 3 · жёлтое — цель · синее — шар · красное — логова",
+  "The Order has dug in. Find every lair on the map and burn it down with sword, arrows and spells.": "Орден окопался. Найди все логова на карте и выжги их мечом, стрелами и заклинаниями.",
+  "Old beacons stand dark. Light each one with F and hold it until the fire takes — a raid comes for every beacon.": "Старые маяки погасли. Зажги каждый клавишей F и держи, пока огонь не разгорится, — на каждый маяк придёт набег.",
+  "A free plot waits for a seedling. Drive off its guards, plant the bush and hold three raids.": "Свободная грядка ждёт саженец. Прогони стражу, посади куст и отбей три набега.",
+  "Click — mission · 1–3 on the sketch — landing · Q / E — tabs": "Клик — миссия · 1–3 на схеме — высадка · Q / E — вкладки",
 };
 export default ru;
