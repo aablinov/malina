@@ -20,8 +20,8 @@ export class Pack {
   private readonly hooks: MobHooks;
 
   /** loot — raspberries from the fallen: where and how many (n — the pile, base — the mob's own loot before scaling) */
-  private readonly loot: (at: THREE.Vector3, n: number, base: number) => void;
-  constructor(h: BossHooks, loot: (at: THREE.Vector3, n: number, base: number) => void) { this.loot = loot;
+  private readonly loot: (at: THREE.Vector3, n: number, base: number, kind: string) => void;
+  constructor(h: BossHooks, loot: (at: THREE.Vector3, n: number, base: number, kind: string) => void) { this.loot = loot;
     // client puppets (src/cgame/net-battle.ts) summon nobody: the server snapshot will send the summoned
     this.hooks = { ...h, allies: () => this.mobs.filter((m) => m.alive), spawn: (kind, at) => (this.mirror ? null : this.spawn(kind, at)) };
   }
@@ -33,7 +33,7 @@ export class Pack {
     const m = new def.make(this.hooks, at);
     m.setScale(this.level, this.players);
     m.net = ++this.seq;
-    m.onDeath = (p) => { if (!m.summoned) this.loot(p, Math.max(1, Math.round(m.loot * m.lootMult)), m.loot); };
+    m.onDeath = (p) => { if (!m.summoned) this.loot(p, Math.max(1, Math.round(m.loot * m.lootMult)), m.loot, kind); };
     this.mobs.push(m);
     return m;
   }

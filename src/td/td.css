@@ -61,3 +61,45 @@
 @keyframes td-alarm { from { opacity: 1; } to { opacity: 0.55; } }
 /* Misty Clearing: the wave modifier (src/td/waves-fog.ts) */
 .td-hud .td-mod { font-style: normal; padding: 1px 6px; border-radius: 4px; background: rgba(120, 100, 200, 0.55); color: #e6dcff; }
+
+/* tower tiles (src/cgame/td-ui.ts renderTowers): a square per built tower in the top left corner — glyph, level, health, animated state */
+.td-towers {
+  position: fixed; left: 12px; top: 12px; z-index: 5; pointer-events: none; user-select: none;
+  display: grid; grid-template-columns: repeat(6, 40px); gap: 5px;
+  font: 700 11px/1 Rubik, system-ui, sans-serif; color: #f4f1ea;
+}
+.td-tile {
+  position: relative; width: 40px; height: 40px; box-sizing: border-box; border-radius: 5px; overflow: hidden; pointer-events: auto;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 34%, #1a1820), #15131a 78%);
+  border: 2px solid color-mix(in srgb, var(--c) 55%, #2a2830); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+}
+.td-tile i { position: absolute; left: 0; right: 0; top: 4px; text-align: center; font-style: normal; font-size: 19px; line-height: 22px; color: var(--c); text-shadow: 0 1px 0 #000, 0 0 6px color-mix(in srgb, var(--c) 60%, transparent); }
+.td-tile b { position: absolute; right: 3px; top: 2px; font-size: 9px; color: #ffd25a; text-shadow: 0 1px 0 #000; }
+.td-tile em { position: absolute; left: 3px; top: 1px; font-style: normal; font-size: 10px; line-height: 12px; text-shadow: 0 1px 0 #000; }
+.td-tile u { position: absolute; left: 3px; right: 3px; bottom: 3px; height: 5px; border-radius: 3px; background: #0c0b10; overflow: hidden; text-decoration: none; }
+.td-tile u s { display: block; height: 100%; width: 100%; border-radius: 3px; background: #9ad87a; transition: width 0.2s; text-decoration: none; }
+/* shooting: the glyph kicks and flares, a light sweeps over the square */
+.td-tile.fire i { animation: td-tile-fire 0.22s ease-out infinite; }
+.td-tile.fire { box-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 9px color-mix(in srgb, var(--c) 80%, transparent); }
+.td-tile.fire::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.4) 50%, transparent 70%); animation: td-tile-sweep 0.45s linear infinite; }
+.td-tile.fire em::before { content: '✦'; color: #fff3b0; }
+/* under attack: the square shakes, the frame blinks red */
+.td-tile.hit { animation: td-tile-hit 0.28s linear infinite; border-color: #ff4a4a; }
+.td-tile.hit em::before { content: '⚔'; color: #ff6a5a; }
+/* frozen: iced over, everything stops */
+.td-tile.frozen { border-color: #7ad8ff; background: linear-gradient(160deg, #3a6a8a, #1a3040); }
+.td-tile.frozen i { color: #cfefff; opacity: 0.7; }
+.td-tile.frozen::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(190, 235, 255, 0.28) 0 4px, transparent 4px 9px); animation: td-tile-ice 1.6s ease-in-out infinite alternate; }
+.td-tile.frozen em::before { content: '❄'; color: #dff4ff; }
+/* destroyed: grey ruins, a slow red pulse — repair me */
+.td-tile.ruin { background: #1c1a1e; border-color: #5a3038; animation: td-tile-ruin 1.2s ease-in-out infinite alternate; }
+.td-tile.ruin i { color: #6a6670; text-shadow: none; transform: rotate(-14deg); }
+.td-tile.ruin em::before { content: '✖'; color: #ff5a5a; }
+.td-tile.ruin u s { width: 0 !important; }
+@keyframes td-tile-fire { 0% { transform: scale(1.35); filter: brightness(2.2); } 100% { transform: scale(1); filter: brightness(1); } }
+@keyframes td-tile-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes td-tile-hit { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-2px, 1px); } 50% { transform: translate(2px, -1px); border-color: #ffb0a0; } 75% { transform: translate(-1px, -1px); } }
+@keyframes td-tile-ice { from { opacity: 0.55; } to { opacity: 1; } }
+@keyframes td-tile-ruin { from { box-shadow: 0 0 0 rgba(255, 60, 60, 0); } to { box-shadow: 0 0 10px rgba(255, 60, 60, 0.75); } }
+/* the buff column of the hero HUD moves down from under the tiles */
+body:has(.td-towers > .td-tile) .hud-buffs { top: calc(4.2em + 130px); }

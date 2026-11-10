@@ -8,6 +8,7 @@ import { rng, useRng, type Rand } from '../rng.ts';
 import type { Target } from '../target.ts';
 import type { TdSpec } from '../td/types.ts';
 import type { SimEvent } from './events.ts';
+import { Drops } from './drops.ts';
 import { Piles } from './pile.ts';
 import { SimTd } from './td.ts';
 
@@ -73,6 +74,8 @@ export class SimWorld {
   readonly h: SimHooks;
   readonly td: SimTd | null;
   readonly piles: Piles;
+  /** Items from fallen enemies (src/sim/drops.ts) */
+  readonly drops: Drops;
   /** This world's mob decoys: bush, walls, towers, summons (src/decoys.ts) */
   readonly decoys: Decoy[] = [];
   events: SimEvent[] = [];
@@ -85,6 +88,7 @@ export class SimWorld {
     this.level = o.level;
     this.terrain = o.level ? terrainOf(o.level) : null;
     this.piles = new Piles(this);
+    this.drops = new Drops(this);
     this.td = o.td ? new SimTd(this, o.td, o.players ?? 1, o.personal ?? false) : null;
   }
 
@@ -115,6 +119,7 @@ export class SimWorld {
       this.h.step?.(dt);
       this.td?.update(dt);
       this.piles.update(dt);
+      this.drops.update(dt);
     } finally { r2(); r1(); }
   }
 
@@ -123,6 +128,7 @@ export class SimWorld {
     const out: EntityState[] = [];
     this.td?.entities(out);
     this.piles.entities(out);
+    this.drops.entities(out);
     return out;
   }
 }

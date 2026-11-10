@@ -140,7 +140,8 @@ export class Shop {
   private makeWares(): Ware[] {
     const pw = this.profile.power;
     const sutler = this.kind === 'sutler';
-    const of = (f: (d: ItemDef) => boolean): Ware[] => ITEMS.filter(f).map((d) => ({ key: d.id, def: d, price: sutler ? SUTLER_PRICE[d.rarity] : priceOf(d.id, pw) }));
+    // relics drop from enemies only (src/sim/drops.ts) — no merchant sells them
+    const of = (f: (d: ItemDef) => boolean): Ware[] => ITEMS.filter((d) => !d.mob && f(d)).map((d) => ({ key: d.id, def: d, price: sutler ? SUTLER_PRICE[d.rarity] : priceOf(d.id, pw) }));
     let w: Ware[];
     switch (this.tab) {
       // the sutler has all spells (starter, shop, boss) and all auras

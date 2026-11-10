@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
-import { Profile, type ProfileData } from '../src/items.ts';
+import { ITEMS, Profile, type ProfileData } from '../src/items.ts';
 import { MAX_PLAYERS, NET_LIMITS, type ErrorCode, type RoomInfo, type RtcSignal, type SeatInfo, type ServerMsg } from '../src/net/protocol.ts';
-import { Match, type MatchEnd } from '../src/game/match.ts';
+import { Match, MAX_LOOT_ITEMS, type MatchEnd } from '../src/game/match.ts';
 import { checkPass, hashPass, newId } from './auth.ts';
 import { tx, type Db } from './db.ts';
 import { MAX_XP_PER_MATCH, type MapCatalog } from './maps.ts';
@@ -311,6 +311,8 @@ export class RoomManager {
         const p = new Profile(prof.data as ProfileData);
         p.addBerries(berries);
         p.addXp(xp);
+        // items picked up from fallen enemies stay with the hero whatever the outcome
+        for (const it of (r.items ?? []).slice(0, MAX_LOOT_ITEMS)) if (ITEMS.some((d) => d.id === it.def)) p.add(it.def, Math.max(1, Math.min(99, Math.round(it.power))));
         const version = this.d.profiles.put(m.playerId, prof.version, p.data, now);
         if (version !== null) updated.push({ m, version, data: p.data });
       }

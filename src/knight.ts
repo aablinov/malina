@@ -166,6 +166,10 @@ const SPECIALS: Record<SpecialMove, SpecialPose> = {
   mill: { from: SPIN, to: SPIN, a: 0.1, b: 0.9, turns: 2.5, dash: [4, 0.1, 0.9] },
 };
 const _tint = new THREE.Color();
+/** A push out of an obstacle longer than this in one tick, m, is not a step into a wall — the obstacle appeared around the hero */
+const EJECT_MIN = 0.35;
+/** How fast the hero slides out of such an obstacle, m/s */
+const EJECT_SPEED = 4;
 
 const lerpPose = (a: Pose, b: Pose, k: number): Pose => ({
   ax: a.ax + (b.ax - a.ax) * k, ay: a.ay + (b.ay - a.ay) * k, az: a.az + (b.az - a.az) * k, w: a.w + (b.w - a.w) * k,
@@ -575,6 +579,8 @@ export class Knight {
   // ---------- simulation ----------
 
   /** solids — flat obstacles (props), terrain — level blocks: stairs, height, cliffs */
+  /** Sliding out of an obstacle that appeared around the hero (see the push-out below) */
+  private ejecting = false;
   update(dt: number, input: KnightInput, solids: readonly Obstacle[], terrain?: Terrain): void {
     const H = HERO;
     this.simTime += dt;
@@ -654,13 +660,25 @@ export class Knight {
       if (lunge > 0) this.pos.add(new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(lunge));
     }
 
+    // An obstacle that appeared around the hero (a tower built on the pad they stand on) must not throw them out in one frame:
+    // a push longer than any step into a wall could be (EJECT_MIN) is walked out at EJECT_SPEED instead — the hero slides off the pad
+    const bx = this.pos.x, bz = this.pos.z;
     this.touching = resolveCircle(this.pos, H.radius, solids);
+    const ex = this.pos.x - bx, ez = this.pos.z - bz, el = Math.hypot(ex, ez);
+    if (el > EJECT_MIN) this.ejecting = true;
+    if (this.ejecting) {
+      const step = EJECT_SPEED * dt;
+      if (el <= step) { this.ejecting = false; if (el > 1e-6) this.vel.set(0, 0, 0); }
+      else { this.pos.x = bx + (ex * step) / el; this.pos.z = bz + (ez * step) / el; }
+    }
     if (terrain) {
       if (terrain.resolve(this.pos, H.radius)) this.touching = true;
       this.vertical(dt, terrain);
     } else this.pos.y = 0;
     this.speed = dt > 0 ? Math.hypot(this.pos.x - prev.x, this.pos.z - prev.z) / dt : 0;
-    if (this.touching && dt > 0) this.vel.set(this.pos.x - prev.x, 0, this.pos.z - prev.z).divideScalar(dt);
+    // sliding out of an obstacle is not the hero's own motion: it must not turn into speed, or the hero is flung on after leaving it
+    if (this.ejecting) this.vel.set(0, 0, 0);
+    else if (this.touching && dt > 0) this.vel.set(this.pos.x - prev.x, 0, this.pos.z - prev.z).divideScalar(dt);
 
     this.animate(dt);
     this.sampleTrail();

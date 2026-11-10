@@ -3,7 +3,7 @@ import { t } from '../i18n/i18n.ts';
 import type { Channel } from '../net/channel.ts';
 import { CMD_BACKLOG, LOOT_DELAY, MOB_FLAG, SNAP_RING, TICK, type Cmd, type CmdBatch, type GameClientMsg, type GameServerMsg } from '../net/game-protocol.ts';
 import { CLOSE } from '../net/protocol.ts';
-import { BATTLE_ARROWS, ITEMS, itemDef, type KitOp, type ProfileData } from '../items.ts';
+import { BATTLE_ARROWS, ITEMS, itemDef, mobLootPower, type KitOp, type ProfileData } from '../items.ts';
 import { ARROW_BUNDLE, SUTLER_ARROWS, SUTLER_PRICE } from '../prices.ts';
 import type { GearAction } from '../net/protocol.ts';
 import { SnapshotRing, type Delta, type EntityState } from '../net/snapshot.ts';
@@ -20,7 +20,11 @@ import { HeadlessBattle, type BattleHero } from './battle.ts';
  */
 export interface MatchPlayer { seat: number; playerId: string; name: string; profile: ProfileData }
 export type GameChannel = Channel<GameClientMsg | GameServerMsg, CmdBatch | Delta<SimEvent>>;
-export interface MatchEnd { result: 'won' | 'lost' | 'abandoned'; wave: number; rewards: Map<number, { berries: number; xp: number }> }
+export interface MatchEnd { result: 'won' | 'lost' | 'abandoned'; wave: number; rewards: Map<number, { berries: number; xp: number; items?: LootItem[] }> }
+/** An item an enemy left and a hero picked up (src/sim/drops.ts): it goes to the stored profile when the match ends, whatever the outcome */
+export interface LootItem { def: string; power: number }
+/** No more items than this per hero per match reach the stored profile */
+export const MAX_LOOT_ITEMS = 60;
 
 interface Seat {
   player: MatchPlayer;
@@ -38,6 +42,8 @@ interface Seat {
   acts: { seq: number; a: GearAction }[];
   /** The gear was changed in this battle (`gear`) — the kit is no longer the stored one */
   geared: boolean;
+  /** Items picked up from fallen enemies in this battle */
+  loot: LootItem[];
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -61,6 +67,20 @@ export class Match {
     this.stored = o.stored ?? null;
     this.battle = new HeadlessBattle(o.map, o.seed, Math.max(1, o.players.length), true);
     for (const p of o.players) this.join(p);
+    this.battle.world.drops.onPick = (seat, def) => this.pickUp(seat, def);
+  }
+
+  /** A hero picked up an item an enemy left: into the battle copy of the gear right away (the client gets its copy anew), and on the list for the stored profile */
+  private pickUp(seat: number, def: string): void {
+    const s = this.seats.get(seat);
+    if (!s || !ITEMS.some((d) => d.id === def)) return;
+    const p = s.hero.profile, power = mobLootPower(def, p.power);
+    p.add(def, power);
+    p.save();
+    if (s.loot.length < MAX_LOOT_ITEMS) s.loot.push({ def, power });
+    s.geared = true;
+    const d = p.data;
+    this.send(s, { t: 'mine', items: d.items, equip: d.equip, seq: d.seq, points: d.points, arrows: d.arrows });
   }
 
   get tick(): number { return this.battle.world.tick; }
@@ -71,7 +91,7 @@ export class Match {
     const was = this.seats.get(p.seat);
     if (was) return was;
     const hero = this.battle.addHero(p.seat, p.profile);
-    const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false, acts: [], geared: false };
+    const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false, acts: [], geared: false, loot: [] };
     this.seats.set(p.seat, s);
     this.td.setPlayers(this.seats.size);
     // strength — from the gear the hero came with (the sutler's goods do not raise it)
@@ -199,7 +219,7 @@ export class Match {
       case 'salvage': ok = str(m.uid) && p.salvage(m.uid) !== null; break;
       case 'enchant': ok = str(m.uid) && isNum(m.slot) && isNum(m.option) && p.enchant(m.uid, m.slot, m.option); break;
       case 'buy': {
-        if (!str(m.def) || !ITEMS.some((d) => d.id === m.def)) break;
+        if (!str(m.def) || !ITEMS.some((d) => d.id === m.def && !d.mob)) break;
         if (!this.td.spend(seat, SUTLER_PRICE[itemDef(m.def).rarity])) { poor(); break; }
         p.add(m.def, p.power);
         p.save();
@@ -213,7 +233,11 @@ export class Match {
         break;
       default: break;
     }
-    if (!ok) return;
+    if (!ok) {
+      // the client did the op on a copy that a picked-up item had not reached yet (uids differ) — it takes the server's copy again
+      if (s.loot.length) { const d = p.data; this.send(s, { t: 'mine', items: d.items, equip: d.equip, seq: d.seq, points: d.points, arrows: d.arrows }); }
+      return;
+    }
     s.geared = true;
     if (m.op !== 'arrows') this.broadcast(this.kitOf(s), seat);
   }
@@ -340,7 +364,9 @@ export class Match {
 
   private finish(result: MatchEnd['result']): void {
     const wave = result === 'won' ? this.td.waves.length : Math.max(0, this.td.wave - (this.td.waveRunning ? 1 : 0));
-    this.ended = { result, wave, rewards: this.battle.rewards() };
+    const rewards: MatchEnd['rewards'] = this.battle.rewards();
+    for (const s of this.seats.values()) { const r = rewards.get(s.player.seat); if (r && s.loot.length) r.items = s.loot.slice(); }
+    this.ended = { result, wave, rewards };
     this.broadcast({ t: 'over', result, wave });
     for (const s of this.seats.values()) s.chan?.flush();
     this.onEnd?.(this.ended);

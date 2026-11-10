@@ -87,7 +87,7 @@ const part = (name: string, w: number, h: number, d: number, x: number, y: numbe
 const GOLD = { emissive: '#f2a020', ei: 0.25, flat: true };
 
 /** Default weapons. The first is the hero's sword with the former SWORD numbers */
-export const DEFAULT_WEAPONS: readonly WeaponDef[] = [
+const BASE_WEAPONS: readonly WeaponDef[] = [
   {
     id: 'sword', title: t('Warden sword'), category: 'sword', rarity: 'common',
     description: t('The hero\'s trusty sword: quick strikes left and right, an overhead finisher with a shockwave.'),
@@ -423,6 +423,39 @@ export const DEFAULT_WEAPONS: readonly WeaponDef[] = [
     },
   },
 ];
+
+/**
+ * Relic weapons (wiki/design-weapon-arts.md, section "Relics"): drop from enemies only (src/sim/drops.ts). Each is built on a base weapon —
+ * its shape and combo — but the metal is dark, the blade burns in the relic's own colour, the trail is of that colour, and the strikes are
+ * heavier (`dmg`) and quicker (`speed`). What the relic does on a hit — `relic` of the item (src/items.ts, src/gear.ts)
+ */
+function relic(base: string, id: string, title: string, description: string, color: string, dmg: number, speed: number, more: Partial<WeaponStats> = {}): WeaponDef {
+  const b = BASE_WEAPONS.find((w) => w.id === base)!;
+  const lit = (p: WeaponPart): WeaponPart => {
+    if (p.glow) return { ...p, color, glow: p.glow + 1.2 };
+    if (p.emissive) return { ...p, color: '#2a2630', emissive: color, ei: 0.9, flat: true };
+    return { ...p, color: '#3a3440' };
+  };
+  return {
+    ...b, id, title, description, rarity: 'unique', trail: color, offTrail: b.offhand ? color : undefined,
+    model: b.model.map(lit), offhand: b.offhand?.map(lit),
+    stats: { ...b.stats, ...more, speed: b.stats.speed * speed, swings: b.stats.swings.map((x) => ({ ...x, dmg: Math.round(x.dmg * dmg) })) },
+  };
+}
+export const RELIC_WEAPONS: readonly WeaponDef[] = [
+  relic('katana', 'emberfang', t('Emberfang'), t('A katana that never cooled: every cut leaves the enemy burning.'), '#ff6a1a', 1.35, 1.1),
+  relic('claymore', 'frostbite', t('Winter\'s Bite'), t('A two-hander of never-melting ice: whoever it touches slows down.'), '#6fd8ff', 1.35, 1.1),
+  relic('spear', 'stormcaller', t('Stormcaller'), t('Lightning jumps from every lunge to the enemies nearby.'), '#8ab4ff', 1.3, 1.15),
+  relic('rapier', 'bloodthorn', t('Bloodthorn'), t('A raspberry thorn: every thrust returns health to the hero.'), '#ff2a5d', 1.35, 1.15, { critChance: 0.35 }),
+  relic('dragonslayer', 'starcleaver', t('Starcleaver'), t('A slab of fallen star: every fifth hit bursts in a star wave.'), '#ffd75a', 1.3, 1.15),
+  relic('dagger', 'voidedge', t('Edge of the Void'), t('The cut enemy takes more damage from everything.'), '#b46aff', 1.4, 1.15),
+  relic('knuckles', 'thunderfists', t('Thunder Fists'), t('A storm on each hand: one hit in five stuns.'), '#7ae8ff', 1.4, 1.1),
+  relic('scythe', 'midnightscythe', t('Midnight Scythe'), t('Wide sweeps that gather souls and a little life with every hit.'), '#5a7aff', 1.3, 1.1),
+  relic('halberd', 'sunlance', t('Sun Halberd'), t('One hit in four calls a beam of sunlight onto the enemy.'), '#ffc23a', 1.35, 1.1),
+  relic('hammer', 'berryking', t('Raspberry King\'s Hammer'), t('One hit in four shakes the ground and stuns everyone around.'), '#ff4a8a', 1.3, 1.15, { shockR: 3.6 }),
+];
+/** Default weapons: the base ones and the relics */
+export const DEFAULT_WEAPONS: readonly WeaponDef[] = [...BASE_WEAPONS, ...RELIC_WEAPONS];
 
 // ---------- storage ----------
 

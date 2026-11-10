@@ -5,6 +5,7 @@ import { iconImg, iconURL } from '../icons.ts';
 import {
   armorHealth, enchantDef, itemDef, PERK_TEXT, powerMult, RARITY, salvageValue, SLOT_TITLE, spentPoints, xpToNext,
   type EnchantDef, type Item, type ItemSlot, type Profile,
+  RELIC_TEXT,
 } from '../items.ts';
 import { emptyInput, Knight } from '../knight.ts';
 import { rng, type Textures } from '../textures.ts';
@@ -361,6 +362,7 @@ export class Inventory {
         const dm = w.stats.swings.map((s) => Math.round(s.dmg * k * sharp));
         line('sword', t('Damage {min}–{max} per hit', { min: Math.min(...dm), max: Math.max(...dm) }));
         for (const t of d.traits ?? []) line('e-star', t);
+        if (d.relic) line('e-bolt', RELIC_TEXT[d.relic]);
         const m = weaponMetrics(w);
         const cur = p.equipped('melee'), cm = cur && cur.uid !== it.uid ? weaponMetrics(getWeapon(itemDef(cur.def).weapon ?? '') ?? w) : null;
         const bar = (name: string, v: number, c: number | null): string =>

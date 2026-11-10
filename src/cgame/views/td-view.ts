@@ -6,6 +6,7 @@ import type { TdSpec } from '../../td/types.ts';
 import { playTdEvents } from '../effects.ts';
 import { BoltView } from './bolt-view.ts';
 import { BushView } from './bush-view.ts';
+import { DropView } from './drop-view.ts';
 import { LairView } from './lair-view.ts';
 import { PadView } from './pad-view.ts';
 import { PileView } from './pile-view.ts';
@@ -105,6 +106,7 @@ export class TdView {
     }
     if (/^b\d+$/.test(id)) return new BoltView(this.scene, this.fx, e);
     if (/^p\d+$/.test(id)) return new PileView(this.scene, this.fx, e);
+    if (/^d\d+$/.test(id)) return new DropView(this.scene, this.fx, e);
     return null;
   }
 

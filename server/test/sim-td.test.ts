@@ -3,7 +3,10 @@ import { test } from 'node:test';
 import * as THREE from 'three';
 import type { TowerKind } from '../../src/td/towers.ts';
 import { hashEntities } from '../../src/sim/hash.ts';
-import { tdWorld } from './sim-helpers.ts';
+import { tdWorld, type StubMob } from './sim-helpers.ts';
+import { itemDef, MOB_DROPS, Profile } from '../../src/items.ts';
+import { spellOf } from '../../src/magic/registry.ts';
+import { getWeapon } from '../../src/weapons.ts';
 
 /** Scenario: towers on every pad that can be afforded, waves one after another — until victory or defeat */
 function play(id: string, seed: number, ticks: number, build: TowerKind): { hashes: number[]; w: ReturnType<typeof tdWorld> } {
@@ -160,4 +163,52 @@ test('misty clearing: the same wave from its number on every machine; lanterns l
   w.step();
   assert.equal(s.berries(0), before + 25);
   assert.equal(fog.wisps.length, 0);
+});
+
+test('loot from enemies: a mini-boss always leaves a relic, the hero picks items up; the rank and file leave items by chance', () => {
+  const w = tdWorld('td', 11), { world, sim } = w;
+  const picked: { seat: number; def: string; relic: boolean }[] = [];
+  world.drops.onPick = (seat, def, relic) => picked.push({ seat, def, relic });
+  sim.killed(w.hero.pos.clone().add(new THREE.Vector3(1.5, 0, 0)), 1, 1, 'chief_test');
+  assert.equal(world.drops.list.length, 1, 'a mini-boss always leaves an item');
+  assert.ok(world.drops.list[0].relic && itemDef(world.drops.list[0].def).mob, 'and it is a relic');
+  assert.ok(world.entities().some((e) => /^d\d+$/.test(e.id) && e.relic === 1), 'the item is in the snapshot records');
+  for (let i = 0; i < 180 && !picked.length; i++) world.step(1 / 60);
+  assert.equal(picked.length, 1, 'the item flew to the hero nearby and was picked up');
+  assert.ok(picked[0].relic && picked[0].seat === 0);
+  assert.ok(world.takeEvents().some((e) => e.t === 'drop.pick' && e.def === picked[0].def));
+  for (let i = 0; i < 400; i++) sim.killed(new THREE.Vector3(w.hero.pos.x + 60, 0, w.hero.pos.z + 60), 1, 1, 'grunt');
+  const n = world.drops.list.length;
+  assert.ok(n > 0 && n <= 24, `the rank and file leave items too, no more than 24 lie on the ground: ${n}`);
+  assert.equal(MOB_DROPS().length, 20, 'twenty relics');
+  for (const d of MOB_DROPS()) {
+    assert.equal(d.rarity, 'unique');
+    if (d.slot === 'melee') assert.ok(d.relic && getWeapon(d.weapon ?? ''), `${d.id}: a weapon with a model and an effect`);
+    else assert.ok(spellOf(d.artifact!.kind), `${d.id}: a spell from the registry`);
+  }
+  const p = new Profile(Profile.starter());
+  assert.ok(!p.data.items.some((i) => itemDef(i.def).mob), 'no relics in the starter kit');
+  for (let i = 0; i < 300; i++) assert.ok(!itemDef(p.rollLoot().def).mob, 'nor in chests');
+});
+
+test('frost spire and arcane obelisk hold rays: the slow and the drain grow while the ray stays on the target', () => {
+  for (const kind of ['frost', 'magic'] as const) {
+    const w = tdWorld('td', 5, { mobHp: 100000 }), { world, sim } = w;
+    sim.gain(0, 5000);
+    assert.ok(sim.command(0, { t: 'td', a: `build:${kind}`, pad: 0 }));
+    const at = sim.pads[0].pos.clone().add(new THREE.Vector3(3, 0, 0));
+    const m = world.h.spawnMob('grunt', at) as unknown as StubMob;
+    const hp: number[] = [], chill = new Set<number>();
+    const fires: import('../../src/sim/events.ts').SimEvent[] = [];
+    for (let i = 0; i < 60 * 5; i++) {
+      const was = m.hp;
+      world.step(1 / 60);
+      if (m.hp < was) { hp.push(was - m.hp); chill.add(Math.round(m.chillK * 100)); }
+      fires.push(...world.takeEvents().filter((e) => e.t === 'tower.fire'));
+    }
+    assert.ok(fires.length > 8 && fires.every((e) => Array.isArray(e.pts) && (e.pts as number[]).length === 6), `${kind}: every tick is an event with the ray's two ends (${fires.length})`);
+    assert.equal(fires[fires.length - 1].ramp, 1, `${kind}: the ramp is full after a few seconds`);
+    if (kind === 'frost') { assert.ok(Math.min(...chill) < 40, 'the frost ray starts near −30 %'); assert.equal(Math.max(...chill), 60, 'and reaches −60 %'); }
+    else assert.ok(hp[hp.length - 1] >= hp[0] * 2, `the tether drains harder with time: ${hp[0]} → ${hp[hp.length - 1]}`);
+  }
 });

@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { MapMarker } from '../hud/automap.ts';
 import { t } from '../i18n/i18n.ts';
+import { ITEMS } from '../items.ts';
 import { MOBS } from '../mobs/roster.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { isChief, type SimPad, type SimTd } from '../sim/td.ts';
@@ -45,6 +46,12 @@ export class TdUi {
   /** Towers in trouble: a signal in the HUD and on the map */
   readonly alarms = new Map<SimTower, Alarm>();
   private alarmBeep = 0;
+  /** Tiles of the built towers in the top left corner: health and what the tower is doing right now */
+  readonly towersEl: HTMLDivElement;
+  private readonly tiles = new Map<number, { el: HTMLDivElement; bar: HTMLElement; lvl: HTMLElement; key: string }>();
+  /** Seconds left of "is firing" and "is under attack" per pad — from the `tower.fire` / `tower.hurt` events */
+  private readonly fireT = new Map<number, number>();
+  private readonly hurtT = new Map<number, number>();
   private menuHtml = '';
   private hudHtml = '';
   private readonly sim: SimTd;
@@ -66,6 +73,9 @@ export class TdUi {
     this.hudEl = document.createElement('div');
     this.hudEl.className = 'td-hud';
     parent.appendChild(this.hudEl);
+    this.towersEl = document.createElement('div');
+    this.towersEl.className = 'td-towers';
+    parent.appendChild(this.towersEl);
     sim.onToast = (s, text) => { if (s === this.seat) h.toast(text); };
     sim.onAlarm = (t, why) => this.alarm(t, why);
   }
@@ -73,6 +83,7 @@ export class TdUi {
   dispose(): void {
     this.menuEl.remove();
     this.hudEl.remove();
+    this.towersEl.remove();
     if (this.sim.onToast) this.sim.onToast = null;
     if (this.sim.onAlarm) this.sim.onAlarm = null;
   }
@@ -131,7 +142,7 @@ export class TdUi {
     } else {
       const tw = p.tower, next = tw.nextCost, back = Math.round(tw.spent * SELL_BACK), ok = next !== null && berries >= next;
       html = `<div class="td-head">${t('{title} · damage {dmg} · {range} m · raspberries {n}', { title: tw.title, dmg: tw.dmg, range: tw.range, n: berries })}</div>`
-        + `<button class="td-card${next === null || !ok ? ' off' : ''}" data-act="upgrade"><kbd>1</kbd><i style="background:${tw.def.color}"></i><b>${next === null ? t('Maxed out') : t('Upgrade to {lvl}', { lvl: ['I', 'II', 'III'][tw.level] })}</b><small>${next === null ? t('it does not get better') : t('more damage and range')}</small><em class="${ok ? 'ok' : ''}">${next === null ? '—' : t('{n} raspberries', { n: next })}</em></button>`
+        + `<button class="td-card${next === null || !ok ? ' off' : ''}" data-act="upgrade"><kbd>1</kbd><i style="background:${tw.def.color}"></i><b>${next === null ? t('Maxed out') : t('Upgrade to {lvl}', { lvl: ['I', 'II', 'III'][tw.level] })}</b><small>${next === null ? t('it does not get better') : tw.def.perks[tw.level - 1]}</small><em class="${ok ? 'ok' : ''}">${next === null ? '—' : t('{n} raspberries', { n: next })}</em></button>`
         + `<button class="td-card" data-act="sell"><kbd>2</kbd><i style="background:#9ad87a"></i><b>${t('Sell')}</b><small>${t('the pad is freed')}</small><em class="sell">+${t('{n} raspberries', { n: back })}</em></button>`;
     }
     if (html !== this.menuHtml) { this.menuHtml = html; this.menuEl.innerHTML = html; }
@@ -174,6 +185,16 @@ export class TdUi {
     const sim = this.sim, rest = sim.spec.rest ?? 20;
     for (const e of evs) {
       switch (e.t) {
+        case 'tower.fire': this.fireT.set(Number(String(e.id).slice(1)), 0.45); break;
+        case 'tower.hurt': this.hurtT.set(Number(String(e.id).slice(1)), 1.6); break;
+        case 'drop.spawn': if (e.relic) this.h.toast(t('A relic dropped — run and pick it up!')); break;
+        case 'drop.pick': {
+          if (e.seat !== this.seat) break;
+          const title = ITEMS.find((d) => d.id === e.def)?.title ?? String(e.def);
+          if (e.relic) this.h.banner(`${t('Relic!')}<small>${title} · ${t('open the inventory (I)')}</small>`, 3);
+          else this.h.toast(t('Loot: {title}', { title }));
+          break;
+        }
         case 'wave.start': this.h.banner(`${e.of ? t('Wave {n} of {total}', { n: e.wave as number, total: e.of as number }) : t('Wave {n}', { n: e.wave as number })}<small>${t((e.title as string) || 'The Order marches on the bush')}</small>`, 2.5); break;
         case 'lantern.out': this.h.toast(t('A lantern went out — the mist creeps closer')); break;
         case 'wisp.catch': if (e.seat === this.seat) this.h.toast(t('Wisp caught: +{n} raspberries', { n: e.n as number })); break;
@@ -182,7 +203,7 @@ export class TdUi {
         case 'wave.early': if (e.seat === this.seat) this.h.toast(t('Wave ahead of time: +{n} raspberries', { n: e.n as number })); break;
         case 'td.won': this.closeMenu(); this.h.banner(`${t('The bush is saved!')}<small>${t('All waves of the Order are broken · N — play again')}</small>`, 6); break;
         case 'td.lost': this.closeMenu(); this.h.banner(`${t('The bush withered')}<small>${t('The Order reached the raspberries · N — try again')}</small>`, 5); break;
-        case 'td.reset': this.closeMenu(); this.alarms.clear(); break;
+        case 'td.reset': this.closeMenu(); this.alarms.clear(); this.fireT.clear(); this.hurtT.clear(); break;
         case 'chief': this.h.banner(`${t('A mini-boss is coming!')}<small>${t(String(e.title))} · ${t(String(e.lane)).toLowerCase()}</small>`, 3); break;
         case 'wall.break': this.h.banner(`${e.kind === 'gate' ? t('Gate broken') : t('Wall breached')}!<small>${t(String(e.title))} · ${t('enemies are coming in · F at the wall — repair')}</small>`, 3); break;
       }
@@ -205,6 +226,43 @@ export class TdUi {
       else this.renderMenu();
     }
     this.renderHud();
+    this.renderTowers(dt);
+  }
+
+  /**
+   * Tower tiles: one square per built tower, in pad order. The square shows the tower's glyph in its colour, the level and a health
+   * bar; its state is a class the styles animate (src/td/td.css): `fire` — shooting (flashes), `hit` — under attack (shakes, red frame),
+   * `frozen` — iced over, `ruin` — destroyed (grey, a cross). Nodes are kept and only their classes and widths change, so the animations run on
+   */
+  private renderTowers(dt: number): void {
+    for (const m of [this.fireT, this.hurtT]) for (const [k, v] of m) { if (v - dt <= 0) m.delete(k); else m.set(k, v - dt); }
+    const live = new Set<number>();
+    for (const tw of [...this.sim.towers].sort((a, b) => a.pad - b.pad)) {
+      live.add(tw.pad);
+      let tile = this.tiles.get(tw.pad);
+      const key = `${tw.kind}`;
+      if (tile && tile.key !== key) { tile.el.remove(); this.tiles.delete(tw.pad); tile = undefined; }
+      if (!tile) {
+        const el = document.createElement('div');
+        el.style.setProperty('--c', tw.def.color);
+        el.innerHTML = `<i>${tw.def.glyph}</i><b></b><em></em><u><s></s></u>`;
+        // tiles stay in pad order
+        const after = [...this.tiles.keys()].filter((p) => p > tw.pad).sort((a, b) => a - b)[0];
+        this.towersEl.insertBefore(el, after === undefined ? null : this.tiles.get(after)!.el);
+        tile = { el, bar: el.querySelector('s')!, lvl: el.querySelector('b')!, key };
+        this.tiles.set(tw.pad, tile);
+      }
+      const k = tw.maxHp > 0 ? Math.max(0, tw.hp / tw.maxHp) : 0, ruin = tw.ruined, frozen = !ruin && tw.frozen > 0;
+      const cls = `td-tile${ruin ? ' ruin' : ''}${frozen ? ' frozen' : ''}${!ruin && this.hurtT.has(tw.pad) ? ' hit' : ''}${!ruin && !frozen && this.fireT.has(tw.pad) ? ' fire' : ''}`;
+      if (tile.el.className !== cls) tile.el.className = cls;
+      const w = `${(k * 100).toFixed(0)}%`;
+      if (tile.bar.style.width !== w) { tile.bar.style.width = w; tile.bar.style.background = wallBarColor(k); }
+      const lv = ['I', 'II', 'III'][tw.level - 1];
+      if (tile.lvl.textContent !== lv) tile.lvl.textContent = lv;
+      const tip = `${tw.title} · ${Math.ceil(tw.hp)} / ${tw.maxHp}`;
+      if (tile.el.title !== tip) tile.el.title = tip;
+    }
+    for (const [pad, tile] of this.tiles) if (!live.has(pad)) { tile.el.remove(); this.tiles.delete(pad); }
   }
 
   /** Next-wave card: who and how many, tower hunters and the mini-boss marked separately */

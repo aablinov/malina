@@ -3,7 +3,7 @@ import type { Obstacle } from '../collision.ts';
 import type { Decoy } from '../decoys.ts';
 import type { EntityState } from '../net/snapshot.ts';
 import type { Target } from '../target.ts';
-import { MAX_LEVEL, REPAIR_COST, TOWERS, UPGRADE_DMG, UPGRADE_HP, UPGRADE_RANGE, upgradeCost, type TowerDef, type TowerKind } from '../td/towers.ts';
+import { HEAD_Y, LEVEL_RISE, MAX_LEVEL, REPAIR_COST, TOWERS, UPGRADE_DMG, UPGRADE_HP, UPGRADE_RANGE, upgradeCost, type TowerDef, type TowerKind } from '../td/towers.ts';
 import { r1, r2 } from './entities.ts';
 import type { Foe, SimWorld } from './world.ts';
 
@@ -57,6 +57,8 @@ export class SimTower implements Decoy {
   readonly pools: Pool[] = [];
   private readonly burns: Burn[] = [];
   private iceHits = 0;
+  /** Channelled beams (frost spire, arcane obelisk): seconds the beam has stayed on each target — the ramp */
+  private ramps = new Map<Foe, number>();
   private cd = 0.3;
   private time = 0;
   private readonly w: SimWorld;
@@ -146,6 +148,7 @@ export class SimTower implements Decoy {
     this.bolts.length = 0;
     this.pools.length = 0;
     this.burns.length = 0;
+    this.ramps.clear();
   }
 
   // ---------- combat ----------
@@ -178,8 +181,23 @@ export class SimTower implements Decoy {
     return this.w.h.foes().filter((f) => f !== except && f.alive && !f.dead && Math.hypot(f.pos.x - at.x, f.pos.z - at.z) - f.radius <= r);
   }
 
-  private muzzle(y: number, ahead: number): THREE.Vector3 {
-    return this.pos.clone().add(new THREE.Vector3(Math.sin(this.yaw) * ahead, y, Math.cos(this.yaw) * ahead));
+  /** Height of the turning head: grows with the level, as the model does (src/cgame/views/tower-view.ts) */
+  get headY(): number { return HEAD_Y[this.def.id] + (this.level - 1) * LEVEL_RISE; }
+  /** A point of the head: dy above its pivot, `ahead` metres towards the target */
+  private muzzle(dy: number, ahead: number): THREE.Vector3 {
+    return this.pos.clone().add(new THREE.Vector3(Math.sin(this.yaw) * ahead, this.headY + dy, Math.cos(this.yaw) * ahead));
+  }
+  /** The next targets after `first` — the ones furthest along the lane within range */
+  private others(first: Foe, n: number): Foe[] {
+    if (n <= 0) return [];
+    return this.around(this.pos, this.range, first).sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0)).slice(0, n);
+  }
+  /** Seconds a channelled beam has been on each of `list` after this tick (others are forgotten), capped at `max` */
+  private channel(list: Foe[], max: number): number[] {
+    const next = new Map<Foe, number>();
+    for (const f of list) next.set(f, Math.min(max, (this.ramps.get(f) ?? 0) + this.def.cd));
+    this.ramps = next;
+    return list.map((f) => next.get(f)!);
   }
   private chest(t: Foe): THREE.Vector3 { return t.pos.clone().setY(t.pos.y + Math.min(1, (t.topY ?? 1.4) * 0.6)); }
 
@@ -211,7 +229,7 @@ export class SimTower implements Decoy {
 
   /** Heavy bolt: straight through the target to the edge of the range, hits everyone in a 0.7 m strip; a hit without direction — does not block armour */
   private fireBallista(t: Foe): void {
-    const dmg = this.dmg, from = this.muzzle(1.3, 1.0);
+    const dmg = this.dmg, from = this.muzzle(0.3, 1.0), lvl = this.level;
     const dir = new THREE.Vector3(t.pos.x - this.pos.x, 0, t.pos.z - this.pos.z).normalize();
     const len = this.range + 1;
     const end = this.pos.clone().addScaledVector(dir, len); end.y = this.w.floor(end.x, end.z, t.pos.y) + 0.9;
@@ -223,16 +241,18 @@ export class SimTower implements Decoy {
       if (along < 0 || along > len) continue;
       if (Math.abs(dx * dir.z - dz * dir.x) > 0.7 + f.radius) continue;
       const at = this.chest(f);
-      this.strike(f, n === 0 ? dmg : Math.round(dmg * 0.7), 0, at, 'crit', true);
-      this.w.emit({ t: 'hit.ballista', x: at.x, y: at.y, z: at.z });
+      // II — the bolt loses nothing on the way through; III — it also staggers everyone it passes
+      this.strike(f, n === 0 || lvl >= 2 ? dmg : Math.round(dmg * 0.7), 0, at, 'crit', true);
+      if (lvl >= 3) f.stun?.(0.4);
+      this.w.emit({ t: 'hit.ballista', x: at.x, y: at.y, z: at.z, dx: dir.x, dz: dir.z });
       n++;
     }
   }
 
   /** A ladle of tar along an arc: a pool of radius 2.2 m for 5 s — in it they get stuck (−50 %) and burn (a damage tick every 0.5 s) */
   private fireOil(t: Foe): void {
-    const from = this.muzzle(1.9, 0.6), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
-    this.ev('tower.fire');
+    const from = this.muzzle(0.7, 0.6), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
+    this.ev('tower.fire', { fx: from.x, fy: from.y, fz: from.z });
     this.bolt('oil', from, t.pos.clone().setY(this.w.floor(t.pos.x, t.pos.z, t.pos.y)), 0.5 + dist * 0.05, 2 + dist * 0.2, null, (at) => {
       const r = 2.2 + (this.level - 1) * 0.3;
       this.pools.push({ id: this.w.id('pool'), at: at.clone(), t: 5, tick: 0, r });
@@ -242,7 +262,7 @@ export class SimTower implements Decoy {
 
   /** Meteor: into the densest crowd within range — from the sky, 4.5 m blast (damage fades towards the edge, no less than half), knockback, sets on fire */
   private fireMeteor(): void {
-    const R = 4.5, dmg = this.dmg;
+    const lvl = this.level, R = lvl >= 3 ? 5.5 : 4.5, dmg = this.dmg;
     const foes = this.around(this.pos, this.range);
     if (!foes.length) return;
     let best = foes[0], bn = -1;
@@ -257,7 +277,8 @@ export class SimTower implements Decoy {
       for (const f of this.around(at, R)) {
         const d = Math.hypot(f.pos.x - at.x, f.pos.z - at.z), k = Math.max(0.5, 1 - d / R);
         this.strike(f, Math.round(dmg * k), 3 * k, f.pos.clone().setY(1), 'crit');
-        this.burn(f, 3, Math.round(dmg * 0.1));
+        this.burn(f, lvl >= 2 ? 5 : 3, Math.round(dmg * 0.1));
+        if (lvl >= 3 && k > 0.7) f.stun?.(0.8);
       }
     });
   }
@@ -273,7 +294,7 @@ export class SimTower implements Decoy {
       if (!next) break;
       chain.push(next);
     }
-    const pts: number[] = [this.pos.x, this.pos.y + 4.15, this.pos.z];
+    const pts: number[] = [this.pos.x, this.pos.y + this.headY + 1.0, this.pos.z];
     chain.forEach((f, i) => {
       const b = this.chest(f);
       pts.push(b.x, b.y, b.z);
@@ -285,46 +306,84 @@ export class SimTower implements Decoy {
 
   /** Blizzard: damage and −50 % speed to everyone within range; every fifth hit is an ice wave: damage ×3 and 1.2 s stun */
   private fireWinter(): void {
-    const R = this.range, nova = this.shots % 5 === 0, dmg = nova ? this.dmg * 3 : this.dmg;
+    const lvl = this.level, R = this.range, nova = this.shots % (lvl >= 2 ? 4 : 5) === 0, dmg = nova ? this.dmg * 3 : this.dmg;
     for (const f of this.around(this.pos, R)) {
       this.strike(f, dmg, nova ? 1.5 : 0, f.pos.clone().setY(1), nova ? 'crit' : '');
       f.chill?.(0.5, 1.5);
-      if (nova) f.stun?.(1.2);
+      if (nova) f.stun?.(lvl >= 3 ? 1.8 : 1.2);
     }
     this.ev('tower.fire', { nova, r: R });
   }
 
-  /** Bolt: flies straight at the target, on hit — damage */
+  /** Bolt: flies straight at the target. II — every third bolt is a heavy one (×2); III — a volley: two more bolts at the next targets */
   private fireArrow(t: Foe): void {
-    const to = this.chest(t), dmg = this.dmg, from = this.muzzle(2.9, 0.5);
-    this.ev('tower.fire');
-    this.bolt('arrow', from, to, from.distanceTo(to) / 34, 0, null, () => { this.strike(t, dmg, 0.4, to); this.w.emit({ t: 'hit.arrow', x: to.x, y: to.y, z: to.z }); });
+    const lvl = this.level, heavy = lvl >= 2 && this.shots % 3 === 0;
+    const from = this.muzzle(0.45, 0.6);
+    this.ev('tower.fire', { fx: from.x, fy: from.y, fz: from.z, heavy });
+    const shoot = (f: Foe, dmg: number, crit: boolean, side: number): void => {
+      const to = this.chest(f), a = from.clone();
+      a.x += Math.cos(this.yaw) * side; a.z -= Math.sin(this.yaw) * side;
+      this.bolt('arrow', a, to, a.distanceTo(to) / 34, 0, null, () => { this.strike(f, dmg, crit ? 0.9 : 0.4, to, crit ? 'crit' : ''); this.w.emit({ t: 'hit.arrow', x: to.x, y: to.y, z: to.z, heavy: crit }); });
+    };
+    shoot(t, heavy ? this.dmg * 2 : this.dmg, heavy, 0);
+    if (lvl >= 3) this.others(t, 2).forEach((f, i) => shoot(f, Math.round(this.dmg * 0.6), false, i ? 0.3 : -0.3));
   }
 
-  /** Ice clot: damage and slow; at III — rime over an area around the target */
+  /**
+   * Freezing beam: the spire holds a ray of cold on its target — damage every tick, the slow grows the longer the ray stays
+   * (−30 % → −60 % over 2 s, at II over 1 s). III — a second ray at the next enemy, and a target chilled to the limit freezes solid
+   */
   private fireFrost(t: Foe): void {
-    const to = this.chest(t), dmg = this.dmg, lvl = this.level;
-    const from = this.muzzle(2.9 + lvl * 0.2, 0.3);
-    this.ev('tower.fire', { fx: from.x, fy: from.y, fz: from.z });
-    this.bolt('frost', from, to, from.distanceTo(to) / 22, 0, null, () => {
-      const at = t.pos.clone().setY(t.pos.y + 0.6);
-      this.strike(t, dmg, 0.2, to);
-      t.chill?.(0.45, 2.2);
-      if (lvl >= 3) for (const f of this.around(at, 2, t)) { this.strike(f, Math.round(dmg * 0.5), 0, f.pos.clone().setY(f.pos.y + 1)); f.chill?.(0.45, 2.2); }
-      this.w.emit({ t: 'hit.frost', x: at.x, y: at.y, z: at.z, area: lvl >= 3 });
+    const lvl = this.level, FULL = lvl >= 2 ? 1 : 2, dmg = this.dmg;
+    const list = [t, ...this.others(t, lvl >= 3 ? 1 : 0)], held = this.channel(list, FULL);
+    const from = this.muzzle(1.1, 0), pts: number[] = [from.x, from.y, from.z];
+    let ramp = 0;
+    list.forEach((f, i) => {
+      const k = held[i] / FULL, at = this.chest(f);
+      ramp = Math.max(ramp, k);
+      pts.push(at.x, at.y, at.z);
+      this.strike(f, i ? Math.max(1, Math.round(dmg * 0.6)) : dmg, 0, at);
+      f.chill?.(0.3 + 0.3 * k, 0.8);
+      if (lvl >= 3 && k >= 1) {
+        f.stun?.(1);
+        this.ramps.set(f, FULL * 0.3);
+        this.w.emit({ t: 'hit.frost', x: at.x, y: at.y, z: at.z, area: true });
+      }
     });
+    this.ev('tower.fire', { pts, ramp: r2(ramp) });
+  }
+
+  /**
+   * Arcane tether: the obelisk latches onto its target and drains it — damage every tick grows the longer the tether holds
+   * (×1 → ×2.5 over 3 s), the target is weakened (+30 % damage taken). One tether per level: II — two targets, III — three
+   */
+  private fireMagic(t: Foe): void {
+    const FULL = 3, dmg = this.dmg;
+    const list = [t, ...this.others(t, this.level - 1)], held = this.channel(list, FULL);
+    const from = this.muzzle(1.2, 0), pts: number[] = [from.x, from.y, from.z];
+    let ramp = 0;
+    list.forEach((f, i) => {
+      const k = held[i] / FULL, at = this.chest(f);
+      ramp = Math.max(ramp, k);
+      pts.push(at.x, at.y, at.z);
+      f.expose?.(0.3, 1);
+      this.strike(f, Math.max(1, Math.round(dmg * (1 + 1.5 * k) * (i ? 0.6 : 1))), 0, at, k >= 1 && !i ? 'crit' : '');
+      if (k >= 1 && this.shots % 4 === 0) this.w.emit({ t: 'hit.magic', x: at.x, y: at.y, z: at.z, pts: [] });
+    });
+    this.ev('tower.fire', { pts, ramp: r2(ramp) });
   }
 
   /** Rock along an arc: area blast with knockback, damage fades towards the edge */
   private fireSplash(t: Foe): void {
-    const dmg = this.dmg, R = 2.4;
-    const from = this.muzzle(2.0, -0.3), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
-    this.ev('tower.fire');
+    const lvl = this.level, dmg = this.dmg, R = lvl >= 2 ? 3 : 2.4;
+    const from = this.muzzle(1.2, -0.3), dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
+    this.ev('tower.fire', { fx: from.x, fy: from.y, fz: from.z });
     this.bolt('splash', from, t.pos.clone().setY(this.w.floor(t.pos.x, t.pos.z, t.pos.y)), 0.6 + dist * 0.05, 3 + dist * 0.25, null, (at) => {
       this.w.emit({ t: 'hit.splash', x: at.x, y: at.y, z: at.z, r: R });
       for (const f of this.around(at, R)) {
         const d = Math.hypot(f.pos.x - at.x, f.pos.z - at.z), k = Math.max(0.4, 1 - d / R);
         this.strike(f, Math.round(dmg * k), 2.5 * k, f.pos.clone().setY(1), k > 0.8 ? 'crit' : '');
+        if (lvl >= 3 && k > 0.6) f.stun?.(0.6);
       }
     });
   }
@@ -332,39 +391,15 @@ export class SimTower implements Decoy {
   /** Jet of flame: everyone in the cone in front of the brazier takes damage and burns for 3 more s */
   private fireFlame(): void {
     const dmg = this.dmg, R = this.range, yaw = this.yaw;
-    const from = this.muzzle(1.6, 0.9);
-    this.ev('tower.fire', { fx: from.x, fy: from.y, fz: from.z, yaw });
+    const from = this.muzzle(0.4, 1.0), lvl = this.level, half = lvl >= 3 ? 0.62 : 0.42;
+    this.ev('tower.fire', { fx: from.x, fy: from.y, fz: from.z, yaw, half });
     for (const f of this.w.h.foes()) {
       if (!f.alive || f.dead) continue;
       const dx = f.pos.x - this.pos.x, dz = f.pos.z - this.pos.z, d = Math.hypot(dx, dz);
-      if (d - f.radius > R || Math.abs(wrap(Math.atan2(dx, dz) - yaw)) > 0.42 + Math.atan(f.radius / Math.max(d, 0.5))) continue;
+      if (d - f.radius > R || Math.abs(wrap(Math.atan2(dx, dz) - yaw)) > half + Math.atan(f.radius / Math.max(d, 0.5))) continue;
       this.strike(f, dmg, 0.1, f.pos.clone().setY(1));
-      this.burn(f, 3, Math.round(dmg * 0.3));
+      this.burn(f, lvl >= 2 ? 5 : 3, Math.round(dmg * 0.3));
     }
-  }
-
-  /** Orb: flies to the target along an arc, weakens and hits; chains on to neighbours (as many as the level) */
-  private fireMagic(t: Foe): void {
-    const dmg = this.dmg, lvl = this.level, from = this.muzzle(3.5, 0);
-    const dist = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z), up = 1.5 + dist * 0.15;
-    this.ev('tower.fire');
-    this.bolt('magic', from, this.chest(t), 0.25 + dist * 0.035, up, t, () => {
-      const at = this.chest(t);
-      t.expose?.(0.3, 3);
-      this.strike(t, dmg, 0.3, at, 'crit');
-      const pts: number[] = [at.x, at.y, at.z];
-      let prev = t, n = 0;
-      for (const f of this.around(t.pos, 4, t).sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0))) {
-        if (n++ >= lvl) break;
-        const c = this.chest(f);
-        pts.push(c.x, c.y, c.z);
-        f.expose?.(0.3, 3);
-        this.strike(f, Math.round(dmg * 0.6), 0.2, c);
-        prev = f;
-      }
-      void prev;
-      this.w.emit({ t: 'hit.magic', x: at.x, y: at.y, z: at.z, pts });
-    });
   }
 
   update(dt: number): void {
@@ -372,7 +407,7 @@ export class SimTower implements Decoy {
     this.cd -= dt;
     if (this.frozen > 0) { this.frozen -= dt; if (this.frozen <= 0) { this.frozen = 0.0001; this.thaw(true); } }
     const idle = this.ruined || this.frozen > 0;
-    if (idle) this.target = null;
+    if (idle) { this.target = null; this.ramps.clear(); }
     else if (!this.target || !this.inRange(this.target)) this.target = this.pick();
     const t = this.target;
     if (t) {

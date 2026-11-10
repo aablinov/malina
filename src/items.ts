@@ -33,8 +33,24 @@ export type BossSpellKind =
   | 'firewall' | 'firestorm' | 'armageddon' | 'wolves' | 'elemental' | 'golem' | 'bloodclaws' | 'bloodswarm' | 'bloodblade' | 'blindflash';
 /** Starter spells (src/magic/starters.ts) */
 export type StarterSpellKind = 'spark' | 'fireball' | 'icerain' | 'heal';
+/** Relic spells (src/magic/relics.ts): very strong, drop from enemies only */
+export type RelicSpellKind = 'dragonbreath' | 'glacier' | 'worldstorm' | 'supernova' | 'soulstorm' | 'earthshatter' | 'bloodmoon' | 'timestop' | 'phoenix' | 'bladestorm';
 /** Any spell — present in the SPELLS registry (src/magic/registry.ts) */
-export type SpellKind = StarterSpellKind | BossSpellKind;
+export type SpellKind = StarterSpellKind | BossSpellKind | RelicSpellKind;
+/** What a relic weapon does on every hit by itself (src/gear.ts `relicHit`) */
+export type RelicProc = 'burn' | 'chill' | 'chain' | 'leech' | 'nova' | 'expose' | 'stun' | 'souls' | 'smite' | 'quake';
+export const RELIC_TEXT: Record<RelicProc, string> = {
+  burn: t('Relic: every hit sets the enemy on fire'),
+  chill: t('Relic: every hit chills — the enemy slows by 40 %'),
+  chain: t('Relic: lightning jumps from the hit to two more enemies'),
+  leech: t('Relic: every hit returns 8 % of the damage as health'),
+  nova: t('Relic: every fifth hit bursts in a star wave'),
+  expose: t('Relic: the hit enemy takes 30 % more damage'),
+  stun: t('Relic: one hit in five stuns'),
+  souls: t('Relic: +3 souls per hit and a little health'),
+  smite: t('Relic: one hit in four calls a beam from the sky'),
+  quake: t('Relic: one hit in four shakes the ground and stuns around'),
+};
 /** Artifacts without a cast: they fire in src/gear.ts */
 export type PlainArtifactKind = 'firework' | 'totem' | 'boots' | 'horn' | 'harvester' | 'lightning';
 export type ArtifactKind = PlainArtifactKind | SpellKind;
@@ -138,7 +154,11 @@ export interface ItemDef {
    * Spell (wiki/design-spells.md): starter; 'shop' — common, the merchant sells it for raspberries; 'boss' — rare and above, boss drops only.
    * Never appears in chests or in random stock
    */
-  spell?: 'starter' | 'shop' | 'boss';
+  spell?: 'starter' | 'shop' | 'boss' | 'mob';
+  /** A relic (wiki/design-inventory.md): drops from enemies only — not in chests, shops or the starter kit */
+  mob?: true;
+  /** A relic weapon's own effect on every hit */
+  relic?: RelicProc;
   /** Special weapon traits (lines as in MCD: "Wide strikes") */
   traits?: string[];
 }
@@ -234,6 +254,28 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'bladephalanx', slot: 'artifact', spell: 'boss', title: t('Blade Phalanx'), rarity: 'rare', icon: 'bladephalanx', description: t('Seven ghostly swords fan out above the head and fly one after another.'), artifact: A('bladephalanx', 10, 20, { radius: 14, charge: 1, info: t('Blades: 7 × {v} damage') }) },
   { id: 'blink', slot: 'artifact', spell: 'boss', title: t('Tear'), rarity: 'rare', icon: 'blink', description: t('A dash through space: an explosion where you vanished and where you appeared.'), artifact: A('blink', 8, 45, { radius: 8, charge: 0.8, info: t('Tear: {v} damage twice, dash up to {r} m') }) },
   { id: 'harvester', slot: 'artifact', title: t('Soul Reaper'), rarity: 'unique', icon: 'harvester', description: t('Releases the gathered souls in a burst around the hero.'), artifact: A('harvester', 3, 45, { radius: 4, souls: 40 }) },
+  // relics — drop from enemies only (src/sim/drops.ts). Weapons: models and strikes — RELIC_WEAPONS in src/weapons.ts, the hit effect — src/gear.ts
+  { id: 'emberfang', slot: 'melee', weapon: 'emberfang', mob: true, relic: 'burn', title: t('Emberfang'), rarity: 'unique', icon: 'katana', description: t('A katana quenched in a volcano\'s throat. The blade never cooled.'), traits: [t('Quick long cuts'), t('Drops only from enemies')] },
+  { id: 'frostbite', slot: 'melee', weapon: 'frostbite', mob: true, relic: 'chill', title: t('Winter\'s Bite'), rarity: 'unique', icon: 'claymore', description: t('A two-hander of never-melting ice. Whoever it touches forgets how to hurry.'), traits: [t('Wide strikes'), t('Drops only from enemies')] },
+  { id: 'stormcaller', slot: 'melee', weapon: 'stormcaller', mob: true, relic: 'chain', title: t('Stormcaller'), rarity: 'unique', icon: 'spear', description: t('A spear that was struck by lightning seven times and liked it.'), traits: [t('Long lunges'), t('Drops only from enemies')] },
+  { id: 'bloodthorn', slot: 'melee', weapon: 'bloodthorn', mob: true, relic: 'leech', title: t('Bloodthorn'), rarity: 'unique', icon: 'rapier', description: t('A raspberry thorn the length of an arm. It drinks, and shares with its owner.'), traits: [t('Lightning thrusts'), t('Drops only from enemies')] },
+  { id: 'starcleaver', slot: 'melee', weapon: 'starcleaver', mob: true, relic: 'nova', title: t('Starcleaver'), rarity: 'unique', icon: 'dragonslayer', description: t('A slab of fallen star with a handle. Heavy as the night sky.'), traits: [t('Strongest strike'), t('Drops only from enemies')] },
+  { id: 'voidedge', slot: 'melee', weapon: 'voidedge', mob: true, relic: 'expose', title: t('Edge of the Void'), rarity: 'unique', icon: 'dagger', description: t('A dagger with nothing where the blade should be. The nothing cuts.'), traits: [t('Fast strikes'), t('Drops only from enemies')] },
+  { id: 'thunderfists', slot: 'melee', weapon: 'thunderfists', mob: true, relic: 'stun', title: t('Thunder Fists'), rarity: 'unique', icon: 'knuckles', description: t('Each knuckle holds a small thunderstorm. They argue.'), traits: [t('Fastest strikes'), t('Drops only from enemies')] },
+  { id: 'midnightscythe', slot: 'melee', weapon: 'midnightscythe', mob: true, relic: 'souls', title: t('Midnight Scythe'), rarity: 'unique', icon: 'scythe', description: t('It reaps at midnight, and every soul it frees stays close.'), traits: [t('Very wide sweeps'), t('Drops only from enemies')] },
+  { id: 'sunlance', slot: 'melee', weapon: 'sunlance', mob: true, relic: 'smite', title: t('Sun Halberd'), rarity: 'unique', icon: 'halberd', description: t('The halberd of the first gate guard. The sun still stands watch with it.'), traits: [t('Long shaft'), t('Drops only from enemies')] },
+  { id: 'berryking', slot: 'melee', weapon: 'berryking', mob: true, relic: 'quake', title: t('Raspberry King\'s Hammer'), rarity: 'unique', icon: 'hammer', description: t('The King of Raspberries used it to crack nuts. And castles.'), traits: [t('Huge shockwave'), t('Drops only from enemies')] },
+  // relic spells — src/magic/relics.ts
+  { id: 'dragonbreath', slot: 'artifact', spell: 'mob', mob: true, title: t('Dragon Breath'), rarity: 'unique', icon: 'flameserpent', description: t('A roaring cone of dragon fire burns everything in front of the hero. Drops only from enemies.'), artifact: A('dragonbreath', 14, 34, { radius: 10, duration: 1.6, charge: 1, info: t('Fire cone: {v} damage ×8, {r} m') }) },
+  { id: 'glacier', slot: 'artifact', spell: 'mob', mob: true, title: t('Glacier'), rarity: 'unique', icon: 'absolutezero', description: t('A glacier bursts out of the ground at the cursor: huge damage, and everyone inside freezes. Drops only from enemies.'), artifact: A('glacier', 18, 130, { radius: 5.5, duration: 2.5, charge: 1.2, info: t('Glacier: {v} damage within {r} m, frozen for {d} s') }) },
+  { id: 'worldstorm', slot: 'artifact', spell: 'mob', mob: true, title: t('Wrath of the Storm'), rarity: 'unique', icon: 'spark', description: t('The sky splits: lightning hammers every enemy around, again and again. Drops only from enemies.'), artifact: A('worldstorm', 20, 46, { radius: 11, duration: 2.4, charge: 1.2, info: t('Storm: 14 bolts of {v} damage within {r} m') }) },
+  { id: 'supernova', slot: 'artifact', spell: 'mob', mob: true, title: t('Supernova'), rarity: 'unique', icon: 'starfall', description: t('A star is born at the cursor, swells — and explodes. Drops only from enemies.'), artifact: A('supernova', 26, 260, { radius: 7.5, charge: 1.5, info: t('Explosion: {v} damage within {r} m') }) },
+  { id: 'soulstorm', slot: 'artifact', spell: 'mob', mob: true, title: t('Storm of Souls'), rarity: 'unique', icon: 'skullscythe', description: t('Sixteen homing souls burst from the hero and find the enemies themselves. Drops only from enemies.'), artifact: A('soulstorm', 12, 40, { radius: 16, charge: 1, info: t('Souls: 16 × {v} damage, they seek targets up to {r} m') }) },
+  { id: 'earthshatter', slot: 'artifact', spell: 'mob', mob: true, title: t('Earthshatter'), rarity: 'unique', icon: 'rift', description: t('Three waves of broken ground roll out from the hero, each wider than the last. Drops only from enemies.'), artifact: A('earthshatter', 16, 80, { radius: 10, charge: 1.1, info: t('Three waves: {v} damage each, up to {r} m') }) },
+  { id: 'bloodmoon', slot: 'artifact', spell: 'mob', mob: true, title: t('Raspberry Moon'), rarity: 'unique', icon: 'bloodblade', description: t('A crimson moon rises over the cursor: its light burns enemies and heals the hero. Drops only from enemies.'), artifact: A('bloodmoon', 24, 22, { radius: 6.5, duration: 6, charge: 1.2, info: t('Moon: {v} damage every 0.5 s within {r} m, {d} s; heals') }) },
+  { id: 'timestop', slot: 'artifact', spell: 'mob', mob: true, title: t('Stopped Hour'), rarity: 'unique', icon: 'gravitywell', description: t('Time stands still for every enemy around; while it does, they take half as much damage again. Drops only from enemies.'), artifact: A('timestop', 30, 30, { radius: 10, duration: 4, charge: 1, info: t('Stops enemies within {r} m for {d} s, +50 % damage to them') }) },
+  { id: 'phoenix', slot: 'artifact', spell: 'mob', mob: true, title: t('Phoenix'), rarity: 'unique', icon: 'fireball', description: t('A firebird flies through the ranks to the cursor and explodes; its warmth heals the hero. Drops only from enemies.'), artifact: A('phoenix', 18, 110, { radius: 18, charge: 1.1, info: t('Phoenix: {v} damage along {r} m and a blast; heals') }) },
+  { id: 'bladestorm', slot: 'artifact', spell: 'mob', mob: true, title: t('Thousand Cuts'), rarity: 'unique', icon: 'bladephalanx', description: t('For four seconds the air around the hero is nothing but blades. Drops only from enemies.'), artifact: A('bladestorm', 16, 24, { radius: 5, duration: 4, charge: 1, info: t('Cuts: {v} damage every 0.2 s within {r} m, {d} s') }) },
 ];
 
 /** Starter spells (wiki/design-spells.md, section 2) */
@@ -245,6 +287,20 @@ export const SHOP_SPELLS = (): string[] => ITEMS.filter((d) => d.spell === 'shop
 const BOSS_SPELL_IDS = (): string[] => ITEMS.filter((d) => d.spell === 'boss' && d.slot === 'artifact').map((d) => d.id);
 /** Base spells (src/magic/base-*.ts): the merchant sells them, and in the playground the hero has them from the start */
 export const BASE_SPELLS = ['firewall', 'firestorm', 'armageddon', 'wolves', 'elemental', 'golem', 'bloodclaws', 'bloodswarm', 'bloodblade', 'blindflash'];
+
+/** Relics: the twenty items that drop from enemies only */
+export const MOB_DROPS = (): ItemDef[] => ITEMS.filter((d) => d.mob);
+/** Of the items enemies leave, this share are relics; the rest is ordinary gear */
+export const RELIC_SHARE = 0.3;
+/** What a fallen enemy leaves (src/sim/drops.ts): a relic (always — from a mini-boss) or gear from the common pool, uniques rarely */
+export function rollMobLoot(r: Rand, relic = false): { def: string; relic: boolean } {
+  if (relic || r() < RELIC_SHARE) { const p = MOB_DROPS(); return { def: p[Math.floor(r() * p.length)].id, relic: true }; }
+  const x = r(), rarity: Rarity = x < 0.1 ? 'unique' : x < 0.4 ? 'rare' : 'common';
+  const pool = ITEMS.filter((d) => d.rarity === rarity && !d.spell && !d.mob);
+  return { def: pool[Math.floor(r() * pool.length)].id, relic: false };
+}
+/** Power of an item an enemy left for a hero of power `power`: a relic is one above */
+export const mobLootPower = (def: string, power: number): number => Math.max(1, power + (itemDef(def).mob ? 1 : 0));
 
 export const itemDef = (id: string): ItemDef => {
   const d = ITEMS.find((x) => x.id === id);
@@ -504,7 +560,7 @@ export class Profile {
     const add = STARTER_SPELLS.filter((d) => !have.has(d));
     // while there are no bosses — auras and boss spells go to the inventory so they can be tried on
     // playground: all melee weapons are in the inventory, new weapons reach old saves too
-    const extra = [...AURAS, ...BOSS_SPELL_IDS(), ...BASE_SPELLS, ...ITEMS.filter((d) => d.slot === 'melee').map((d) => d.id)].filter((d) => !have.has(d));
+    const extra = [...AURAS, ...BOSS_SPELL_IDS(), ...BASE_SPELLS, ...ITEMS.filter((d) => d.slot === 'melee' && !d.mob).map((d) => d.id)].filter((d) => !have.has(d));
     if (!add.length && !extra.length) return false;
     for (const d of add) {
       const it = this.add(d, 1);
@@ -571,6 +627,11 @@ export class Profile {
     });
   }
 
+  /** An item an enemy left goes to the stored profile too — it stays whatever the battle's outcome (solo battle; online the server adds it) */
+  static keepItem(def: string, power: number): void {
+    storage?.update((x) => { new Profile(x).add(def, power); });
+  }
+
   /** Victory loot into the stored profile's raspberries (solo battle; online the server pays it) */
   static creditStored(n: number): void {
     if (n <= 0) return;
@@ -603,7 +664,7 @@ export class Profile {
     const x = r();
     const rarity: Rarity = x < 0.06 ? 'unique' : x < 0.32 ? 'rare' : 'common';
     // spells drop from bosses only — not from chests and not from merchants
-    const of = (rr: Rarity): ItemDef[] => ITEMS.filter((d) => d.rarity === rr && !d.spell && (!slots || slots.includes(d.slot)));
+    const of = (rr: Rarity): ItemDef[] => ITEMS.filter((d) => d.rarity === rr && !d.spell && !d.mob && (!slots || slots.includes(d.slot)));
     const pool = of(rarity).length ? of(rarity) : of('common');
     return { def: pool[Math.floor(r() * pool.length)].id, power: Math.max(1, this.power + Math.floor(r() * 3) - 1) };
   }

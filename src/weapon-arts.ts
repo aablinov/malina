@@ -20,6 +20,8 @@ import { specialSound, weaponHit, type SpecialCue } from './weapon-audio.ts';
  * Data and texts — src/temper.ts; damage to targets, healing and souls — through the Gear hooks (src/gear.ts).
  */
 
+const WHITE = new THREE.Color(1, 1, 1);
+
 export interface ArtsHooks {
   scene: THREE.Scene;
   fx: FX;
@@ -166,6 +168,21 @@ export class WeaponArts {
         this.sparks(p, this.dir(a + (rnd() < 0.5 ? 1.2 : -1.2)), c, 1, 1.1, 0.6);
       }
     }
+    // anime sweep (wiki/style-guide.md, section "Impact"): a ribbon of light races along the swing and lingers — two on the finisher,
+    // and when the finisher lands, a shaft of light from the sky into the point of impact and a star of rays
+    const side = s.step === 1 ? -1 : 1, hot = c.clone().lerp(WHITE, 0.35);
+    if (s.half >= 0.5) {
+      const half = Math.min(Math.PI, s.half), ox = s.from.x, oz = s.from.z;
+      const sweep = (r: number, yy: number, w: number, dur: number): void => fx.streak({ path: (k, out) => { const a = yaw + side * half * (1 - 2 * k); return out.set(ox + Math.sin(a) * r, yy, oz + Math.cos(a) * r); }, dur, color: hot, color2: c.clone().multiplyScalar(0.5), width: w, tail: 0.22, halo: 3, core: 0.9 });
+      sweep(R, y, fin ? 0.2 : 0.13, 0.07);
+      if (fin) sweep(R * 0.72, y + 0.25, 0.12, 0.09);
+    } else fx.cut(s.from.clone().addScaledVector(this.dir(yaw), s.range * 0.55).setY(y), this.dir(yaw), s.range * 1.2, hot, fin ? 0.16 : 0.1);
+    if (fin && hits.length) {
+      fx.pillar(impact.clone(), hot, 7, 0.5);
+      fx.shafts(impact.clone().setY(impact.y + 0.9), hot, 8, 3, 0.12, 0.8);
+      fx.light(impact.clone().setY(impact.y + 1.4), '#' + c.clone().multiplyScalar(1 / Math.max(1, c.r, c.g, c.b)).getHexString(), 7, 9, 0.3);
+      fx.shake = Math.max(fx.shake, 0.4);
+    }
     if (hits.length) this.meter = Math.min(1, this.meter + (1 + 0.25 * (hits.length - 1)) / SPECIAL_HITS);
     if (s.step === 2 && this.syn.length) this.proc(impact.clone().setY(hero.pos.y), s.yaw, hits, 1);
   }
@@ -176,6 +193,13 @@ export class WeaponArts {
     fx.flash(point, this.colors[0].clone().multiplyScalar(finisher ? 1.3 : 0.9), (finisher ? 2 : 1.3) * (0.85 + rnd() * 0.3), 0.16);
     // ribbon splashes from the hit: along the strike direction with spread, each temper in its own colour
     this.sparks(point, dir, this.temper.length ? this.colors[(rnd() * this.colors.length) | 0] : this.colors[0], finisher ? 6 : 3, finisher ? 1.8 : 1.2, 1.1);
+    // anime impact: a star of light shafts out of the wound, a cut of light across the target, a spray of glowing sparks along the strike
+    const c0 = this.colors[0], hot = c0.clone().lerp(WHITE, crit ? 0.6 : 0.4), big = finisher || crit;
+    fx.shafts(point, hot, big ? 7 : 4, big ? 2.8 : 1.7, big ? 0.11 : 0.07);
+    fx.cut(point, _v.set(dir.z + (rnd() - 0.5) * 0.8, (rnd() - 0.5) * 1.2, -dir.x + (rnd() - 0.5) * 0.8).normalize().clone(), big ? 3.4 : 2.2, hot, big ? 0.13 : 0.08);
+    fx.spray(point, dir, [c0, hot, '#ffffff'], big ? 16 : 8, { speed: big ? 9 : 6, size: 0.07, life: 0.3, gravity: 6, spread: 0.7 });
+    fx.burst(point, [c0, hot], big ? 10 : 5, { speed: 2.5, up: 3, size: 0.06, life: 0.45, glow: true, gravity: 7 });
+    if (crit) { fx.pillar(t.pos.clone(), hot, 6, 0.45); fx.shake = Math.max(fx.shake, 0.3); }
     const yaw = Math.atan2(dir.x, dir.z);
     for (const { id, tier } of this.temper) {
       const c = rgb(id), n = 2 + tier;

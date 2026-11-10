@@ -182,13 +182,87 @@ export class Gear {
   /** Hit a target (sword, arrow, artifact): souls, XP, leeching, aura meter; at — where the target is */
   onHit(dmg: number, melee: boolean, at?: THREE.Vector3, target?: Target): void {
     const s = this.stats, hero = this.h.hero;
-    if (melee && target) for (const b of this.spells.buffs) b.onMelee?.(target, dmg);
+    if (melee && target) { for (const b of this.spells.buffs) b.onMelee?.(target, dmg); this.relicHit(target, dmg); }
     const pact = this.auras.onDealt(dmg, at);
     if (pact > 0 && !hero.down) hero.hp = Math.min(hero.maxHp, hero.hp + pact);
     this.soulAcc += (melee ? s.soulsPerHit : 1) * s.soulsMult;
     if (this.soulAcc >= 1) { const n = Math.floor(this.soulAcc); this.soulAcc -= n; this.profile.addSouls(n); }
     if (melee && s.leech > 0) hero.hp = Math.min(hero.maxHp, hero.hp + dmg * s.leech);
     this.gainXp(Math.max(1, Math.round(dmg * 0.25)));
+  }
+
+  private relicN = 0;
+  private inRelic = false;
+  /** A relic weapon's own effect on a hit (src/items.ts `relic`): fire, cold, lightning, a star wave… Its extra damage does not trigger it again */
+  private relicHit(t: Target, dmg: number): void {
+    const m = this.profile.equipped('melee'), kind = m ? itemDef(m.def).relic : undefined;
+    if (!kind || this.inRelic) return;
+    this.inRelic = true;
+    try {
+      const fx = this.h.fx, hero = this.h.hero, at = t.pos.clone().setY(t.pos.y + 1);
+      const col = (r: number, g: number, b: number): THREE.Color => new THREE.Color(r, g, b);
+      const extra = (o: Target, v: number): void => {
+        v = Math.round(v);
+        if (!o.alive || v <= 0) return;
+        const d = new THREE.Vector3(o.pos.x - hero.pos.x, 0, o.pos.z - hero.pos.z);
+        o.hit(v, d.lengthSq() > 1e-6 ? d.normalize() : d.set(0, 0, 1), o.pos.clone().setY(o.pos.y + 1), 0);
+        fx.text(o.pos.clone().setY(o.pos.y + 1.1), String(v), 'spell');
+      };
+      const near = (r: number): Target[] => this.h.targets().filter((o) => o !== t && o.alive && !o.prop && Math.hypot(o.pos.x - t.pos.x, o.pos.z - t.pos.z) - o.radius <= r)
+        .sort((a, b) => Math.hypot(a.pos.x - t.pos.x, a.pos.z - t.pos.z) - Math.hypot(b.pos.x - t.pos.x, b.pos.z - t.pos.z));
+      const heal = (v: number): void => { if (!hero.down) hero.hp = Math.min(hero.maxHp, hero.hp + v); };
+      switch (kind) {
+        case 'burn':
+          for (let i = 1; i <= 3; i++) this.spells.later(i * 0.5, () => {
+            extra(t, dmg * 0.15);
+            if (t.alive) fx.burst(t.pos.clone().setY(t.pos.y + 0.8), [col(3.6, 1.6, 0.4), col(3.4, 0.8, 0.2)], 5, { speed: 1, up: 2.4, size: 0.08, life: 0.45, glow: true, gravity: -1 });
+          });
+          break;
+        case 'chill':
+          t.chill?.(0.4, 2.5);
+          fx.burst(at, [col(1.6, 3.2, 4), '#ffffff'], 6, { speed: 2, up: 1.5, size: 0.07, life: 0.4, glow: true, gravity: 5 });
+          break;
+        case 'chain': {
+          let from = at;
+          for (const o of near(4.5).slice(0, 2)) {
+            const to = o.pos.clone().setY(o.pos.y + 1);
+            fx.bolt(from, to, col(2.2, 2.8, 4), 0.06, 1, 0.2);
+            fx.flash(to, col(2.2, 2.8, 4), 1.2, 0.14);
+            extra(o, dmg * 0.4);
+            from = to;
+          }
+          break;
+        }
+        case 'leech': heal(dmg * 0.08); break;
+        case 'nova':
+          if (++this.relicN % 5) break;
+          fx.ring(t.pos.clone().setY(t.pos.y + 0.08), 3.2, col(3.6, 2.8, 1), 0.4, 0.2);
+          fx.shafts(at, col(3.6, 2.8, 1), 8, 3.2, 0.12);
+          for (const o of near(3.2)) extra(o, dmg * 0.7);
+          break;
+        case 'expose': t.expose?.(0.3, 3); break;
+        case 'stun':
+          if (rnd() >= 0.2) break;
+          t.stun?.(0.9);
+          fx.bolt(at.clone().setY(at.y + 2.4), at, col(2, 3.4, 4), 0.07, 2, 0.2);
+          break;
+        case 'souls': this.profile.addSouls(3); heal(dmg * 0.02); break;
+        case 'smite':
+          if (rnd() >= 0.25) break;
+          fx.pillar(t.pos.clone(), col(3.8, 3, 1.2), 9, 0.5);
+          fx.flash(at, col(3.8, 3, 1.2), 2.2, 0.2);
+          extra(t, dmg * 0.9);
+          break;
+        case 'quake':
+          if (rnd() >= 0.25) break;
+          fx.shock(t.pos.clone().setY(t.pos.y + 0.08), 2.8, col(3.4, 0.8, 1.6), 0.4, 0.25);
+          fx.burst(t.pos.clone().setY(t.pos.y + 0.2), ['#8a6a50', '#5e4a3a', col(3.4, 0.8, 1.6)], 14, { speed: 4, up: 4, size: 0.13, life: 0.6, gravity: 10 });
+          fx.shake = Math.max(fx.shake, 0.35);
+          t.stun?.(0.6);
+          for (const o of near(2.8)) { o.stun?.(0.6); extra(o, dmg * 0.5); }
+          break;
+      }
+    } finally { this.inRelic = false; }
   }
 
   gainXp(n: number): void {

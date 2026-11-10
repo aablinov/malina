@@ -294,3 +294,30 @@ test('match: the battle page joins — the kit is the stored one; reconnecting a
   const m = c2.got.find((x) => x.t === 'mine') as Extract<GameServerMsg, { t: 'mine' }> | undefined;
   assert.ok(m && (m.equip as { artifacts: unknown[] }).artifacts[0] === null && m.items.length === stored.items.length);
 });
+
+test('match: an item picked up from a fallen enemy goes into the hero\'s kit at once and into the rewards whatever the outcome', () => {
+  const match = new Match({ id: 'm3', map: loadMap('td'), seed: 7, players: [{ seat: 0, playerId: 'p0', name: 'A', profile: Profile.starter() }] });
+  const hero = match.battle.heroes.get(0)!, n = hero.profile.data.items.length, power = hero.profile.power;
+  let end: import('../../src/game/match.ts').MatchEnd | null = null;
+  match.onEnd = (e) => { end = e; };
+  match.battle.world.drops.onPick!(0, 'emberfang', true);
+  match.battle.world.drops.onPick!(0, 'mace', false);
+  match.battle.world.drops.onPick!(0, 'no-such-item', false);
+  assert.equal(hero.profile.data.items.length, n + 2, 'both items are in the battle kit, the unknown one is not');
+  assert.deepEqual(hero.profile.data.items.slice(-2).map((i) => [i.def, i.power]), [['emberfang', power + 1], ['mace', power]], 'a relic is one power above the hero');
+  match.abandon();
+  assert.deepEqual(end!.rewards.get(0)!.items, [{ def: 'emberfang', power: power + 1 }, { def: 'mace', power }]);
+});
+
+test('a tower built on the pad the hero stands on does not throw them out in one tick — they slide off', () => {
+  const b = new Match({ id: 'm4', map: loadMap('td'), seed: 3, players: [{ seat: 0, playerId: 'p0', name: 'A', profile: Profile.starter() }] }).battle;
+  const h = b.heroes.get(0)!, td = b.world.td!, pad = td.pads[0];
+  h.knight.place(pad.pos.x + 0.1, pad.pos.z, 0, pad.pos.y);
+  b.step(1 / 60);
+  td.gain(0, 1000);
+  assert.ok(td.command(0, { t: 'td', a: 'build:arrow', pad: pad.index }));
+  let prev = h.knight.pos.clone(), max = 0;
+  for (let i = 0; i < 90; i++) { b.step(1 / 60); max = Math.max(max, Math.hypot(h.knight.pos.x - prev.x, h.knight.pos.z - prev.z)); prev = h.knight.pos.clone(); }
+  assert.ok(max < 0.12, `no jump in a tick: the longest step is ${max.toFixed(3)} m`);
+  assert.ok(Math.abs(h.knight.pos.x - pad.pos.x) >= 0.75 + 0.3 || Math.abs(h.knight.pos.z - pad.pos.z) >= 0.75 + 0.3, 'and the hero ends up outside the tower');
+});

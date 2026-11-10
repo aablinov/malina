@@ -3,6 +3,7 @@ import type { Obstacle } from '../collision.ts';
 import { addDecoy } from '../decoys.ts';
 import type { EntityState } from '../net/snapshot.ts';
 import type { TdCommand } from '../net/protocol.ts';
+import { rng, type Rand } from '../rng.ts';
 import type { Target } from '../target.ts';
 import { clampRating, LOOT_WAVE, LOOT_WIN, lootK, scaledBounty, scaledCount, waveLevel } from '../td/scaling.ts';
 import { BASE_TOWERS, SELL_BACK, TOWER_ORDER, TOWERS, type TowerKind } from '../td/towers.ts';
@@ -10,6 +11,8 @@ import type { TdLane, TdPad, TdSpec, TdWave } from '../td/types.ts';
 import { SimBush } from './bush.ts';
 import { SimFog } from './fog.ts';
 import { fogWave } from '../td/waves-fog.ts';
+import { rollMobLoot } from '../items.ts';
+import { DROP_CHANCE } from './drops.ts';
 import { r1 } from './entities.ts';
 import { SimLair } from './lair.ts';
 import { SimTower } from './tower.ts';
@@ -72,6 +75,8 @@ export class SimTd {
   /** Mirror: whether a wave is running — from the server snapshot */
   netRunning: boolean | null = null;
   private time = 0;
+  /** Randomness of item drops — apart from the world's, so that the waves of a seed do not change with them */
+  private readonly lootRng: Rand;
   private solidsCache: Obstacle[] = [];
   private solidsN = -1;
   private foeSolidsCache: Obstacle[] | null = null;
@@ -83,6 +88,7 @@ export class SimTd {
 
   constructor(w: SimWorld, spec: TdSpec, players: number, personal: boolean) {
     this.w = w;
+    this.lootRng = rng((w.seed ^ 0x51ed270b) >>> 0 || 1);
     this.spec = spec;
     this.players = Math.max(1, Math.round(players));
     this.personal = personal;
@@ -136,10 +142,14 @@ export class SimTd {
   /** Mirror of a network battle: a seat's loot — from the server snapshot */
   setLoot(seat: number, n: number): void { this.loots.set(this.key(seat), Math.max(0, n)); }
   /** An enemy fell: the pile of raspberries for the purse on the ground, its own loot (before scaling) — into the match loot */
-  killed(at: THREE.Vector3, pile: number, base: number): void {
+  killed(at: THREE.Vector3, pile: number, base: number, kind = ''): void {
     this.fallen++;
     this.w.piles.drop(at, pile);
-    if (this.state === 'play') this.addLoot(base * lootK(this.rating));
+    if (this.state !== 'play') return;
+    this.addLoot(base * lootK(this.rating));
+    // an item (src/sim/drops.ts): a mini-boss always leaves a relic, the rank and file — by chance. Own randomness: waves and piles roll as before
+    const chief = isChief(kind);
+    if (chief || this.lootRng() < DROP_CHANCE) { const it = rollMobLoot(this.lootRng, chief); this.w.drops.drop(at, it.def, it.relic); }
   }
 
   // ---------- geometry ----------
@@ -422,6 +432,7 @@ export class SimTd {
     this.fog?.reset();
     this.gen.length = 0;
     this.w.piles.clear();
+    this.w.drops.clear();
     for (const seat of this.purses.keys()) this.fund(seat);
     this.loots.clear();
     this.state = 'play';

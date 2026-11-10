@@ -36,7 +36,7 @@ import { HERO, SWORD, snapshotTuning } from '../tuning.ts';
 import { getWeapon, onWeaponChange, pickWeapon, weapons } from '../weapons.ts';
 import { MELEE_ENCHANTS, TEMPER_LOOK, type MeleeEnchant } from '../temper.ts';
 import { weaponHit, weaponSwing } from '../weapon-audio.ts';
-import { enchantDef, itemDef, Profile } from '../items.ts';
+import { enchantDef, itemDef, mobLootPower, Profile } from '../items.ts';
 import { arrowsLootMesh, Gear, itemLootMesh } from '../gear.ts';
 import { Hud } from '../hud/hud.ts';
 import { Inventory } from '../hud/inventory.ts';
@@ -879,7 +879,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   /** The client copy of the snapshot: in single player — from its own world, by the same path as a network battle guest */
   const snapView = new SnapshotView<SimEvent>();
   if (tdSpec) {
-    const pk = new Pack(bossHooks, (at, n, base) => { sim?.killed(at, n, base); });
+    const pk = new Pack(bossHooks, (at, n, base, kind) => { sim?.killed(at, n, base, kind); });
     tdPack = pk;
     world = new SimWorld({
       foes: () => pk.mobs.filter((m) => m.alive),
@@ -890,6 +890,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       levelChanged,
     }, { seed: Number(query.get('seed')) || Date.now() % 2 ** 31, level, td: tdSpec, players: bossPlayers, personal: false });
     sim = world.td!;
+    // an item an enemy left (src/sim/drops.ts): into the battle copy and into the stored profile — it stays whatever the outcome
+    world.drops.onPick = (_seat, def) => { const power = mobLootPower(def, profile.power); profile.add(def, power); profile.save(); Profile.keepItem(def, power); };
     // strength — from the gear the hero came with (src/td/scaling.ts); sutler purchases do not raise it
     sim.setRating(profile.rating);
     sim.fund(0);

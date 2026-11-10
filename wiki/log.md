@@ -529,3 +529,11 @@ Pages: [design-tower-defence.md](design-tower-defence.md).
 The fifth map `td5`: a night clearing with no roads, a mist ring, eight invisible directions with every enemy wandering its own way, four pads, eight lanterns lit with F (enemies put them out), the beacon's beam, wisps with raspberries, chiefs in their own cloud. Endless waves by number (`src/td/waves-fog.ts`) with modifiers; the loot is kept when the bush falls, the record shows in the camp. New: `src/level/td-fog-map.ts`, `src/sim/fog.ts`, `src/td/fog-fx.ts`, `tests/td5.spec.ts`.
 Pages: [design-tower-defence.md](design-tower-defence.md) (section 18).
 
+
+## [2026-11-10] code | Towers reworked, tower tiles, loot and relics from enemies, anime impacts
+Tower models rebuilt: the body shows the level, every head has turning parts; the frost spire and the arcane obelisk hold rays instead of throwing projectiles; every level adds an ability. Tower tiles with animated states in the top left corner. Enemies leave items (14 %, mini-bosses always): gear and twenty relics — ten weapons with a hit effect, ten spells — that drop from enemies only and stay in the profile. Light shafts, cuts and pillars on hero and tower hits.
+Pages: [design-tower-defence.md](design-tower-defence.md) (sections 19–22).
+
+## [2026-11-10] code | A tower built under the hero no longer flings them away
+The tower's obstacle appears at once; the push out of it (over a metre in one tick) was turned into the hero's speed, so they flew off for four metres. Now a push longer than 0.35 m per tick is walked out at 4 m/s and never becomes speed (`Knight.update`, `ejecting`): the hero slides off the pad and stops at the tower's edge.
+Pages: [design-tower-defence.md](design-tower-defence.md).

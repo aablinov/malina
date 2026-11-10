@@ -4,11 +4,11 @@ import * as THREE from 'three';
  * Glowing streak ribbons behind a flying "head" (wiki/design-weapon-arts.md, section 7): souls, drops, stars, lightning arcs
  * and crescents fly along curves with a juicy tail behind them — a bright core and a wide soft halo, narrowing and fading towards the end.
  * The head moves along the function path(k) (k — flight fraction 0..1), the ribbon is the history of its positions over the last tail seconds;
- * always faces the camera. All ribbons are one mesh with dynamic buffers, one draw call; room for 96 ribbons,
+ * always faces the camera. All ribbons are one mesh with dynamic buffers, one draw call; room for 160 ribbons,
  * the oldest gives way (wiki/dev-performance.md).
  */
 
-const MAX = 96;
+const MAX = 160;
 const PTS = 28;
 /** Two strips per ribbon: halo and core */
 const STRIPS = 2;

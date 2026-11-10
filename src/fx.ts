@@ -422,6 +422,39 @@ export class FX {
     this.pooled(this.shocks, s, dur, (k) => { m.scale.setScalar(0.3 + radius * Math.sqrt(k)); mat.opacity = 1 - k; });
   }
 
+  /** The soft round glow texture — for marks on the ground (`decal`) */
+  get glowTex(): THREE.Texture { return this.T.glow; }
+
+  // ---------- anime impact (wiki/style-guide.md, section "Impact") ----------
+
+  /**
+   * Light shafts: a star of thin white-hot rays shooting out of a point and lingering for a moment — the anime "impact frame".
+   * Each ray is a streak ribbon (src/fx-streaks.ts): it faces the camera, has a halo and fades from the tail
+   */
+  shafts(at: THREE.Vector3, color: THREE.Color, n = 4, len = 2.2, width = 0.09, flat = 0.55): void {
+    const tail = color.clone().multiplyScalar(0.45), a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const a = a0 + (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.7, up = (Math.random() - 0.35) * flat * 2;
+      const d = new THREE.Vector3(Math.cos(a), up, Math.sin(a)).normalize(), l = len * (0.55 + Math.random() * 0.7);
+      const from = at.clone().addScaledVector(d, l * 0.12), to = at.clone().addScaledVector(d, l);
+      this.streaks.add({ path: (k, out) => out.lerpVectors(from, to, k), dur: 0.06 + Math.random() * 0.04, color, color2: tail, width: width * (0.7 + Math.random() * 0.6), tail: 0.18, halo: 2, core: 0.9 });
+    }
+  }
+
+  /** A cut of light through a point along `dir` — the long bright line an anime slash leaves across the target */
+  cut(at: THREE.Vector3, dir: THREE.Vector3, len: number, color: THREE.Color, width = 0.14, dur = 0.07): void {
+    const from = at.clone().addScaledVector(dir, -len * 0.5), to = at.clone().addScaledVector(dir, len * 0.5);
+    this.streaks.add({ path: (k, out) => out.lerpVectors(from, to, k), dur, color, color2: color.clone().multiplyScalar(0.4), width, tail: 0.22, halo: 2.2, core: 0.9 });
+  }
+
+  /** A shaft of light from the sky down to a point: a bright column that lingers, a flash and sparks where it lands */
+  pillar(at: THREE.Vector3, color: THREE.Color, height = 8, width = 0.4): void {
+    const from = at.clone().setY(at.y + height), to = at.clone().setY(at.y + 0.1);
+    this.streaks.add({ path: (k, out) => out.lerpVectors(from, to, k), dur: 0.07, color, color2: color.clone().multiplyScalar(0.5), width, tail: 0.3, halo: 2.2, core: 0.9 });
+    this.flash(to.clone().setY(to.y + 0.5), color, Math.min(2.4, width * 5), 0.2);
+    this.burst(to, [color, '#ffffff'], 8, { speed: 3.5, up: 2.5, size: 0.07, life: 0.4, glow: true, gravity: 6 });
+  }
+
   /** A glowing ribbon behind a head flying along path (src/fx-streaks.ts) */
   streak(o: StreakOptions): void { this.streaks.add(o); }
   get streakCount(): number { return this.streaks.count; }

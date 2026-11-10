@@ -61,7 +61,7 @@ export function headlessBattle(mapId: string, seed: number, o: { players?: numbe
   const gear = new Gear({
     scene, fx, hero, terrain, targets, blast: () => {}, sound: () => {}, toast: () => {}, banner: () => {}, quiet: () => true,
   }, profile);
-  pack = new Pack(bossHooks, (at, n, base) => { if (world?.td) world.td.killed(at, n, base); else world?.piles.drop(at, n); });
+  pack = new Pack(bossHooks, (at, n, base, kind) => { if (world?.td) world.td.killed(at, n, base, kind); else world?.piles.drop(at, n); });
   const pk = pack;
   const hooks: SimHooks = {
     foes: () => pk.mobs.filter((m) => m.alive),
