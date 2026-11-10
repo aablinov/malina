@@ -105,3 +105,24 @@ test('expedition: a lair falls to the sword and counts; the same seed builds the
   await open(page, 'seed=8&obj=lairs&d=1');
   expect(await page.evaluate(() => JSON.stringify((window as any).__malina.exp.sim.spec.lairs))).toBe(r.sites);
 });
+
+test('expedition: parcels — Z calls a tower that lands near the hero and stands in the HUD on cooldown; totems and the alarm are shown', async ({ page }) => {
+  await open(page, 'seed=3&obj=lairs&d=1');
+  const r = await page.evaluate(() => {
+    const m = (window as any).__malina, e = m.exp, s = e.sim;
+    m.step(0.2);
+    const hud0 = e.ui.el.textContent as string;
+    const ok = s.command(0, { t: 'exp', a: 'parcel', slot: 0, x: m.hero.pos.x + 4, z: m.hero.pos.z });
+    m.step(0.5);
+    const flying = e.world.entities().some((x: any) => /^parcel\d+$/.test(x.id));
+    m.step(3);
+    const towers = s.parcels.towers.length, record = e.world.entities().find((x: any) => /^t\d+$/.test(x.id));
+    m.step(0.2);
+    return { hud0, ok, flying, towers, kind: record?.kind, cd: s.parcels.cooldowns(0)[0], hud: e.ui.el.textContent as string, again: s.command(0, { t: 'exp', a: 'parcel', slot: 0, x: m.hero.pos.x + 4, z: m.hero.pos.z }), totems: s.totems };
+  });
+  expect(r.hud0).toMatch(/Z .*X .*C /);
+  expect(r.hud0).toContain('Totems');
+  expect(r).toMatchObject({ ok: true, flying: true, towers: 1, kind: 'arrow', again: false, totems: 4 });
+  expect(r.cd).toBeGreaterThan(60);
+  expect(r.hud).toMatch(/Archer tower \d+/);
+});

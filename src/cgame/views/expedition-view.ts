@@ -8,6 +8,9 @@ import { playTdEvents } from '../effects.ts';
 import { BushView } from './bush-view.ts';
 import { DropView } from './drop-view.ts';
 import { PileView } from './pile-view.ts';
+import { BoltView } from './bolt-view.ts';
+import { PoolView } from './pool-view.ts';
+import { TowerView } from './tower-view.ts';
 
 /**
  * Expedition view — "cgame" (wiki/design-expeditions.md): draws the mission's things from the snapshot records by id prefix —
@@ -160,6 +163,45 @@ class SeedView extends GroupView {
   update(_dt: number, time: number): void { this.g.children[0].rotation.y = time * 2.5; this.g.children[0].position.y = 0.5 + Math.sin(time * 4) * 0.1; }
 }
 
+/** A parcel on its way: a ring on the ground that closes in as it lands */
+class ParcelView extends GroupView {
+  private readonly ring: THREE.Mesh;
+  private t = 3;
+  constructor(scene: THREE.Scene, e: EntityState, y: number) {
+    super(scene);
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 32), basic(glow('#ff8fb0', 2), 0.9));
+    this.ring.rotation.x = -Math.PI / 2;
+    const crate = box(0.9, 0.9, 0.9, lambert('#b98a4a'), 0, 0);
+    this.g.add(this.ring, crate);
+    this.g.position.set(num(e.x), y + 0.05, num(e.z));
+    this.set(e);
+  }
+  set(e: EntityState): void { this.t = num(e.t); }
+  update(dt: number, time: number): void {
+    this.t = Math.max(0, this.t - dt);
+    const k = Math.min(1, this.t / 3);
+    this.ring.scale.setScalar(1 + k * 2.2);
+    this.g.children[1].position.y = 0.45 + k * 22;
+    this.g.children[1].rotation.y = time * 3;
+  }
+}
+
+/** Healing totem: a small raspberry post and the circle it mends in */
+class HealView extends GroupView {
+  private readonly ring: THREE.Mesh;
+  constructor(scene: THREE.Scene, e: EntityState) {
+    super(scene);
+    const r = num(e.r) || 5;
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.15, r, 48), basic(glow('#8be38f', 1.6), 0.6));
+    this.ring.rotation.x = -Math.PI / 2;
+    this.ring.position.y = 0.05;
+    this.g.add(this.ring, box(0.4, 1.4, 0.4, lambert('#8a5a32'), 0, 0.7), box(0.7, 0.7, 0.7, basic(glow('#ff5a8a', 1.8)), 0, 1.7));
+    this.g.position.set(num(e.x), num(e.y), num(e.z));
+  }
+  set(): void {}
+  update(_dt: number, time: number): void { (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.4 + Math.sin(time * 4) * 0.2; this.g.children[2].rotation.y = time * 2; }
+}
+
 /** Secondary objective: an Order chest, an altar, a watchtower; done — dimmed (a horn-blowers' nest is a NestView) */
 class SideView extends GroupView {
   private readonly mark: THREE.Mesh;
@@ -182,6 +224,8 @@ class SideView extends GroupView {
 export class ExpeditionView {
   private readonly views = new Map<string, View>();
   private time = 0;
+  /** Parcel towers by record id — their events (shots, hits) go to them */
+  private readonly towers = new Map<string, TowerView>();
   private readonly o: ExpeditionViewOpts;
   private readonly bushPos = new THREE.Vector3();
   /** Floor under a point — the level's terrain (records of flat things carry no height) */
@@ -197,6 +241,7 @@ export class ExpeditionView {
     for (const e of v.removed) this.drop(e.id);
     for (const e of v.added) this.ensure(e);
     for (const e of v.updated) this.ensure(e);
+    for (const e of v.events) if (e.id) this.towers.get(e.id)?.onEvent?.(e);
     // piles, drops and the bush play the defence's effects; the mission's own — below
     playTdEvents(v.events, { fx: this.o.fx, quiet: this.o.quiet, heroPos: this.o.heroPos, bushPos: this.bushPos, seat: this.o.seat });
     this.play(v.events);
@@ -225,6 +270,12 @@ export class ExpeditionView {
     if (/^poi\d+$/.test(id)) return new PoiView(scene, e, this.floorAt(num(e.x), num(e.z)));
     if (/^seed\d+$/.test(id)) return new SeedView(scene, e);
     if (id.startsWith('s:')) return e.kind === 'horns' ? null : new SideView(scene, e, this.floorAt(num(e.x), num(e.z)));
+    // parcels: the defence's own tower, bolt and pool views; a parcel in flight; a healing totem
+    if (/^t\d+$/.test(id)) { const tv = new TowerView(scene, fx, e); this.towers.set(id, tv); return wrap(tv); }
+    if (/^b\d+$/.test(id)) return wrap(new BoltView(scene, fx, e));
+    if (id.startsWith('pool')) return wrap(new PoolView(scene, fx, e));
+    if (/^parcel\d+$/.test(id)) return new ParcelView(scene, e, this.floorAt(num(e.x), num(e.z)));
+    if (/^heal\d+$/.test(id)) return new HealView(scene, e);
     if (/^p\d+$/.test(id)) return wrap(new PileView(scene, fx, e));
     if (/^d\d+$/.test(id)) return wrap(new DropView(scene, fx, e));
     return null;
@@ -235,6 +286,7 @@ export class ExpeditionView {
     if (!w) return;
     w.dispose();
     this.views.delete(id);
+    this.towers.delete(id);
   }
 
   private play(events: readonly SimEvent[]): void {
@@ -264,6 +316,11 @@ export class ExpeditionView {
         case 'horn.call': fx.shock(at(e, 0.06), 8, glow('#ffd15c'), 0.8, 0.2); fx.text(at(e, 2.4), '♪♪♪', 'bad'); break;
         case 'hero.totem': fx.pillar(at(e), glow('#ff5a8a', 2.6), 10, 0.6); fx.ring(at(e, 0.06), 3, glow('#ff5a8a'), 0.6, 0.14, 1); break;
         case 'hero.raised': fx.burst(at(e, 0.8), [glow('#8be38f'), '#ffffff'], 16, { speed: 2, up: 4, size: 0.1, life: 0.7, glow: true, gravity: 3 }); break;
+        case 'parcel.land':
+          fx.burst(at(e, 0.4), ['#b98a4a', '#8a5a32', glow('#ff8fb0')], 18, { speed: 4, up: 4, size: 0.12, life: 0.6, gravity: 9 });
+          if (e.kind === 'volley') { fx.shock(at(e, 0.06), 4.5, glow('#ffb040', 2.4), 0.5, 0.25); fx.pillar(at(e), glow('#ffb040', 3), 12, 0.9); fx.shake = Math.max(fx.shake, 0.5); }
+          break;
+        case 'parcel.gone': fx.burst(at(e, 1), ['#d8cfa8', '#9a8f70'], 14, { speed: 3, up: 3, size: 0.12, life: 0.5 }); break;
         case 'extract.call': fx.ring(at(e, 0.06), PAD_R + 2, glow('#7ad0ff'), 1, 0.2, 2); break;
         case 'extract.ready': fx.pillar(at(e), glow('#7ad0ff', 2.6), 16, 0.8); break;
         default: break;

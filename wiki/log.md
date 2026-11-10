@@ -561,3 +561,7 @@ Pages: [design-expeditions.md](design-expeditions.md), [design-main-menu.md](des
 ## [2026-11-11] code | Alarm, horn-blowers, dusk; revive and totems (Expeditions, stage 5)
 The alarm meter (four levels: a level every four minutes, +50 per horn call, faster with a horn-blowers' nest and after dusk at minute 15) raises the pack level and the size of raids. The first mob of every patrol blows the horn for 3 s when it sees a hero — kill it in time or a raid comes. The mission owns the downed state (`Rules.ownsDowned`, `SimHooks.raise`): a teammate nearby lifts in 3 s, otherwise a shared totem after 20 s; four totems, +1 per secondary objective; no totems and everyone down — the mission fails with half the loot.
 Pages: [design-expeditions.md](design-expeditions.md).
+
+## [2026-11-11] code | Parcels from the camp (Expeditions, stage 6)
+`src/sim/parcel.ts`: three slots per hero on Z / X / C — a defence tower that stands for a minute wherever it lands, a spell volley over an area, a healing totem; called to the aim point within 16 m, landing in 3 s, each slot with its own rest. The set is picked in the camp under the gear and stored in the profile. The mission view reuses the defence's tower, bolt and pool views.
+Pages: [design-expeditions.md](design-expeditions.md).

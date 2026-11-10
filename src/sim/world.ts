@@ -53,6 +53,8 @@ export interface SimHooks {
   levelChanged?(): void;
   /** A fallen hero gets up — where he lies or at a point (rules that own the downed state: src/sim/expedition.ts) */
   raise?(seat: number, at?: THREE.Vector3): void;
+  /** A hero on his feet gets health back (a healing totem, src/sim/parcel.ts) */
+  heal?(seat: number, n: number): void;
   /** Step of heroes and the pack inside the world step — under this world's game randomness and decoys */
   step?(dt: number): void;
 }

@@ -405,6 +405,8 @@ export interface ProfileData {
   equip: Equipment;
   /** Seeds brought out of expeditions (wiki/design-expeditions.md, section 8): common, rare, golden; absent — none yet */
   seeds?: { common: number; rare: number; golden: number };
+  /** Parcels taken on expeditions — three slots (src/sim/parcel.ts); absent — the default set */
+  parcels?: string[];
 }
 
 /** Multiplier from item power: +6% per unit */

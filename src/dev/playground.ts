@@ -24,6 +24,7 @@ import { buildExpedition } from '../level/expedition-map.ts';
 import { LIBRARY } from '../level/prefab-lib/index.ts';
 import { OBJECTIVES, type ExpeditionSpec, type ObjectiveKind } from '../expedition/types.ts';
 import { parseMission } from '../expedition/mission.ts';
+import { PARCEL_RANGE } from '../sim/parcel.ts';
 import type { SimExpedition } from '../sim/expedition.ts';
 import { ExpUi } from '../cgame/exp-ui.ts';
 import { ExpeditionView } from '../cgame/views/expedition-view.ts';
@@ -731,9 +732,18 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       case 'special': gear.special(aimPoint()); break;
       case 'interact': interactReq = true; break;
       case 'wave': sim?.callWave(0); break;
+      case 'parcel': callParcel(a.i); break;
       case 'artifact': if (a.down) gear.pressArtifact(a.i, aimPoint()); else gear.releaseArtifact(a.i, aimPoint()); break;
       case 'use': gear.useArtifact(a.i, aimPoint()); break;
     }
+  }
+
+  /** Expedition: the parcel of a slot — to the aim point, no farther than its range from the hero */
+  function callParcel(slot: number): void {
+    if (!exped || hero.down) return;
+    const seat = nb?.seat ?? 0, p = aimPoint(), d = Math.hypot(p.x - hero.pos.x, p.z - hero.pos.z), k = d > PARCEL_RANGE - 0.5 ? (PARCEL_RANGE - 0.5) / d : 1;
+    if (exped.parcels.cooldowns(seat)[slot] > 0) { toast(t('The parcel is not ready yet')); return; }
+    exped.command(seat, { t: 'exp', a: 'parcel', slot, x: hero.pos.x + (p.x - hero.pos.x) * k, z: hero.pos.z + (p.z - hero.pos.z) * k });
   }
 
   // screen up = world (−1, −1)
@@ -938,11 +948,13 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       levelChanged,
       // the mission decides when the fallen hero gets up: a teammate or a totem (src/sim/expedition.ts)
       raise: (_seat, at) => { if (at) hero.place(at.x, at.z, hero.yaw, at.y); hero.revive(); downT = 0; },
+      heal: (_seat, n) => { if (!hero.down) hero.hp = Math.min(hero.maxHp, hero.hp + n); },
       // a network battle: the server posts the garrisons and runs the mission, this world only mirrors it
     }, { seed: expSpec.seed, level, mode: { kind: 'expedition', spec: expSpec }, players: bossPlayers, personal: false, mirror: FROM_MENU && !!query.get('room') });
     const ex = exped = world.expedition!;
     world.drops.onPick = (_seat, def) => { const power = mobLootPower(def, profile.power); profile.add(def, power); profile.save(); Profile.keepItem(def, power); };
     ex.setRating(profile.rating);
+    ex.parcels.setLoadout(0, profile.data.parcels);
     ex.fund(0);
     ex.onToast = (_seat, text) => toast(text);
     profile.data.berries = 0;
@@ -1415,7 +1427,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   window.__malina = {
     mode: 'playground',
     /** Expedition for tests (tests/expedition.spec.ts): the rules, the view, the HUD and the pack; null — another mode */
-    get exp() { return exped && expUi && tdPack && world ? { sim: exped, ui: expUi, pack: tdPack, world, flush: flushExp, targets: () => targets(), seat: nb?.seat ?? 0, use: () => exped!.command(nb?.seat ?? 0, { t: 'exp', a: 'use' }) } : null; },
+    get exp() { return exped && expUi && tdPack && world ? { sim: exped, ui: expUi, pack: tdPack, world, flush: flushExp, targets: () => targets(), seat: nb?.seat ?? 0, parcel: (slot: number) => callParcel(slot), use: () => exped!.command(nb?.seat ?? 0, { t: 'exp', a: 'use' }) } : null; },
     /** Network battle client (src/cgame/net-battle.ts); null — the battle is local */
     get net() { return netClient; },
     /** Room voice chat (src/net/voice.ts) */

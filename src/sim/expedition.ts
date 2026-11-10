@@ -10,6 +10,7 @@ import type { Target } from '../target.ts';
 import { clampRating, lootK, scaledCount } from '../td/scaling.ts';
 import { SimBush } from './bush.ts';
 import { Garrisons, type PostedMob } from './garrison.ts';
+import { Parcels } from './parcel.ts';
 import { BEACON_HOLD, BOARD_WAIT, EXTRACT_WAIT, HOLD_R, PAD_R, SimBeacon, SimExtraction, SimNest, USE_R } from './objective.ts';
 import type { Rules, RulesCommand, RulesState } from './rules.ts';
 import type { HeroLike, SimWorld } from './world.ts';
@@ -75,6 +76,8 @@ export class SimExpedition implements Rules {
   readonly beacons: SimBeacon[];
   readonly extraction: SimExtraction;
   readonly sides: Side[];
+  /** Parcels from the camp: towers, volleys, healing totems (src/sim/parcel.ts) */
+  readonly parcels: Parcels;
   /** The planted bush (objective `bush`); null — not planted or another objective */
   bush: SimBush | null = null;
   /** Waves beaten at the bush, and seconds to the next one (−1 — a wave is running or nothing is planted) */
@@ -113,6 +116,8 @@ export class SimExpedition implements Rules {
   private readonly lootRng: Rand;
   private readonly pool: string[];
   private solidsCache: Obstacle[] | null = null;
+  private joined: Obstacle[] = [];
+  private joinedKey: [Obstacle[] | null, Obstacle[] | null] = [null, null];
   private undecoy: (() => void) | null = null;
 
   /** A network battle's client: state comes from the server's records (`mirror`), nothing is posted or ticked here */
@@ -127,6 +132,7 @@ export class SimExpedition implements Rules {
     this.lootRng = rng((w.seed ^ 0x3c6ef372) >>> 0 || 1);
     this.pool = guardPool(spec.difficulty);
     w.h.setScale(this.base, this.players);
+    this.parcels = new Parcels(w);
     this.garrisons = new Garrisons(w, mirrored ? [] : spec.garrisons);
     this.nests = spec.lairs.map((l) => new SimNest(w, l, this.players));
     for (const n of this.nests) n.onDeath = () => this.nestFell(n);
@@ -161,7 +167,11 @@ export class SimExpedition implements Rules {
   }
   get solids(): Obstacle[] {
     this.solidsCache ??= [...this.nests, ...this.sides.map((s) => s.nest)].filter((n): n is SimNest => !!n && !n.dead).map((n) => n.solid).concat(this.bush && !this.bush.dead ? [this.bush.solid] : []);
-    return this.solidsCache;
+    const towers = this.parcels.solids;
+    if (!towers.length) return this.solidsCache;
+    // parcel towers come and go: the joined list is rebuilt only when either part changes
+    if (this.joinedKey[0] !== this.solidsCache || this.joinedKey[1] !== towers) { this.joined = this.solidsCache.concat(towers); this.joinedKey = [this.solidsCache, towers]; }
+    return this.joined;
   }
   get foeSolids(): Obstacle[] { return this.solids; }
   targets(): Target[] { return [...this.nests, ...this.sides.map((s) => s.nest)].filter((n): n is SimNest => !!n && !n.dead); }
@@ -204,7 +214,7 @@ export class SimExpedition implements Rules {
     if (this.remote) { this.remote(c); return true; }
     if (this.state !== 'play') return false;
     // a command arrives between steps and may bring a raid: the same randomness as inside a step
-    return this.w.scoped(() => this.use(seat));
+    return this.w.scoped(() => (c.a === 'parcel' ? this.parcels.call(seat, c.slot, c.x, c.z) : this.use(seat)));
   }
 
   private use(seat: number): boolean {
@@ -499,6 +509,7 @@ export class SimExpedition implements Rules {
         this.step();
       }
     }
+    this.parcels.update(dt);
     this.tickAlarm(dt, heroes);
     this.tickBush(dt);
     this.tickSeeds(dt, heroes);
@@ -522,6 +533,7 @@ export class SimExpedition implements Rules {
     this.dusk = !!exp.dusk;
     this.time = n(exp.time);
     this.downs.clear();
+    for (const [id, e] of ents) if (id.startsWith('cd')) this.parcels.setCooldowns(n(e.seat), [n(e.a), n(e.b), n(e.c)], String(e.kinds ?? '').split(','));
     this.players = n(exp.players) || 1;
     this.rating = n(exp.rating) || 1;
     if (this.spec.objective.kind === 'bush') this.bushWave = n(exp.done);
@@ -557,6 +569,7 @@ export class SimExpedition implements Rules {
     out.push({ id: 'exp', state: this.state, kind: this.spec.objective.kind, done: this.done, goal: this.goal, primary: this.primary ? 1 : 0, players: this.players, rating: this.rating, fallen: this.fallen, guards: this.garrisons.alive, wave: this.bushRaid ? 1 : 0,
       totems: this.totems, alarm: Math.round(this.alarm), dusk: this.dusk ? 1 : 0, time: Math.floor(this.time) });
     for (const [seat, d] of this.downs) out.push({ id: `down${seat}`, seat, left: Math.ceil(DOWN_WAIT - d.t), k: Math.round((d.hold / RAISE_HOLD) * 10) / 10 });
+    this.parcels.entities(out);
     for (const n of this.nests) n.entity(out);
     for (const b of this.beacons) b.entity(out);
     this.bush?.entity(out);

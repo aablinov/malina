@@ -100,6 +100,8 @@ export class Match {
     const hero = this.battle.addHero(p.seat, p.profile);
     const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false, acts: [], geared: false, loot: [] };
     this.seats.set(p.seat, s);
+    // the parcels the hero picked in the camp
+    this.battle.world.expedition?.parcels.setLoadout(p.seat, hero.profile.data.parcels);
     this.rules.setPlayers(this.seats.size);
     // strength — from the gear the hero came with (the sutler's goods do not raise it)
     this.ratings.set(p.seat, hero.profile.rating);
@@ -272,6 +274,7 @@ export class Match {
       }
       case 'exp': {
         if (m.a === 'use') this.rules.command(seat, { t: 'exp', a: 'use' });
+        else if (m.a === 'parcel' && isNum(m.slot) && isNum(m.x) && isNum(m.z)) this.rules.command(seat, { t: 'exp', a: 'parcel', slot: m.slot, x: m.x, z: m.z });
         break;
       }
       case 'act': {

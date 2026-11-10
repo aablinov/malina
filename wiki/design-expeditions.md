@@ -1,6 +1,6 @@
 # Expeditions. Design document
 
-Version 0.5 of 2026-11-11. In the code: stages 1–5 (section 11) — missions are played solo and in a room from the camp's "Expeditions" tab, with the alarm, horn-blowers, dusk, revive and totems. Not in the code yet: parcels (stage 6), operations, the difficulty ladder, modifiers, camp beds and the order of the day (stage 7).
+Version 0.6 of 2026-11-11. In the code: stages 1–6 (section 11) — missions are played solo and in a room from the camp's "Expeditions" tab, with the alarm, horn-blowers, dusk, revive, totems and parcels. Not in the code yet: operations, the difficulty ladder, modifiers, camp beds and the order of the day (stage 7).
 
 **Decision:** [adr-006-expeditions.md](adr-006-expeditions.md). **Source:** [sources/helldivers2.md](sources/helldivers2.md).
 
@@ -84,6 +84,16 @@ The counterpart of stratagems.
 | Healing totem | heals heroes nearby |
 
 Towers are the main find: the game already has five towers with levels and abilities; in Expeditions they become portable sentries.
+
+**In the code** (stage 6, `src/sim/parcel.ts`): three slots on Z, X and C; a parcel is called to the aim point no farther than 16 m from the hero and lands in 3 s; the slot then rests.
+
+| Parcel | What it does | Slot rest |
+|---|---|---|
+| Tower — archer, frost, catapult, brazier, obelisk | the defence's own tower at level I, stands 60 s where it landed, enemies attack it like any tower | 70–90 s |
+| Spell volley | 70 damage and a knockback to every enemy within 4.5 m | 45 s |
+| Healing totem | stands 12 s, heals 8 health a second to heroes within 5 m | 80 s |
+
+The set is picked in the camp under the gear (a click on a slot puts the next kind in) and stored in the profile (`ProfileData.parcels`); the default is the archer tower, the volley and the totem. The supply crate with potions and arrows is not made: arrows live in the hero's profile copy, which the client predicts — it needs its own message, left for later.
 
 ## 6. Alarm and patrols
 

@@ -87,6 +87,7 @@ export class HeadlessBattle {
       setScale: (l, p) => this.pack.setScale(l, p),
       levelChanged: () => { this.levelObstacles.length = 0; this.levelObstacles.push(...obstaclesOf(map.level, 0, b.minX, b.minZ, b.maxX, b.maxZ)); this.foeCache = null; },
       step: (dt) => this.stepActors(dt),
+      heal: (seat, n) => { const k = this.heroes.get(seat)?.knight; if (k && !k.down) k.hp = Math.min(k.maxHp, k.hp + n); },
       raise: (seat, at) => {
         const h = this.heroes.get(seat);
         if (!h) return;

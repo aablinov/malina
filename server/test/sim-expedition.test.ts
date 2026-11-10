@@ -9,6 +9,7 @@ import { Profile } from '../../src/items.ts';
 import { expeditionMap } from '../../src/level/expedition-map.ts';
 import { BUSH_WAVES, DOWN_WAIT, DUSK_AT, HORN_BLOW, RAISE_HOLD, TOTEMS } from '../../src/sim/expedition.ts';
 import { BEACON_HOLD, BOARD_WAIT, EXTRACT_WAIT } from '../../src/sim/objective.ts';
+import { PARCEL_DELAY, PARCEL_RANGE, parcelLoadout, TOWER_LIFE } from '../../src/sim/parcel.ts';
 import { loadPrefabs } from '../prefabs.ts';
 
 const LIB = loadPrefabs(join(import.meta.dirname, '..', '..', 'assets', 'prefabs'));
@@ -271,4 +272,50 @@ test('expedition, alarm: it grows with time and with a horn call; a horn-blower 
   assert.equal(exp.dusk, true);
   assert.ok(p.events.includes('exp.dusk'));
   assert.ok(rate() > day * 1.8);
+});
+
+test('expedition, parcels: a tower lands where it was called and shoots for a minute, a volley strikes an area, a totem heals; a slot rests after a call', () => {
+  const p = party('lairs', 1), { exp, knights: [a], b } = p;
+  const land = exp.spec.landings[0];
+  const keep = (): void => { a.hp = a.maxHp; a.place(land.x, land.z, 0, 0); };
+  exp.parcels.setLoadout(0, ['tower:arrow', 'volley', 'heal']);
+  assert.deepEqual(parcelLoadout(['tower:frost', 'dragon']), ['tower:frost', 'volley', 'heal'], 'unknown kinds fall back to the default set');
+  keep();
+  p.step(0.1, keep);
+  // too far, a wrong slot — nothing
+  assert.equal(exp.command(0, { t: 'exp', a: 'parcel', slot: 0, x: land.x + PARCEL_RANGE + 5, z: land.z }), false);
+  assert.equal(exp.command(0, { t: 'exp', a: 'parcel', slot: 7, x: land.x, z: land.z }), false);
+  // the tower
+  assert.ok(exp.command(0, { t: 'exp', a: 'parcel', slot: 0, x: land.x + 4, z: land.z }));
+  assert.equal(exp.command(0, { t: 'exp', a: 'parcel', slot: 0, x: land.x + 4, z: land.z }), false, 'the slot rests');
+  assert.ok(exp.parcels.cooldowns(0)[0] > 60);
+  assert.ok(p.match.entities().some((e) => /^parcel\d+$/.test(e.id)));
+  p.step(PARCEL_DELAY + 0.2, keep);
+  assert.equal(exp.parcels.towers.length, 1);
+  const tower = exp.parcels.towers[0].tower;
+  assert.ok(Math.hypot(tower.pos.x - (land.x + 4), tower.pos.z - land.z) < 0.01);
+  assert.ok(exp.solids.includes(tower.solid), 'the tower stands in the way');
+  assert.ok(p.match.entities().some((e) => e.id === tower.id && e.kind === 'arrow'));
+  // an enemy walks up: the tower shoots it
+  const foe = b.pack.spawn('squire', new THREE.Vector3(land.x + 9, 0, land.z))!;
+  p.step(4, keep);
+  assert.ok(tower.shots > 0 && foe.hp < foe.maxHp, 'the tower shoots');
+  // the volley: enemies in the circle are hit, the one outside is not
+  const near = b.pack.spawn('shield', new THREE.Vector3(land.x - 8, 0, land.z))!, far = b.pack.spawn('shield', new THREE.Vector3(land.x - 8, 0, land.z + 12))!;
+  assert.ok(exp.command(0, { t: 'exp', a: 'parcel', slot: 1, x: land.x - 8, z: land.z }));
+  const farHp = far.hp;
+  p.step(PARCEL_DELAY + 0.1, keep);
+  assert.ok(near.hp < near.maxHp);
+  assert.equal(far.hp, farHp);
+  assert.ok(p.events.includes('parcel.land'));
+  // the totem heals a wounded hero standing by it
+  assert.ok(exp.command(0, { t: 'exp', a: 'parcel', slot: 2, x: land.x, z: land.z + 1 }));
+  p.step(PARCEL_DELAY + 0.1, keep);
+  a.hp = 20;
+  p.step(3, () => { a.place(land.x, land.z, 0, 0); for (const m of b.pack.mobs) if (!m.dead && !m.asleep) m.hit(99999, UP, m.pos, 0); });
+  assert.ok(a.hp >= 36, `healed (${a.hp})`);
+  // a minute later the tower is gone
+  p.step(TOWER_LIFE, keep);
+  assert.equal(exp.parcels.towers.length, 0);
+  assert.ok(!exp.solids.includes(tower.solid));
 });

@@ -13,6 +13,8 @@ export type Action =
   | { k: 'special' }
   | { k: 'interact' }
   | { k: 'wave' }
+  /** Expedition: call the parcel of a slot to the aim point */
+  | { k: 'parcel'; i: number }
   | { k: 'artifact'; i: number; down: boolean }
   /** HUD button: an artifact without holding */
   | { k: 'use'; i: number };
@@ -79,6 +81,9 @@ const ACTIONS: Record<string, Action | undefined> = {
   KeyQ: { k: 'special' },
   KeyF: { k: 'interact' },
   KeyG: { k: 'wave' },
+  KeyZ: { k: 'parcel', i: 0 },
+  KeyX: { k: 'parcel', i: 1 },
+  KeyC: { k: 'parcel', i: 2 },
 };
 
 export class GameInput {

@@ -3,6 +3,7 @@ import type { MapMarker } from '../hud/automap.ts';
 import { t } from '../i18n/i18n.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { ALARM_MAX, type SimExpedition } from '../sim/expedition.ts';
+import { PARCEL_TITLE } from '../expedition/parcels.ts';
 import '../td/td.css';
 
 /**
@@ -94,6 +95,8 @@ export class ExpUi {
     const down = s.downOf(this.seat());
     if (down) lines.push(`<div class="td-alarm">${down.k > 0 ? t('A teammate is lifting you') : s.totems > 0 ? t('Down · a totem in {n} s', { n: Math.ceil(down.left) }) : t('Down · no totems left')}</div>`);
     lines.push(`<div>${t('Totems')}: <span style="color:#ff8fb0">${s.totems}</span> · ${t('Alarm')}: <span style="color:#ffd15c">${'▮'.repeat(s.alarmLevel)}${'▯'.repeat(ALARM_MAX - s.alarmLevel)}</span>${s.dusk ? ` · ${t('dusk')}` : ''}</div>`);
+    const kinds = s.parcels.loadout(this.seat()), cds = s.parcels.cooldowns(this.seat());
+    lines.push(`<div>${kinds.map((k, i) => `<kbd>${'ZXC'[i]}</kbd> ${PARCEL_TITLE[k]}${cds[i] > 0 ? ` <span style="color:#b9c4cc">${Math.ceil(cds[i])}</span>` : ''}`).join(' · ')}</div>`);
     const tg = this.target();
     if (tg && s.state === 'play') {
       const dx = tg.x - hp.x, dz = tg.z - hp.z, d = Math.hypot(dx, dz);

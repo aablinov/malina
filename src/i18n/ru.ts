@@ -2321,5 +2321,12 @@ const ru: Record<string, string> = {
   "Totems": "Тотемы",
   "Alarm": "Тревога",
   "dusk": "сумерки",
+  "The parcel is not ready yet": "Посылка ещё не готова",
+  "Spell volley": "Залп заклинаний",
+  "stands for a minute where it lands": "стоит минуту там, где приземлилась",
+  "a strike over an area": "удар по площади",
+  "mends the heroes around it": "лечит героев вокруг",
+  "Parcels for expeditions": "Посылки для вылазок",
+  "click — change": "клик — сменить",
 };
 export default ru;

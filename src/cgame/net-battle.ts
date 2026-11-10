@@ -156,7 +156,7 @@ export class NetBattleClient {
     document.body.appendChild(this.names);
     h.pack.mirror = true;
     if (h.sim) h.sim.remote = (c) => { if (c.t === 'td') this.sendTd(c); };
-    if (h.exp) h.exp.sim.remote = (c) => { if (c.t === 'exp') this.chan?.sendReliable({ t: 'exp', a: c.a }); };
+    if (h.exp) h.exp.sim.remote = (c) => { if (c.t === 'exp') this.chan?.sendReliable(c.a === 'parcel' ? { t: 'exp', a: 'parcel', slot: c.slot, x: c.x, z: c.z } : { t: 'exp', a: 'use' }); };
     h.gear.onAction = (a) => this.sendAct(a);
     h.net.battlePing();
     // gear changes go as tens-of-bytes `gear` messages; the kit itself the server took from the database

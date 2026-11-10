@@ -9,6 +9,8 @@ import type { Textures } from '../textures.ts';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
 import { boardHtml, missionCardHtml } from './expeditions.ts';
 import { MAX_DIFFICULTY, sameMission, withLanding } from '../expedition/mission.ts';
+import { PARCEL_HINT, PARCEL_TITLE } from '../expedition/parcels.ts';
+import { PARCEL_KINDS, parcelLoadout } from '../sim/parcel.ts';
 import type { MenuScene } from './scene.ts';
 import { go } from './boot.ts';
 import { battleUrl, loadMenuState, NET, netBattleUrl, record, saveMenuState, VOICE, type GameMode } from './session.ts';
@@ -271,6 +273,8 @@ export class Lobby {
       // expeditions: the board's difficulty and the landing point on the mission's sketch
       const diff = Number(t.closest<HTMLElement>('[data-diff]')?.dataset.diff);
       if (diff) { this.expDiff = diff; const st = loadMenuState(); st.expDiff = diff; saveMenuState(st); this.render(); return; }
+      const parcel = t.closest<HTMLElement>('[data-parcel]')?.dataset.parcel;
+      if (parcel !== undefined) { this.cycleParcel(Number(parcel)); return; }
       const landing = t.closest<SVGElement>('[data-landing]')?.dataset.landing;
       if (landing !== undefined) { this.selectMap(withLanding(this.map, Number(landing))); return; }
       const row = t.closest<HTMLElement>('[data-room]')?.dataset.room;
@@ -334,7 +338,7 @@ export class Lobby {
     this.q('mode').innerHTML = this.mode === 'online' ? t('Online game') : t('Solo game');
     for (const b of this.el.querySelectorAll<HTMLElement>('[data-pane]')) b.classList.toggle('on', b.dataset.pane === this.pane);
     this.el.classList.toggle('rooms', this.pane === 'rooms');
-    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() : this.pane === 'map' ? this.mapsHtml() : this.pane === 'missions' ? boardHtml(this.map, this.expDiff) : this.roomsHtml();
+    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() + this.parcelsHtml() : this.pane === 'map' ? this.mapsHtml() : this.pane === 'missions' ? boardHtml(this.map, this.expDiff) : this.roomsHtml();
     this.renderSel();
   }
 
@@ -412,6 +416,23 @@ export class Lobby {
       <div class="mm-card-head"><b class="mm-card-pw">${it.power}</b><i class="mm-rar" style="--c:${r.color}">${r.title}</i><img class="px" src="${iconURL(d.icon)}" alt=""></div>
       <h3>${d.title}</h3><p>${d.description}</p>${traits}
       <button class="mm-btn small primary" data-act="change">${t('Change')} <kbd>I</kbd></button></div>`;
+  }
+
+  /** Parcels for expeditions (src/sim/parcel.ts): three slots under the gear; a click puts the next kind into the slot */
+  private parcelsHtml(): string {
+    const kinds = parcelLoadout(this.profile.data.parcels);
+    return `<h4 class="mm-pane-title">${t('Parcels for expeditions')} · ${t('click — change')}</h4><div class="mm-parcels">${kinds.map((k, i) => `<button class="mm-btn small" data-parcel="${i}"><kbd>${'ZXC'[i]}</kbd> <b>${PARCEL_TITLE[k]}</b><small>${PARCEL_HINT[k]}</small></button>`).join('')}</div>`;
+  }
+
+  /** The next parcel kind into a slot — one not taken by the other slots */
+  private cycleParcel(i: number): void {
+    const kinds = parcelLoadout(this.profile.data.parcels);
+    let k = PARCEL_KINDS.indexOf(kinds[i]);
+    do k = (k + 1) % PARCEL_KINDS.length; while (kinds.some((x, j) => j !== i && x === PARCEL_KINDS[k]));
+    kinds[i] = PARCEL_KINDS[k];
+    this.profile.data.parcels = kinds;
+    this.profile.save();
+    this.render();
   }
 
   private mapsHtml(): string {

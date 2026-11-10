@@ -19,6 +19,12 @@ test('expeditions: the board in the camp — difficulty, a mission, a landing on
   await page.waitForFunction(() => (window as any).__menu?.screen === 'start', null, { timeout: 60_000 });
   await page.getByRole('button', { name: 'Solo game' }).click();
   await page.waitForFunction(() => (window as any).__menu.screen === 'lobby');
+  // parcels under the gear: three slots, a click puts the next kind in, the choice is stored with the hero
+  await expect(page.locator('.mm-parcels [data-parcel]')).toHaveCount(3);
+  await expect(page.locator('.mm-parcels [data-parcel="0"]')).toContainText('Archer tower');
+  await page.locator('.mm-parcels [data-parcel="0"]').click();
+  await expect(page.locator('.mm-parcels [data-parcel="0"]')).toContainText('Frost spire');
+  expect(await page.evaluate(() => (window as any).__menu.profile.data.parcels)).toEqual(['tower:frost', 'volley', 'heal']);
   await page.locator('[data-pane="missions"]').click();
   await expect(page.locator('.mm-exp-diff [data-diff]')).toHaveCount(8);
   await expect(page.locator('.mm-maps .mm-map')).toHaveCount(3);
@@ -40,9 +46,9 @@ test('expeditions: the board in the camp — difficulty, a mission, a landing on
   await page.waitForFunction(() => (window as any).__malina?.mode === 'playground' && (window as any).__malina.exp, null, { timeout: 60_000 });
   const r = await page.evaluate(() => {
     const m = (window as any).__malina, s = m.exp.sim, l = s.spec.landings[2];
-    return { landing: s.spec.landing, d: s.spec.difficulty, near: Math.hypot(m.hero.pos.x - l.x, m.hero.pos.z - l.z) < 2, title: document.title };
+    return { parcels: s.parcels.loadout(0), landing: s.spec.landing, d: s.spec.difficulty, near: Math.hypot(m.hero.pos.x - l.x, m.hero.pos.z - l.z) < 2, title: document.title };
   });
-  expect(r).toEqual({ landing: 2, d: 2, near: true, title: expect.stringContaining('Expedition') });
+  expect(r).toEqual({ parcels: ['tower:frost', 'volley', 'heal'], landing: 2, d: 2, near: true, title: expect.stringContaining('Expedition') });
   expect(errors).toEqual([]);
 });
 
