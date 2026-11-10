@@ -6,10 +6,10 @@ import type { EntityState } from '../net/snapshot.ts';
 import { useDecoys, type Decoy } from '../decoys.ts';
 import { rng, useRng, type Rand } from '../rng.ts';
 import type { Target } from '../target.ts';
-import type { TdSpec } from '../td/types.ts';
 import type { SimEvent } from './events.ts';
 import { Drops } from './drops.ts';
 import { Piles } from './pile.ts';
+import type { Rules, SimMode } from './rules.ts';
 import { SimTd } from './td.ts';
 
 /**
@@ -57,7 +57,8 @@ export interface SimHooks {
 export interface SimWorldOpts {
   seed: number;
   level: Level | null;
-  td?: TdSpec;
+  /** What is played (src/sim/rules.ts); none — a bare world: enemies, piles, drops */
+  mode?: SimMode;
   players?: number;
   /** Shared battle: each seat has its own raspberries */
   personal?: boolean;
@@ -72,6 +73,9 @@ export class SimWorld {
   /** Level terrain (floors of the plateau, terraces, ramps); null — an empty test world on the y = 0 plane */
   readonly terrain: Terrain | null;
   readonly h: SimHooks;
+  /** The match rules of the mode; null — a bare world */
+  readonly rules: Rules | null;
+  /** The same rules when the mode is Bush Defence — for its views and menus */
   readonly td: SimTd | null;
   readonly piles: Piles;
   /** Items from fallen enemies (src/sim/drops.ts) */
@@ -89,7 +93,8 @@ export class SimWorld {
     this.terrain = o.level ? terrainOf(o.level) : null;
     this.piles = new Piles(this);
     this.drops = new Drops(this);
-    this.td = o.td ? new SimTd(this, o.td, o.players ?? 1, o.personal ?? false) : null;
+    this.td = o.mode?.kind === 'td' ? new SimTd(this, o.mode.td, o.players ?? 1, o.personal ?? false) : null;
+    this.rules = this.td;
   }
 
   /** Floor under a point no higher than y + step (the bush on the plateau, a splash on a terrace, a landed pile); a chasm or no level — 0 */
@@ -103,21 +108,21 @@ export class SimWorld {
   id(prefix: string): string { return `${prefix}${++this.nextId}`; }
 
   /** Hero obstacles: the bush trunk and towers */
-  get solids(): Obstacle[] { return this.td?.solids ?? []; }
+  get solids(): Obstacle[] { return this.rules?.solids ?? []; }
   /** Enemy obstacles: the same plus intact gates */
-  get foeSolids(): Obstacle[] { return this.td?.foeSolids ?? []; }
+  get foeSolids(): Obstacle[] { return this.rules?.foeSolids ?? []; }
 
   /** Events since the last pickup — the view and the snapshot take them after the step; what happened between steps (hero hits) is here too */
   takeEvents(): SimEvent[] { const e = this.events; this.events = []; return e; }
 
-  /** World step: game randomness and decoys are this world's, then heroes and the pack (hook), the defence, piles */
+  /** World step: game randomness and decoys are this world's, then heroes and the pack (hook), the rules, piles */
   step(dt: number): void {
     const r1 = useRng(this.rng), r2 = useDecoys(this.decoys);
     try {
       this.tick++;
       this.time += dt;
       this.h.step?.(dt);
-      this.td?.update(dt);
+      this.rules?.update(dt);
       this.piles.update(dt);
       this.drops.update(dt);
     } finally { r2(); r1(); }
@@ -126,7 +131,7 @@ export class SimWorld {
   /** Records of all entities for the snapshot (src/sim/entities.ts) */
   entities(): EntityState[] {
     const out: EntityState[] = [];
-    this.td?.entities(out);
+    this.rules?.entities(out);
     this.piles.entities(out);
     this.drops.entities(out);
     return out;

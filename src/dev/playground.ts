@@ -888,7 +888,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       step: (dt) => pk.update(dt),
       setScale: (l, p) => pk.setScale(l, p),
       levelChanged,
-    }, { seed: Number(query.get('seed')) || Date.now() % 2 ** 31, level, td: tdSpec, players: bossPlayers, personal: false });
+    }, { seed: Number(query.get('seed')) || Date.now() % 2 ** 31, level, mode: { kind: 'td', td: tdSpec }, players: bossPlayers, personal: false });
     sim = world.td!;
     // an item an enemy left (src/sim/drops.ts): into the battle copy and into the stored profile — it stays whatever the outcome
     world.drops.onPick = (_seat, def) => { const power = mobLootPower(def, profile.power); profile.add(def, power); profile.save(); Profile.keepItem(def, power); };

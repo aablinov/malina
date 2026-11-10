@@ -76,7 +76,7 @@ export function headlessBattle(mapId: string, seed: number, o: { players?: numbe
       fx.update(dt, 0, 0);
     },
   };
-  world = new SimWorld(hooks, { seed, level, td, players: o.players ?? 1, personal: false });
+  world = new SimWorld(hooks, { seed, level, mode: { kind: 'td', td }, players: o.players ?? 1, personal: false });
   world.td!.fund(0);
   hero.onStrike = (s) => {
     // sword strike on targets in the arc — as in the playground, without effects

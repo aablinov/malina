@@ -10,14 +10,14 @@ import { ROUTE_BUDGET, ROUTE_EXPAND } from '../mobs/mob.ts';
 import type { Level } from '../level/level.ts';
 import { Pack } from '../mobs/pack.ts';
 import { rnd } from '../rng.ts';
+import type { MatchMap } from '../sim/rules.ts';
 import { SimWorld, type SimHooks } from '../sim/world.ts';
 import type { Target } from '../target.ts';
 import { SWORD } from '../tuning.ts';
-import type { TdSpec } from '../td/types.ts';
 import { makeTextures, type Textures } from '../textures.ts';
 
 /**
- * Headless defence battle (wiki/design-multiplayer.md): the simulation world, party heroes with gear and the enemy pack —
+ * Headless battle (wiki/design-multiplayer.md): the simulation world, party heroes with gear and the enemy pack —
  * the same classes as in the browser, but without rendering (`src/headless.ts`). The server runs the match on it (src/game/match.ts),
  * tests run real waves in Node. The hero of each seat is `Knight` + `Gear` from its profile (the defence kit)
  */
@@ -59,7 +59,7 @@ export class HeadlessBattle {
   /** Default mob target when there are no heroes: far away and exhausted */
   private readonly nobody: Knight;
 
-  constructor(map: { level: Level; td: TdSpec }, seed: number, players: number, personal = true) {
+  constructor(map: MatchMap, seed: number, players: number, personal = true) {
     textures ??= makeTextures();
     this.level = map.level;
     this.terrain = terrainOf(map.level);
@@ -79,7 +79,7 @@ export class HeadlessBattle {
       hurtKnight: (k: Knight, dmg: number, from: THREE.Vector3, knock: number) => this.hurt(k, dmg, from, knock),
       route: (from: THREE.Vector3, to: THREE.Vector3) => this.route(from, to),
     };
-    this.pack = new Pack(bossHooks, (at, n, base, kind) => { if (this.world.td) this.world.td.killed(at, n, base, kind); else this.world.piles.drop(at, n); });
+    this.pack = new Pack(bossHooks, (at, n, base, kind) => { if (this.world.rules) this.world.rules.killed(at, n, base, kind); else this.world.piles.drop(at, n); });
     const hooks: SimHooks = {
       foes: () => this.pack.mobs.filter((m) => m.alive),
       heroes: () => [...this.heroes.values()].map((h) => ({ pos: h.knight.pos, get down() { return h.knight.down; }, seat: h.seat })),
@@ -88,7 +88,7 @@ export class HeadlessBattle {
       levelChanged: () => { this.levelObstacles.length = 0; this.levelObstacles.push(...obstaclesOf(map.level, 0, b.minX, b.minZ, b.maxX, b.maxZ)); this.foeCache = null; },
       step: (dt) => this.stepActors(dt),
     };
-    this.world = new SimWorld(hooks, { seed, level: map.level, td: map.td, players, personal });
+    this.world = new SimWorld(hooks, { seed, level: map.level, mode: map.mode, players, personal });
   }
 
   /** Detour paths per tick — no more than ROUTE_BUDGET (like the botlib routing limit): the other mobs get theirs next tick */
@@ -113,7 +113,7 @@ export class HeadlessBattle {
   addHero(seat: number, data: ProfileData): BattleHero {
     const knight = new Knight(this.scene, textures!);
     knight.tune = structuredClone(SWORD);
-    const sp = this.level.spawn ?? [this.world.td!.bush.pos.x, 0, this.world.td!.bush.pos.z + 4];
+    const sp = this.level.spawn ?? this.world.rules?.muster ?? [0, 0, 0];
     const a = (seat / 4) * Math.PI * 2;
     knight.place(sp[0] + Math.cos(a) * 1.2, sp[2] + Math.sin(a) * 1.2, Math.PI, sp[1]);
     const profile = new Profile(structuredClone(data));
@@ -125,7 +125,7 @@ export class HeadlessBattle {
     const h: BattleHero = { seat, knight, gear, profile, input: emptyInput(), bow: false, rolled: false, lavaT: 0, downT: 0, xp0: xpTotal(profile.data) };
     knight.onStrike = (s) => this.strike(s, h);
     this.heroes.set(seat, h);
-    this.world.td?.fund(seat);
+    this.world.rules?.fund(seat);
     return h;
   }
 
@@ -137,7 +137,7 @@ export class HeadlessBattle {
   }
 
   /** Targets of sword, arrows and spells: enemies and ice on towers */
-  targets(): Target[] { return [...this.pack.targets(), ...(this.world.td?.targets() ?? [])]; }
+  targets(): Target[] { return [...this.pack.targets(), ...(this.world.rules?.targets() ?? [])]; }
 
   /** Mob hit on a hero: damage and knockback (like the playground's hurtHero, without sparks and sound) */
   private hurt(k: Knight, dmg: number, from: THREE.Vector3, knock: number): void {
@@ -210,11 +210,11 @@ export class HeadlessBattle {
   /** Battle step */
   step(dt: number): void { this.world.step(dt); }
 
-  /** Reward to everyone: the match loot — only for a defended bush (lost — it burns), and the battle experience */
+  /** Reward to everyone: the match loot — only when the rules pay it (a defended bush; lost — it burns), and the battle experience */
   rewards(): Map<number, { berries: number; xp: number }> {
     const out = new Map<number, { berries: number; xp: number }>();
-    const td = this.world.td, won = !!td?.paid;
-    for (const h of this.heroes.values()) out.set(h.seat, { berries: won ? Math.max(0, Math.floor(td.lootOf(h.seat))) : 0, xp: Math.max(0, Math.floor(xpTotal(h.profile.data) - h.xp0)) });
+    const rules = this.world.rules;
+    for (const h of this.heroes.values()) out.set(h.seat, { berries: rules?.paid ? Math.max(0, Math.floor(rules.lootOf(h.seat))) : 0, xp: Math.max(0, Math.floor(xpTotal(h.profile.data) - h.xp0)) });
     return out;
   }
 }

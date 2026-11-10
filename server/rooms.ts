@@ -411,7 +411,7 @@ export class RoomManager {
     if (room.matchId) {
       const match = this.d.games.get(room.matchId);
       this.d.games.remove(room.matchId);
-      this.d.matches.finish(room.matchId, 'abandoned', match ? Math.max(0, match.td.wave - 1) : 0, this.now());
+      this.d.matches.finish(room.matchId, 'abandoned', match ? Math.max(0, match.rules.stage - 1) : 0, this.now());
     }
     room.matchId = null;
     this.saveRoom(room, false);
@@ -464,7 +464,7 @@ export class RoomManager {
 
   private info(r: Room): RoomInfo {
     const host = r.members.find((m) => m.playerId === r.row.host_id);
-    const wave = r.row.state === 'battle' && r.matchId ? (this.d.games.get(r.matchId)?.td.wave ?? 0) : 0;
+    const wave = r.row.state === 'battle' && r.matchId ? (this.d.games.get(r.matchId)?.rules.stage ?? 0) : 0;
     return {
       id: r.row.id, code: r.row.code, host: host?.name ?? '', hostId: r.row.host_id, creator: r.row.creator || (host?.name ?? ''), map: r.row.map,
       players: r.members.length, max: r.row.max, locked: !!r.row.pass_hash, state: r.row.state, wave, waves: this.d.maps.waves(r.row.map),

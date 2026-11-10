@@ -7,10 +7,10 @@ import { BATTLE_ARROWS, ITEMS, itemDef, mobLootPower, type KitOp, type ProfileDa
 import { ARROW_BUNDLE, SUTLER_ARROWS, SUTLER_PRICE } from '../prices.ts';
 import type { GearAction } from '../net/protocol.ts';
 import { SnapshotRing, type Delta, type EntityState } from '../net/snapshot.ts';
-import type { Level } from '../level/level.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { r2 } from '../sim/entities.ts';
-import type { TdSpec } from '../td/types.ts';
+import type { MatchMap, Rules } from '../sim/rules.ts';
+import type { SimTd } from '../sim/td.ts';
 import { HeadlessBattle, type BattleHero } from './battle.ts';
 
 /**
@@ -62,7 +62,7 @@ export class Match {
   /** The stored profile of a player (the database): the battle page connects after the camp saved its last change */
   private readonly stored: ((playerId: string) => ProfileData | null) | null;
 
-  constructor(o: { id: string; map: { level: Level; td: TdSpec }; seed: number; players: MatchPlayer[]; stored?: (playerId: string) => ProfileData | null }) {
+  constructor(o: { id: string; map: MatchMap; seed: number; players: MatchPlayer[]; stored?: (playerId: string) => ProfileData | null }) {
     this.id = o.id;
     this.stored = o.stored ?? null;
     this.battle = new HeadlessBattle(o.map, o.seed, Math.max(1, o.players.length), true);
@@ -84,7 +84,10 @@ export class Match {
   }
 
   get tick(): number { return this.battle.world.tick; }
-  get td() { return this.battle.world.td!; }
+  /** The match rules of the map's mode (src/sim/rules.ts) */
+  get rules(): Rules { return this.battle.world.rules!; }
+  /** The defence — only in a Bush Defence match */
+  get td(): SimTd { return this.battle.world.td!; }
 
   /** Player in the match (start or joining a running battle): the hero at the spawn point */
   join(p: MatchPlayer): Seat {
@@ -93,7 +96,7 @@ export class Match {
     const hero = this.battle.addHero(p.seat, p.profile);
     const s: Seat = { player: p, hero, chan: null, queue: [], last: null, lastSeq: 0, snapAck: 0, ping: 0, rolled: false, acts: [], geared: false, loot: [] };
     this.seats.set(p.seat, s);
-    this.td.setPlayers(this.seats.size);
+    this.rules.setPlayers(this.seats.size);
     // strength — from the gear the hero came with (the sutler's goods do not raise it)
     this.ratings.set(p.seat, hero.profile.rating);
     this.rerate();
@@ -109,12 +112,12 @@ export class Match {
     this.battle.removeHero(seat);
     this.seats.delete(seat);
     this.ratings.delete(seat);
-    if (this.seats.size) { this.td.setPlayers(this.seats.size); this.rerate(); }
+    if (this.seats.size) { this.rules.setPlayers(this.seats.size); this.rerate(); }
   }
 
   /** The party's strength — the average of the heroes' */
   private rerate(): void {
-    if (this.ratings.size) this.td.setRating([...this.ratings.values()].reduce((a, b) => a + b, 0) / this.ratings.size);
+    if (this.ratings.size) this.rules.setRating([...this.ratings.values()].reduce((a, b) => a + b, 0) / this.ratings.size);
   }
 
   /** Battle page connection: the channel goes to the seat; a greeting and everyone's kits right away */
@@ -220,14 +223,14 @@ export class Match {
       case 'enchant': ok = str(m.uid) && isNum(m.slot) && isNum(m.option) && p.enchant(m.uid, m.slot, m.option); break;
       case 'buy': {
         if (!str(m.def) || !ITEMS.some((d) => d.id === m.def && !d.mob)) break;
-        if (!this.td.spend(seat, SUTLER_PRICE[itemDef(m.def).rarity])) { poor(); break; }
+        if (!this.rules.spend(seat, SUTLER_PRICE[itemDef(m.def).rarity])) { poor(); break; }
         p.add(m.def, p.power);
         p.save();
         ok = true;
         break;
       }
       case 'arrows':
-        if (!this.td.spend(seat, SUTLER_ARROWS)) { poor(); break; }
+        if (!this.rules.spend(seat, SUTLER_ARROWS)) { poor(); break; }
         p.addArrows(ARROW_BUNDLE);
         ok = true;
         break;
@@ -260,7 +263,7 @@ export class Match {
     switch (m.t) {
       case 'td': {
         if (typeof m.a !== 'string') return;
-        this.td.command(seat, { t: 'td', a: m.a, pad: isNum(m.pad) ? m.pad : undefined, wall: typeof m.wall === 'string' ? m.wall : undefined });
+        this.rules.command(seat, { t: 'td', a: m.a, pad: isNum(m.pad) ? m.pad : undefined, wall: typeof m.wall === 'string' ? m.wall : undefined });
         break;
       }
       case 'act': {
@@ -302,10 +305,10 @@ export class Match {
       this.finish('abandoned');
       return;
     }
-    if (this.td.state !== 'play') {
+    if (this.rules.state !== 'play') {
       if (this.endT < 0) this.endT = LOOT_DELAY;
       this.endT -= dt;
-      if (this.endT <= 0) this.finish(this.td.state === 'won' ? 'won' : 'lost');
+      if (this.endT <= 0) this.finish(this.rules.state === 'won' ? 'won' : 'lost');
     }
   }
 
@@ -363,7 +366,7 @@ export class Match {
   abandon(): void { if (!this.ended) this.finish('abandoned'); }
 
   private finish(result: MatchEnd['result']): void {
-    const wave = result === 'won' ? this.td.waves.length : Math.max(0, this.td.wave - (this.td.waveRunning ? 1 : 0));
+    const wave = this.rules.progress;
     const rewards: MatchEnd['rewards'] = this.battle.rewards();
     for (const s of this.seats.values()) { const r = rewards.get(s.player.seat); if (r && s.loot.length) r.items = s.loot.slice(); }
     this.ended = { result, wave, rewards };

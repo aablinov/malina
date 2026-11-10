@@ -541,3 +541,7 @@ Pages: [design-tower-defence.md](design-tower-defence.md).
 ## [2026-11-10] source | Helldivers 2 and the Expeditions mode
 Notes on the Helldivers 2 mission loop; the decision to add a second mode with missions on a seeded map, a board in the DOM camp and operations kept in the room; the design page with objectives, parcels, alarm, seeds, extraction, retention hooks and seven stages. Nothing is in the code yet.
 Pages: [sources/helldivers2.md](sources/helldivers2.md), [adr-006-expeditions.md](adr-006-expeditions.md), [design-expeditions.md](design-expeditions.md), [index.md](index.md).
+
+## [2026-11-10] code | Match rules behind one interface (Expeditions, stage 1)
+`src/sim/rules.ts`: the `Rules` interface and the explicit mode of a match map (`MatchMap`, `SimMode`). `SimWorld`, `HeadlessBattle`, `Match` and the rooms talk to `world.rules`; `SimTd` implements it and behaves as before. The lobby protocol and the `matches.wave` column keep their names — they now carry the rules' stage and progress. The battle client still mirrors the defence only; it is generalised together with the expedition mirror (stages 3–4).
+Pages: [arch-layers.md](arch-layers.md), [design-expeditions.md](design-expeditions.md), [adr-006-expeditions.md](adr-006-expeditions.md).

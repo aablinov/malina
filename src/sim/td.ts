@@ -15,6 +15,7 @@ import { rollMobLoot } from '../items.ts';
 import { DROP_CHANCE } from './drops.ts';
 import { r1 } from './entities.ts';
 import { SimLair } from './lair.ts';
+import type { Rules } from './rules.ts';
 import { SimTower } from './tower.ts';
 import { t } from '../i18n/i18n.ts';
 import { SimWall } from './wall.ts';
@@ -40,7 +41,7 @@ export class SimPad {
 
 interface Queued { kind: string; lane: string; left: number; t: number; every: number }
 
-export class SimTd {
+export class SimTd implements Rules {
   readonly spec: TdSpec;
   readonly pads: SimPad[];
   readonly towers: SimTower[] = [];
@@ -340,6 +341,14 @@ export class SimTd {
     while (this.gen.length <= this.wave) this.gen.push(fogWave(this.gen.length + 1, ids));
     return this.gen;
   }
+  /** Rules: the running wave */
+  get stage(): number { return this.wave; }
+  /** Rules: waves repelled */
+  get progress(): number { return this.state === 'won' ? this.waves.length : Math.max(0, this.wave - (this.waveRunning ? 1 : 0)); }
+  /** Rules: waves in total; an endless run has no end */
+  get goal(): number { return this.endless ? 0 : this.waves.length; }
+  /** Rules: heroes without a spawn point on the level stand by the bush */
+  get muster(): [number, number, number] { return [this.bush.pos.x, 0, this.bush.pos.z + 4]; }
   /** Endless mode: the run never ends in victory, the loot is paid when the bush falls */
   get endless(): boolean { return !!this.spec.endless; }
   /** Whether the match loot goes to the camp: a saved bush, or any end of an endless run */

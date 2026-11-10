@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Level, type LevelJSON } from '../src/level/level.ts';
 import { crowdMult, lootK, MAX_RATING } from '../src/td/scaling.ts';
+import type { MatchMap } from '../src/sim/rules.ts';
 import type { TdSpec } from '../src/td/types.ts';
 
 /**
@@ -47,10 +48,10 @@ export class MapCatalog {
   waves(id: string): number { return this.maps.get(id)?.waves ?? 0; }
 
   /** Map level for a server-side battle (each match gets its own, walls break blocks); null — no such map */
-  load(id: string): { level: Level; td: TdSpec } | null {
+  load(id: string): MatchMap | null {
     if (!this.maps.has(id)) return null;
     const j = JSON.parse(readFileSync(join(this.dir, `${id}.json`), 'utf8')) as LevelJSON;
     const level = Level.fromJSON(j);
-    return { level, td: level.meta.td as TdSpec };
+    return { level, mode: { kind: 'td', td: level.meta.td as TdSpec } };
   }
 }
