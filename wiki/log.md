@@ -537,3 +537,7 @@ Pages: [design-tower-defence.md](design-tower-defence.md) (sections 19–22).
 ## [2026-11-10] code | A tower built under the hero no longer flings them away
 The tower's obstacle appears at once; the push out of it (over a metre in one tick) was turned into the hero's speed, so they flew off for four metres. Now a push longer than 0.35 m per tick is walked out at 4 m/s and never becomes speed (`Knight.update`, `ejecting`): the hero slides off the pad and stops at the tower's edge.
 Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-10] source | Helldivers 2 and the Expeditions mode
+Notes on the Helldivers 2 mission loop; the decision to add a second mode with missions on a seeded map, a board in the DOM camp and operations kept in the room; the design page with objectives, parcels, alarm, seeds, extraction, retention hooks and seven stages. Nothing is in the code yet.
+Pages: [sources/helldivers2.md](sources/helldivers2.md), [adr-006-expeditions.md](adr-006-expeditions.md), [design-expeditions.md](design-expeditions.md), [index.md](index.md).
