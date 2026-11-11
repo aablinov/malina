@@ -24,6 +24,8 @@ export interface Cmd {
 export type GameClientMsg =
   | { t: 'hello'; token: string; matchId: string; protocol: number }
   | ({ t: 'td' } & Omit<TdCommand, 't'>)
+  /** Expedition: use what the hero stands next to (src/sim/expedition.ts) */
+  | { t: 'exp'; a: 'use' | 'parcel'; slot?: number; x?: number; z?: number }
   /** seq — the client's last command before the action: the server executes it in the same order with movement */
   | ({ t: 'act'; seq?: number } & GearAction)
   /**

@@ -65,14 +65,14 @@ export class Pack {
   update(dt: number): void {
     // those summoned this frame think from the next one
     const list = this.mobs.slice();
-    for (const m of list) m.update(dt);
+    for (const m of list) if (!m.asleep) m.update(dt);
     // jostling: the living do not stand inside each other, the light yields to the heavy
     for (let i = 0; i < list.length; i++) {
       const a = list[i];
-      if (a.dead) continue;
+      if (a.dead || a.asleep) continue;
       for (let j = i + 1; j < list.length; j++) {
         const b = list[j];
-        if (b.dead) continue;
+        if (b.dead || b.asleep) continue;
         const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, d = Math.hypot(dx, dz), R = a.radius + b.radius;
         if (d >= R || d < 1e-4) continue;
         const k = (R - d) / d, wa = b.mass / (a.mass + b.mass);

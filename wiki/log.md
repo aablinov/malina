@@ -537,3 +537,35 @@ Pages: [design-tower-defence.md](design-tower-defence.md) (sections 19–22).
 ## [2026-11-10] code | A tower built under the hero no longer flings them away
 The tower's obstacle appears at once; the push out of it (over a metre in one tick) was turned into the hero's speed, so they flew off for four metres. Now a push longer than 0.35 m per tick is walked out at 4 m/s and never becomes speed (`Knight.update`, `ejecting`): the hero slides off the pad and stops at the tower's edge.
 Pages: [design-tower-defence.md](design-tower-defence.md).
+
+## [2026-11-10] source | Helldivers 2 and the Expeditions mode
+Notes on the Helldivers 2 mission loop; the decision to add a second mode with missions on a seeded map, a board in the DOM camp and operations kept in the room; the design page with objectives, parcels, alarm, seeds, extraction, retention hooks and seven stages. Nothing is in the code yet.
+Pages: [sources/helldivers2.md](sources/helldivers2.md), [adr-006-expeditions.md](adr-006-expeditions.md), [design-expeditions.md](design-expeditions.md), [index.md](index.md).
+
+## [2026-11-10] code | Match rules behind one interface (Expeditions, stage 1)
+`src/sim/rules.ts`: the `Rules` interface and the explicit mode of a match map (`MatchMap`, `SimMode`). `SimWorld`, `HeadlessBattle`, `Match` and the rooms talk to `world.rules`; `SimTd` implements it and behaves as before. The lobby protocol and the `matches.wave` column keep their names — they now carry the rules' stage and progress. The battle client still mirrors the defence only; it is generalised together with the expedition mirror (stages 3–4).
+Pages: [arch-layers.md](arch-layers.md), [design-expeditions.md](design-expeditions.md), [adr-006-expeditions.md](adr-006-expeditions.md).
+
+## [2026-11-10] code | Expedition map by seed, garrisons in the simulation (Expeditions, stage 2)
+`src/level/expedition-map.ts` builds a 160 × 160 m mission map from a seed, a difficulty and an objective: landings, extraction pad, lairs, objective sites, secondary objectives, points of interest, patrols; the same parameters give the same level hash, reachability is checked by the pathfinder. `src/sim/garrison.ts` posts the guards and puts far garrisons to sleep (`Mob.asleep`: the pack skips them, the match does not send them). A second mode `expedition` with `SimExpedition` — purses and loot so far. `server/prefabs.ts` loads the prefab library for the server.
+Pages: [design-expeditions.md](design-expeditions.md).
+
+## [2026-11-10] code | Expedition objectives, seeds, extraction — playable solo (Expeditions, stage 3)
+`SimExpedition` (`src/sim/expedition.ts`): three primary objectives (burn the lairs, light and hold the beacons, plant a bush and beat three raids), secondary objectives, seeds from points of interest that spill when the carrier falls, the balloon — called after the objective, held for 90 s, boarded. One command `use`; spawns outside a step run under the world's randomness (`SimWorld.scoped`). The client: `ExpeditionView`, `ExpUi` (objective line, arrow with distance, seeds, countdown, map markers), `?map=expedition&seed=N&obj=…&d=…`. Tests: `server/test/sim-expedition.test.ts`, `tests/expedition.spec.ts`.
+Pages: [design-expeditions.md](design-expeditions.md).
+
+## [2026-11-11] code | Expeditions in the camp and over the network (Expeditions, stage 4)
+A mission is a map name `exp:<seed>:<difficulty>:<objective>:<landing>` (`src/expedition/mission.ts`): rooms, match history and the battle address carry it unchanged. The camp's "Expeditions" tab — difficulty, the day's three missions, the mission card with a map sketch and the landing choice (`src/menu/expeditions.ts`). The server builds the level from the name and runs the mission; the client sends `exp` and mirrors the rules from snapshots (`SimExpedition.mirror`); `NetBattleClient` no longer requires the defence. Loot and banked seeds go into the profile (`ProfileData.seeds`). Tests: `server/test/rooms-expedition.test.ts`, `tests/expedition-net.spec.ts`.
+Pages: [design-expeditions.md](design-expeditions.md), [design-main-menu.md](design-main-menu.md).
+
+## [2026-11-11] code | Alarm, horn-blowers, dusk; revive and totems (Expeditions, stage 5)
+The alarm meter (four levels: a level every four minutes, +50 per horn call, faster with a horn-blowers' nest and after dusk at minute 15) raises the pack level and the size of raids. The first mob of every patrol blows the horn for 3 s when it sees a hero — kill it in time or a raid comes. The mission owns the downed state (`Rules.ownsDowned`, `SimHooks.raise`): a teammate nearby lifts in 3 s, otherwise a shared totem after 20 s; four totems, +1 per secondary objective; no totems and everyone down — the mission fails with half the loot.
+Pages: [design-expeditions.md](design-expeditions.md).
+
+## [2026-11-11] code | Parcels from the camp (Expeditions, stage 6)
+`src/sim/parcel.ts`: three slots per hero on Z / X / C — a defence tower that stands for a minute wherever it lands, a spell volley over an area, a healing totem; called to the aim point within 16 m, landing in 3 s, each slot with its own rest. The set is picked in the camp under the gear and stored in the profile. The mission view reuses the defence's tower, bolt and pool views.
+Pages: [design-expeditions.md](design-expeditions.md).
+
+## [2026-11-11] code | Operations, the difficulty ladder, modifiers, camp beds, the order of the day (Expeditions, stage 7)
+The board offers three operations a day: chains of two or three missions with shared modifiers (mist, downpour, full moon, Order's fury, quiet forest); missions won in a row pay more, the server keeps the room's streak and moves it on. A won mission of the hero's top difficulty opens the next one. Seeds are planted in three camp beds (totem, stash, courier); the order of the day counts lairs, beacons, seeds or missions and pays once. `src/expedition/camp.ts`, `src/expedition/mission.ts`, `src/menu/expeditions.ts`; tests `server/test/expedition-camp.test.ts`, `server/test/rooms-expedition.test.ts`.
+Pages: [design-expeditions.md](design-expeditions.md).

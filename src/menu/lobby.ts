@@ -7,6 +7,11 @@ import { Shop } from '../hud/shop.ts';
 import type { MerchantKind } from '../merchants.ts';
 import type { Textures } from '../textures.ts';
 import { CAMPAIGN, campaignMap, difficultyTitle, type CampaignMap } from './campaign.ts';
+import { boardHtml, missionCardHtml } from './expeditions.ts';
+import { isMission, MAX_DIFFICULTY, parseMission, sameMission, sameOperation, withLanding } from '../expedition/mission.ts';
+import { plantBed, unlockedDifficulty, type BedKind } from '../expedition/camp.ts';
+import { PARCEL_HINT, PARCEL_TITLE } from '../expedition/parcels.ts';
+import { PARCEL_KINDS, parcelLoadout } from '../sim/parcel.ts';
 import type { MenuScene } from './scene.ts';
 import { go } from './boot.ts';
 import { battleUrl, loadMenuState, NET, netBattleUrl, record, saveMenuState, VOICE, type GameMode } from './session.ts';
@@ -23,7 +28,10 @@ import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
  * or join by code, seats and readiness; "Start game" for the host — "To battle" for the whole room, for a guest — "Ready".
  * Keys: Q / E — tabs, arrows — select, I — inventory, Enter — start, Esc — back.
  */
-type Pane = 'gear' | 'map' | 'rooms';
+/** `t` under another name: click handlers call their event target `t` */
+const tr = t;
+
+type Pane = 'gear' | 'map' | 'missions' | 'rooms';
 /** Room list refresh while the "Rooms" tab is open, ms */
 const ROOMS_POLL_MS = 3000;
 type SlotId = 'melee' | 'ranged' | 'armor' | 'art0' | 'art1' | 'art2' | 'aura';
@@ -48,6 +56,8 @@ export class Lobby {
   private mode: GameMode = 'solo';
   private slot: SlotId = 'melee';
   private map: string;
+  /** Expeditions: the difficulty of the board on screen */
+  private expDiff = 1;
   private won: string[];
   /** Online panel: password of the room being created ('' — open) */
   private passDraft = '';
@@ -75,11 +85,12 @@ export class Lobby {
     const st = loadMenuState();
     this.map = campaignMap(st.map).id;
     this.won = st.won;
+    this.expDiff = Math.max(1, Math.min(MAX_DIFFICULTY, Math.round(st.expDiff ?? campaignMap(st.map).mission?.difficulty ?? 1)));
     const el = document.createElement('div');
     el.className = 'mm-lobby';
     el.innerHTML = `
       <header class="mm-top">
-        <div class="mm-tabs"><kbd>Q</kbd><button data-pane="gear">${t('Gear')}</button><button data-pane="map">${t('Map')}</button><button data-pane="rooms">${t('Rooms')}</button><kbd>E</kbd></div>
+        <div class="mm-tabs"><kbd>Q</kbd><button data-pane="gear">${t('Gear')}</button><button data-pane="map">${t('Map')}</button><button data-pane="missions">${t('Expeditions')}</button><button data-pane="rooms">${t('Rooms')}</button><kbd>E</kbd></div>
         <div class="mm-mode" data-id="mode"></div>
         <div class="mm-cur"><span title="${t('Raspberries')}">${iconImg('berry')}<b data-id="berries"></b></span><span title="${t('Enchantment points')}">${iconImg('spiral')}<b data-id="points"></b></span>
           <button class="mm-btn icon" data-act="settings" title="${t('Settings')}">⚙</button></div>
@@ -124,7 +135,8 @@ export class Lobby {
     // entered or left a room — the list shows it at once (own row: "you are here")
     if ((m.t === 'room.state' && this.passFor !== null) || m.t === 'room.left') this.poll();
     if (m.t === 'room.state') this.passFor = null;
-    if (m.t === 'room.state' && !NET.isHost) this.map = m.room.map;
+    // the room's map: a guest follows the host; the host follows the server when it moves the room on to an operation's next mission
+    if (m.t === 'room.state' && (!NET.isHost || (isMission(m.room.map) && sameOperation(m.room.map, this.map)))) this.map = m.room.map;
     if ((m.t === 'room.state' || m.t === 'room.left' || m.t === 'welcome' || m.t === 'chat') && this.open && this.mode === 'online') this.renderSel();
   }
 
@@ -147,7 +159,7 @@ export class Lobby {
   hide(): void { this.el.classList.remove('open'); window.clearInterval(this.pollTimer); }
 
   /** Tabs in order: "Rooms" only in the online game */
-  private panes(): Pane[] { return this.mode === 'online' ? ['gear', 'map', 'rooms'] : ['gear', 'map']; }
+  private panes(): Pane[] { return this.mode === 'online' ? ['gear', 'map', 'missions', 'rooms'] : ['gear', 'map', 'missions']; }
 
   /** The room list refreshes by itself while it is on screen */
   private poll(): void {
@@ -190,6 +202,9 @@ export class Lobby {
       else NET.setReady(!r.seats.find((x) => x.seat === r.you)?.ready);
       return;
     }
+    // a remembered mission above the hero's ladder (another hero played here before) does not start
+    const mission = parseMission(this.map);
+    if (mission && mission.difficulty > unlockedDifficulty(this.profile.data)) { this.flash(t('Win a mission of difficulty {n} first', { n: mission.difficulty - 1 })); return; }
     sfx.twinkle();
     void go(battleUrl({ mode: this.mode, map: this.map, players: 1 }));
   }
@@ -250,7 +265,8 @@ export class Lobby {
       const i = list.findIndex((r) => r.code === this.selCode);
       this.selCode = list[i < 0 ? 0 : (i + d + list.length) % list.length].code;
       this.renderRooms();
-    } else { const i = CAMPAIGN.findIndex((m) => m.id === this.map); this.selectMap(CAMPAIGN[(i + d + CAMPAIGN.length) % CAMPAIGN.length].id); }
+    } else if (this.pane === 'missions') { this.expDiff = ((this.expDiff - 1 + d + MAX_DIFFICULTY) % MAX_DIFFICULTY) + 1; this.render(); }
+    else { const i = CAMPAIGN.findIndex((m) => m.id === this.map); this.selectMap(CAMPAIGN[(i + d + CAMPAIGN.length) % CAMPAIGN.length].id); }
   }
 
   private bind(): void {
@@ -262,6 +278,16 @@ export class Lobby {
       if (slot) { this.slot = slot; this.renderSel(); return; }
       const map = t.closest<HTMLElement>('[data-map]')?.dataset.map;
       if (map) { this.selectMap(map); return; }
+      // expeditions: the board's difficulty and the landing point on the mission's sketch
+      const diff = Number(t.closest<HTMLElement>('[data-diff]')?.dataset.diff);
+      if (diff && diff > unlockedDifficulty(this.profile.data)) { this.flash(tr('Win a mission of difficulty {n} first', { n: diff - 1 })); return; }
+      const bed = t.closest<HTMLElement>('[data-bed]')?.dataset.bed as BedKind | undefined;
+      if (bed) { if (plantBed(this.profile.data, bed)) { this.profile.save(); sfx.twinkle(); this.render(); } else this.flash(tr('Not enough seeds for this bed')); return; }
+      if (diff) { this.expDiff = diff; const st = loadMenuState(); st.expDiff = diff; saveMenuState(st); this.render(); return; }
+      const parcel = t.closest<HTMLElement>('[data-parcel]')?.dataset.parcel;
+      if (parcel !== undefined) { this.cycleParcel(Number(parcel)); return; }
+      const landing = t.closest<SVGElement>('[data-landing]')?.dataset.landing;
+      if (landing !== undefined) { this.selectMap(withLanding(this.map, Number(landing))); return; }
       const row = t.closest<HTMLElement>('[data-room]')?.dataset.room;
       // only the highlight, not a re-render: otherwise the second click of a double click lands on a new element
       if (row && !t.closest('[data-act]') && !t.closest('input')) { this.selCode = row; for (const e of this.el.querySelectorAll<HTMLElement>('[data-room]')) e.classList.toggle('sel', e.dataset.room === row); return; }
@@ -323,7 +349,7 @@ export class Lobby {
     this.q('mode').innerHTML = this.mode === 'online' ? t('Online game') : t('Solo game');
     for (const b of this.el.querySelectorAll<HTMLElement>('[data-pane]')) b.classList.toggle('on', b.dataset.pane === this.pane);
     this.el.classList.toggle('rooms', this.pane === 'rooms');
-    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() : this.pane === 'map' ? this.mapsHtml() : this.roomsHtml();
+    this.q('pane').innerHTML = this.pane === 'gear' ? this.gearHtml() + this.parcelsHtml() : this.pane === 'map' ? this.mapsHtml() : this.pane === 'missions' ? boardHtml(this.map, this.expDiff, this.profile.data, this.streak()) : this.roomsHtml();
     this.renderSel();
   }
 
@@ -345,7 +371,8 @@ export class Lobby {
    */
   private renderSel(): void {
     for (const e of this.el.querySelectorAll<HTMLElement>('[data-slot]')) e.classList.toggle('sel', e.dataset.slot === this.slot);
-    for (const e of this.el.querySelectorAll<HTMLElement>('[data-map]')) e.classList.toggle('sel', e.dataset.map === this.map);
+    // a mission tile is the same mission whatever landing is picked: it follows the selection's id
+    for (const e of this.el.querySelectorAll<HTMLElement>('[data-map]')) { if (e.dataset.map && sameMission(e.dataset.map, this.map)) e.dataset.map = this.map; e.classList.toggle('sel', e.dataset.map === this.map); }
     // re-rendering the online panel (a message arrived, the roster changed) does not disturb typing in a field
     this.keepFocus(() => {
       this.q('side').innerHTML = this.pane === 'gear' ? this.itemCard() : this.mapCard() + (this.mode === 'online' ? this.onlineHtml() : '');
@@ -363,7 +390,8 @@ export class Lobby {
     this.q('hint').textContent = this.pane === 'gear'
       ? t('Click — slot · double click or I — change · B — shop · Q / E — tabs')
       : this.pane === 'rooms' ? t('Click — select · double click — join · Q / E — tabs')
-        : t('Map: {map} · double click — straight to battle', { map: campaignMap(this.map).title });
+        : this.pane === 'missions' ? t('Click — mission · 1–3 on the sketch — landing · Q / E — tabs')
+          : t('Map: {map} · double click — straight to battle', { map: campaignMap(this.map).title });
   }
 
   private gearHtml(): string {
@@ -401,6 +429,30 @@ export class Lobby {
       <button class="mm-btn small primary" data-act="change">${t('Change')} <kbd>I</kbd></button></div>`;
   }
 
+  /** Missions of an operation won in a row: solo — remembered by the menu; in a room the server keeps it, and the room's map is the step it is on */
+  private streak(): { seed: number; difficulty: number; next: number } | null {
+    if (this.mode === 'solo') return loadMenuState().streak ?? null;
+    const m = NET.room ? parseMission(NET.room.room.map) : null;
+    return m?.op ? { seed: m.op.seed, difficulty: m.difficulty, next: m.op.index } : null;
+  }
+
+  /** Parcels for expeditions (src/sim/parcel.ts): three slots under the gear; a click puts the next kind into the slot */
+  private parcelsHtml(): string {
+    const kinds = parcelLoadout(this.profile.data.parcels);
+    return `<h4 class="mm-pane-title">${t('Parcels for expeditions')} · ${t('click — change')}</h4><div class="mm-parcels">${kinds.map((k, i) => `<button class="mm-btn small" data-parcel="${i}"><kbd>${'ZXC'[i]}</kbd> <b>${PARCEL_TITLE[k]}</b><small>${PARCEL_HINT[k]}</small></button>`).join('')}</div>`;
+  }
+
+  /** The next parcel kind into a slot — one not taken by the other slots */
+  private cycleParcel(i: number): void {
+    const kinds = parcelLoadout(this.profile.data.parcels);
+    let k = PARCEL_KINDS.indexOf(kinds[i]);
+    do k = (k + 1) % PARCEL_KINDS.length; while (kinds.some((x, j) => j !== i && x === PARCEL_KINDS[k]));
+    kinds[i] = PARCEL_KINDS[k];
+    this.profile.data.parcels = kinds;
+    this.profile.save();
+    this.render();
+  }
+
   private mapsHtml(): string {
     return `<h4 class="mm-pane-title">${t('Bush Defence — choose a map')}</h4><div class="mm-maps">${CAMPAIGN.map((m) => this.mapTile(m)).join('')}</div>`;
   }
@@ -417,6 +469,7 @@ export class Lobby {
 
   private mapCard(): string {
     const m = campaignMap(this.map);
+    if (m.mission) return missionCardHtml(m.id, this.streak());
     return `<div class="mm-card map" style="--bg:${m.bg}"><div class="mm-card-tag">${difficultyTitle(m.difficulty)}</div>
       <h3>${m.title}</h3><p>${m.blurb}</p>
       <dl><dt>${t('Waves')}</dt><dd>${m.endless ? '∞' : m.waves}</dd><dt>${t('Lanes')}</dt><dd>${m.lanes}</dd><dt>${t('Bush')}</dt><dd>${m.bush}</dd><dt>${t('Treasury')}</dt><dd>${m.berries}</dd></dl>

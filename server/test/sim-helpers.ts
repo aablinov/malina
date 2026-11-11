@@ -2,15 +2,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as THREE from 'three';
 import { Level, type LevelJSON } from '../../src/level/level.ts';
+import type { MatchMap } from '../../src/sim/rules.ts';
 import type { TdSpec } from '../../src/td/types.ts';
 import { SimWorld, type Foe, type HeroLike, type MarchingMob, type SimHooks } from '../../src/sim/world.ts';
 
 export const MAPS = join(import.meta.dirname, '..', '..', 'assets', 'maps');
 
-export function loadMap(id: string): { level: Level; td: TdSpec } {
+export function loadMap(id: string): MatchMap & { td: TdSpec } {
   const j = JSON.parse(readFileSync(join(MAPS, `${id}.json`), 'utf8')) as LevelJSON;
   const level = Level.fromJSON(j);
-  return { level, td: level.meta.td as TdSpec };
+  const td = level.meta.td as TdSpec;
+  return { level, td, mode: { kind: 'td', td } };
 }
 
 /** Stub enemy: walks the road to the bush, hits it at the end; dies from tower damage */
@@ -67,7 +69,7 @@ export function tdWorld(id: string, seed: number, o: { players?: number; persona
     spawnMob: (kind, at) => { const m = new StubMob(kind, at, Math.round((o.mobHp ?? 30) * (1 + 0.5 * (scale.level - 1)))); mobs.push(m); return m; },
     setScale: (l, p) => { scale = { level: l, players: p }; },
   };
-  const world = new SimWorld(hooks, { seed, level, td, players: o.players ?? 1, personal: o.personal ?? false });
+  const world = new SimWorld(hooks, { seed, level, mode: { kind: 'td', td }, players: o.players ?? 1, personal: o.personal ?? false });
   const sim = world.td!;
   sim.fund(0);
   /** Step of the world and the stubs; the fallen drop raspberries, like the pack */
