@@ -38,5 +38,7 @@ PW_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" mise 
 - The error `Executable doesn't exist at …/chromium_headless_shell-…` means `PW_CHROMIUM` was forgotten, not that a browser needs downloading.
 - 15 tests take ≈ 2 minutes single-threaded; run a long pass in the background.
 - The perf tests `tests/perf.spec.ts` with `PERF_GPU=1` open Chrome in a window on the real GPU (Metal) — only then does frame time mean anything; without the flag they only check leaks and the number of programs ([dev-performance.md](dev-performance.md)).
+- **Tutorial cards are silent in an automated run** (`navigator.webdriver`): a card pauses a solo battle and would stall a spec. A test that wants them stores `{ "on": true }` in localStorage `malina.tutorial` before the page loads ([design-tutorial.md](design-tutorial.md), section 5).
+- **Tutorial screenshots — `make shots`**, not part of the test run: its own config `playwright.shots.config.ts`, the font hosts are not blocked there, so it needs the network.
 
 Verified 2026-10-24: 15 of 15 green (node 26.7.0, Playwright 1.56.1, Google Chrome from `/Applications`).
