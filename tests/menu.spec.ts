@@ -61,7 +61,7 @@ test('menu: first entry asks for the hero name, the old browser save moves to th
 test('menu: solo game — equip an axe in the camp, pick the glade, battle, pause and back to the camp with the raspberries', async ({ page }) => {
   const errors: string[] = [];
   const token = await openMenu(page, errors);
-  await expect(page.locator('.mm-nav .mm-btn.big')).toHaveText([/Solo game/, /Online game/, /Settings/]);
+  await expect(page.locator('.mm-nav .mm-btn.big')).toHaveText([/Solo game/, /Online game/, /How to play/, /Settings/]);
 
   // a new axe and own raspberries in the bag
   const uid = await page.evaluate(() => {

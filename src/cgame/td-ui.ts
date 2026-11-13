@@ -10,6 +10,7 @@ import type { SimWall } from '../sim/wall.ts';
 import { voice } from '../spell-audio.ts';
 import { menuKey, SELL_BACK, TOWERS, type TowerKind } from '../td/towers.ts';
 import { FOG_MOD_TITLE, type FogMod } from '../td/waves-fog.ts';
+import { TUTORIAL } from '../tutorial/tutorial.ts';
 import '../td/td.css';
 
 /** Wall bar colour in the HUD */
@@ -186,7 +187,10 @@ export class TdUi {
     for (const e of evs) {
       switch (e.t) {
         case 'tower.fire': this.fireT.set(Number(String(e.id).slice(1)), 0.45); break;
-        case 'tower.hurt': this.hurtT.set(Number(String(e.id).slice(1)), 1.6); break;
+        case 'tower.hurt': this.hurtT.set(Number(String(e.id).slice(1)), 1.6); TUTORIAL.fire('td.hunters'); break;
+        case 'tower.ruin': TUTORIAL.fire('td.repair'); break;
+        case 'pile.drop': TUTORIAL.fire('td.berries'); break;
+        case 'wall.hurt': TUTORIAL.fire('td.walls'); break;
         case 'drop.spawn': if (e.relic) this.h.toast(t('A relic dropped — run and pick it up!')); break;
         case 'drop.pick': {
           if (e.seat !== this.seat) break;
@@ -196,15 +200,15 @@ export class TdUi {
           break;
         }
         case 'wave.start': this.h.banner(`${e.of ? t('Wave {n} of {total}', { n: e.wave as number, total: e.of as number }) : t('Wave {n}', { n: e.wave as number })}<small>${t((e.title as string) || 'The Order marches on the bush')}</small>`, 2.5); break;
-        case 'lantern.out': this.h.toast(t('A lantern went out — the mist creeps closer')); break;
+        case 'lantern.out': TUTORIAL.fire('td.lanterns'); this.h.toast(t('A lantern went out — the mist creeps closer')); break;
         case 'wisp.catch': if (e.seat === this.seat) this.h.toast(t('Wisp caught: +{n} raspberries', { n: e.n as number })); break;
         case 'wisp.show': this.h.toast(t('A wisp flickers in the mist — catch it!')); break;
-        case 'wave.won': this.h.banner(`${t('Wave {n} beaten', { n: e.wave as number })}<small>${t('+{n} raspberries · next in {s} s · G — now', { n: e.n as number, s: rest })}</small>`, 3); break;
+        case 'wave.won': TUTORIAL.fire('td.skills'); this.h.banner(`${t('Wave {n} beaten', { n: e.wave as number })}<small>${t('+{n} raspberries · next in {s} s · G — now', { n: e.n as number, s: rest })}</small>`, 3); break;
         case 'wave.early': if (e.seat === this.seat) this.h.toast(t('Wave ahead of time: +{n} raspberries', { n: e.n as number })); break;
         case 'td.won': this.closeMenu(); this.h.banner(`${t('The bush is saved!')}<small>${t('All waves of the Order are broken · N — play again')}</small>`, 6); break;
         case 'td.lost': this.closeMenu(); this.h.banner(`${t('The bush withered')}<small>${t('The Order reached the raspberries · N — try again')}</small>`, 5); break;
         case 'td.reset': this.closeMenu(); this.alarms.clear(); this.fireT.clear(); this.hurtT.clear(); break;
-        case 'chief': this.h.banner(`${t('A mini-boss is coming!')}<small>${t(String(e.title))} · ${t(String(e.lane)).toLowerCase()}</small>`, 3); break;
+        case 'chief': TUTORIAL.fire('td.chief'); this.h.banner(`${t('A mini-boss is coming!')}<small>${t(String(e.title))} · ${t(String(e.lane)).toLowerCase()}</small>`, 3); break;
         case 'wall.break': this.h.banner(`${e.kind === 'gate' ? t('Gate broken') : t('Wall breached')}!<small>${t(String(e.title))} · ${t('enemies are coming in · F at the wall — repair')}</small>`, 3); break;
       }
     }
