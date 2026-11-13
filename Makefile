@@ -13,7 +13,7 @@ SERVER_PORT ?= 8787
 CLIENT_PORT ?= 5173
 DB_PATH ?= data/malina.db
 
-.PHONY: dev play server client build check e2e typecheck test-net
+.PHONY: dev play server client build check e2e shots typecheck test-net
 
 dev:
 	@trap 'kill 0' INT TERM; \
@@ -43,6 +43,10 @@ check: typecheck test-net
 
 e2e: build
 	PW_CHROMIUM="$(PW_CHROMIUM)" $(MISE) npx playwright test
+
+# Tutorial screenshots, both languages, into public/tutorial/ (wiki/design-tutorial.md); needs the network for the fonts
+shots: build
+	PW_CHROMIUM="$(PW_CHROMIUM)" $(MISE) npx playwright test -c playwright.shots.config.ts
 
 # ---- Docker and deploy (wiki/dev-deploy.md) ------------------------------------------------------------
 # No registry: images are built here and copied to the servers over ssh (docker save | gzip → scp → docker load).

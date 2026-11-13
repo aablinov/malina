@@ -73,7 +73,7 @@ test('tutorial: silent in an automated run and when switched off; the handbook h
   await page.evaluate(() => (window as any).__malina.tutorial.openBook('td.wave'));
   const book = page.locator('.tut-book.open');
   await expect(book.locator('.tut-item')).toHaveCount(27);
-  await expect(book.locator('.tut-item.sel')).toHaveText('Waves');
+  await expect(book.locator('.tut-item.sel')).toHaveText('Waves of the Order');
   await expect(book.locator('.tut-page .tut-marks li')).toHaveCount(3);
   await page.keyboard.press('ArrowDown');
   await expect(book.locator('.tut-item.sel')).toHaveText('Raspberries');
