@@ -1,5 +1,7 @@
 # Malina
 
+[![Malina trailer: tower defence, sword fights, spells and bosses](docs/promo/malina-promo.webp)](docs/promo/malina-promo.mp4)
+
 **English** · [Русский](#малина)
 
 A cosy co-op action game in the spirit of **Minecraft Dungeons** crossed with **tower defence**, playable **over the network** with friends and family. Isometric camera, swords, axes, bows and magic, a kind blocky voxel look — and a raspberry bush in the middle of the map that the whole party has to keep alive.

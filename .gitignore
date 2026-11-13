@@ -5,3 +5,4 @@ playwright-report
 data/
 # the build copies public/tutorial here; the pictures are kept once, in public/
 dist/tutorial
+.promo-frames/
