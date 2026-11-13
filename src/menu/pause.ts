@@ -2,6 +2,7 @@ import { t } from '../i18n/i18n.ts';
 import { go } from './boot.ts';
 import { menuUrl } from './session.ts';
 import type { SettingsPanel } from './settings-panel.ts';
+import { TUTORIAL } from '../tutorial/tutorial.ts';
 
 /**
  * Menu of a battle started from the main menu (`?from=menu`, wiki/design-main-menu.md):
@@ -28,6 +29,7 @@ export class BattleMenu {
       switch ((e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act) {
         case 'resume': this.hide(); break;
         case 'settings': this.settings.show(); break;
+        case 'help': TUTORIAL.openBook(); break;
         case 'restart': this.hide(); this.onRestart?.(); break;
         case 'leave': this.leave(); break;
         default: break;
@@ -74,6 +76,7 @@ export class BattleMenu {
     const head = p === 'pause' ? t('Paused') : p === 'won' ? t('The bush held!') : t('The bush withered');
     const btns = p === 'pause'
       ? `<button class="mm-btn primary" data-act="resume">${t('Resume')} <kbd>Esc</kbd></button>
+         <button class="mm-btn" data-act="help">${t('How to play')}</button>
          <button class="mm-btn" data-act="settings">${t('Settings')}</button>
          <button class="mm-btn" data-act="restart">${t('Restart')}</button>
          <button class="mm-btn" data-act="leave">${t('Leave to camp')}</button>`

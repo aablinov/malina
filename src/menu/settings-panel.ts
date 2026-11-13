@@ -1,6 +1,7 @@
 import { setVolume } from '../audio.ts';
 import { LANG, setLang, t, type Lang } from '../i18n/i18n.ts';
 import { setMusicVolume } from '../music.ts';
+import { TUTORIAL } from '../tutorial/tutorial.ts';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './settings.ts';
 
 /**
@@ -30,6 +31,7 @@ export class SettingsPanel {
       </section>
       <section><h3>${t('Game')}</h3>
         <label class="mm-row"><span>${t('Controls hint at the start of a battle')}</span><input type="checkbox" data-k="help"></label>
+        <label class="mm-row"><span>${t('Hint cards for new mechanics')}</span><button type="button" class="mm-btn small" data-act="tut-reset">${t('Show again')}</button><input type="checkbox" data-tut></label>
         <label class="mm-row"><span>${t('Language')}</span><select data-lang><option value="en">English</option><option value="ru">Русский</option></select></label>
       </section>
       <p class="mm-note">${t('Quality applies from the next battle. Changing the language reloads the page.')}</p>
@@ -44,6 +46,7 @@ export class SettingsPanel {
         if (l !== LANG) { setLang(l); location.reload(); }
         return;
       }
+      if (t instanceof HTMLInputElement && t.dataset.tut !== undefined) { TUTORIAL.setOff(!t.checked); return; }
       const k = t.dataset.k as keyof Settings | undefined;
       if (!k) return;
       const s = this.settings as unknown as Record<string, unknown>;
@@ -55,6 +58,7 @@ export class SettingsPanel {
     el.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
       if (act === 'close') this.hide();
+      if (act === 'tut-reset') { e.preventDefault(); TUTORIAL.reset(); TUTORIAL.setOff(false); this.sync(); (e.target as HTMLElement).closest('button')!.textContent = t('Hints will show again'); }
       if (act === 'reset') { this.settings = { ...DEFAULT_SETTINGS }; this.commit(); }
       if (e.target === el) this.hide();
     });
@@ -96,6 +100,8 @@ export class SettingsPanel {
     for (const b of this.el.querySelectorAll<HTMLElement>('[data-v]')) b.textContent = `${Math.round(Number(s[b.dataset.v ?? '']) * 100)}%`;
     const lang = this.el.querySelector<HTMLSelectElement>('[data-lang]');
     if (lang) lang.value = LANG;
+    const tut = this.el.querySelector<HTMLInputElement>('[data-tut]');
+    if (tut) tut.checked = !TUTORIAL.off;
   }
 }
 

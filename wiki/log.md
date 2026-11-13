@@ -569,3 +569,7 @@ Pages: [design-expeditions.md](design-expeditions.md).
 ## [2026-11-11] code | Operations, the difficulty ladder, modifiers, camp beds, the order of the day (Expeditions, stage 7)
 The board offers three operations a day: chains of two or three missions with shared modifiers (mist, downpour, full moon, Order's fury, quiet forest); missions won in a row pay more, the server keeps the room's streak and moves it on. A won mission of the hero's top difficulty opens the next one. Seeds are planted in three camp beds (totem, stash, courier); the order of the day counts lairs, beacons, seeds or missions and pays once. `src/expedition/camp.ts`, `src/expedition/mission.ts`, `src/menu/expeditions.ts`; tests `server/test/expedition-camp.test.ts`, `server/test/rooms-expedition.test.ts`.
 Pages: [design-expeditions.md](design-expeditions.md).
+
+## [2026-11-13] code | Tutorial: cards for new mechanics and the "How to play" handbook
+27 cards in English and Russian (camp, Bush Defence, expeditions, online) pop up the first time a mechanic shows up, once per browser; a card pauses a solo battle and stands aside in a room; urgent cards jump the queue, calm ones wait for a lull. The handbook opens from the start screen, the camp and the pause. Screenshots with numbered rings are shot by `make shots` into `public/tutorial/<lang>/` (rings drawn in the page, fonts need the network).
+Pages: [design-tutorial.md](design-tutorial.md), [td-playability-kids.md](td-playability-kids.md), [dev-testing.md](dev-testing.md).

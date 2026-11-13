@@ -43,7 +43,7 @@ Value — for children aged 10–14; cost — work in code. Those marked ✅ are
 | 4 | Tower range circle when hovering a card in the pad menu | high | low | backlog |
 | 5 | Retry the wave instead of the whole map: "The bush withered — try wave N again" with towers as at the start of the wave | high | medium | backlog |
 | 6 | "Counter" hint in the pad menu: "against moths — spire", "against warlocks — spire, it does not freeze" | medium | low | backlog |
-| 7 | First appearance of a new enemy — a card with a picture and one line "how to beat it" (as in PvZ) | medium | medium | backlog |
+| 7 | First appearance of a new enemy — a card with a picture and one line "how to beat it" (as in PvZ) | medium | medium | partly: the tutorial cards cover the mini-boss, tower hunters and the horn-blower ([design-tutorial.md](design-tutorial.md)); a card per enemy kind — backlog |
 | 8 | Easy mode in settings: bush ×1.5, raspberries ×1.3, pause while the pad menu is open | medium | low | backlog |
 | 9 | Stars per map (bush intact at 100/60/30 %) and a mark in the camp | medium | low | backlog |
 | 10 | Build pause: time slows to ×0.3 while the pad menu is open | medium | low | backlog |

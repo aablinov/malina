@@ -8,6 +8,7 @@ import { Lobby } from './lobby.ts';
 import { MenuScene } from './scene.ts';
 import { applyAudio, SettingsPanel } from './settings-panel.ts';
 import { loadMenuState, NET, saveMenuState, VOICE, type GameMode } from './session.ts';
+import { TUTORIAL } from '../tutorial/tutorial.ts';
 import '../style.css';
 import '../hud/hud.css';
 import './menu.css';
@@ -47,6 +48,7 @@ export async function runMenu(): Promise<void> {
     <nav class="mm-nav">
       <button class="mm-btn big" data-act="solo">${t('Solo game')}</button>
       <button class="mm-btn big" data-act="online">${t('Online game')}</button>
+      <button class="mm-btn big" data-act="help">${t('How to play')}</button>
       <button class="mm-btn big" data-act="settings">${t('Settings')}</button>
       ${DEV_TOOLS ? `<div class="mm-dev"><button class="mm-btn small" data-act="playground">${t('Playground')}</button><button class="mm-btn small" data-act="editor">${t('Editor')}</button></div>` : ''}
     </nav>
@@ -56,6 +58,8 @@ export async function runMenu(): Promise<void> {
   const lobby = new Lobby(root, profile, T, scene);
   lobby.onBack = () => showStart();
   lobby.onSettings = () => settingsPanel.show();
+  // tutorial cards stop nothing here; they wait while the settings window is up
+  TUTORIAL.host = { blocking: true, busy: () => settingsPanel.open };
 
   const navButtons = (): HTMLButtonElement[] => [...start.querySelectorAll<HTMLButtonElement>('.mm-nav button')];
   let focus = 0;
@@ -88,6 +92,7 @@ export async function runMenu(): Promise<void> {
     if (a === 'solo') openLobby('solo');
     else if (a === 'online') openLobby('online');
     else if (a === 'settings') settingsPanel.show();
+    else if (a === 'help') TUTORIAL.openBook();
     else if (a === 'playground') window.location.search = '?dev=playground';
     else if (a === 'editor') openEditor();
   }
@@ -106,6 +111,7 @@ export async function runMenu(): Promise<void> {
     if (e.repeat) return;
     initAudio();
     if (langPick) { langPick.key(e); return; }
+    if (TUTORIAL.key(e)) return;
     if (settingsPanel.key(e)) return;
     if (lobby.open) { lobby.key(e); return; }
     switch (e.code) {
@@ -127,6 +133,7 @@ export async function runMenu(): Promise<void> {
     get screen() { return langPick ? 'lang' : lobby.open ? 'lobby' : 'start'; },
     lobby,
     settings: settingsPanel,
+    tutorial: TUTORIAL,
     /** Room voice chat (src/net/voice.ts) */
     voice: VOICE,
     /** Send the pending profile change to the server now */

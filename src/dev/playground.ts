@@ -81,6 +81,7 @@ import type { TdSpec } from '../td/types.ts';
 import { button, Panel, select, toggle } from './panel.ts';
 import '../style.css';
 import './playground.css';
+import { TUTORIAL } from '../tutorial/tutorial.ts';
 import { t } from '../i18n/i18n.ts';
 
 /** Shared battle: sounds of other players' heroes are heard closer than this, m */
@@ -674,6 +675,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
    */
   function uiKey(e: KeyboardEvent): boolean {
     if (e.repeat) return true;
+    // a tutorial card or the handbook is up: the keys go to it
+    if (TUTORIAL.key(e)) return true;
     // pause and the battle result from the menu: the keys go to them
     if (battle?.key(e)) return true;
     // the inventory is open: the keys go to it (Esc, I, Q/E, arrows, Enter, X)
@@ -1115,6 +1118,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
   document.body.appendChild(dev);
 
   let toastT = 0;
+  let tutLevel = profile.data.level;
   let lastNearChest: unknown = null;
   function toast(s: string): void { const t = $('pgToast'); t.textContent = s; t.classList.add('show'); toastT = 1.4; }
 
@@ -1141,6 +1145,8 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     else if (trader) setHTML('pgPrompt', `<kbd>F</kbd>${t('Trade: {who}', { who: MERCHANT_TITLE[trader.kind].toLowerCase() })}`);
     else if (near) setHTML('pgPrompt', `<kbd>F</kbd>${near.prompt}`);
     hud.update(gear.hudState(), dt);
+    if (trader?.kind === 'sutler') TUTORIAL.fire('td.sutler');
+    if (profile.data.level > tutLevel) { tutLevel = profile.data.level; TUTORIAL.fire('td.level'); }
     hud.el.classList.toggle('show-hp', showTelemetry);
     const cell = `${Math.round(hero.pos.x)},${Math.round(hero.pos.z)}`;
     if (cell !== revealAt) { revealAt = cell; automap.reveal(hero.pos.x, hero.pos.z); }
@@ -1228,6 +1234,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
       lavaT -= dt;
       if (lavaT <= 0) {
         lavaT = 0.4;
+        TUTORIAL.fire('td.lava');
         const hp0 = hero.hp;
         if (hero.hurt(6)) fx.text(hero.pos.clone().setY(hero.pos.y + 1.2), `−${Math.round(hp0 - hero.hp)}`, 'bad');
         fx.burst(hero.pos.clone().setY(hero.pos.y + 0.2), [new THREE.Color(3.4, 1.4, 0.3), '#ff8a2a'], 8, { speed: 1.5, up: 3, size: 0.09, life: 0.5, glow: true, gravity: 2 });
@@ -1236,7 +1243,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     } else lavaT = 0;
     const healed = props.update(dt, hero);
     if (healed > 0) hero.hp = Math.min(hero.maxHp, hero.hp + healed);
-    if (hero.down) { if (downT === 0) gear.onDown(); downT += dt; if (downT > 2 && !exped) { hero.revive(); downT = 0; } }
+    if (hero.down) { if (downT === 0) { gear.onDown(); TUTORIAL.fire(exped ? 'exp.totems' : 'td.down'); } downT += dt; if (downT > 2 && !exped) { hero.revive(); downT = 0; } }
     for (const d of dummies) d.update(dt);
     for (const m of merchants) m.update(dt, hero.pos);
     pack.update(dt);
@@ -1277,6 +1284,18 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     bosses.some((b) => b.awake && !b.dead) ||
     [pack, ...mobRooms.map((r) => r.pack), ...(tdPack ? [tdPack] : [])].some((p) => p.mobs.some((m) => m.alerted && !m.dead && near(m.pos, 25)));
 
+  // tutorial cards (src/tutorial/tutorial.ts): in a battle from the menu; solo — a card pauses the battle, in a room it stands aside.
+  // Calm cards wait for a lull in the fight, urgent ones come at once
+  if (FROM_MENU || TUTORIAL.forced) {
+    TUTORIAL.host = {
+      blocking: !netRoom, battle: true, onClose: () => gi.clear(),
+      busy: () => inventory.open || shop.open || !!battle?.open || (sim ? sim.state !== 'play' : false) || (exped ? exped.state !== 'play' : false),
+      calm: () => !inFight(),
+    };
+    if (sim) for (const id of ['td.move', 'td.build', 'td.wave', ...(sim.walls.length ? ['td.walls'] : []), ...(sim.fog ? ['td.lanterns'] : [])]) TUTORIAL.fire(id);
+    if (exped) for (const id of ['exp.goal', 'exp.parcels']) TUTORIAL.fire(id);
+  }
+
   let acc = 0;
   let last = performance.now();
   let fpsAcc = 0, fpsN = 0, fpsVal = 60, frameMs = 16;
@@ -1300,7 +1319,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     // test calls no longer depends on how loaded the machine is (src/devflag.ts AUTOMATED); a network battle keeps its clock
     const held = AUTOMATED && scripted && !netRoom;
     if (held) acc = 0;
-    else if (!paused && (netRoom || (!inventory.open && !shop.open && !battle?.pausing))) acc += real * timeScale * stop;
+    else if (!paused && (netRoom || (!inventory.open && !shop.open && !battle?.pausing && !TUTORIAL.pausing))) acc += real * timeScale * stop;
     else if (stepOnce) { acc += STEP; stepOnce = false; }
     perf.begin();
     let n = 0;
@@ -1471,6 +1490,7 @@ float wrapR(float v, float o, float R) { return o + mod(v - o + R, 2.0 * R) - R;
     /** Rank-and-file mobs (src/mobs/): pack.mobs; summon a mob at a point */
     pack,
     /** Bush defence: the facade (pads, towers, build(pad, kind), enemy pack, walls); world and sim — the simulation world (src/sim/); lavaFx — lava haze and sparks (cells) */
+    tutorial: TUTORIAL,
     td: tdFacade, world, sim, tdView, tdUi, lavaFx, mistFx, get fogFx() { return fogFx; },
     /** Mob rooms: spec (posts, entrance) and the garrison pack; fillRoom — back at the posts */
     mobRooms, fillRoom,

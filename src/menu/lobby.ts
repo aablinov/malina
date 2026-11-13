@@ -16,6 +16,7 @@ import type { MenuScene } from './scene.ts';
 import { go } from './boot.ts';
 import { battleUrl, loadMenuState, NET, netBattleUrl, record, saveMenuState, VOICE, type GameMode } from './session.ts';
 import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
+import { TUTORIAL } from '../tutorial/tutorial.ts';
 
 /**
  * Camp before a battle (wiki/design-main-menu.md) — like the inventory and hero screen in Minecraft Dungeons:
@@ -32,6 +33,8 @@ import type { FriendInfo, RoomInfo, ServerMsg } from '../net/protocol.ts';
 const tr = t;
 
 type Pane = 'gear' | 'map' | 'missions' | 'rooms';
+/** The tutorial card of each tab (src/tutorial/cards.ts) */
+const PANE_CARD: Record<Pane, string> = { gear: 'camp.gear', map: 'camp.map', missions: 'camp.exp', rooms: 'camp.rooms' };
 /** Room list refresh while the "Rooms" tab is open, ms */
 const ROOMS_POLL_MS = 3000;
 type SlotId = 'melee' | 'ranged' | 'armor' | 'art0' | 'art1' | 'art2' | 'aura';
@@ -93,6 +96,7 @@ export class Lobby {
         <div class="mm-tabs"><kbd>Q</kbd><button data-pane="gear">${t('Gear')}</button><button data-pane="map">${t('Map')}</button><button data-pane="missions">${t('Expeditions')}</button><button data-pane="rooms">${t('Rooms')}</button><kbd>E</kbd></div>
         <div class="mm-mode" data-id="mode"></div>
         <div class="mm-cur"><span title="${t('Raspberries')}">${iconImg('berry')}<b data-id="berries"></b></span><span title="${t('Enchantment points')}">${iconImg('spiral')}<b data-id="points"></b></span>
+          <button class="mm-btn icon" data-act="help" title="${t('How to play')}">?</button>
           <button class="mm-btn icon" data-act="settings" title="${t('Settings')}">⚙</button></div>
       </header>
       <section class="mm-hero">
@@ -154,6 +158,7 @@ export class Lobby {
       this.pollTimer = window.setInterval(() => this.poll(), ROOMS_POLL_MS);
     } else if (this.pane === 'rooms') this.pane = 'gear';
     this.render();
+    TUTORIAL.fire(PANE_CARD[this.pane]);
   }
 
   hide(): void { this.el.classList.remove('open'); window.clearInterval(this.pollTimer); }
@@ -167,7 +172,7 @@ export class Lobby {
     void NET.list().then((r) => { this.rooms = r; this.renderRooms(); });
   }
 
-  setPane(p: Pane): void { this.pane = p; this.render(); }
+  setPane(p: Pane): void { this.pane = p; this.render(); TUTORIAL.fire(PANE_CARD[p]); }
 
   selectMap(id: string): void {
     if (this.mode === 'online' && NET.room && !NET.isHost) { this.flash(t('The host picks the map')); return; }
@@ -183,6 +188,7 @@ export class Lobby {
   openInventory(slot?: SlotId): void {
     this.scene.stop();
     this.inventory.show(slot ? SLOT_KIND(slot) : undefined);
+    TUTORIAL.fire('camp.items');
   }
 
   /** Open a camp shop: the merchant (everything at the hero's power) or the blacksmith (forge, reforge the equipped) */
@@ -294,6 +300,7 @@ export class Lobby {
       switch (t.closest<HTMLElement>('[data-act]')?.dataset.act) {
         case 'back': this.onBack?.(); break;
         case 'settings': this.onSettings?.(); break;
+        case 'help': TUTORIAL.openBook(PANE_CARD[this.pane]); break;
         case 'start': this.startGame(); break;
         case 'change': this.openInventory(this.slot); break;
         case 'inventory': this.openInventory(); break;

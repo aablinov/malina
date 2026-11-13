@@ -4,6 +4,7 @@ import { t } from '../i18n/i18n.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { ALARM_MAX, type SimExpedition } from '../sim/expedition.ts';
 import { PARCEL_TITLE } from '../expedition/parcels.ts';
+import { TUTORIAL } from '../tutorial/tutorial.ts';
 import '../td/td.css';
 
 /**
@@ -66,19 +67,20 @@ export class ExpUi {
     for (const e of evs) {
       switch (e.t) {
         case 'exp.step': if (Number(e.n) < Number(e.of)) this.h.banner(`${t(TITLE[this.sim.spec.objective.kind])}<small>${t('{n} of {total}', { n: Number(e.n), total: Number(e.of) })}</small>`, 2); break;
-        case 'exp.primary': this.h.banner(`${t('Objective done')}<small>${t('Get to the pad and call the balloon')}</small>`, 3.5); break;
+        case 'exp.primary': TUTORIAL.fire('exp.balloon'); this.h.banner(`${t('Objective done')}<small>${t('Get to the pad and call the balloon')}</small>`, 3.5); break;
         case 'exp.raid': this.h.toast(t('A raid is coming!')); break;
         case 'exp.side': if (e.kind === 'watchtower') this.revealed = true; this.h.toast(t('Secondary objective done')); break;
         case 'extract.call': this.h.banner(`${t('The balloon is on its way')}<small>${t('Hold the pad for {n} s', { n: Number(e.sec) })}</small>`, 3); break;
         case 'extract.ready': this.h.banner(`${t('The balloon has landed')}<small>${t('Everyone onto the pad!')}</small>`, 3); break;
-        case 'poi.take': if (e.seat === this.seat() && e.seed) this.h.toast(t('Seed found — carry it to the balloon')); break;
+        case 'seed.take': TUTORIAL.fire('exp.seeds'); break;
+        case 'poi.take': if (e.seed) TUTORIAL.fire('exp.seeds'); if (e.seat === this.seat() && e.seed) this.h.toast(t('Seed found — carry it to the balloon')); break;
         case 'exp.lost': this.h.banner(t(e.why === 'bush' ? 'The bush has withered' : 'The squad has fallen'), 3); break;
-        case 'horn.start': this.h.toast(t('A horn-blower! Stop him before he calls')); break;
+        case 'horn.start': TUTORIAL.fire('exp.horn'); this.h.toast(t('A horn-blower! Stop him before he calls')); break;
         case 'horn.cut': this.h.toast(t('The horn is silenced')); break;
         case 'horn.call': this.h.banner(`${t('The horn has sounded')}<small>${t('Reinforcements are coming')}</small>`, 2.5); break;
-        case 'exp.alarm': this.h.toast(t('Alarm {n}: the Order grows stronger', { n: Number(e.level) })); break;
-        case 'exp.dusk': this.h.dusk?.(); this.h.banner(`${t('Dusk is falling')}<small>${t('The alarm grows twice as fast — time to leave')}</small>`, 4); break;
-        case 'hero.totem': this.h.toast(t('A raspberry totem lifts the fallen · {n} left', { n: Number(e.left) })); break;
+        case 'exp.alarm': TUTORIAL.fire('exp.alarm'); this.h.toast(t('Alarm {n}: the Order grows stronger', { n: Number(e.level) })); break;
+        case 'exp.dusk': TUTORIAL.fire('exp.dusk'); this.h.dusk?.(); this.h.banner(`${t('Dusk is falling')}<small>${t('The alarm grows twice as fast — time to leave')}</small>`, 4); break;
+        case 'hero.totem': TUTORIAL.fire('exp.totems'); this.h.toast(t('A raspberry totem lifts the fallen · {n} left', { n: Number(e.left) })); break;
         case 'hero.raised': if (e.seat === this.seat()) this.h.toast(t('A teammate lifted you')); break;
         default: break;
       }
@@ -94,17 +96,17 @@ export class ExpUi {
     else if (pad.state === 'ready') lines.push(`<div class="td-wave">${t('Boarding')} <span>${Math.ceil(pad.t)}</span></div>`);
     const down = s.downOf(this.seat());
     if (down) lines.push(`<div class="td-alarm">${down.k > 0 ? t('A teammate is lifting you') : s.totems > 0 ? t('Down · a totem in {n} s', { n: Math.ceil(down.left) }) : t('Down · no totems left')}</div>`);
-    lines.push(`<div>${t('Totems')}: <span style="color:#ff8fb0">${s.totems}</span> · ${t('Alarm')}: <span style="color:#ffd15c">${'▮'.repeat(s.alarmLevel)}${'▯'.repeat(ALARM_MAX - s.alarmLevel)}</span>${s.dusk ? ` · ${t('dusk')}` : ''}</div>`);
+    lines.push(`<div class="exp-state"><span class="exp-totems">${t('Totems')}: <span style="color:#ff8fb0">${s.totems}</span></span> · <span class="exp-alarm">${t('Alarm')}: <span style="color:#ffd15c">${'▮'.repeat(s.alarmLevel)}${'▯'.repeat(ALARM_MAX - s.alarmLevel)}</span></span>${s.dusk ? ` · ${t('dusk')}` : ''}</div>`);
     const kinds = s.parcels.loadout(this.seat()), cds = s.parcels.cooldowns(this.seat());
-    lines.push(`<div>${kinds.map((k, i) => `<kbd>${'ZXC'[i]}</kbd> ${PARCEL_TITLE[k]}${cds[i] > 0 ? ` <span style="color:#b9c4cc">${Math.ceil(cds[i])}</span>` : ''}`).join(' · ')}</div>`);
+    lines.push(`<div class="exp-parcels">${kinds.map((k, i) => `<kbd>${'ZXC'[i]}</kbd> ${PARCEL_TITLE[k]}${cds[i] > 0 ? ` <span style="color:#b9c4cc">${Math.ceil(cds[i])}</span>` : ''}`).join(' · ')}</div>`);
     const tg = this.target();
     if (tg && s.state === 'play') {
       const dx = tg.x - hp.x, dz = tg.z - hp.z, d = Math.hypot(dx, dz);
       // the camera looks from (+1, ·, +1): screen right is (1, −1), up is (−1, −1)
       const deg = Math.round((Math.atan2(dx - dz, -dx - dz) * 180) / Math.PI);
-      if (d > 4) lines.push(`<div>${tg.label} <i style="display:inline-block;font-style:normal;transform:rotate(${deg}deg)">↑</i> ${t('{n} m', { n: Math.round(d) })}</div>`);
+      if (d > 4) lines.push(`<div class="exp-arrow">${tg.label} <i style="display:inline-block;font-style:normal;transform:rotate(${deg}deg)">↑</i> ${t('{n} m', { n: Math.round(d) })}</div>`);
     }
-    if (bag.common + bag.rare + bag.golden > 0) lines.push(`<div>${t('Seeds')}: <span style="color:#8fd45a">${bag.common}</span> · <span style="color:#5ab8ff">${bag.rare}</span> · <span style="color:#ffcc3a">${bag.golden}</span></div>`);
+    if (bag.common + bag.rare + bag.golden > 0) lines.push(`<div class="exp-seeds">${t('Seeds')}: <span style="color:#8fd45a">${bag.common}</span> · <span style="color:#5ab8ff">${bag.rare}</span> · <span style="color:#ffcc3a">${bag.golden}</span></div>`);
     const html = lines.join('');
     if (html !== this.last) { this.last = html; this.el.innerHTML = html; }
   }
